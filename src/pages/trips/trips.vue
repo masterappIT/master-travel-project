@@ -64,7 +64,6 @@ const handleOrderAction = (name: string) => {
   }
   if (name === '待出行') {
     setOrderReturnTarget('profile')
-    setOrderReturnTarget('profile')
     return openCachedPage('/pages/orders/pending-detail?from=profile')
   }
   comingSoon(name)
