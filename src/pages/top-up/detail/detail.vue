@@ -139,7 +139,7 @@ const topUp = () => {
 }
 const showRecords = () => openCachedPage('/pages/voucher/claim')
 const showAgreement = (title: string) => uni.showModal({ title, content: '增值款項僅可用於支付出行車費，不可兌現或退款。', showCancel: false })
-const goBack = () => closeCachedPage('/pages/wallet/wallet')
+const goBack = () => closeCachedPage('/pages/transactions/transactions')
 </script>
 
 <style scoped>
