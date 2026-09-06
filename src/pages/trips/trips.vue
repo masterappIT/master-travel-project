@@ -59,7 +59,7 @@ const openAccount = () => openCachedPage('/pages/account/account')
 const openMembership = () => openCachedPage('/pages/membership/membership')
 const handleOrderAction = (name: string) => {
   if (name === '全部訂單') return openCachedPage('/pages/orders/orders')
-  if (name === '待出行') return openCachedPage('/pages/trips/detail?from=profile')
+  if (name === '待出行') return openCachedPage('/pages/orders/detail?status=traveling&from=profile')
   comingSoon(name)
 }
 const handleWalletAction = (name: string) => {
