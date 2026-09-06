@@ -37,7 +37,7 @@
       <view class="times"><text>上車時間 ：{{ bookingTime }}</text><text>到達時間 ：{{ bookingTime }}</text></view>
       <view class="passenger-title">乘客及聯絡資料：</view><view class="passenger"><view><image src="/static/orders/passenger.svg" mode="aspectFit" /><text>李XX（先生）</text></view><view><image src="/static/orders/phone.svg" mode="aspectFit" /><text>852 - 53**8469</text></view></view>
       <view :class="['payment', { completed: isCompleted, pending: !isCompleted }]">
-        <text v-if="!isCompleted">交易時間剩餘：05:00</text>
+        <text v-if="!isCompleted">交易時間剩餘：10:00</text>
         <text class="amount">RMB¥{{ selectedVehicle.price.toFixed(2) }}</text>
         <view v-if="!isCompleted" class="pay-tag">待付款</view>
         <view v-else class="paid-tag">已付款</view>

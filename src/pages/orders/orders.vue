@@ -42,7 +42,7 @@ const activeTab = ref<Tab>('all')
 const tabs: Array<{ label: string; value: Tab }> = [{ label: '全部', value: 'all' }, { label: '已完成', value: 'completed' }, { label: '取消', value: 'cancelled' }]
 const orders = computed<Order[]>(() => [
   { id: 1, status: '已完成', kind: '加急訂單' },
-  { id: 2, status: pendingOrderStatus.value, kind: '預約訂單', countdown: pendingOrderStatus.value === '待確認' ? '05:00' : undefined, payment: pendingOrderStatus.value === '待確認' ? '待付款' : '不需退款' },
+  { id: 2, status: pendingOrderStatus.value, kind: '預約訂單', countdown: pendingOrderStatus.value === '待確認' ? '10:00' : undefined, payment: pendingOrderStatus.value === '待確認' ? '待付款' : '不需退款' },
   { id: 3, status: '待出行', kind: '預約訂單' },
   { id: 4, status: '取消', kind: '預約訂單', payment: '不需退款' },
   { id: 5, status: '進行中', kind: '預約訂單' }
