@@ -60,12 +60,18 @@ const tripStore = useTripStore()
 const { responsiveStyle } = useResponsiveCanvas()
 const isCompleted = ref(false)
 const isTraveling = ref(false)
+const returnTarget = ref<'profile' | 'orders'>('orders')
 const applyStatus = (url?: string) => {
   const status = url?.match(/[?&]status=([^&#]+)/)?.[1]
+  const source = url?.match(/[?&](?:from|returnTo)=([^&#]+)/)?.[1]
   isCompleted.value = status === 'completed'
   isTraveling.value = status === 'traveling'
+  if (source === 'profile' || source === 'orders') returnTarget.value = source
 }
-onLoad((options) => { applyStatus(options ? `?status=${options.status || ''}` : undefined) })
+onLoad((options) => {
+  const query = options ? `?status=${options.status || ''}&from=${options.from || options.returnTo || ''}` : undefined
+  applyStatus(query)
+})
 const handleHashChange = () => {
   if (typeof window !== 'undefined') applyStatus(window.location.hash)
 }
@@ -150,11 +156,10 @@ const getPreviousStackPath = () => {
 }
 
 const goBack = () => {
-  const explicitSource = getCurrentPageSource() || getSourceFromStack()
-  if (explicitSource === 'profile') return closeCachedPage('/pages/trips/trips')
-
-  const previousStackPath = getPreviousStackPath()
-  if (previousStackPath === '/pages/trips/trips') return closeCachedPage('/pages/trips/trips')
+  // The pending-travel entry on Profile always returns to Profile. Keep this
+  // independent from the embedded host stack, which may reuse the detail page.
+  if (isTraveling.value) return openCachedPage('/pages/trips/trips')
+  if (returnTarget.value === 'profile') return openCachedPage('/pages/trips/trips')
   return closeCachedPage('/pages/orders/orders')
 }
 const cancelOrder = () => uni.showToast({ title: '訂單取消功能開發中', icon: 'none' })
