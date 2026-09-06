@@ -40,7 +40,7 @@
         <text v-if="!isCompleted && !isCancelled">交易時間剩餘：05:00</text>
         <text class="amount">RMB¥{{ selectedVehicle.price.toFixed(2) }}</text>
         <view v-if="!isCompleted && !isCancelled" class="pay-tag">待付款</view>
-        <view v-else-if="isCancelled" class="cancelled-tag">不需退款</view>
+        <view v-else-if="isCancelled" class="cancelled-tag">已退款</view>
         <view v-else class="paid-tag">已付款</view>
       </view>
       <view class="detail"><text class="detail-title">訂單詳細</text><text class="detail-date">2024/03/15</text><view class="line"/><view class="row"><text>{{ selectedVehicle.title }}（{{ selectedVehicle.seats }}座）</text><text>¥ {{ selectedVehicle.price }}</text></view><view class="row"><text>加急附加費</text><text>¥ 100</text></view><view class="row"><text>優惠券抵扣</text><text>-¥ 100</text></view><view v-if="isCompleted" class="completed-payment"><view class="payment-record wallet-record"><image src="/static/vehicles/payment/payment-wallet-fare.svg" mode="aspectFit" /><text>車費餘額</text><text class="record-amount">-¥ 0.00</text></view><view class="payment-record wechat-record"><image src="/static/vehicles/payment/payment-wechat.svg" mode="aspectFit" /><text>微信支付</text><text class="record-amount">-¥ 800.00</text></view><view class="record-link" @tap="showPaymentRecords">相關支付紀錄 <text>›</text></view></view><view class="total">Total： ¥ {{ selectedVehicle.price }}</view><button v-if="!isCompleted && !isCancelled" class="cancel" @tap="cancelOrder">取消</button></view>
