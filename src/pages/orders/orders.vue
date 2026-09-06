@@ -29,7 +29,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
-import { openCachedPage } from '../../utils/navigation'
+import { openCachedPage, setOrderReturnTarget } from '../../utils/navigation'
 import { usePendingOrderStatus } from '../../utils/pendingOrderStatus'
 import OrdersBackButton from '../../components/orders/OrdersBackButton.vue'
 type Tab = 'all' | 'completed' | 'cancelled'
@@ -51,10 +51,11 @@ const visibleOrders = computed(() => activeTab.value === 'completed' ? orders.va
 const statusIcon = (status: OrderStatus) => status === '進行中' ? '/static/orders/status-green.svg' : status === '已完成' || status === '待出行' ? '/static/orders/status-blue.svg' : status === '待確認' ? '/static/orders/status-pending.svg' : '/static/orders/status-gray.svg'
 const openOrder = (order: Order) => {
   if (order.status === '已完成' || order.status === '取消' || order.status === '待確認' || order.status === '待出行') {
+    setOrderReturnTarget('orders')
     if (order.status === '取消') return openCachedPage('/pages/orders/cancelled-detail')
-      if (order.status === '待確認') return openCachedPage('/pages/orders/pending-detail')
-      const detailStatus = order.status === '已完成' ? 'completed' : 'traveling'
-    openCachedPage(`/pages/orders/detail?status=${detailStatus}`)
+    if (order.status === '待確認') return openCachedPage('/pages/orders/pending-detail')
+    const detailStatus = order.status === '已完成' ? 'completed' : 'traveling'
+    openCachedPage(`/pages/orders/detail?status=${detailStatus}&from=orders`)
   }
 }
 const goBack = () => openCachedPage('/pages/trips/trips')

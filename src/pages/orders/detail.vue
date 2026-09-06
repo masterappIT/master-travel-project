@@ -54,19 +54,21 @@ import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { useTripStore } from '../../stores/trip'
-import { closeCachedPage, cachedPageUrl, cachedPageStack, openCachedPage } from '../../utils/navigation'
+import { closeCachedPage, cachedPageUrl, openCachedPage, getOrderReturnTarget } from '../../utils/navigation'
 import OrdersBackButton from '../../components/orders/OrdersBackButton.vue'
 const tripStore = useTripStore()
 const { responsiveStyle } = useResponsiveCanvas()
 const isCompleted = ref(false)
 const isTraveling = ref(false)
-const returnTarget = ref<'profile' | 'orders'>('orders')
+const returnTarget = ref<'profile' | 'orders'>(getOrderReturnTarget() || 'orders')
 const applyStatus = (url?: string) => {
   const status = url?.match(/[?&]status=([^&#]+)/)?.[1]
   const source = url?.match(/[?&](?:from|returnTo)=([^&#]+)/)?.[1]
   isCompleted.value = status === 'completed'
   isTraveling.value = status === 'traveling'
-  if (source === 'profile' || source === 'orders') returnTarget.value = source
+  const storedTarget = getOrderReturnTarget()
+  if (storedTarget) returnTarget.value = storedTarget
+  else if (source === 'profile' || source === 'orders') returnTarget.value = source
 }
 onLoad((options) => {
   const query = options ? `?status=${options.status || ''}&from=${options.from || options.returnTo || ''}` : undefined
@@ -109,56 +111,7 @@ const selectedVehicle = computed(() => tripStore.chosenVehicle || {
   seats: 7,
   price: 800
 })
-const parseQueryParams = (url = '') => {
-  const search = (url || '').split('?')[1] || ''
-  const params: Record<string, string> = {}
-  const pairs = search.split('&')
-  for (const pair of pairs) {
-    if (!pair) continue
-    const [key, ...rest] = pair.split('=')
-    if (!key) continue
-    params[decodeURIComponent(key)] = decodeURIComponent(rest.join('=') || '')
-  }
-  return params
-}
-
-const getCurrentPageSource = () => {
-  const candidates: string[] = []
-  if (cachedPageUrl.value) candidates.push(cachedPageUrl.value)
-  if (typeof window !== 'undefined' && window.location.hash) candidates.push(window.location.hash)
-
-  for (const candidate of candidates) {
-    const params = parseQueryParams(candidate)
-    const source = params.from || params.returnTo || ''
-    if (source) return source
-  }
-
-  return ''
-}
-
-const getSourceFromStack = () => {
-  const currentIndex = cachedPageStack.value.findIndex((entry) => (entry || '').split('?')[0] === '/pages/orders/detail')
-  if (currentIndex < 0) return ''
-
-  const stackEntries = cachedPageStack.value.slice(0, currentIndex + 1)
-  for (let index = stackEntries.length - 1; index >= 0; index -= 1) {
-    const params = parseQueryParams(stackEntries[index])
-    if (params.from === 'profile' || params.returnTo === 'profile') return 'profile'
-    if (params.from === 'orders' || params.returnTo === 'orders') return 'orders'
-  }
-  return ''
-}
-
-const getPreviousStackPath = () => {
-  const currentIndex = cachedPageStack.value.findIndex((entry) => (entry || '').split('?')[0] === '/pages/orders/detail')
-  if (currentIndex <= 0) return ''
-  return (cachedPageStack.value[currentIndex - 1] || '').split('?')[0]
-}
-
 const goBack = () => {
-  // The pending-travel entry on Profile always returns to Profile. Keep this
-  // independent from the embedded host stack, which may reuse the detail page.
-  if (isTraveling.value) return openCachedPage('/pages/trips/trips')
   if (returnTarget.value === 'profile') return openCachedPage('/pages/trips/trips')
   return closeCachedPage('/pages/orders/orders')
 }

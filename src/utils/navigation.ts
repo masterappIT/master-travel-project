@@ -1,8 +1,20 @@
 import { computed, ref } from 'vue'
 
 const HOME_PATH = '/pages/index/index'
+const ORDER_RETURN_TARGET_KEY = 'order-detail-return-target'
 let embeddedHostActive = false
 const pagePath = (url: string) => url.split('?')[0]
+
+export type OrderReturnTarget = 'profile' | 'orders'
+
+export const setOrderReturnTarget = (target: OrderReturnTarget) => {
+  uni.setStorageSync(ORDER_RETURN_TARGET_KEY, target)
+}
+
+export const getOrderReturnTarget = (): OrderReturnTarget | '' => {
+  const target = uni.getStorageSync(ORDER_RETURN_TARGET_KEY)
+  return target === 'profile' || target === 'orders' ? target : ''
+}
 
 export const cachedPageUrl = ref(HOME_PATH)
 export const cachedPagePath = computed(() => pagePath(cachedPageUrl.value))
