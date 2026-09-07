@@ -7,8 +7,7 @@
       <image class="splash-circle splash-circle-right" src="/static/splash/ellipse-right.svg" mode="aspectFit" />
       <image class="splash-wave" src="/static/splash/wave.svg" mode="scaleToFill" />
       <image class="splash-wave-bottom" src="/static/splash/wave-bottom.svg" mode="scaleToFill" />
-      <image class="splash-logo-mark" src="/static/home/header-logo.svg" mode="aspectFit" />
-      <text class="splash-brand-name">Master Travel Project</text>
+      <image class="splash-logo" src="/static/splash/launch.png" mode="widthFix" />
     </view>
   </view>
 </template>
@@ -141,7 +140,7 @@ body,
 .splash-wave-bottom {
   animation: splash-wave-bottom 2.2s ease-in-out infinite alternate;
 }
-.splash-logo-mark {
+.splash-logo {
   animation: splash-logo 900ms ease-out both;
 }
 @keyframes splash-enter {
@@ -171,7 +170,7 @@ body,
 .splash-circle,
 .splash-wave,
 .splash-wave-bottom,
-.splash-logo-mark {
+.splash-logo {
   position: absolute;
   display: block;
 }
@@ -203,19 +202,9 @@ body,
 }
 .splash-logo-mark {
   left: 50%;
-  top: calc(50% - 23px);
-  width: 74px;
-  height: 58px;
+  top: 50%;
+  width: 250px;
+  height: auto;
   transform: translate(-50%, -50%);
-}
-.splash-brand-name {
-  position: absolute;
-  left: 50%;
-  top: calc(50% + 34px);
-  transform: translateX(-50%);
-  color: #fff;
-  font-size: 18px;
-  font-weight: 700;
-  white-space: nowrap;
 }
 </style>
