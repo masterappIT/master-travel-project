@@ -2,7 +2,7 @@
 
 ## Database
 
-PostgreSQL 使用資料庫名稱 `master_travel_project`，Docker volume 仍保留為 `taxi-postgres`，以避免更名時遺失既有資料。
+PostgreSQL 使用資料庫名稱 `master_travel_project`，Docker volume 為 `master-travel-project-postgres`。
 
 ## Master Box 客服 Chat Box
 

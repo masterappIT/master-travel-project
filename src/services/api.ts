@@ -98,7 +98,7 @@ export async function listSupportMessages(): Promise<SupportMessage[]> {
 }
 
 export async function sendSupportMessage(text: string): Promise<SupportMessage> {
-  const clientId = `taxi-${Date.now()}-${Math.random().toString(36).slice(2)}`
+  const clientId = `master-travel-project-${Date.now()}-${Math.random().toString(36).slice(2)}`
   return supportRequest<SupportMessage>('/messages', { method: 'POST', data: { text, clientId } })
 }
 

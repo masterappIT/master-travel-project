@@ -2,13 +2,13 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: taxi
-      POSTGRES_PASSWORD: taxi
+      POSTGRES_USER: master_travel_project
+      POSTGRES_PASSWORD: master_travel_project
       POSTGRES_DB: master_travel_project
     ports:
       - "5433:5432"
     volumes:
-      - taxi-postgres:/var/lib/postgresql/data
+      - master-travel-project-postgres:/var/lib/postgresql/data
 
 volumes:
-  taxi-postgres:
+  master-travel-project-postgres:

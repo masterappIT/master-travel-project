@@ -2,7 +2,7 @@ import { ref } from 'vue'
 
 export type OrderStatus = '待確認' | '取消'
 
-const STORAGE_KEY = 'taxi-pending-order-status'
+const STORAGE_KEY = 'master-travel-project-pending-order-status'
 const pendingOrderStatus = ref<OrderStatus>('待確認')
 
 const readStoredStatus = () => {

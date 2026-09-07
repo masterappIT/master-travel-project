@@ -105,9 +105,9 @@ class SupportController {
     const conversation = await masterBoxRequest<MasterBoxConversation>('/conversations', {
       method: 'POST',
       body: JSON.stringify({
-        externalId: `taxi:${riderId}`,
-        subject: 'Taxi 客戶服務',
-        metadata: { source: 'taxi-service', riderId, displayName: body.displayName?.trim().slice(0, 80) || undefined }
+        externalId: `master-travel-project:${riderId}`,
+        subject: 'Master Travel Project 客戶服務',
+        metadata: { source: 'master-travel-project-service', riderId, displayName: body.displayName?.trim().slice(0, 80) || undefined }
       })
     })
     const exp = Date.now() + 8 * 60 * 60 * 1000
