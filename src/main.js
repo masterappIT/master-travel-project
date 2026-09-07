@@ -63,4 +63,3 @@ export function createApp() {
   app.use(createPinia())
   return { app }
 }
-

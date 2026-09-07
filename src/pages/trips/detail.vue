@@ -80,7 +80,7 @@ const handleHashChange = () => {
 onMounted(() => {
   // H5 keeps the detail component mounted while the hash route changes, so the
   // hash must be treated as the source of truth for every order status.
-  // #ifndef MP-WEIXIN
+  // #ifndef MP-WEIXIN || MP-TOUTIAO
   if (typeof window !== 'undefined') {
     handleHashChange()
     window.addEventListener('hashchange', handleHashChange)
@@ -88,16 +88,16 @@ onMounted(() => {
   // #endif
 })
 onUnmounted(() => {
-  // #ifndef MP-WEIXIN
+  // #ifndef MP-WEIXIN || MP-TOUTIAO
   if (typeof window !== 'undefined') window.removeEventListener('hashchange', handleHashChange)
   // #endif
 })
 onShow(() => {
-  // #ifndef MP-WEIXIN
+  // #ifndef MP-WEIXIN || MP-TOUTIAO
   if (typeof window !== 'undefined') applyStatus(window.location.hash)
   // #endif
 })
-// #ifdef MP-WEIXIN
+// #ifdef MP-WEIXIN || MP-TOUTIAO
 watch(cachedPageUrl, (url) => applyStatus(url), { immediate: true })
 // #endif
 const statusIcon = computed(() => isCompleted.value ? '/static/orders/status-blue.svg' : '/static/orders/status-pending.svg')

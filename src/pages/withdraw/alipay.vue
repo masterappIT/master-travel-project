@@ -1,5 +1,5 @@
 <template>
-  <!-- #ifndef MP-WEIXIN -->
+  <!-- #ifndef MP-WEIXIN || MP-TOUTIAO -->
   <view class="page" :style="responsiveStyle">
     <view class="header"><image class="back" src="/static/wallet/back.svg" mode="aspectFit" @tap="goBack" /><text class="title">提現</text></view>
     <text class="method-title">到帳方式</text>

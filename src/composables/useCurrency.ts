@@ -20,7 +20,7 @@ export function useCurrency() {
     if (loaded) return
     loaded = true
     // 微信開發者工具與真機無法直接存取本機 localhost，預覽時使用快取／預設值。
-    // #ifdef MP-WEIXIN
+    // #ifdef MP-WEIXIN || MP-TOUTIAO
     return
     // #endif
     try {

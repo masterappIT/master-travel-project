@@ -4,7 +4,7 @@ defineEmits<{ select: [label: string] }>()
 
 const items = [
   { label: '常用資料', icon: '/static/profile/common-data.svg' },
-  // #ifndef MP-WEIXIN
+  // #ifndef MP-WEIXIN || MP-TOUTIAO
   { label: '我的銀行卡', icon: '/static/profile/common-card.svg' },
   // #endif
   { label: '聯繫客服', icon: '/static/customer-service.svg' },

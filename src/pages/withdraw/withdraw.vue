@@ -7,7 +7,7 @@
     <text class="method-title">到帳方式</text>
     <view class="methods">
       <view class="method-card method-wechat" :class="{ selected: selectedMethod === 'wechat' }" @tap="selectMethod('wechat')"><image class="method-icon" src="/static/withdraw/wechat.svg" mode="aspectFit" /><text>微信支付</text><view class="check-wrap"><image class="check" :src="selectedMethod === 'wechat' ? '/static/withdraw/check-selected.svg' : '/static/withdraw/check.svg'" mode="aspectFit" /></view></view>
-      <!-- #ifndef MP-WEIXIN -->
+      <!-- #ifndef MP-WEIXIN || MP-TOUTIAO -->
 <view class="method-card method-alipay" :class="{ selected: selectedMethod === 'alipay' }" @tap="selectMethod('alipay')"><image class="method-icon" src="/static/withdraw/alipay.svg" mode="aspectFit" /><text>支付寶提現（只限內地支付寶）</text><view class="check-wrap"><image class="check" :src="selectedMethod === 'alipay' ? '/static/withdraw/check-selected.svg' : '/static/withdraw/check.svg'" mode="aspectFit" /></view></view>
       <text class="bank-title">銀行帳戶</text>
       <view class="method-card method-visa" @tap="selectMethod('visa')"><image class="card-icon" src="/static/withdraw/visa.svg" mode="aspectFit" /><view class="method-copy"><text>VISA Card •••• 2321</text><text class="sub">銀行帳戶</text></view><view class="check-wrap"><image class="check" src="/static/withdraw/check.svg" mode="aspectFit" /></view></view>

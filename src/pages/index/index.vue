@@ -61,7 +61,7 @@
       <HomeBottomNav @services="openSupport" @trips="openTrips" />
     </view>
   </view>
-  <!-- #ifdef MP-WEIXIN -->
+  <!-- #ifdef MP-WEIXIN || MP-TOUTIAO -->
   <TripsPage v-if="visitedPages.has('/pages/trips/trips')" v-show="activePagePath === '/pages/trips/trips'" />
   <MembershipPage v-if="visitedPages.has('/pages/membership/membership')" v-show="activePagePath === '/pages/membership/membership'" />
   <MileagePage v-if="visitedPages.has('/pages/mileage/mileage')" v-show="activePagePath === '/pages/mileage/mileage'" />
@@ -120,7 +120,7 @@ import { reverseGeocode } from '../../services/api'
 import { findLocalRegion } from '../../utils/localRegions'
 
 const { responsiveStyle } = useResponsiveCanvas()
-// #ifdef MP-WEIXIN
+// #ifdef MP-WEIXIN || MP-TOUTIAO
 import TripsPage from '../trips/trips.vue'
 import MembershipPage from '../membership/membership.vue'
 import MileagePage from '../mileage/mileage.vue'
@@ -163,7 +163,7 @@ type RideMode = 'cross-border' | 'business'
 type TravelMode = 'cross-border' | 'airport'
 
 const activePagePath = cachedPagePath
-// #ifdef MP-WEIXIN
+// #ifdef MP-WEIXIN || MP-TOUTIAO
 activateEmbeddedPageHost()
 // #endif
 

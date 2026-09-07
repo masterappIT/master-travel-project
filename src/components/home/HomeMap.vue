@@ -1,6 +1,6 @@
 <template>
   <view class="map-layer" :class="{ 'full-screen': fullScreen }" aria-label="地圖區域">
-    <!-- #ifdef MP-WEIXIN -->
+    <!-- #ifdef MP-WEIXIN || MP-TOUTIAO -->
     <map
       class="native-map"
       :latitude="latitude"

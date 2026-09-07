@@ -67,16 +67,16 @@ const applyStatus = () => {
 }
 onLoad(() => { applyStatus() })
 onMounted(() => {
-  // #ifndef MP-WEIXIN
+  // #ifndef MP-WEIXIN || MP-TOUTIAO
   if (typeof window !== 'undefined') applyStatus()
   // #endif
 })
 onShow(() => {
-  // #ifndef MP-WEIXIN
+  // #ifndef MP-WEIXIN || MP-TOUTIAO
   if (typeof window !== 'undefined') applyStatus()
   // #endif
 })
-// #ifdef MP-WEIXIN
+// #ifdef MP-WEIXIN || MP-TOUTIAO
 watch(cachedPageUrl, () => applyStatus(), { immediate: true })
 // #endif
 const statusIcon = computed(() => isCompleted.value ? '/static/orders/status-blue.svg' : isCancelled.value ? '/static/orders/status-gray.svg' : '/static/orders/status-pending.svg')

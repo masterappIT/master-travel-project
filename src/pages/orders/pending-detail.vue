@@ -139,7 +139,7 @@ const cancelOrder = () => {
   setStatus('取消')
   // Replace the pending page so its cached route cannot be revealed as the
   // cancelled detail page when the native history contains an older entry.
-  // #ifndef MP-WEIXIN
+  // #ifndef MP-WEIXIN || MP-TOUTIAO
   return uni.redirectTo({ url: '/pages/orders/cancelled-detail', animationType: 'none', animationDuration: 0 })
   // #endif
   openCachedPage('/pages/orders/cancelled-detail')

@@ -34,7 +34,7 @@ export const deactivateEmbeddedPageHost = () => {
 }
 
 export const openCachedPage = (url: string) => {
-  // #ifdef MP-WEIXIN
+  // #ifdef MP-WEIXIN || MP-TOUTIAO
   if (embeddedHostActive) {
     const targetPath = pagePath(url)
     const targetIndex = cachedPageStack.value.findIndex((entry) => pagePath(entry) === targetPath)
@@ -69,7 +69,7 @@ export const openCachedPage = (url: string) => {
 }
 
 export const goHome = () => {
-  // #ifdef MP-WEIXIN
+  // #ifdef MP-WEIXIN || MP-TOUTIAO
   if (embeddedHostActive) {
     cachedPageStack.value = [HOME_PATH]
     cachedPageUrl.value = HOME_PATH
@@ -83,7 +83,7 @@ export const goHome = () => {
 export const closeCachedPage = (fallbackUrl: string) => {
   const fallbackPath = pagePath(fallbackUrl)
 
-  // #ifdef MP-WEIXIN
+  // #ifdef MP-WEIXIN || MP-TOUTIAO
   if (embeddedHostActive) {
     const fallbackIndex = cachedPageStack.value.findIndex((entry) => pagePath(entry) === fallbackPath)
 
@@ -120,7 +120,7 @@ export const closeCachedPage = (fallbackUrl: string) => {
 }
 
 export const swipeBack = () => {
-  // #ifdef MP-WEIXIN
+  // #ifdef MP-WEIXIN || MP-TOUTIAO
   if (embeddedHostActive) {
     if (cachedPageStack.value.length > 1) {
       cachedPageStack.value = cachedPageStack.value.slice(0, -1)
