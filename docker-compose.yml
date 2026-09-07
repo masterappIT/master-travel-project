@@ -4,9 +4,9 @@ services:
     environment:
       POSTGRES_USER: taxi
       POSTGRES_PASSWORD: taxi
-      POSTGRES_DB: taxi
+      POSTGRES_DB: master_travel_project
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - taxi-postgres:/var/lib/postgresql/data
 

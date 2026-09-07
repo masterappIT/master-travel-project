@@ -248,7 +248,7 @@ class PaymentCardsController {
   }
 }
 
-@Controller('health') class HealthController { @Get() check() { return { status: 'ok', service: 'taxi-cross-border-api' } } }
+@Controller('health') class HealthController { @Get() check() { return { status: 'ok', service: 'master-travel-project-api' } } }
 @Module({ controllers: [HealthController, LocationController, SettingsController, RecommendedAddressesController, PublicVehiclesController, PublicMembershipPlansController, PaymentCardsController, AdminAuthController, AdminController, SupportController] }) class AppModule {}
 async function bootstrap() {
   const app = await NestFactory.create(AppModule)
