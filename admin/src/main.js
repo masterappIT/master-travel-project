@@ -1,7 +1,7 @@
 import { createApp, ref, computed, onMounted } from 'vue'
 import './style.css'
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+const API = import.meta.env.VITE_API_URL || '/api'
 const token = ref(localStorage.getItem('admin_token') || '')
 const locale = ref(localStorage.getItem('admin_locale') || 'en')
 const view = ref('dashboard')

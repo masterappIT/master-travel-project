@@ -44,10 +44,14 @@ npm --prefix brand run dev
 | 服務 | 預設網址 |
 | --- | --- |
 | PostgreSQL | `localhost:5433` |
-| API | `http://localhost:3000` |
-| H5 客戶端 | `http://localhost:5173` |
-| 管理後台 | `http://localhost:5174` |
+| API | `http://127.0.0.1:3010` |
+| H5 客戶端 | `http://127.0.0.1:5173` |
+| 管理後台 | `http://127.0.0.1:5174` |
 | 品牌網站 | `http://localhost:4173` |
+
+H5 與管理後台使用固定連接埠；若連接埠已被其他程序占用，Vite 會直接報錯，不會自動切換到其他連接埠。開發環境的瀏覽器請求統一經由同源 `/api` 代理到 `http://127.0.0.1:3010`，原生、小程序等非 H5 目標則繼續使用 `VITE_API_BASE_URL` 或預設 API 位址。
+
+生產環境可參考 `deploy/nginx.h5.conf`，將 H5 靜態檔案與 `/api/` 反向代理部署在同一來源，避免瀏覽器跨域。
 
 ## 環境變數
 

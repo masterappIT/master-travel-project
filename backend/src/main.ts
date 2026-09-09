@@ -256,15 +256,18 @@ async function bootstrap() {
     .split(',')
     .map(origin => origin.trim())
     .filter(Boolean)
-  const allowedOrigins = new Set([...configuredOrigins, 'http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:5174', 'http://127.0.0.1:5174', 'http://localhost:5177', 'http://127.0.0.1:5177', 'http://localhost:5178', 'http://127.0.0.1:5178', 'http://localhost:5179', 'http://127.0.0.1:5179', 'http://localhost:5180', 'http://127.0.0.1:5180', 'http://localhost:5181', 'http://127.0.0.1:5181', 'http://localhost:5182', 'http://127.0.0.1:5182', 'http://localhost:5183', 'http://127.0.0.1:5183'])
+  const allowedOrigins = new Set([
+    ...configuredOrigins,
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    'http://localhost:5174',
+    'http://127.0.0.1:5174'
+  ])
   app.enableCors({
-    origin: (origin, callback) => {
-      if (!origin || allowedOrigins.has(origin) || /^https?:\/\/(localhost|127\.0\.0\.1):51(?:7[3-9]|8\d|9\d)$/.test(origin)) callback(null, true)
-      else callback(null, false)
-    },
+    origin: (origin, callback) => callback(null, !origin || allowedOrigins.has(origin)),
     methods: ['GET', 'POST', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization']
   })
-  await app.listen(Number(process.env.PORT) || 3000)
+  await app.listen(Number(process.env.PORT) || 3010, '127.0.0.1')
 }
 bootstrap()

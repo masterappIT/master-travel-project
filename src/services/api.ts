@@ -1,6 +1,9 @@
 import type { CrossBorderTrip } from '../../../shared/types/trip'
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000'
+let API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:3010'
+// #ifdef H5
+API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api'
+// #endif
 
 export async function getHealth(): Promise<{ status: string }> {
   const response = await uni.request({ url: `${API_BASE_URL}/health` })
