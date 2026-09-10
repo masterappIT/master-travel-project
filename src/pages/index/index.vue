@@ -311,7 +311,7 @@ const selectAddress = (value: string, selection?: AddressSelection) => {
     if (target === 'origin') businessOrigin.value = location
     if (target === 'destination') businessDestination.value = location
   } else {
-    const formattedValue = selection ? formatRouteAddress(selection.address, selection.region, selection.city, selection.district, selection.landmark || selection.name) : value
+    const formattedValue = selection?.displayAddress || (selection ? formatRouteAddress(selection.address, selection.region, selection.city, selection.district, selection.landmark || selection.name) : value)
     if (target === 'origin') {
       origin.value = formattedValue
       originIsCurrent.value = false

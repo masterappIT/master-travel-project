@@ -45,10 +45,10 @@ export async function reverseGeocode(latitude: number, longitude: number): Promi
   return response.data as LocationDetails
 }
 
-export async function searchPlaces(keyword: string, region?: string): Promise<PlaceSearchResult[]> {
+export async function searchPlaces(keyword: string, region?: string, city?: string): Promise<PlaceSearchResult[]> {
   const response = await uni.request({
     url: `${API_BASE_URL}/location/search`,
-    data: { keyword, region: region || '' }
+    data: { keyword, region: region || '', city: city || '' }
   })
   if (response.statusCode === 403) throw new Error('未開通服務')
   if (response.statusCode >= 400) throw new Error('位置搜索暫時無法使用')
@@ -113,6 +113,7 @@ export async function createFareQuote(input: { categoryId: string; vehicleId: st
 export type RecommendedAddress = {
   id: string
   region: '大陸' | '香港' | '澳門'
+  city?: string | null
   name: string
   address: string
   displayAddress?: string
@@ -126,6 +127,13 @@ export async function listRecommendedAddresses(): Promise<RecommendedAddress[]> 
   const response = await uni.request({ url: `${API_BASE_URL}/recommended-addresses` })
   if (response.statusCode >= 400) throw new Error('推薦地址暫時無法載入')
   return (response.data as { data: RecommendedAddress[] }).data
+}
+export type MainlandCity = { id: string; name: string; enabled: boolean; order: number }
+
+export async function listMainlandCities(): Promise<MainlandCity[]> {
+  const response = await uni.request({ url: `${API_BASE_URL}/recommended-addresses/mainland-cities` })
+  if (response.statusCode >= 400) throw new Error('大陸城市暫時無法載入')
+  return (response.data as { data: MainlandCity[] }).data
 }
 
 export type MembershipPlan = { id: string; level: string; name: string; monthly: number; yearly: number; recommended: boolean; benefits: string[]; enabled: boolean; order: number }

@@ -14,6 +14,7 @@ model User {
   name               String?
   cashBalance        Float               @default(0)
   fareBalance        Float               @default(0)
+  membershipLevel    String?
   createdAt          DateTime            @default(now())
   trips              Trip[]
   walletTransactions WalletTransaction[]
@@ -91,10 +92,22 @@ model AppSetting {
 model RecommendedAddress {
   id        String   @id @default(cuid())
   region    String
+  city      String?
   name      String
   address   String
   latitude  Float?
   longitude Float?
+  enabled   Boolean  @default(true)
+  order     Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([enabled, order])
+}
+
+model MainlandCity {
+  id        String   @id @default(cuid())
+  name      String   @unique
   enabled   Boolean  @default(true)
   order     Int
   createdAt DateTime @default(now())
@@ -255,4 +268,38 @@ enum FareQuoteLineType {
   VEHICLE
   EXTRA
   ADJUSTMENT
+  DISCOUNT
+}
+
+model Promotion {
+  id              String        @id @default(cuid())
+  name            String
+  kind            PromotionKind
+  discountType    DiscountType
+  discountValue   Float
+  currency        String        @default("RMB¥")
+  minimumSpend    Float         @default(0)
+  maximumDiscount Float?
+  startsAt        DateTime?
+  endsAt          DateTime?
+  enabled         Boolean       @default(true)
+  couponCode      String?       @unique
+  usageLimit      Int?
+  usageCount      Int           @default(0)
+  membershipLevel String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([kind, enabled, startsAt, endsAt])
+}
+
+enum PromotionKind {
+  CAMPAIGN
+  COUPON
+  MEMBER
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED_AMOUNT
 }

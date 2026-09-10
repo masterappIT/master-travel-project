@@ -25,7 +25,8 @@ type SupportSession = { conversationId: string; riderId: string; exp: number }
 interface User { id: string; countryCode: string; phoneNumber: string; name: string | null; cashBalance: number; fareBalance: number; createdAt: string }
 interface Trip { id: string; userId: string; origin: string; destination: string; region: string; scheduledAt: string; status: string; createdAt: string }
 type AddressRegion = '大陸' | '香港' | '澳門'
-interface RecommendedAddress { id: string; region: AddressRegion; name: string; address: string; latitude: number | null; longitude: number | null; enabled: boolean; order: number }
+interface RecommendedAddress { id: string; region: AddressRegion; city: string | null; name: string; address: string; latitude: number | null; longitude: number | null; enabled: boolean; order: number }
+interface MainlandCity { id: string; name: string; enabled: boolean; order: number }
 interface CharterOrder { id: string; userId: string; originRegion: string; origin: string; destinationRegion: string; destination: string; scheduledAt: string; durationHours: number; status: string; createdAt: string }
 interface VehicleCategory { id: string; name: string; tabLabel: string; order: number; enabled: boolean }
 interface VehicleCatalogItem { id: string; categoryId: string | null; brand: string; model: string; series: string; seats: number; image: string; colorLabel: string; modelChoiceLabel: string; enabled: boolean; order: number }
@@ -33,8 +34,9 @@ interface VehicleExtraOption { id: string; name: string; label: string; price: n
 interface DistancePricingTier { id: string; fromKm: number; toKm: number | null; pricePerKm: number; order: number }
 interface DistancePricingSettings { categoryId: string; minimumFare: number; currency: string; tiers: DistancePricingTier[] }
 interface QuoteExtraRequest { id?: unknown; quantity?: unknown }
-interface CreateQuoteRequest { categoryId?: unknown; vehicleId?: unknown; distanceMeters?: unknown; extraIds?: unknown; extras?: unknown; displayCurrency?: unknown; currency?: unknown }
+interface CreateQuoteRequest { categoryId?: unknown; vehicleId?: unknown; distanceMeters?: unknown; extraIds?: unknown; extras?: unknown; displayCurrency?: unknown; currency?: unknown; couponCode?: unknown; userId?: unknown; membershipLevel?: unknown }
 interface QuoteExtraSelection { id: string; quantity: number }
+interface PromotionInput { id?: unknown; name?: unknown; kind?: unknown; discountType?: unknown; discountValue?: unknown; currency?: unknown; minimumSpend?: unknown; maximumDiscount?: unknown; startsAt?: unknown; endsAt?: unknown; enabled?: unknown; couponCode?: unknown; usageLimit?: unknown; membershipLevel?: unknown }
 interface MembershipPlan { id: string; level: string; name: string; monthly: number; yearly: number; recommended: boolean; benefits: string[]; enabled: boolean; order: number }
 const prisma = new PrismaClient()
 const appSettingsDefaults = { id: 'default', language: '繁體中文', region: '香港', currency: 'HKD', exchangeRate: 0.92, adminLogo: null as string | null }
@@ -82,14 +84,14 @@ const vehicleDefaults: VehicleCatalogItem[] = [
   { id: 'premium-alphard', categoryId: 'premium-mpv', brand: 'Toyota', model: 'Alphard', series: '30系', seats: 6, image: '/static/vehicles/alphard.png', colorLabel: '不限顏色', modelChoiceLabel: '', enabled: true, order: 2 },
   { id: 'tesla-s', categoryId: 'standard-car', brand: 'Tesla', model: 'Model', series: 'S', seats: 5, image: '/static/vehicles/tesla-s.png', colorLabel: '不限顏色', modelChoiceLabel: '', enabled: true, order: 1 },
 ]
-const recommendedAddressDefaults: RecommendedAddress[] = [
-  ['hk-airport', '香港', '香港國際機場', '香港特別行政區-離島區-香港赤臘角天路1號'],
-  ['hk-disney', '香港', '香港迪士尼樂園', '香港特別行政區-荃灣區-大嶼山竹篙灣'],
-  ['sz-airport', '大陸', '深圳寶安國際機場', '深圳市-寶安區-寶安大道'],
-  ['sz-bay', '大陸', '深圳灣口岸', '深圳市-南山區-東濱路'],
-  ['macau-airport', '澳門', '澳門國際機場', '澳門特別行政區-嘉模堂區-偉龍馬路'],
-  ['macau-ruins', '澳門', '澳門大三巴牌坊', '澳門特別行政區-花王堂區-炮台山下'],
-].map(([id, region, name, address], index) => ({ id, region: region as AddressRegion, name, address, latitude: null, longitude: null, enabled: true, order: index + 1 }))
+const recommendedAddressDefaults: RecommendedAddress[] = ([
+  ['hk-airport', '香港', null, '香港國際機場', '香港特別行政區-離島區-香港赤臘角天路1號'],
+  ['hk-disney', '香港', null, '香港迪士尼樂園', '香港特別行政區-荃灣區-大嶼山竹篙灣'],
+  ['sz-airport', '大陸', '深圳市', '深圳寶安國際機場', '深圳市-寶安區-寶安大道'],
+  ['sz-bay', '大陸', '深圳市', '深圳灣口岸', '深圳市-南山區-東濱路'],
+  ['macau-airport', '澳門', null, '澳門國際機場', '澳門特別行政區-嘉模堂區-偉龍馬路'],
+  ['macau-ruins', '澳門', null, '澳門大三巴牌坊', '澳門特別行政區-花王堂區-炮台山下'],
+] as Array<[string, AddressRegion, string | null, string, string]>).map(([id, region, city, name, address], index) => ({ id, region, city: region === '大陸' ? city : null, name, address, latitude: null, longitude: null, enabled: true, order: index + 1 }))
 async function ensurePricingDefaults() {
   await prisma.$transaction(async tx => {
     await tx.appSetting.upsert({
@@ -172,7 +174,7 @@ function pricingResponse(pricing: DistancePricingSettings) {
   }
 }
 function validVehicleCategory(body: Partial<VehicleCategory>) { return body.id && body.name?.trim() && body.tabLabel?.trim() }
-type ManagedUser = { id: string; countryCode: string; phoneNumber: string; name: string | null; cashBalance: number; fareBalance: number; createdAt: Date }
+type ManagedUser = { id: string; countryCode: string; phoneNumber: string; name: string | null; cashBalance: number; fareBalance: number; membershipLevel: string | null; createdAt: Date }
 function userResponse(user: ManagedUser) {
   return {
     id: user.id,
@@ -182,6 +184,7 @@ function userResponse(user: ManagedUser) {
     name: user.name,
     cashBalance: user.cashBalance,
     fareBalance: user.fareBalance,
+    membershipLevel: user.membershipLevel,
     createdAt: user.createdAt.toISOString()
   }
 }
@@ -354,6 +357,7 @@ function recommendedAddressResponse(address: Omit<RecommendedAddress, 'region'> 
   return {
     id: address.id,
     region: address.region,
+    city: address.city,
     name: address.name,
     address: normalizeRegionalAddress(address.region, address.address),
     displayAddress: formattedAddress(address.region, address.address),
@@ -363,8 +367,9 @@ function recommendedAddressResponse(address: Omit<RecommendedAddress, 'region'> 
     order: address.order,
   }
 }
-function parseRecommendedAddress(body: { region?: unknown; name?: unknown; address?: unknown; latitude?: unknown; longitude?: unknown; enabled?: unknown; order?: unknown }, fallbackOrder: number): Omit<RecommendedAddress, 'id'> {
+function parseRecommendedAddress(body: { region?: unknown; city?: unknown; name?: unknown; address?: unknown; latitude?: unknown; longitude?: unknown; enabled?: unknown; order?: unknown }, fallbackOrder: number): Omit<RecommendedAddress, 'id'> {
   const region = body.region
+  const city = typeof body.city === 'string' ? body.city.trim() : ''
   const name = typeof body.name === 'string' ? body.name.trim() : ''
   const address = typeof body.address === 'string' ? normalizeRegionalAddress(typeof region === 'string' ? region : '', body.address.trim()) : ''
   const parseCoordinate = (value: unknown, field: string) => {
@@ -377,7 +382,7 @@ function parseRecommendedAddress(body: { region?: unknown; name?: unknown; addre
   const longitude = parseCoordinate(body.longitude, 'Longitude')
   const incomingOrder = body.order
   const order = incomingOrder === undefined || incomingOrder === null || incomingOrder === '' ? fallbackOrder : Number(incomingOrder)
-  if (typeof region !== 'string' || !['大陸', '香港', '澳門'].includes(region) || !name || name.length > 200 || !address || address.length > 500) {
+  if (typeof region !== 'string' || !['大陸', '香港', '澳門'].includes(region) || (region === '大陸' && city.length > 100) || !name || name.length > 200 || !address || address.length > 500) {
     throw new HttpException('Region, name and address are required', HttpStatus.BAD_REQUEST)
   }
   if ((latitude === null) !== (longitude === null) || (latitude !== null && (Math.abs(latitude) > 90 || Math.abs(longitude!) > 180))) {
@@ -385,7 +390,16 @@ function parseRecommendedAddress(body: { region?: unknown; name?: unknown; addre
   }
   if (!Number.isInteger(order) || order < 0) throw new HttpException('Order must be a non-negative integer', HttpStatus.BAD_REQUEST)
   if (body.enabled !== undefined && typeof body.enabled !== 'boolean') throw new HttpException('Enabled must be a boolean', HttpStatus.BAD_REQUEST)
-  return { region: region as AddressRegion, name, address, latitude, longitude, enabled: body.enabled ?? true, order }
+  return { region: region as AddressRegion, city: region === '大陸' ? city || null : null, name, address, latitude, longitude, enabled: body.enabled ?? true, order }
+}
+function parseMainlandCity(body: { name?: unknown; enabled?: unknown; order?: unknown }, fallbackOrder: number): Omit<MainlandCity, 'id'> {
+  const name = typeof body.name === 'string' ? body.name.trim() : ''
+  const order = body.order === undefined || body.order === null || body.order === '' ? fallbackOrder : Number(body.order)
+  if (!name || name.length > 100) throw new HttpException('City name is required', HttpStatus.BAD_REQUEST)
+  if (!/市$/.test(name)) throw new HttpException('City name must be a city-level unit ending with 市', HttpStatus.BAD_REQUEST)
+  if (!Number.isInteger(order) || order < 0) throw new HttpException('Order must be a non-negative integer', HttpStatus.BAD_REQUEST)
+  if (body.enabled !== undefined && typeof body.enabled !== 'boolean') throw new HttpException('Enabled must be a boolean', HttpStatus.BAD_REQUEST)
+  return { name, enabled: body.enabled ?? true, order }
 }
 function hashPassword(password: string) { const salt = randomBytes(16).toString('hex'); return `${salt}:${scryptSync(password, salt, 64).toString('hex')}` }
 function verifyPassword(password: string, stored: string) { const [salt, hash] = stored.split(':'); if (!salt || !hash) return false; const actual = scryptSync(password, salt, 64); const expected = Buffer.from(hash, 'hex'); return actual.length === expected.length && timingSafeEqual(actual, expected) }
@@ -664,12 +678,48 @@ class AdminController {
     ])
     return { data: data.map(recommendedAddressResponse), total }
   }
+  @Get('mainland-cities') async listMainlandCities(@Req() req: RequestLike) {
+    requireAuth(req)
+    return { data: await prisma.mainlandCity.findMany({ orderBy: [{ order: 'asc' }, { createdAt: 'asc' }] }) }
+  }
+  @Post('mainland-cities') async saveMainlandCity(@Req() req: RequestLike, @Body() body: Partial<MainlandCity>) {
+    requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
+    const id = typeof body.id === 'string' ? body.id.trim() : ''
+    const existing = id ? await prisma.mainlandCity.findUnique({ where: { id } }) : null
+    if (id && !existing) throw new HttpException('Mainland city not found', HttpStatus.NOT_FOUND)
+    const values = parseMainlandCity(body, existing?.order ?? await prisma.mainlandCity.count() + 1)
+    try {
+      return existing
+        ? await prisma.mainlandCity.update({ where: { id: existing.id }, data: values })
+        : await prisma.mainlandCity.create({ data: values })
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('Unique constraint')) throw new HttpException('City already exists', HttpStatus.CONFLICT)
+      throw error
+    }
+  }
+  @Delete('mainland-cities/:id') async deleteMainlandCity(@Req() req: RequestLike, @Param('id') id: string) {
+    requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
+    const existing = await prisma.mainlandCity.findUnique({ where: { id } })
+    if (!existing) throw new HttpException('Mainland city not found', HttpStatus.NOT_FOUND)
+    await prisma.$transaction([
+      prisma.recommendedAddress.updateMany({
+        where: { region: '大陸', city: existing.name },
+        data: { city: null },
+      }),
+      prisma.mainlandCity.delete({ where: { id } }),
+    ])
+    return { ok: true }
+  }
   @Post('recommended-addresses') async saveRecommendedAddress(@Req() req: RequestLike, @Body() body: Partial<RecommendedAddress>) {
     requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
     const id = typeof body.id === 'string' ? body.id.trim() : ''
     const existing = id ? await prisma.recommendedAddress.findUnique({ where: { id } }) : null
     if (id && !existing) throw new HttpException('Recommended address not found', HttpStatus.NOT_FOUND)
     const values = parseRecommendedAddress(body, existing?.order ?? await prisma.recommendedAddress.count() + 1)
+    if (values.region === '大陸' && values.city) {
+      const city = await prisma.mainlandCity.findFirst({ where: { name: values.city!, enabled: true } })
+      if (!city) throw new HttpException('Please select an enabled mainland city', HttpStatus.BAD_REQUEST)
+    }
     const saved = existing
       ? await prisma.recommendedAddress.update({ where: { id: existing.id }, data: values })
       : await prisma.recommendedAddress.create({ data: values })
@@ -679,9 +729,14 @@ class AdminController {
     requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
     const existing = await prisma.recommendedAddress.findUnique({ where: { id } })
     if (!existing) throw new HttpException('Recommended address not found', HttpStatus.NOT_FOUND)
+    const values = parseRecommendedAddress({ ...existing, ...body }, existing.order)
+    if (values.region === '大陸' && values.city) {
+      const city = await prisma.mainlandCity.findFirst({ where: { name: values.city!, enabled: true } })
+      if (!city) throw new HttpException('Please select an enabled mainland city', HttpStatus.BAD_REQUEST)
+    }
     const updated = await prisma.recommendedAddress.update({
       where: { id },
-      data: parseRecommendedAddress({ ...existing, ...body }, existing.order)
+      data: values
     })
     return recommendedAddressResponse(updated)
   }
@@ -830,6 +885,9 @@ class PublicQuotesController {
 }
 @Controller('recommended-addresses')
 class RecommendedAddressesController {
+  @Get('mainland-cities') async listCities() {
+    return { data: await prisma.mainlandCity.findMany({ where: { enabled: true }, orderBy: [{ order: 'asc' }, { createdAt: 'asc' }] }) }
+  }
   @Get() async list() {
     const data = await prisma.recommendedAddress.findMany({
       where: { enabled: true },
@@ -905,6 +963,7 @@ class LocationController {
     const region = req.query?.region
     if (region === '香港') params.set('city', '香港')
     else if (region === '澳門') params.set('city', '澳門')
+    else if (region === '大陸' && req.query?.city?.trim()) params.set('city', req.query.city.trim())
     const data = await this.requestAmap<{ pois?: Array<{ id?: string; name?: string; address?: string | string[]; location?: string; pname?: string; cityname?: string; adname?: string }> }>('/v3/place/text', params)
     const pois = data.pois || []
     const mainlandPois = pois.filter((poi) => {
