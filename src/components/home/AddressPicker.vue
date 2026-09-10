@@ -29,40 +29,20 @@ interface AddressSelection extends Place { region: Region | null }
 const emit = defineEmits<{ close: []; select: [value: string, selection: AddressSelection]; locate: []; 'use-current': [] }>()
 interface RegionData { currentCity: string; currentName: string; currentAddress: string; places: Place[] }
 const regions: Region[] = ['大陸', '香港', '澳門']
+const fallbackRecommendedPlaces: Array<Place & { region: Region }> = [
+  { id: 'hk-airport', region: '香港', name: '香港國際機場', address: '香港特別行政區-離島區-香港赤臘角天路1號' },
+  { id: 'hk-disney', region: '香港', name: '香港迪士尼樂園', address: '香港特別行政區-荃灣區-大嶼山竹篙灣' },
+  { id: 'sz-airport', region: '大陸', name: '深圳寶安國際機場', address: '深圳市-寶安區-寶安大道' },
+  { id: 'sz-bay', region: '大陸', name: '深圳灣口岸', address: '深圳市-南山區-東濱路' },
+  { id: 'macau-airport', region: '澳門', name: '澳門國際機場', address: '澳門特別行政區-嘉模堂區-偉龍馬路' },
+  { id: 'macau-ruins', region: '澳門', name: '澳門大三巴牌坊', address: '澳門特別行政區-花王堂區-炮台山下' },
+]
 const selectedRegion = ref<Region | null>(null)
 const regionMenuOpen = ref(false)
 const keyword = ref('')
 const searching = ref(false)
 const searchResults = ref<PlaceSearchResult[] | null>(null)
-const hongKongPlaces = ref<Place[]>([
-  { name: '香港國際機場', address: '香港特別行政區-離島區-香港赤臘角天路1號' },
-  { name: '香港迪士尼樂園', address: '香港特別行政區-荃灣區-大嶼山竹篙灣' },
-  { name: '香港海洋公園', address: '香港特別行政區-南區-香港香港仔黃竹坑180號' },
-  { name: '香港銅鑼灣時代廣場', address: '香港特別行政區-灣仔區-香港銅鑼灣勿地臣街1號' },
-  { name: '尖沙咀海港城', address: '香港特別行政區-灣仔區-香港銅鑼灣勿地臣街1號' },
-  { name: '香港會展中心', address: '香港特別行政區-灣仔區-香港銅鑼灣勿地臣街1號' },
-  { name: '亞洲國際博覽館', address: '香港特別行政區-灣仔區-香港銅鑼灣勿地臣街1號' },
-  { name: '蘭桂坊', address: '香港特別行政區-灣仔區-香港銅鑼灣勿地臣街1號' },
-])
-const mainlandPlaces = ref<Place[]>([
-  { name: '深圳寶安國際機場', address: '深圳市-寶安區-寶安大道' },
-  { name: '深圳灣口岸', address: '深圳市-寶安區-寶安大道' },
-  { name: '廣州白雲國際機場', address: '廣州市-花都區-花東鎮機場大道東888號' },
-  { name: '廣州融創樂園', address: '廣州市-花都區-花東鎮機場大道東888號' },
-  { name: '珠海長隆國際海洋度假區', address: '廣東省-珠海市' },
-  { name: '珠海市', address: '廣東省-珠海市' },
-  { name: '中山市', address: '廣東省-中山市' },
-  { name: '佛山市', address: '廣東省-佛山市' },
-  { name: '東莞市', address: '廣東省-東莞市' },
-])
-const macauPlaces = ref<Place[]>([
-  { name: '澳門國際機場', address: '澳門特別行政區-嘉模堂區-偉龍馬路' },
-  { name: '澳門半島', address: '澳門特別行政區-澳門半島' },
-  { name: '澳門大三巴牌坊', address: '澳門特別行政區-花王堂區-炮台山下' },
-  { name: '澳門葡京酒店', address: '澳門特別行政區-大堂區-葡京路2-4號' },
-  { name: '銀河酒店鑽石大廳', address: '澳門特別行政區-路氹城-望德聖母灣大馬路' },
-  { name: '永利皇宮', address: '澳門特別行政區-路氹城-體育館大馬路' },
-])
+const recommendedPlaces = ref<Array<Place & { region: Region }>>(fallbackRecommendedPlaces)
 const currentCity = computed(() => {
   const city = props.locationLabel.split(' · ')[0] || '目前位置'
   return city.replace(/特別行政區$|特别行政区$|市$/, '') || city
@@ -71,28 +51,16 @@ const defaultData = computed<RegionData>(() => ({
   currentCity: currentCity.value,
   currentName: props.locationLabel || '目前位置',
   currentAddress: props.detailedAddress || props.locationLabel || '目前位置',
-  places: props.selecting === 'origin' ? hongKongPlaces.value : mainlandPlaces.value,
+  places: recommendedPlaces.value.filter(place => place.region === (props.selecting === 'origin' ? '香港' : '大陸')),
 }))
 const regionData = computed<RegionData>(() => ({
   ...defaultData.value,
-  places: selectedRegion.value === '大陸'
-    ? mainlandPlaces.value
-    : selectedRegion.value === '澳門'
-      ? macauPlaces.value
-      : hongKongPlaces.value,
+  places: selectedRegion.value
+    ? recommendedPlaces.value.filter(place => place.region === selectedRegion.value)
+    : defaultData.value.places,
 }))
 const filteredPlaces = computed(() => searchResults.value ?? regionData.value.places.filter(place => !keyword.value || `${place.name}${place.address}`.includes(keyword.value)))
 const validCoordinate = (latitude?: number, longitude?: number) => Number.isFinite(latitude) && Number.isFinite(longitude) && Math.abs(latitude as number) <= 90 && Math.abs(longitude as number) <= 180
-const mergePlaces = (base: Place[], remote: Place[]) => {
-  const merged = [...remote, ...base]
-  const seen = new Set<string>()
-  return merged.filter(place => {
-    const key = `${place.name.trim()}|${place.address.trim()}`
-    if (seen.has(key)) return false
-    seen.add(key)
-    return true
-  })
-}
 const runSearch = async () => {
   const value = keyword.value.trim()
   if (!value || searching.value) return
@@ -111,15 +79,14 @@ const runSearch = async () => {
 onMounted(async () => {
   try {
     const addresses = await listRecommendedAddresses()
-    const grouped = (region: Region) => addresses.filter(item => item.region === region).map(({ id, name, address }) => ({ id, name, address }))
-    const hongKong = grouped('香港')
-    const mainland = grouped('大陸')
-    const macau = grouped('澳門')
-    hongKongPlaces.value = mergePlaces(hongKongPlaces.value, hongKong)
-    mainlandPlaces.value = mergePlaces(mainlandPlaces.value, mainland)
-    macauPlaces.value = mergePlaces(macauPlaces.value, macau)
+    recommendedPlaces.value = addresses.length > 0
+      ? addresses.map(({ id, region, name, address, latitude, longitude }) => ({
+          id, region, name, address, latitude: latitude ?? undefined, longitude: longitude ?? undefined,
+        }))
+      : fallbackRecommendedPlaces
   } catch {
-    // Keep bundled recommendations when the API is unavailable.
+    recommendedPlaces.value = fallbackRecommendedPlaces
+    uni.showToast({ title: '推薦地點暫時無法載入，已使用預設地點', icon: 'none' })
   }
 })
 const inferRegion = (place: Place): Region | null => {

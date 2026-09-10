@@ -113,6 +113,8 @@ export type RecommendedAddress = {
   region: '大陸' | '香港' | '澳門'
   name: string
   address: string
+  latitude: number | null
+  longitude: number | null
   enabled: boolean
   order: number
 }

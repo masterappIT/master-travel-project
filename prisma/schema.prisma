@@ -88,6 +88,21 @@ model AppSetting {
   updatedAt    DateTime @updatedAt
 }
 
+model RecommendedAddress {
+  id        String   @id @default(cuid())
+  region    String
+  name      String
+  address   String
+  latitude  Float?
+  longitude Float?
+  enabled   Boolean  @default(true)
+  order     Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([enabled, order])
+}
+
 model VehicleCategory {
   id              String                   @id
   name            String

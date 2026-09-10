@@ -1,5 +1,5 @@
 import { NestFactory } from '@nestjs/core'
-import { Body, CallHandler, Controller, Delete, ExecutionContext, ForbiddenException, Get, HttpException, HttpStatus, Injectable, Module, NestInterceptor, Param, Post, Req, UnauthorizedException } from '@nestjs/common'
+import { Body, CallHandler, Controller, Delete, ExecutionContext, ForbiddenException, Get, HttpException, HttpStatus, Injectable, Module, NestInterceptor, Param, Patch, Post, Req, UnauthorizedException } from '@nestjs/common'
 import { NestExpressApplication } from '@nestjs/platform-express'
 import { APP_INTERCEPTOR } from '@nestjs/core'
 import { createHmac, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto'
@@ -25,7 +25,7 @@ type SupportSession = { conversationId: string; riderId: string; exp: number }
 interface User { id: string; countryCode: string; phoneNumber: string; name: string | null; cashBalance: number; fareBalance: number; createdAt: string }
 interface Trip { id: string; userId: string; origin: string; destination: string; region: string; scheduledAt: string; status: string; createdAt: string }
 type AddressRegion = '大陸' | '香港' | '澳門'
-interface RecommendedAddress { id: string; region: AddressRegion; name: string; address: string; enabled: boolean; order: number }
+interface RecommendedAddress { id: string; region: AddressRegion; name: string; address: string; latitude: number | null; longitude: number | null; enabled: boolean; order: number }
 interface CharterOrder { id: string; userId: string; originRegion: string; origin: string; destinationRegion: string; destination: string; scheduledAt: string; durationHours: number; status: string; createdAt: string }
 interface VehicleCategory { id: string; name: string; tabLabel: string; order: number; enabled: boolean }
 interface VehicleCatalogItem { id: string; categoryId: string | null; brand: string; model: string; series: string; seats: number; image: string; colorLabel: string; modelChoiceLabel: string; enabled: boolean; order: number }
@@ -82,6 +82,14 @@ const vehicleDefaults: VehicleCatalogItem[] = [
   { id: 'premium-alphard', categoryId: 'premium-mpv', brand: 'Toyota', model: 'Alphard', series: '30系', seats: 6, image: '/static/vehicles/alphard.png', colorLabel: '不限顏色', modelChoiceLabel: '', enabled: true, order: 2 },
   { id: 'tesla-s', categoryId: 'standard-car', brand: 'Tesla', model: 'Model', series: 'S', seats: 5, image: '/static/vehicles/tesla-s.png', colorLabel: '不限顏色', modelChoiceLabel: '', enabled: true, order: 1 },
 ]
+const recommendedAddressDefaults: RecommendedAddress[] = [
+  ['hk-airport', '香港', '香港國際機場', '香港特別行政區-離島區-香港赤臘角天路1號'],
+  ['hk-disney', '香港', '香港迪士尼樂園', '香港特別行政區-荃灣區-大嶼山竹篙灣'],
+  ['sz-airport', '大陸', '深圳寶安國際機場', '深圳市-寶安區-寶安大道'],
+  ['sz-bay', '大陸', '深圳灣口岸', '深圳市-南山區-東濱路'],
+  ['macau-airport', '澳門', '澳門國際機場', '澳門特別行政區-嘉模堂區-偉龍馬路'],
+  ['macau-ruins', '澳門', '澳門大三巴牌坊', '澳門特別行政區-花王堂區-炮台山下'],
+].map(([id, region, name, address], index) => ({ id, region: region as AddressRegion, name, address, latitude: null, longitude: null, enabled: true, order: index + 1 }))
 async function ensurePricingDefaults() {
   await prisma.$transaction(async tx => {
     await tx.appSetting.upsert({
@@ -108,6 +116,11 @@ async function ensurePricingDefaults() {
     }
     for (const extra of vehicleExtraDefaults) {
       await tx.vehicleExtra.upsert({ where: { id: extra.id }, create: extra, update: {} })
+    }
+    if ((await tx.recommendedAddress.count()) === 0) {
+      for (const address of recommendedAddressDefaults) {
+        await tx.recommendedAddress.upsert({ where: { id: address.id }, create: address, update: {} })
+      }
     }
     for (const user of users) {
       await tx.user.upsert({
@@ -321,14 +334,42 @@ function parseDistancePricing(categoryId: string, body: Partial<DistancePricingS
   if (!currency || !validNumbers || !contiguous) throw new HttpException('Pricing tiers must be valid, contiguous, and end with an unlimited tier', HttpStatus.BAD_REQUEST)
   return { categoryId, minimumFare, currency, tiers }
 }
-const recommendedAddresses: RecommendedAddress[] = [
-  ['hk-airport', '香港', '香港國際機場', '香港特別行政區-離島區-香港赤臘角天路1號'],
-  ['hk-disney', '香港', '香港迪士尼樂園', '香港特別行政區-荃灣區-大嶼山竹篙灣'],
-  ['sz-airport', '大陸', '深圳寶安國際機場', '深圳市-寶安區-寶安大道'],
-  ['sz-bay', '大陸', '深圳灣口岸', '深圳市-南山區-東濱路'],
-  ['macau-airport', '澳門', '澳門國際機場', '澳門特別行政區-嘉模堂區-偉龍馬路'],
-  ['macau-ruins', '澳門', '澳門大三巴牌坊', '澳門特別行政區-花王堂區-炮台山下'],
-].map(([id, region, name, address], order) => ({ id, region: region as AddressRegion, name, address, enabled: true, order }))
+function recommendedAddressResponse(address: Omit<RecommendedAddress, 'region'> & { region: string }) {
+  return {
+    id: address.id,
+    region: address.region,
+    name: address.name,
+    address: address.address,
+    latitude: address.latitude,
+    longitude: address.longitude,
+    enabled: address.enabled,
+    order: address.order,
+  }
+}
+function parseRecommendedAddress(body: { region?: unknown; name?: unknown; address?: unknown; latitude?: unknown; longitude?: unknown; enabled?: unknown; order?: unknown }, fallbackOrder: number): Omit<RecommendedAddress, 'id'> {
+  const region = body.region
+  const name = typeof body.name === 'string' ? body.name.trim() : ''
+  const address = typeof body.address === 'string' ? body.address.trim() : ''
+  const parseCoordinate = (value: unknown, field: string) => {
+    if (value === undefined || value === null || value === '') return null
+    const coordinate = Number(value)
+    if (!Number.isFinite(coordinate)) throw new HttpException(`${field} must be a valid number`, HttpStatus.BAD_REQUEST)
+    return coordinate
+  }
+  const latitude = parseCoordinate(body.latitude, 'Latitude')
+  const longitude = parseCoordinate(body.longitude, 'Longitude')
+  const incomingOrder = body.order
+  const order = incomingOrder === undefined || incomingOrder === null || incomingOrder === '' ? fallbackOrder : Number(incomingOrder)
+  if (typeof region !== 'string' || !['大陸', '香港', '澳門'].includes(region) || !name || name.length > 200 || !address || address.length > 500) {
+    throw new HttpException('Region, name and address are required', HttpStatus.BAD_REQUEST)
+  }
+  if ((latitude === null) !== (longitude === null) || (latitude !== null && (Math.abs(latitude) > 90 || Math.abs(longitude!) > 180))) {
+    throw new HttpException('Latitude and longitude must be supplied together and be in range', HttpStatus.BAD_REQUEST)
+  }
+  if (!Number.isInteger(order) || order < 0) throw new HttpException('Order must be a non-negative integer', HttpStatus.BAD_REQUEST)
+  if (body.enabled !== undefined && typeof body.enabled !== 'boolean') throw new HttpException('Enabled must be a boolean', HttpStatus.BAD_REQUEST)
+  return { region: region as AddressRegion, name, address, latitude, longitude, enabled: body.enabled ?? true, order }
+}
 function hashPassword(password: string) { const salt = randomBytes(16).toString('hex'); return `${salt}:${scryptSync(password, salt, 64).toString('hex')}` }
 function verifyPassword(password: string, stored: string) { const [salt, hash] = stored.split(':'); if (!salt || !hash) return false; const actual = scryptSync(password, salt, 64); const expected = Buffer.from(hash, 'hex'); return actual.length === expected.length && timingSafeEqual(actual, expected) }
 const now = new Date().toISOString()
@@ -437,7 +478,7 @@ class AdminController {
   @Delete('administrators/:id') disableAdministrator(@Req() req: RequestLike, @Param('id') id: string) { const session = requireRole(req, ['SUPER_ADMIN']); if (session.sub === id) throw new HttpException('Cannot disable the current administrator', HttpStatus.BAD_REQUEST); const admin = administrators.find(item => item.id === id); if (!admin) throw new HttpException('Administrator not found', HttpStatus.NOT_FOUND); if (admin.role === 'SUPER_ADMIN' && admin.enabled && administrators.filter(item => item.role === 'SUPER_ADMIN' && item.enabled).length === 1) throw new HttpException('At least one enabled super administrator is required', HttpStatus.BAD_REQUEST); admin.enabled = false; admin.updatedAt = new Date().toISOString(); return { ok: true } }
   @Get('audit-logs') listAuditLogs(@Req() req: RequestLike) { requireRole(req, ['SUPER_ADMIN']); return { data: adminAuditLogs.slice(0, 300), total: adminAuditLogs.length } }
 
-  @Get('dashboard') async dashboard(@Req() req: RequestLike) { requireAuth(req); return { users: await prisma.user.count(), trips: trips.length, pendingTrips: trips.filter(t => t.status === 'PENDING').length, completedTrips: trips.filter(t => t.status === 'COMPLETED').length, charterOrders: charterOrders.length, pendingCharters: charterOrders.filter(order => order.status === 'PENDING').length, recommendedAddresses: recommendedAddresses.filter(address => address.enabled).length } }
+  @Get('dashboard') async dashboard(@Req() req: RequestLike) { requireAuth(req); return { users: await prisma.user.count(), trips: trips.length, pendingTrips: trips.filter(t => t.status === 'PENDING').length, completedTrips: trips.filter(t => t.status === 'COMPLETED').length, charterOrders: charterOrders.length, pendingCharters: charterOrders.filter(order => order.status === 'PENDING').length, recommendedAddresses: await prisma.recommendedAddress.count({ where: { enabled: true } }) } }
   @Get('users') async listUsers(@Req() req: RequestLike) {
     requireAuth(req)
     const [data, total] = await prisma.$transaction([prisma.user.findMany({ orderBy: { createdAt: 'desc' } }), prisma.user.count()])
@@ -598,8 +639,42 @@ class AdminController {
     if (!Number.isFinite(distanceKm) || distanceKm < 0) throw new HttpException('Valid distance is required', HttpStatus.BAD_REQUEST)
     return { categoryId, distanceKm, fare: calculateDistanceFare(distanceKm, pricing), currency: pricing.currency }
   }
-@Post('recommended-addresses') saveRecommendedAddress(@Req() req: RequestLike, @Body() body: Partial<RecommendedAddress>) { requireAuth(req); const region = body.region; const name = body.name?.trim(); const address = body.address?.trim(); if (!region || !['大陸', '香港', '澳門'].includes(region) || !name || !address) throw new HttpException('Region, name and address are required', HttpStatus.BAD_REQUEST); const existing = body.id ? recommendedAddresses.find(item => item.id === body.id) : undefined; if (existing) { Object.assign(existing, { region, name, address, enabled: body.enabled ?? existing.enabled, order: Number.isFinite(body.order) ? Number(body.order) : existing.order }); return existing } const item: RecommendedAddress = { id: `address-${Date.now()}`, region, name, address, enabled: body.enabled ?? true, order: Number.isFinite(body.order) ? Number(body.order) : recommendedAddresses.length }; recommendedAddresses.push(item); return item }
-  @Delete('recommended-addresses/:id') deleteRecommendedAddress(@Req() req: RequestLike, @Param('id') id: string) { requireAuth(req); const index = recommendedAddresses.findIndex(item => item.id === id); if (index < 0) throw new HttpException('Recommended address not found', HttpStatus.NOT_FOUND); recommendedAddresses.splice(index, 1); return { ok: true } }
+  @Get('recommended-addresses') async listRecommendedAddresses(@Req() req: RequestLike) {
+    requireAuth(req)
+    const [data, total] = await prisma.$transaction([
+      prisma.recommendedAddress.findMany({ orderBy: [{ order: 'asc' }, { createdAt: 'asc' }] }),
+      prisma.recommendedAddress.count(),
+    ])
+    return { data: data.map(recommendedAddressResponse), total }
+  }
+  @Post('recommended-addresses') async saveRecommendedAddress(@Req() req: RequestLike, @Body() body: Partial<RecommendedAddress>) {
+    requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
+    const id = typeof body.id === 'string' ? body.id.trim() : ''
+    const existing = id ? await prisma.recommendedAddress.findUnique({ where: { id } }) : null
+    if (id && !existing) throw new HttpException('Recommended address not found', HttpStatus.NOT_FOUND)
+    const values = parseRecommendedAddress(body, existing?.order ?? await prisma.recommendedAddress.count() + 1)
+    const saved = existing
+      ? await prisma.recommendedAddress.update({ where: { id: existing.id }, data: values })
+      : await prisma.recommendedAddress.create({ data: values })
+    return recommendedAddressResponse(saved)
+  }
+  @Patch('recommended-addresses/:id') async updateRecommendedAddress(@Req() req: RequestLike, @Param('id') id: string, @Body() body: Partial<RecommendedAddress>) {
+    requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
+    const existing = await prisma.recommendedAddress.findUnique({ where: { id } })
+    if (!existing) throw new HttpException('Recommended address not found', HttpStatus.NOT_FOUND)
+    const updated = await prisma.recommendedAddress.update({
+      where: { id },
+      data: parseRecommendedAddress({ ...existing, ...body }, existing.order)
+    })
+    return recommendedAddressResponse(updated)
+  }
+  @Delete('recommended-addresses/:id') async deleteRecommendedAddress(@Req() req: RequestLike, @Param('id') id: string) {
+    requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
+    const existing = await prisma.recommendedAddress.findUnique({ where: { id }, select: { id: true } })
+    if (!existing) throw new HttpException('Recommended address not found', HttpStatus.NOT_FOUND)
+    await prisma.recommendedAddress.delete({ where: { id } })
+    return { ok: true }
+  }
 }
 @Controller('membership-plans')
 class PublicMembershipPlansController { @Get() list() { return { data: membershipPlans.filter(item => item.enabled).sort((a, b) => a.order - b.order) } } }
@@ -738,8 +813,12 @@ class PublicQuotesController {
 }
 @Controller('recommended-addresses')
 class RecommendedAddressesController {
-  @Get() list() {
-    return { data: [...recommendedAddresses].filter(item => item.enabled).sort((a, b) => a.order - b.order) }
+  @Get() async list() {
+    const data = await prisma.recommendedAddress.findMany({
+      where: { enabled: true },
+      orderBy: [{ order: 'asc' }, { createdAt: 'asc' }],
+    })
+    return { data: data.map(recommendedAddressResponse) }
   }
 }
 @Controller('settings')
@@ -909,7 +988,7 @@ async function bootstrap() {
   ])
   app.enableCors({
     origin: (origin, callback) => callback(null, !origin || allowedOrigins.has(origin)),
-    methods: ['GET', 'POST', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization']
   })
   await app.listen(Number(process.env.PORT) || 3010, '127.0.0.1')
