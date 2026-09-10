@@ -108,10 +108,11 @@ export type FareQuote = {
   expiresAt: string | null
   pricing: { categoryId: string; categoryName: string; tabLabel: string; minimumFare: number; currency: string; tiers: Array<{ id: string; fromKm: number; toKm: number | null; pricePerKm: number; order: number }> } | null
   vehicle: PublicVehicle | null
+  appliedPromotion: { id: string | null; label: string; discount: number; currency: string } | null
   lines: Array<{ type: string; sourceId: string | null; label: string; quantity: number; unitAmount: number; totalAmount: number; currency: string; order: number }>
 }
 
-export async function createFareQuote(input: { categoryId: string; vehicleId: string; distanceMeters: number; extraIds?: string[]; displayCurrency?: 'RMB' | 'HKD'; originRegion?: string; originCity?: string; destinationRegion?: string; destinationCity?: string; scheduledAt?: string }): Promise<FareQuote> {
+export async function createFareQuote(input: { categoryId: string; vehicleId: string; distanceMeters: number; extraIds?: string[]; displayCurrency?: 'RMB' | 'HKD'; couponCode?: string; originRegion?: string; originCity?: string; destinationRegion?: string; destinationCity?: string; scheduledAt?: string }): Promise<FareQuote> {
   const response = await uni.request({ url: `${API_BASE_URL}/quotes`, method: 'POST', data: input })
   if (response.statusCode >= 400) throw new Error((response.data as { message?: string })?.message || '報價暫時無法取得')
   return response.data as FareQuote
@@ -166,6 +167,7 @@ export type PublicPromotion = {
   name: string
   kind: 'CAMPAIGN' | 'COUPON' | 'MEMBER'
   discountType: 'PERCENTAGE' | 'FIXED_AMOUNT' | 'TOTAL_PRICE'
+  stackingMode: 'NONE' | 'PERCENTAGE_AND_VOUCHER' | 'ALL'
   discountValue: number
   currency: string
   startsAt: string | null
@@ -177,7 +179,7 @@ export type PublicPromotion = {
 }
 
 export async function listPublicPromotions(): Promise<PublicPromotion[]> {
-  const response = await uni.request({ url: `${API_BASE_URL}/promotions` })
+  const response = await uni.request({ url: `${API_BASE_URL}/promotions?_=${Date.now()}` })
   if (response.statusCode >= 400) throw new Error('優惠資料暫時無法載入')
   return (response.data as { data: PublicPromotion[] }).data
 }

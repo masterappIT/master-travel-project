@@ -13,7 +13,7 @@
 
     <view class="vehicle-tag">高級跨境商務車</view>
     <view class="selected-vehicle-card"><VehicleCard :vehicle="vehicle" :quote="tripStore.selectedFareQuote" selectable :selected="true" /></view>
-    <view class="promo-card"><text class="promo-copy">{{ promoApplied ? `已使用優惠「${tripStore.activeDraft.couponCode}」` : '可使用優惠券' }}</text><view class="promo-action" @tap="togglePromo"><text>{{ promoApplied ? '取消使用' : '選擇優惠' }}</text></view></view>
+    <view class="promo-card"><text class="promo-copy">{{ `${promoApplied ? '已使用優惠' : (hasCombinablePromotion ? '可使用組合優惠' : '可使用優惠')}“現金券${displayedPromotionAmount > 0 ? formatCouponAmount(displayedPromotionAmount, tripStore.selectedFareQuote?.currency) : ''}”` }}</text><view class="promo-action" :class="{ 'used-action': promoApplied }" @tap="togglePromo"><text>{{ promoApplied ? '已使用' : '立即使用' }}</text></view></view>
 
     <scroll-view v-if="visibleExtras.length" class="extras" scroll-y :show-scrollbar="false">
       <view class="extras-title"><image src="/static/vehicles/extra-cart.svg" mode="aspectFit" /><text>額外選擇</text></view>
@@ -39,7 +39,7 @@ import { onShow } from '@dcloudio/uni-app'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { useTripStore } from '../../stores/trip'
 import { closeCachedPage, openCachedPage } from '../../utils/navigation'
-import { createFareQuote, listPublicVehicles, planDrivingRoute, type PublicVehicleExtra } from '../../services/api'
+import { createFareQuote, listPublicPromotions, listPublicVehicles, planDrivingRoute, type PublicPromotion, type PublicVehicleExtra } from '../../services/api'
 import { useCurrency } from '../../composables/useCurrency'
 import TripEditSheet from '../../components/home/TripEditSheet.vue'
 import VehicleCard from '../../components/vehicles/VehicleCard.vue'
@@ -47,7 +47,7 @@ import type { Vehicle } from '../../types/vehicle'
 import type { AddressSelection } from '../../components/home/AddressPicker.vue'
 const { responsiveStyle } = useResponsiveCanvas()
 const tripStore = useTripStore()
-const { currency } = useCurrency()
+const { currency, exchangeRate } = useCurrency()
 const editSheetOpen = ref(false)
 const vehicle = computed<Vehicle>(() => tripStore.chosenVehicle || { id: 'premium-alphard', brand: 'Toyota', model: 'Alphard', series: '30系', seats: 6, image: '/static/vehicles/alphard.png', selectable: true })
 const originLabel = computed(() => cityName(tripStore.activeTrip?.origin, '香港'))
@@ -111,9 +111,46 @@ const saveTripChanges = async (
   }
 }
 const promoApplied = ref(false)
+const promotions = ref<PublicPromotion[]>([])
 const extras = ref<PublicVehicleExtra[]>([])
 const severeWeatherEnabled = ref(false)
 const selectedExtras = computed(() => tripStore.activeDraft.extras)
+const cashCoupon = computed(() => {
+  const couponCode = tripStore.activeDraft.couponCode?.trim().toUpperCase()
+  return promotions.value.find(promotion =>
+    promotion.kind === 'COUPON' &&
+    promotion.couponCode &&
+    (!couponCode || promotion.couponCode.toUpperCase() === couponCode)
+  )
+})
+const hasCombinablePromotion = computed(() => promotions.value.some(promotion =>
+  promotion.kind !== 'COUPON' &&
+  (promotion.stackingMode === 'ALL' || promotion.stackingMode === 'PERCENTAGE_AND_VOUCHER')
+))
+const couponDiscountAmount = computed(() => {
+  const promotion = cashCoupon.value
+  if (!promotion || promotion.discountType !== 'FIXED_AMOUNT') return 0
+  const sourceCurrency = promotion.currency === 'HKD' || promotion.currency === 'HKD$' ? 'HKD' : 'RMB'
+  if (currency.value === sourceCurrency) return promotion.discountValue
+  return sourceCurrency === 'RMB' ? promotion.discountValue / exchangeRate.value : promotion.discountValue * exchangeRate.value
+})
+const displayedPromotionAmount = computed(() => {
+  if (promoApplied.value && tripStore.selectedFareQuote?.appliedPromotion) {
+    return tripStore.selectedFareQuote.appliedPromotion.discount
+  }
+  return couponDiscountAmount.value
+})
+const formatCouponAmount = (amount: number, quoteCurrency?: string) => {
+  if (quoteCurrency === 'HKD' || quoteCurrency === 'HKD$' || currency.value === 'HKD') return `HK$${amount.toFixed(0)}`
+  return `¥${amount.toFixed(0)}`
+}
+const loadPromotions = async () => {
+  try {
+    promotions.value = await listPublicPromotions()
+  } catch (error) {
+    uni.showToast({ title: error instanceof Error ? error.message : '優惠資料暫時無法載入', icon: 'none' })
+  }
+}
 const localTimeMinutes = (value: Date) => {
   if (Number.isNaN(value.valueOf())) return null
   const hongKongTime = new Date(value.getTime() + 8 * 60 * 60 * 1000)
@@ -128,16 +165,16 @@ const isTriggeredExtra = (extra: PublicVehicleExtra) => {
   const triggerType = extra.triggerType || (extra.requiredForImmediate ? 'IMMEDIATE' : 'NONE')
   if (!extra.triggerEnabled) return false
   if (triggerType === 'WEATHER') return severeWeatherEnabled.value
+  if (!tripStore.departureTime) return false
   if (triggerType === 'NIGHT') {
     const start = timeMinutes(extra.nightStartTime)
     const end = timeMinutes(extra.nightEndTime)
-    const departure = tripStore.departureTime ? new Date(tripStore.departureTime) : new Date()
+    const departure = new Date(tripStore.departureTime)
     const current = localTimeMinutes(departure)
     if (start === null || end === null || current === null) return false
     return start <= end ? current >= start && current <= end : current >= start || current <= end
   }
   if (triggerType !== 'IMMEDIATE' || extra.requiredWithinMinutes === null) return false
-  if (!tripStore.departureTime) return true
   const departure = new Date(tripStore.departureTime)
   return !Number.isNaN(departure.valueOf()) && departure.getTime() - Date.now() <= extra.requiredWithinMinutes * 60 * 1000
 }
@@ -198,7 +235,15 @@ const refreshQuote = async (extraIds = selectedExtras.value) => {
       extraIds: synchronizedExtraIds,
       displayCurrency: currency.value
     })
-    if (requestId === quoteRequestId) tripStore.setFareQuote(quote)
+    if (requestId !== quoteRequestId) return
+    if (tripStore.activeDraft.couponCode && !quote.appliedPromotion) {
+      tripStore.setCouponCode()
+      promoApplied.value = false
+      tripStore.setFareQuote(quote)
+      showPromoToast('優惠已失效，已取消使用')
+      return
+    }
+    tripStore.setFareQuote(quote)
   } catch (error) {
     if (requestId === quoteRequestId) uni.showToast({ title: error instanceof Error ? error.message : '報價暫時無法取得', icon: 'none' })
   }
@@ -217,10 +262,12 @@ const loadExtras = async () => {
   }
 }
 onMounted(async () => {
+  await loadPromotions()
   await loadExtras()
   await refreshQuote()
 })
 onShow(async () => {
+  await loadPromotions()
   await loadExtras()
   await refreshQuote()
   const applied = Boolean(tripStore.activeDraft.couponCode)
@@ -230,15 +277,30 @@ onShow(async () => {
   }
 })
 const goBack = () => closeCachedPage('/pages/vehicles/select')
+const showPromoToast = (title: string) => {
+  uni.showToast({ title, icon: 'none', duration: 2000 })
+}
 const togglePromo = () => {
   if (promoApplied.value) {
     tripStore.setCouponCode()
     promoApplied.value = false
     void refreshQuote()
-    uni.showToast({ title: '已取消優惠', icon: 'none' })
+    showPromoToast('已取消優惠')
     return
   }
-  openCachedPage('/pages/coupons/coupons')
+  if (couponDiscountAmount.value <= 0) {
+    uni.showToast({ title: '目前沒有可使用的組合優惠', icon: 'none' })
+    return
+  }
+  const couponCode = cashCoupon.value?.couponCode
+  if (!couponCode) {
+    uni.showToast({ title: '目前沒有可使用的現金券', icon: 'none' })
+    return
+  }
+  tripStore.setCouponCode(couponCode)
+  promoApplied.value = true
+  void refreshQuote()
+  showPromoToast('優惠已使用，已扣減車資')
 }
 const toggleExtra = (id: string) => {
   const extra = extras.value.find(item => item.id === id)
@@ -265,5 +327,5 @@ const goNext = async () => {
 
 <style scoped>
 :global(html),:global(body),:global(#app){width:100%;min-width:0;height:100%;margin:0;overflow:hidden;background:#56657e}.page{position:fixed;top:50%;left:50%;width:430px;height:932px;overflow:hidden;background:#56657e;color:#fff;font-family:'Noto Sans TC',sans-serif;transform:translate(-50%,-50%) scale(min(1,calc(100vw / 430px),calc(100dvh / 932px)));transform-origin:center}.header{position:absolute;z-index:3;top:0;left:0;width:430px;height:155px;overflow:hidden;border-radius:25px;background:#56657e;color:#fff}.back-button{position:absolute;top:53px;left:25px;width:28px;height:40px;display:flex;align-items:center;justify-content:center}.back-button image{width:16px;height:29px}.route-summary{position:absolute;top:56px;left:53px;width:324px;height:59px}.origin-icon{position:absolute;top:12px;left:69px;width:8px;height:14.517px}.origin-label{position:absolute;top:9px;left:94px;font-size:14px;font-weight:700;line-height:20px}.route-icon{position:absolute;top:4px;left:139px;width:30px;height:30px}.destination-icon{position:absolute;top:13px;left:186px;width:8px;height:11.978px}.destination-label{position:absolute;top:9px;left:214px;font-size:14px;font-weight:700;line-height:20px}.booking-time{position:absolute;top:39px;left:0;width:324px;text-align:center;font-size:14px;font-weight:100;line-height:20px;white-space:nowrap}.tabs{position:absolute;bottom:0;left:26px;width:378px;height:30px;display:flex;justify-content:space-between}.tab{position:relative;height:30px;font-size:14px;line-height:20px;white-space:nowrap}.tab.active{color:#1effaa;font-weight:700}.tab image{position:absolute;bottom:1px;left:0;width:32px;height:2px}.vehicle-tag{position:absolute;left:24px;top:165px;width:66px;height:18px;border-radius:25px;background:#d9d9d9;color:#38434a;text-align:center;font-size:8px;font-weight:500;line-height:18px;white-space:nowrap}.selected-vehicle-card{position:absolute;z-index:3;top:193px;left:25px;width:380px;height:180px}.selected-vehicle-card :deep(.vehicle-card){margin:0}
-.promo-card{position:absolute;z-index:2;top:306px;left:25px;width:380px;height:104px;overflow:hidden;border-radius:25px;background:#38434a;color:#fff}.promo-copy{position:absolute;left:27px;top:77px;font-size:12px;font-weight:500;white-space:nowrap}.promo-action{position:absolute;top:74px;right:25px;height:26px;padding:5px 10px;box-sizing:border-box;border:1px solid #1effaa;border-radius:10px;color:#1effaa;font-size:10px;line-height:14px}.extras{position:absolute;top:423px;left:26px;width:351px;height:360px}.extras-title{width:220px;height:30px;display:flex;align-items:center;gap:10px;color:#fff;font-size:14px;font-weight:300;white-space:nowrap}.extras-title image{width:30px;height:30px}.extra-row{position:relative;left:29px;width:322px;height:20px;display:flex;align-items:center;gap:10px;margin-top:18px;font-size:16px;font-weight:500;white-space:nowrap}.extras-title+.extra-row{margin-top:24px}.extra-row image{width:18px;height:18px}.extra-price{position:absolute;left:260px;color:#1effaa}.next-button{position:absolute;left:80px;top:826px;width:270px;height:48px;border-radius:25px;background:#1effaa;color:#38434a;text-align:center;line-height:48px;font-size:16px;font-weight:900}@media (max-width:599px){.page{top:0;left:0;height:var(--mobile-height,100dvh);border-radius:0;transform:scale(var(--mobile-scale,1));transform-origin:top left}}
+.promo-card{position:absolute;z-index:2;top:306px;left:25px;width:380px;height:104px;overflow:hidden;border-radius:25px;background:#38434a;color:#fff}.promo-copy{position:absolute;left:27px;top:77px;font-size:12px;font-weight:500;white-space:nowrap}.promo-action{position:absolute;top:74px;right:25px;height:26px;padding:5px 10px;box-sizing:border-box;border:1px solid #1effaa;border-radius:10px;color:#1effaa;font-size:10px;line-height:14px}.promo-action.used-action{border-color:#f95c5c;color:#f95c5c}.extras{position:absolute;top:423px;left:26px;width:351px;height:360px}.extras-title{width:220px;height:30px;display:flex;align-items:center;gap:10px;color:#fff;font-size:14px;font-weight:300;white-space:nowrap}.extras-title image{width:30px;height:30px}.extra-row{position:relative;left:29px;width:322px;height:20px;display:flex;align-items:center;gap:10px;margin-top:18px;font-size:16px;font-weight:500;white-space:nowrap}.extras-title+.extra-row{margin-top:24px}.extra-row image{width:18px;height:18px}.extra-price{position:absolute;left:260px;color:#1effaa}.next-button{position:absolute;left:80px;top:826px;width:270px;height:48px;border-radius:25px;background:#1effaa;color:#38434a;text-align:center;line-height:48px;font-size:16px;font-weight:900}@media (max-width:599px){.page{top:0;left:0;height:var(--mobile-height,100dvh);border-radius:0;transform:scale(var(--mobile-scale,1));transform-origin:top left}}
 </style>

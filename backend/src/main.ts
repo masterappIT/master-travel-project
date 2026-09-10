@@ -393,6 +393,7 @@ type PersistedQuote = {
   lines: Array<{ type: string; sourceId: string | null; label: string; quantity: number; unitAmount: number; totalAmount: number; currency: string; order: number }>
 }
 function quoteResponse(quote: PersistedQuote) {
+  const discountLines = quote.lines.filter(line => line.type === 'DISCOUNT' && line.totalAmount < 0)
   return {
     id: quote.id,
     distanceMeters: quote.distanceKm * 1000,
@@ -421,6 +422,14 @@ function quoteResponse(quote: PersistedQuote) {
       colorLabel: quote.vehicle.colorLabel,
       modelChoiceLabel: quote.vehicle.modelChoiceLabel
     },
+    appliedPromotion: discountLines.length
+      ? {
+          id: discountLines[0].sourceId,
+          label: discountLines.map(line => line.label).join(' + '),
+          discount: roundMoney(discountLines.reduce((sum, line) => sum + Math.abs(line.totalAmount), 0)),
+          currency: discountLines[0].currency
+        }
+      : null,
     lines: quote.lines.map(line => ({ type: line.type, sourceId: line.sourceId, label: line.label, quantity: line.quantity, unitAmount: line.unitAmount, totalAmount: line.totalAmount, currency: line.currency, order: line.order }))
   }
 }
@@ -970,6 +979,7 @@ class PublicPromotionsController {
       name: promotion.name,
       kind: promotion.kind,
       discountType: promotion.discountType,
+      stackingMode: promotion.stackingMode,
       discountValue: promotion.discountValue,
       currency: promotion.currency,
       startsAt: promotion.startsAt,
@@ -1161,24 +1171,59 @@ class PublicQuotesController {
             ? Math.max(0, subtotal - convertCurrency(promotion.discountValue, promotion.currency, currency, exchangeRate))
             : convertCurrency(promotion.discountValue, promotion.currency, currency, exchangeRate)
         const maximumDiscount = promotion.maximumDiscount === null ? null : convertCurrency(promotion.maximumDiscount, promotion.currency, currency, exchangeRate)
-        return { promotion, discount: roundMoney(Math.min(subtotal, maximumDiscount === null ? rawDiscount : Math.min(rawDiscount, maximumDiscount))) }
+        const discount = roundMoney(Math.min(subtotal, maximumDiscount === null ? rawDiscount : Math.min(rawDiscount, maximumDiscount)))
+        return { promotion, discount, discountItems: [{ promotion, discount }] }
       })
-      const combinations = promotionDiscounts.flatMap(first => promotionDiscounts
-        .filter(second => second.promotion.id > first.promotion.id)
+      const combinations = couponCode ? promotionDiscounts.flatMap((first, index) => promotionDiscounts
+        .slice(index + 1)
         .map(second => {
-          const canStack = first.promotion.stackingMode !== 'NONE' && second.promotion.stackingMode !== 'NONE'
-            && (first.promotion.stackingMode === 'ALL' || second.promotion.stackingMode === 'ALL'
-              || first.promotion.stackingMode === 'PERCENTAGE_AND_VOUCHER' && second.promotion.stackingMode === 'PERCENTAGE_AND_VOUCHER')
-          if (!canStack || first.promotion.discountType === 'TOTAL_PRICE' || second.promotion.discountType === 'TOTAL_PRICE' || first.promotion.discountType === second.promotion.discountType) return []
-          const percentage = first.promotion.discountType === 'PERCENTAGE' ? first : second
-          const voucher = first.promotion.discountType === 'PERCENTAGE' ? second : first
-          const afterPercentage = roundMoney(subtotal - percentage.discount)
-          const voucherDiscount = Math.min(afterPercentage, voucher.discount)
-          return [{ promotion: percentage.promotion, secondaryPromotion: voucher.promotion, discount: roundMoney(percentage.discount + voucherDiscount) }]
-        }).flat())
-      const applied = [...promotionDiscounts.map(item => ({ ...item, secondaryPromotion: null })), ...combinations]
+          const canStack = first.promotion.stackingMode === 'ALL' || second.promotion.stackingMode === 'ALL'
+            || first.promotion.stackingMode === 'PERCENTAGE_AND_VOUCHER' && second.promotion.kind === 'COUPON'
+            || second.promotion.stackingMode === 'PERCENTAGE_AND_VOUCHER' && first.promotion.kind === 'COUPON'
+          if (!canStack || first.promotion.discountType === 'TOTAL_PRICE' || second.promotion.discountType === 'TOTAL_PRICE') return []
+          const ordered = [first, second].sort((a, b) => {
+            if (a.promotion.discountType === 'PERCENTAGE' && b.promotion.discountType !== 'PERCENTAGE') return -1
+            if (b.promotion.discountType === 'PERCENTAGE' && a.promotion.discountType !== 'PERCENTAGE') return 1
+            return 0
+          })
+          let remaining = subtotal
+          let discount = 0
+          const discountItems: Array<{ promotion: typeof first.promotion; discount: number }> = []
+          for (const item of ordered) {
+            const rawDiscount = item.promotion.discountType === 'PERCENTAGE'
+              ? remaining * item.promotion.discountValue / 100
+              : convertCurrency(item.promotion.discountValue, item.promotion.currency, currency, exchangeRate)
+            const maximumDiscount = item.promotion.maximumDiscount === null ? null : convertCurrency(item.promotion.maximumDiscount, item.promotion.currency, currency, exchangeRate)
+            const appliedDiscount = roundMoney(Math.min(remaining, maximumDiscount === null ? rawDiscount : Math.min(rawDiscount, maximumDiscount)))
+            discount = roundMoney(discount + appliedDiscount)
+            remaining = roundMoney(remaining - appliedDiscount)
+           discountItems.push({ promotion: item.promotion, discount: appliedDiscount })
+          }
+          return [{
+            promotion: first.promotion,
+            secondaryPromotion: second.promotion,
+            discount,
+            discountItems
+          }]
+        }).flat()) : []
+      const applicableDiscounts = [
+        ...promotionDiscounts.map(item => ({ ...item, secondaryPromotion: null })),
+        ...combinations
+      ]
+      const applied = applicableDiscounts
         .sort((a, b) => b.discount - a.discount || (b.promotion.priority - a.promotion.priority))[0]
-      const quotedLines = applied && applied.discount > 0 ? [...lines, { type: 'DISCOUNT' as const, sourceId: applied.promotion.id, label: applied.secondaryPromotion ? `${applied.promotion.name} + ${applied.secondaryPromotion.name}` : applied.promotion.name, quantity: 1, unitAmount: -applied.discount, totalAmount: -applied.discount, currency: currencyLabels[currency], order: lines.length + 1 }] : lines
+      const quotedLines = applied && applied.discount > 0
+        ? [...lines, ...applied.discountItems.filter(item => item.discount > 0).map((item, index) => ({
+            type: 'DISCOUNT' as const,
+            sourceId: item.promotion.id,
+            label: item.promotion.name,
+            quantity: 1,
+            unitAmount: -item.discount,
+            totalAmount: -item.discount,
+            currency: currencyLabels[currency],
+            order: lines.length + index + 1
+          }))]
+        : lines
       const reservedPromotions = [applied?.promotion, applied?.secondaryPromotion].filter((promotion): promotion is NonNullable<typeof applied>['promotion'] => Boolean(promotion && promotion.kind === 'COUPON'))
       const total = roundMoney(subtotal - (applied?.discount || 0))
       return tx.fareQuote.create({
