@@ -398,6 +398,10 @@ const useCurrentLocation = (closePicker = false, setAsOrigin = false) => {
       }
       if (addressPicker.value) selectedCoordinates.value[addressPicker.value] = { latitude, longitude }
       const localRegion = findLocalRegion(latitude, longitude)
+      if (!localRegion) {
+        uni.showToast({ title: '未開通服務', icon: 'none' })
+        return
+      }
       locationLabel.value = localRegion ? `${localRegion.region} · ${localRegion.district}` : '目前位置'
       detailedAddress.value = localRegion ? `${locationLabel.value}附近` : `目前位置（${latitude.toFixed(5)}, ${longitude.toFixed(5)}）`
       if (setAsOrigin) {

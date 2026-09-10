@@ -334,12 +334,29 @@ function parseDistancePricing(categoryId: string, body: Partial<DistancePricingS
   if (!currency || !validNumbers || !contiguous) throw new HttpException('Pricing tiers must be valid, contiguous, and end with an unlimited tier', HttpStatus.BAD_REQUEST)
   return { categoryId, minimumFare, currency, tiers }
 }
+function normalizeRegionalAddress(region: string, value: string) {
+  if (region === '香港') return value.replace(/香港(?:特別行政區|特别行政区)?/g, '').replace(/^[\s·\-]+/, '')
+  if (region === '澳門') return value.replace(/澳(?:門|门)(?:特別行政區|特别行政区)?/g, '').replace(/^[\s·\-]+/, '')
+  return value
+}
+function formattedAddress(region: string, address: string) {
+  let detail = normalizeRegionalAddress(region, address)
+    .replace(/\s*[·\/-]\s*/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+  if ((region === '香港' || region === '澳門') && !detail.includes('-')) {
+    const districtMatch = detail.match(/^(.+?(?:區|区|堂區|堂区|半島|半岛|路氹城))(.+)$/)
+    if (districtMatch) detail = `${districtMatch[1]}-${districtMatch[2]}`
+  }
+  return [region === '大陸' ? '' : region, detail].filter(Boolean).join('-')
+}
 function recommendedAddressResponse(address: Omit<RecommendedAddress, 'region'> & { region: string }) {
   return {
     id: address.id,
     region: address.region,
     name: address.name,
-    address: address.address,
+    address: normalizeRegionalAddress(address.region, address.address),
+    displayAddress: formattedAddress(address.region, address.address),
     latitude: address.latitude,
     longitude: address.longitude,
     enabled: address.enabled,
@@ -349,7 +366,7 @@ function recommendedAddressResponse(address: Omit<RecommendedAddress, 'region'> 
 function parseRecommendedAddress(body: { region?: unknown; name?: unknown; address?: unknown; latitude?: unknown; longitude?: unknown; enabled?: unknown; order?: unknown }, fallbackOrder: number): Omit<RecommendedAddress, 'id'> {
   const region = body.region
   const name = typeof body.name === 'string' ? body.name.trim() : ''
-  const address = typeof body.address === 'string' ? body.address.trim() : ''
+  const address = typeof body.address === 'string' ? normalizeRegionalAddress(typeof region === 'string' ? region : '', body.address.trim()) : ''
   const parseCoordinate = (value: unknown, field: string) => {
     if (value === undefined || value === null || value === '') return null
     const coordinate = Number(value)
@@ -889,21 +906,37 @@ class LocationController {
     if (region === '香港') params.set('city', '香港')
     else if (region === '澳門') params.set('city', '澳門')
     const data = await this.requestAmap<{ pois?: Array<{ id?: string; name?: string; address?: string | string[]; location?: string; pname?: string; cityname?: string; adname?: string }> }>('/v3/place/text', params)
-    const results = (data.pois || []).flatMap((poi, index) => {
+    const pois = data.pois || []
+    const mainlandPois = pois.filter((poi) => {
+      const area = `${poi.pname || ''}${poi.cityname || ''}`
+      return area.includes('广东') || area.includes('廣東')
+    })
+    const supportedPois = pois.filter((poi) => {
+      const area = `${poi.pname || ''}${poi.cityname || ''}`
+      return area.includes('广东') || area.includes('廣東') || area.includes('香港') || area.includes('澳門') || area.includes('澳门')
+    })
+    if (region === '大陸' && pois.length > 0 && mainlandPois.length === 0) {
+      throw new HttpException('未開通服務', HttpStatus.FORBIDDEN)
+    }
+    if (!region && pois.length > 0 && supportedPois.length === 0) {
+      throw new HttpException('未開通服務', HttpStatus.FORBIDDEN)
+    }
+    const results = (region === '大陸' ? mainlandPois : !region ? supportedPois : pois).flatMap((poi, index) => {
       const [longitude, latitude] = (poi.location || '').split(',').map(Number)
       if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return []
       const area = `${poi.pname || ''}${poi.cityname || ''}`
       const region = area.includes('香港') ? '香港' : area.includes('澳門') || area.includes('澳门') ? '澳門' : '大陸'
       const rawAddress = Array.isArray(poi.address) ? poi.address.join('') : poi.address || ''
       const address = region === '香港'
-        ? `香港 · ${`${poi.adname || ''}${rawAddress}`.replace(/香港(?:特別行政區|特别行政区)?/g, '')}`
+        ? `${poi.adname || ''}-${rawAddress}`
         : region === '澳門'
-          ? `澳門 · ${`${poi.adname || ''}${rawAddress}`.replace(/澳(?:門|门)(?:特別行政區|特别行政区)?/g, '')}`
-          : `${poi.cityname || ''}${poi.adname || ''}${rawAddress}`
+          ? `${poi.adname || ''}-${rawAddress}`
+          : `${poi.cityname || ''}-${poi.adname || ''}-${rawAddress}`
       return [{
         id: poi.id || `${longitude},${latitude},${index}`,
         name: poi.name || keyword,
         address,
+        displayAddress: formattedAddress(region, address),
         region,
         city: poi.cityname || '',
         district: poi.adname || '',

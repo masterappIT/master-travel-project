@@ -28,6 +28,7 @@ export type PlaceSearchResult = Coordinate & {
   id: string
   name: string
   address: string
+  displayAddress?: string
   region: '大陸' | '香港' | '澳門' | null
   city?: string
   district?: string
@@ -49,6 +50,7 @@ export async function searchPlaces(keyword: string, region?: string): Promise<Pl
     url: `${API_BASE_URL}/location/search`,
     data: { keyword, region: region || '' }
   })
+  if (response.statusCode === 403) throw new Error('未開通服務')
   if (response.statusCode >= 400) throw new Error('位置搜索暫時無法使用')
   return (response.data as { data: PlaceSearchResult[] }).data
 }
@@ -113,6 +115,7 @@ export type RecommendedAddress = {
   region: '大陸' | '香港' | '澳門'
   name: string
   address: string
+  displayAddress?: string
   latitude: number | null
   longitude: number | null
   enabled: boolean

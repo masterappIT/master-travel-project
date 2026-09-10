@@ -10,7 +10,7 @@
     </view>
     <scroll-view class="address-scroll" scroll-y :show-scrollbar="false">
       <view class="current-card"><text class="current-title">當前定位城市：{{ regionData.currentCity }}</text><view class="current-place" @tap="$emit('use-current')"><image src="/static/home/address/current.svg" mode="aspectFit" /><view><text class="place-name">{{ regionData.currentName }}</text><text class="place-address">{{ regionData.currentAddress }}</text></view></view></view>
-      <view class="recommend-list"><view class="recommend-content"><view class="recommend-title"><image src="/static/home/address/recommend.svg" mode="aspectFit" /><text>{{ searchResults === null ? '推薦地點' : '搜尋結果' }}</text></view><view v-for="place in filteredPlaces" :key="place.id || place.name" class="place-row" @tap="selectPlace(place)"><image src="/static/home/address/place.svg" mode="aspectFit" /><view><text class="place-name">{{ place.name }}</text><text class="place-address">{{ place.address }}</text></view></view><text v-if="searchResults?.length === 0" class="empty-result">找不到相關地點</text></view></view>
+      <view class="recommend-list"><view class="recommend-content"><view class="recommend-title"><image src="/static/home/address/recommend.svg" mode="aspectFit" /><text>{{ searchResults === null ? '推薦地點' : '搜尋結果' }}</text></view><view v-for="place in filteredPlaces" :key="place.id || place.name" class="place-row" @tap="selectPlace(place)"><image src="/static/home/address/place.svg" mode="aspectFit" /><view><text class="place-name">{{ place.name }}</text><text class="place-address">{{ place.displayAddress || place.address }}</text></view></view><text v-if="searchResults?.length === 0" class="empty-result">找不到相關地點</text></view></view>
     </scroll-view>
     <view v-if="regionMenuOpen" class="region-menu" @tap.stop>
       <view class="region-menu-panel">
@@ -24,18 +24,18 @@ import { computed, onMounted, ref } from 'vue'
 import { listRecommendedAddresses, searchPlaces, type PlaceSearchResult } from '../../services/api'
 const props = defineProps<{ selecting: 'origin' | 'destination'; locationLabel: string; detailedAddress: string; canUseCurrent?: boolean }>()
 type Region = '大陸' | '香港' | '澳門'
-interface Place { id?: string; name: string; address: string; latitude?: number; longitude?: number; city?: string; district?: string; landmark?: string }
+interface Place { id?: string; name: string; address: string; displayAddress?: string; latitude?: number; longitude?: number; city?: string; district?: string; landmark?: string }
 interface AddressSelection extends Place { region: Region | null }
 const emit = defineEmits<{ close: []; select: [value: string, selection: AddressSelection]; locate: []; 'use-current': [] }>()
 interface RegionData { currentCity: string; currentName: string; currentAddress: string; places: Place[] }
 const regions: Region[] = ['大陸', '香港', '澳門']
 const fallbackRecommendedPlaces: Array<Place & { region: Region }> = [
-  { id: 'hk-airport', region: '香港', name: '香港國際機場', address: '香港特別行政區-離島區-香港赤臘角天路1號' },
-  { id: 'hk-disney', region: '香港', name: '香港迪士尼樂園', address: '香港特別行政區-荃灣區-大嶼山竹篙灣' },
+  { id: 'hk-airport', region: '香港', name: '香港國際機場', address: '離島區-香港赤臘角天路1號' },
+  { id: 'hk-disney', region: '香港', name: '香港迪士尼樂園', address: '荃灣區-大嶼山竹篙灣' },
   { id: 'sz-airport', region: '大陸', name: '深圳寶安國際機場', address: '深圳市-寶安區-寶安大道' },
   { id: 'sz-bay', region: '大陸', name: '深圳灣口岸', address: '深圳市-南山區-東濱路' },
-  { id: 'macau-airport', region: '澳門', name: '澳門國際機場', address: '澳門特別行政區-嘉模堂區-偉龍馬路' },
-  { id: 'macau-ruins', region: '澳門', name: '澳門大三巴牌坊', address: '澳門特別行政區-花王堂區-炮台山下' },
+  { id: 'macau-airport', region: '澳門', name: '澳門國際機場', address: '嘉模堂區-偉龍馬路' },
+  { id: 'macau-ruins', region: '澳門', name: '澳門大三巴牌坊', address: '花王堂區-炮台山下' },
 ]
 const selectedRegion = ref<Region | null>(null)
 const regionMenuOpen = ref(false)
@@ -69,9 +69,10 @@ const runSearch = async () => {
   try {
     const results = await searchPlaces(value, selectedRegion.value || undefined)
     searchResults.value = results.filter(place => validCoordinate(place.latitude, place.longitude))
-  } catch {
+  } catch (error) {
     searchResults.value = []
-    uni.showToast({ title: '位置搜索失敗，請稍後再試', icon: 'none' })
+    const message = error instanceof Error && error.message === '未開通服務' ? '未開通服務' : '位置搜索失敗，請稍後再試'
+    uni.showToast({ title: message, icon: 'none' })
   } finally {
     searching.value = false
   }
@@ -80,8 +81,8 @@ onMounted(async () => {
   try {
     const addresses = await listRecommendedAddresses()
     recommendedPlaces.value = addresses.length > 0
-      ? addresses.map(({ id, region, name, address, latitude, longitude }) => ({
-          id, region, name, address, latitude: latitude ?? undefined, longitude: longitude ?? undefined,
+      ? addresses.map(({ id, region, name, address, displayAddress, latitude, longitude }) => ({
+          id, region, name, address, displayAddress, latitude: latitude ?? undefined, longitude: longitude ?? undefined,
         }))
       : fallbackRecommendedPlaces
   } catch {
