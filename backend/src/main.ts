@@ -21,6 +21,8 @@ interface AdminAuditLog { id: string; administratorId: string | null; username: 
 type MasterBoxConversation = { id: string; messages?: MasterBoxMessage[] }
 type MasterBoxMessage = { id: string; direction: string; content: unknown; createdAt: string }
 type SupportSession = { conversationId: string; riderId: string; exp: number }
+type ClientSession = { sub: string; exp: number; jti: string }
+type PhoneChallenge = { countryCode: string; phoneNumber: string; code: string; exp: number }
 
 interface User { id: string; countryCode: string; phoneNumber: string; name: string | null; cashBalance: number; fareBalance: number; createdAt: string }
 interface Trip { id: string; userId: string; origin: string; destination: string; region: string; scheduledAt: string; status: string; createdAt: string }
@@ -140,6 +142,7 @@ const users: User[] = [
   { id: 'usr_demo_001', countryCode: '+852', phoneNumber: '55550101', name: 'Demo Rider', cashBalance: 120, fareBalance: 80, createdAt: '2026-08-22T09:30:00.000Z' },
   { id: 'usr_demo_002', countryCode: '+86', phoneNumber: '13800000202', name: 'Alex Chen', cashBalance: 0, fareBalance: 200, createdAt: '2026-08-27T14:10:00.000Z' },
 ]
+const phoneChallenges = new Map<string, PhoneChallenge>()
 const trips: Trip[] = [
   { id: 'trip_demo_001', userId: 'usr_demo_001', origin: 'Hong Kong Airport', destination: 'Shenzhen Bay Port', region: 'GUANGDONG', scheduledAt: '2026-09-02T10:00:00.000Z', status: 'CONFIRMED', createdAt: '2026-09-01T08:00:00.000Z' },
   { id: 'trip_demo_002', userId: 'usr_demo_002', origin: 'Macau Ferry Terminal', destination: 'Zhuhai Gongbei', region: 'MACAU', scheduledAt: '2026-09-03T03:30:00.000Z', status: 'PENDING', createdAt: '2026-09-01T11:00:00.000Z' },
@@ -327,6 +330,21 @@ function parsePhoneIdentity(body: { countryCode?: string; phoneNumber?: string }
     throw new HttpException('A valid country code and phone number are required', HttpStatus.BAD_REQUEST)
   }
   return { countryCode, phoneNumber }
+}
+function clientSecret() {
+  const value = process.env.CLIENT_SESSION_SECRET || process.env.ADMIN_SESSION_SECRET
+  if (value) return value
+  if (process.env.NODE_ENV !== 'production') return 'development-client-secret'
+  throw new HttpException('Client session secret is not configured', HttpStatus.SERVICE_UNAVAILABLE)
+}
+function clientTokenFor(userId: string) {
+  const session: ClientSession = { sub: userId, exp: Date.now() + 30 * 24 * 60 * 60 * 1000, jti: randomBytes(16).toString('hex') }
+  const payload = Buffer.from(JSON.stringify(session)).toString('base64url')
+  return `${payload}.${createHmac('sha256', clientSecret()).update(payload).digest('base64url')}`
+}
+function clientAuthResponse(user: ManagedUser) {
+  const exp = Date.now() + 30 * 24 * 60 * 60 * 1000
+  return { token: clientTokenFor(user.id), expiresAt: new Date(exp).toISOString(), user: userResponse(user) }
 }
 function calculateDistanceFare(distanceKm: number, pricing: DistancePricingSettings) {
   const subtotal = [...pricing.tiers]
@@ -605,6 +623,67 @@ async function masterBoxRequest<T>(path: string, init: RequestInit = {}): Promis
   const data = await response.json().catch(() => ({}))
   if (!response.ok) throw new HttpException((data as { error?: string }).error || 'Master Box request failed', response.status)
   return data as T
+}
+
+@Controller('auth')
+class ClientAuthController {
+  @Post('phone/request')
+  async requestPhoneCode(@Body() body: { countryCode?: string; phoneNumber?: string }) {
+    const identity = parsePhoneIdentity(body)
+    if (process.env.NODE_ENV === 'production' && !process.env.AUTH_OTP_CODE) {
+      throw new HttpException('OTP delivery is not configured', HttpStatus.SERVICE_UNAVAILABLE)
+    }
+    const challengeId = randomBytes(18).toString('hex')
+    const code = process.env.NODE_ENV === 'production' && process.env.AUTH_OTP_CODE
+      ? process.env.AUTH_OTP_CODE
+      : String(Math.floor(10000 + Math.random() * 90000))
+    const exp = Date.now() + 5 * 60 * 1000
+    phoneChallenges.set(challengeId, { ...identity, code, exp })
+    for (const [id, challenge] of phoneChallenges) {
+      if (challenge.exp <= Date.now()) phoneChallenges.delete(id)
+    }
+    return {
+      challengeId,
+      expiresAt: new Date(exp).toISOString(),
+      ...(process.env.NODE_ENV !== 'production' ? { developmentCode: code } : {})
+    }
+  }
+
+  @Post('phone/verify')
+  async verifyPhoneCode(@Body() body: { challengeId?: string; code?: string; developmentCode?: string }) {
+    const challengeId = body.challengeId?.trim() || ''
+    const challenge = phoneChallenges.get(challengeId)
+    if (!challenge || challenge.exp <= Date.now()) {
+      phoneChallenges.delete(challengeId)
+      throw new UnauthorizedException('Verification code expired')
+    }
+    const submittedCode = body.code?.trim() || ''
+    const developmentBypass = process.env.NODE_ENV !== 'production' && (!submittedCode || submittedCode === body.developmentCode)
+    if (!developmentBypass && submittedCode !== challenge.code) throw new UnauthorizedException('Invalid verification code')
+    phoneChallenges.delete(challengeId)
+    const existing = await prisma.user.findUnique({ where: { countryCode_phoneNumber: { countryCode: challenge.countryCode, phoneNumber: challenge.phoneNumber } } })
+    const user = existing || await prisma.user.create({ data: { countryCode: challenge.countryCode, phoneNumber: challenge.phoneNumber } })
+    return clientAuthResponse(user)
+  }
+
+  @Post('third-party')
+  async thirdParty(@Body() body: { provider?: string; providerToken?: string }) {
+    const provider = body.provider?.trim().toLowerCase()
+    const providerToken = body.providerToken?.trim()
+    if (provider !== 'wechat' && provider !== 'apple') throw new HttpException('Unsupported third-party provider', HttpStatus.BAD_REQUEST)
+    if (!providerToken) throw new HttpException('Third-party provider token is required', HttpStatus.BAD_REQUEST)
+    if (process.env.NODE_ENV === 'production') throw new HttpException('Third-party provider verification is not configured', HttpStatus.SERVICE_UNAVAILABLE)
+
+    const identity = await prisma.authIdentity.findUnique({
+      where: { provider_providerId: { provider, providerId: providerToken } },
+      include: { user: true }
+    })
+    if (identity) return clientAuthResponse(identity.user)
+
+    const phoneNumber = `${Date.now()}${randomBytes(2).toString('hex')}`.replace(/\D/g, '').slice(-15)
+    const user = await prisma.user.create({ data: { countryCode: '+852', phoneNumber, name: provider === 'wechat' ? 'WeChat User' : 'Apple User', authIdentities: { create: { provider, providerId: providerToken } } } })
+    return clientAuthResponse(user)
+  }
 }
 
 @Controller('support')
@@ -1777,7 +1856,7 @@ class PaymentsController {
 }
 
 @Controller('health') class HealthController { @Get() check() { return { status: 'ok', service: 'master-travel-project-api' } } }
-@Module({ controllers: [HealthController, LocationController, SettingsController, RecommendedAddressesController, PublicVehiclesController, PublicQuotesController, PublicMembershipPlansController, PublicPromotionsController, PaymentCardsController, WalletController, PaymentsController, AdminAuthController, AdminController, SupportController], providers: [{ provide: APP_INTERCEPTOR, useClass: AdminAccessInterceptor }] }) class AppModule {}
+@Module({ controllers: [HealthController, LocationController, SettingsController, RecommendedAddressesController, PublicVehiclesController, PublicQuotesController, PublicMembershipPlansController, PublicPromotionsController, PaymentCardsController, WalletController, PaymentsController, ClientAuthController, AdminAuthController, AdminController, SupportController], providers: [{ provide: APP_INTERCEPTOR, useClass: AdminAccessInterceptor }] }) class AppModule {}
 async function bootstrap() {
   await prisma.$connect()
   await ensurePricingDefaults()

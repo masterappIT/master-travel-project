@@ -9,15 +9,17 @@
     <view class="setting-row"><text>貨幣</text><picker class="setting-picker" mode="selector" :range="currencies" :value="currencyIndex" @change="changeCurrency"><view class="setting-value"><text>{{ currency }}</text><text class="chevron">›</text></view></picker></view>
     <view class="setting-row font-row"><text>字體大小</text><view class="font-options"><text class="large">A</text><text class="medium">A</text><text class="small">A</text></view></view>
     <view class="setting-row" @tap="comingSoon('條款')"><text>條款</text></view>
-    <view class="logout" @tap="logout"><text>登出</text></view>
+    <view class="logout" @tap="handleAuthAction"><text>{{ authenticated ? '登出' : '登入' }}</text></view>
   </view>
 </template>
 <script setup lang="ts">
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { onMounted, ref } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 import { getSettings, updateSettings } from '../../services/api'
 import { closeCachedPage } from '../../utils/navigation'
 import { useCurrency, type Currency } from '../../composables/useCurrency'
+import { clearAuthentication, isAuthenticated } from '../../utils/auth'
 
 const { responsiveStyle } = useResponsiveCanvas()
 const { setCurrency } = useCurrency()
@@ -31,11 +33,13 @@ const currency = ref(currencies[0])
 const languageIndex = ref(0)
 const regionIndex = ref(0)
 const currencyIndex = ref(0)
+const authenticated = ref(false)
 const persistSettings = () => updateSettings({ language: language.value, region: region.value, currency: currencyCodes[currencyIndex.value] }).catch(() => undefined)
 const changeLanguage = (event: { detail: { value: number } }) => { languageIndex.value = Number(event.detail.value); language.value = languages[languageIndex.value]; persistSettings() }
 const changeRegion = (event: { detail: { value: number } }) => { regionIndex.value = Number(event.detail.value); region.value = regions[regionIndex.value]; persistSettings() }
 const changeCurrency = (event: { detail: { value: number } }) => { currencyIndex.value = Number(event.detail.value); currency.value = currencies[currencyIndex.value]; setCurrency(currencyCodes[currencyIndex.value]); persistSettings() }
 onMounted(async () => {
+  authenticated.value = isAuthenticated()
   try {
     const saved = await getSettings()
     const savedLanguageIndex = languages.indexOf(saved.language)
@@ -46,7 +50,19 @@ onMounted(async () => {
     if (savedCurrencyIndex >= 0) { currencyIndex.value = savedCurrencyIndex; currency.value = currencies[savedCurrencyIndex]; setCurrency(currencyCodes[savedCurrencyIndex]) }
   } catch { /* retain defaults when the API is unavailable */ }
 })
-const logout = () => uni.showToast({ title: '已登出', icon: 'none' })
+onShow(() => {
+  authenticated.value = isAuthenticated()
+})
+const handleAuthAction = () => {
+  if (!authenticated.value) {
+    uni.reLaunch({ url: '/pages/login/login', animationType: 'none', animationDuration: 0 })
+    return
+  }
+  clearAuthentication()
+  authenticated.value = false
+  uni.showToast({ title: '已登出', icon: 'none' })
+  uni.reLaunch({ url: '/pages/login/login', animationType: 'none', animationDuration: 0 })
+}
 const goBack = () => closeCachedPage('/pages/trips/trips')
 </script>
 <style scoped>

@@ -5,15 +5,19 @@
         <ProfileHeader
           :avatar-url="avatarUrl"
           :display-name="displayName"
+          :authenticated="authenticated"
           :unread-count="unreadCount"
           @notifications="openMessages"
           @settings="openSettings"
           @avatar="openAccount"
+          @login="openLogin"
         />
-        <view class="upgrade-position"><UpgradeCard @tap="openMembership" /></view>
-        <view class="wallet-position"><WalletCard :balance="walletBalance" @select="handleWalletAction" /></view>
-        <view class="orders-position"><OrdersCard @select="handleOrderAction" /></view>
-        <view class="common-position"><CommonActions @select="handleCommonAction" /></view>
+        <template v-if="authenticated">
+          <view class="upgrade-position"><UpgradeCard @tap="openMembership" /></view>
+          <view class="wallet-position"><WalletCard :balance="walletBalance" @select="handleWalletAction" /></view>
+          <view class="orders-position"><OrdersCard @select="handleOrderAction" /></view>
+          <view class="common-position"><CommonActions @select="handleCommonAction" /></view>
+        </template>
       </view>
     </view>
     <ProfileBottomNav @home="goHome" @service="openCustomerService" />
@@ -27,6 +31,7 @@ import { openCachedPage, setOrderReturnTarget } from '../../utils/navigation'
 const { responsiveStyle } = useResponsiveCanvas()
 import { ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
+import { isAuthenticated } from '../../utils/auth'
 import ProfileHeader from '../../components/profile/ProfileHeader.vue'
 import UpgradeCard from '../../components/profile/UpgradeCard.vue'
 import WalletCard from '../../components/profile/WalletCard.vue'
@@ -39,8 +44,10 @@ const unreadCount = ref(totalMessages)
 const avatarUrl = ref('')
 const displayName = ref('John')
 const walletBalance = ref(0)
+const authenticated = ref(false)
 
 onShow(() => {
+  authenticated.value = isAuthenticated()
   const profile = uni.getStorageSync('account-profile')
   avatarUrl.value = profile?.avatarUrl || ''
   displayName.value = profile?.displayName || 'John'
@@ -56,6 +63,7 @@ const openCustomerService = () => openCachedPage('/pages/support/chat')
 const openMessages = () => openCachedPage('/pages/messages/messages')
 const openSettings = () => openCachedPage('/pages/settings/settings')
 const openAccount = () => openCachedPage('/pages/account/account')
+const openLogin = () => uni.reLaunch({ url: '/pages/login/login', animationType: 'none', animationDuration: 0 })
 const openMembership = () => openCachedPage('/pages/membership/membership')
 const handleOrderAction = (name: string) => {
   if (name === '全部訂單') {

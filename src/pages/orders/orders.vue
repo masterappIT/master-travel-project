@@ -10,17 +10,17 @@
       </view>
     </view>
     <scroll-view class="content" scroll-y :show-scrollbar="false">
-      <text class="date">2024年3月15日</text>
-      <view class="orders-list">
+      <text v-if="visibleOrders.length" class="date">{{ formatOrderDate(visibleOrders[0].createdAt || visibleOrders[0].scheduledAt) }}</text>
+      <view v-if="visibleOrders.length" class="orders-list">
         <view v-for="order in visibleOrders" :key="order.id" class="order-card" @tap="openOrder(order)">
           <view class="status"><image :src="statusIcon(order.status)" mode="aspectFit" /><text :class="{ 'in-progress': order.status === '進行中', 'pending-status': order.status === '待確認', 'cancelled-status': order.status === '取消', 'traveling-status': order.status === '待出行' }">{{ order.status }}</text></view>
           <text v-if="order.countdown" class="countdown">交易時間剩餘：{{ order.countdown }}</text>
           <view v-if="order.payment" :class="['payment', { refunded: order.payment === '已退款' }]">{{ order.payment }}</view>
-          <text v-else class="price">RMB¥800.00</text>
-          <view class="route"><text>香港</text><image src="/static/orders/route-arrow.svg" mode="aspectFit" /><text>深圳</text><text :class="['order-kind', { urgent: order.kind === '加急訂單' }]">（{{ order.kind }}）</text></view>
-          <text class="pickup">上車時間 ：2024年3月15日 14:00</text>
-          <text class="arrival">{{ order.status === '已完成' ? '到達時間' : '預計到達時間' }} ：2024年3月15日 14:00</text>
-          <view class="divider" /><text class="vehicle">高級跨境商務車（7座）</text>
+          <text v-else class="price">{{ formatAmount(order.total, order.currency) }}</text>
+          <view class="route"><text>{{ order.origin || '香港' }}</text><image src="/static/orders/route-arrow.svg" mode="aspectFit" /><text>{{ order.destination || '深圳' }}</text><text :class="['order-kind', { urgent: order.kind === '加急訂單' }]">（{{ order.kind }}）</text></view>
+          <text class="pickup">上車時間 ：{{ formatDateTime(order.scheduledAt) }}</text>
+          <text class="arrival">{{ order.status === '已完成' ? '到達時間' : '預計到達時間' }} ：{{ formatDateTime(order.scheduledAt) }}</text>
+          <view class="divider" /><text class="vehicle">{{ order.vehicleTitle || '高級跨境商務車' }}（{{ order.seats || 7 }}座）</text>
         </view>
       </view><view class="bottom-space" />
     </scroll-view>
@@ -28,27 +28,34 @@
 </template>
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { openCachedPage, setOrderReturnTarget } from '../../utils/navigation'
-import { usePendingOrderStatus } from '../../utils/pendingOrderStatus'
+import { listStoredOrders } from '../../utils/orderStore'
 import OrdersBackButton from '../../components/orders/OrdersBackButton.vue'
 type Tab = 'all' | 'completed' | 'cancelled'
 type OrderStatus = '已完成' | '待確認' | '待出行' | '取消' | '進行中'
-interface Order { id: number; status: OrderStatus; kind: '加急訂單' | '預約訂單'; countdown?: string; payment?: '待付款' | '已退款' }
+interface Order { id: string | number; status: OrderStatus; kind: '加急訂單' | '預約訂單'; countdown?: string; payment?: '待付款' | '已付款' | '已退款'; origin?: string; destination?: string; scheduledAt?: string; createdAt?: string; vehicleTitle?: string; seats?: number; total?: number; currency?: string }
 const { responsiveStyle } = useResponsiveCanvas()
-const { status: pendingOrderStatus, readStoredStatus } = usePendingOrderStatus()
-readStoredStatus()
+const storedOrders = ref(listStoredOrders())
+onShow(() => { storedOrders.value = listStoredOrders() })
 const activeTab = ref<Tab>('all')
 const tabs: Array<{ label: string; value: Tab }> = [{ label: '全部', value: 'all' }, { label: '已完成', value: 'completed' }, { label: '取消', value: 'cancelled' }]
-const orders = computed<Order[]>(() => [
-  { id: 1, status: '已完成', kind: '加急訂單' },
-  { id: 2, status: pendingOrderStatus.value, kind: '預約訂單', countdown: pendingOrderStatus.value === '待確認' ? '10:00' : undefined, payment: pendingOrderStatus.value === '待確認' ? '待付款' : '已退款' },
-  { id: 3, status: '待出行', kind: '預約訂單' },
-  { id: 4, status: '取消', kind: '預約訂單', payment: '已退款' },
-  { id: 5, status: '進行中', kind: '預約訂單' }
-])
+const orders = computed<Order[]>(() => storedOrders.value)
 const visibleOrders = computed(() => activeTab.value === 'completed' ? orders.value.filter((order) => order.status === '已完成') : activeTab.value === 'cancelled' ? orders.value.filter((order) => order.status === '取消') : orders.value)
 const statusIcon = (status: OrderStatus) => status === '進行中' ? '/static/orders/status-green.svg' : status === '已完成' || status === '待出行' ? '/static/orders/status-blue.svg' : status === '待確認' ? '/static/orders/status-pending.svg' : '/static/orders/status-gray.svg'
+const formatDateTime = (value?: string) => {
+  if (!value) return '—'
+  const date = new Date(value)
+  if (Number.isNaN(date.valueOf())) return value
+  return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日 ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+}
+const formatOrderDate = (value?: string) => {
+  if (!value) return ''
+  const date = new Date(value)
+  return Number.isNaN(date.valueOf()) ? value : `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`
+}
+const formatAmount = (amount = 0, currency = 'HKD') => `${currency === 'HKD' ? 'HK$' : currency === 'RMB' ? 'RMB¥' : currency} ${amount.toFixed(2)}`
 const openOrder = (order: Order) => {
   if (order.status === '已完成' || order.status === '取消' || order.status === '待確認' || order.status === '待出行') {
     setOrderReturnTarget('orders')

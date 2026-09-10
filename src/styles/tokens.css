@@ -1,4 +1,5 @@
-.login-page {
+.login-page,
+.verify-page {
   --login-background: #f0f2f5;
   --login-surface: #ffffff;
   --login-text: #38434a;

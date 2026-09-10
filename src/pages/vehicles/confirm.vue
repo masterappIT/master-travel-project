@@ -42,18 +42,18 @@
         <image class="payment-close" src="/static/vehicles/payment/payment-close.svg" mode="aspectFit" @tap="closePayment" />
         <image class="payment-back" src="/static/vehicles/payment/payment-back.svg" mode="aspectFit" @tap="closePayment" />
         <text class="payment-title">訂單詳細</text>
-        <text class="payment-countdown">交易時間剩餘：05:00</text>
+        <text class="payment-countdown">交易時間剩餘：{{ formattedCountdown }}</text>
         <view class="payment-amount"><text class="payment-currency">{{ quoteCurrency }}</text><text class="payment-number">{{ formatQuoteNumber(total) }}</text></view>
         <text class="payment-method-label">支付方式</text>
         <view class="payment-options wallet-options">
-          <view class="payment-option" @tap="toggleWallet('fare')"><image src="/static/vehicles/payment/payment-wallet-fare.svg" mode="aspectFit" /><view class="payment-option-copy"><text>車費餘額</text><text class="payment-balance">（{{ format(wallet.fare, 2) }}）</text></view><image class="payment-radio" :src="walletSelections.fare ? '/static/vehicles/payment/payment-radio-selected.svg' : '/static/vehicles/payment/payment-radio-unselected.svg'" mode="aspectFit" /></view>
-          <view class="payment-option" @tap="toggleWallet('cash')"><image src="/static/vehicles/payment/payment-wallet-cash.svg" mode="aspectFit" /><view class="payment-option-copy"><text>現金餘額</text><text class="payment-balance">（{{ format(wallet.withdrawable, 2) }}）</text></view><image class="payment-radio" :src="walletSelections.cash ? '/static/vehicles/payment/payment-radio-selected.svg' : '/static/vehicles/payment/payment-radio-unselected.svg'" mode="aspectFit" /></view>
+          <view v-if="paymentSettings.fareBalancePayEnabled !== false" class="payment-option" @tap="toggleWallet('fare')"><image src="/static/vehicles/payment/payment-wallet-fare.svg" mode="aspectFit" /><view class="payment-option-copy"><text>車費餘額</text><text class="payment-balance">（{{ format(wallet.fare, 2) }}）</text></view><image class="payment-radio" :src="walletSelections.fare ? '/static/vehicles/payment/payment-radio-selected.svg' : '/static/vehicles/payment/payment-radio-unselected.svg'" mode="aspectFit" /></view>
+          <view v-if="paymentSettings.cashBalancePayEnabled !== false" class="payment-option" @tap="toggleWallet('cash')"><image src="/static/vehicles/payment/payment-wallet-cash.svg" mode="aspectFit" /><view class="payment-option-copy"><text>現金餘額</text><text class="payment-balance">（{{ format(wallet.withdrawable, 2) }}）</text></view><image class="payment-radio" :src="walletSelections.cash ? '/static/vehicles/payment/payment-radio-selected.svg' : '/static/vehicles/payment/payment-radio-unselected.svg'" mode="aspectFit" /></view>
         </view>
         <view v-if="externalAllocation > 0" class="payment-options external-options">
-          <view class="payment-option" @tap="selectedPayment = 'wechat'"><image src="/static/vehicles/payment/payment-wechat.svg" mode="aspectFit" /><text>微信支付（支持香港/澳門）</text><image class="payment-radio" :src="selectedPayment === 'wechat' ? '/static/vehicles/payment/payment-radio-selected.svg' : '/static/vehicles/payment/payment-radio-unselected.svg'" mode="aspectFit" /></view>
+          <view v-if="paymentSettings.wechatPayEnabled !== false" class="payment-option" @tap="selectedPayment = 'wechat'"><image src="/static/vehicles/payment/payment-wechat.svg" mode="aspectFit" /><text>微信支付（支持香港/澳門）</text><image class="payment-radio" :src="selectedPayment === 'wechat' ? '/static/vehicles/payment/payment-radio-selected.svg' : '/static/vehicles/payment/payment-radio-unselected.svg'" mode="aspectFit" /></view>
           <!-- #ifndef MP-WEIXIN || MP-TOUTIAO -->
-          <view class="payment-option" @tap="selectedPayment = 'alipay'"><image src="/static/vehicles/payment/payment-alipay.svg" mode="aspectFit" /><text>支付寶支付</text><image class="payment-radio" :src="selectedPayment === 'alipay' ? '/static/vehicles/payment/payment-radio-selected.svg' : '/static/vehicles/payment/payment-radio-unselected.svg'" mode="aspectFit" /></view>
-          <view class="payment-option bank-option" @tap="selectedPayment = 'bank'"><image src="/static/vehicles/payment/payment-bank.svg" mode="aspectFit" /><text>銀行帳戶 支付</text><image class="payment-chevron" src="/static/vehicles/payment/payment-chevron.svg" mode="aspectFit" /></view>
+          <view v-if="paymentSettings.alipayPayEnabled !== false" class="payment-option" @tap="selectedPayment = 'alipay'"><image src="/static/vehicles/payment/payment-alipay.svg" mode="aspectFit" /><text>支付寶支付</text><image class="payment-radio" :src="selectedPayment === 'alipay' ? '/static/vehicles/payment/payment-radio-selected.svg' : '/static/vehicles/payment/payment-radio-unselected.svg'" mode="aspectFit" /></view>
+          <view v-if="paymentSettings.bankCardPayEnabled !== false" class="payment-option bank-option" @tap="selectedPayment = 'bank'"><image src="/static/vehicles/payment/payment-bank.svg" mode="aspectFit" /><text>銀行帳戶 支付</text><image class="payment-chevron" src="/static/vehicles/payment/payment-chevron.svg" mode="aspectFit" /></view>
           <!-- #endif -->
         </view>
         <view class="payment-confirm" @tap="confirmPayment">確認支付</view>
@@ -86,7 +86,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { useTripStore } from '../../stores/trip'
-import { consumeFareQuote, planDrivingRoute } from '../../services/api'
+import { consumeFareQuote, planDrivingRoute, getSettings, getWalletMe, payTrip, type AppSettings } from '../../services/api'
 import type { Coordinate } from '../../services/api'
 import type { AddressSelection } from '../../components/home/AddressPicker.vue'
 import { closeCachedPage, openCachedPage } from '../../utils/navigation'
@@ -95,13 +95,24 @@ import VehicleCard from '../../components/vehicles/VehicleCard.vue'
 import HomeMap from '../../components/home/HomeMap.vue'
 import { useCurrency } from '../../composables/useCurrency'
 import { reactive } from 'vue'
-import { persistWallet, readWallet, type WalletState } from '../../utils/wallet'
+import { savePaidOrder } from '../../utils/orderStore'
 const { responsiveStyle } = useResponsiveCanvas()
 const { format } = useCurrency()
 const wallet = reactive<WalletState>(readWallet())
+const paymentSettings = ref<AppSettings>({
+  language: "zh-HK",
+  region: "香港",
+  currency: "HKD",
+  fareBalancePayEnabled: true,
+  cashBalancePayEnabled: true,
+  wechatPayEnabled: true,
+  alipayPayEnabled: true,
+  bankCardPayEnabled: true,
+  sandboxMode: false
+})
 const walletSelections = reactive({ fare: true, cash: true })
-const fareAllocation = computed(() => walletSelections.fare ? Math.min(wallet.fare, Number(total.value)) : 0)
-const cashAllocation = computed(() => walletSelections.cash ? Math.min(wallet.withdrawable, Math.max(0, Number(total.value) - fareAllocation.value)) : 0)
+const fareAllocation = computed(() => (walletSelections.fare && paymentSettings.value.fareBalancePayEnabled !== false) ? Math.min(wallet.fare, Number(total.value)) : 0)
+const cashAllocation = computed(() => (walletSelections.cash && paymentSettings.value.cashBalancePayEnabled !== false) ? Math.min(wallet.withdrawable, Math.max(0, Number(total.value) - fareAllocation.value)) : 0)
 const externalAllocation = computed(() => Math.max(0, Number(total.value) - fareAllocation.value - cashAllocation.value))
 const tripStore = useTripStore()
 const editSheetOpen = ref(false)
@@ -110,6 +121,33 @@ const detailPriceOpen = ref(false)
 const paymentOpen = ref(false)
 const paymentSuccessOpen = ref(false)
 const selectedPayment = ref('wechat')
+const countdownSeconds = ref(300)
+let countdownTimer: ReturnType<typeof setInterval> | null = null
+
+const formattedCountdown = computed(() => {
+  const m = Math.floor(countdownSeconds.value / 60)
+  const s = countdownSeconds.value % 60
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
+})
+
+const startCountdown = () => {
+  if (countdownTimer) clearInterval(countdownTimer)
+  countdownSeconds.value = 300
+  countdownTimer = setInterval(() => {
+    if (countdownSeconds.value > 0) {
+      countdownSeconds.value--
+    } else {
+      if (countdownTimer) clearInterval(countdownTimer)
+    }
+  }, 1000)
+}
+
+const stopCountdown = () => {
+  if (countdownTimer) {
+    clearInterval(countdownTimer)
+    countdownTimer = null
+  }
+}
 const mapMarkers = ref<Array<Coordinate & { id: number; title?: string; iconPath?: string; width?: number; height?: number }>>([])
 const mapPolyline = ref<Array<{ points: Coordinate[]; color: string; width: number; arrowLine: boolean }>>([])
 const mapIncludePoints = ref<Coordinate[]>([])
@@ -208,8 +246,24 @@ const updateConfirmMap = async () => {
     uni.showToast({ title: error instanceof Error ? error.message : '路線規劃失敗，請稍後再試', icon: 'none' })
   }
 }
+const loadSettingsAndWallet = async () => {
+  try {
+    const [settingsData, walletData] = await Promise.allSettled([getSettings(), getWalletMe()])
+    if (settingsData.status === "fulfilled" && settingsData.value) {
+      paymentSettings.value = { ...paymentSettings.value, ...settingsData.value }
+    }
+    if (walletData.status === "fulfilled" && walletData.value) {
+      wallet.fare = walletData.value.fareBalance
+      wallet.withdrawable = walletData.value.cashBalance
+      persistWallet(wallet)
+    }
+  } catch (e) {
+    console.warn("Failed to load settings or wallet from remote", e)
+  }
+}
 onMounted(() => {
   void updateConfirmMap()
+  void loadSettingsAndWallet()
 })
 const saveTripChanges = async (origin: string, destination: string, departureTime: string, nextOriginSelection: AddressSelection | null, nextDestinationSelection: AddressSelection | null) => {
   const currentRoute = tripStore.activeDraft.route
@@ -244,9 +298,21 @@ const payNow = () => {
     uni.showToast({ title: '報價暫時無法取得', icon: 'none' })
     return
   }
+  // Auto pick available external payment channel if wechat is disabled
+  if (paymentSettings.value.wechatPayEnabled !== false) {
+    selectedPayment.value = 'wechat'
+  } else if (paymentSettings.value.alipayPayEnabled !== false) {
+    selectedPayment.value = 'alipay'
+  } else if (paymentSettings.value.bankCardPayEnabled !== false) {
+    selectedPayment.value = 'bank'
+  }
   paymentOpen.value = true
+  startCountdown()
 }
-const closePayment = () => { paymentOpen.value = false }
+const closePayment = () => {
+  paymentOpen.value = false
+  stopCountdown()
+}
 const toggleWallet = (type: 'fare' | 'cash') => { walletSelections[type] = !walletSelections[type] }
 const confirmPayment = async () => {
   if (!selectedFareQuote.value) {
@@ -257,18 +323,58 @@ const confirmPayment = async () => {
     uni.showToast({ title: '請選擇外部付款方式', icon: 'none' })
     return
   }
+
+  uni.showLoading({ title: '支付處理中...' })
   try {
-    await consumeFareQuote(selectedFareQuote.value.id)
+    const extChannel = externalAllocation.value > 0 ? (selectedPayment.value === 'bank' ? 'bank_card' : selectedPayment.value as 'wechat' | 'alipay' | 'bank_card') : undefined
+    const res = await payTrip({
+      quoteId: selectedFareQuote.value.id,
+      origin: tripStore.activeDraft.route.origin || originLabel.value,
+      destination: tripStore.activeDraft.route.destination || destinationLabel.value,
+      scheduledAt: tripStore.departureTime || undefined,
+      useFareBalance: walletSelections.fare,
+      useCashBalance: walletSelections.cash,
+      externalPaymentMethod: extChannel
+    })
+
+    if (res && res.paidSummary) {
+      wallet.fare = res.user.fareBalance
+      wallet.withdrawable = res.user.cashBalance
+      wallet.records.unshift({
+        id: Date.now(),
+        type: '出行支付',
+        amount: -Number(res.total),
+        time: new Date().toISOString(),
+        balanceType: 'fare'
+      })
+      persistWallet(wallet)
+    } else {
+      wallet.fare = Math.max(0, wallet.fare - fareAllocation.value)
+      wallet.withdrawable = Math.max(0, wallet.withdrawable - cashAllocation.value)
+      wallet.records.unshift({ id: Date.now(), type: '出行支付', amount: -Number(total.value), time: new Date().toISOString(), balanceType: 'fare' })
+      persistWallet(wallet)
+    }
+
+    savePaidOrder({
+      tripId: res.tripId,
+      origin: tripStore.activeDraft.route.origin || originLabel.value,
+      destination: tripStore.activeDraft.route.destination || destinationLabel.value,
+      scheduledAt: tripStore.departureTime,
+      quote: selectedFareQuote.value,
+      urgent: false
+    })
+
+    try {
+      await consumeFareQuote(selectedFareQuote.value.id)
+    } catch (_) {}
+
+    uni.hideLoading()
+    paymentOpen.value = false
+    paymentSuccessOpen.value = true
   } catch (error) {
-    uni.showToast({ title: error instanceof Error ? error.message : '優惠使用失敗', icon: 'none' })
-    return
+    uni.hideLoading()
+    uni.showToast({ title: error instanceof Error ? error.message : '支付失敗', icon: 'none' })
   }
-  wallet.fare = Math.max(0, wallet.fare - fareAllocation.value)
-  wallet.withdrawable = Math.max(0, wallet.withdrawable - cashAllocation.value)
-  wallet.records.unshift({ id: Date.now(), type: '出行支付', amount: -Number(total.value), time: new Date().toISOString(), balanceType: 'fare' })
-  persistWallet(wallet)
-  paymentOpen.value = false
-  paymentSuccessOpen.value = true
 }
 const closePaymentSuccess = () => {
   paymentSuccessOpen.value = false

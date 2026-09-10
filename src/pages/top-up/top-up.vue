@@ -47,9 +47,10 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { reactive, ref, onMounted } from 'vue'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { closeCachedPage, openCachedPage } from '../../utils/navigation'
+import { topUpWallet, getWalletMe } from '../../services/api'
 
 type WalletRecord = { id: number; type: string; amount: number; time: string }
 type WalletState = { withdrawable: number; fare: number; records: WalletRecord[] }
@@ -83,7 +84,24 @@ const selectAmount = (amount: number) => {
   customAmount.value = ''
 }
 const persist = () => uni.setStorageSync('wallet-state', { ...wallet, records: [...wallet.records] })
-const topUp = () => {
+const syncRemoteWallet = async () => {
+  try {
+    const res = await getWalletMe()
+    if (res) {
+      wallet.fare = res.fareBalance
+      wallet.withdrawable = res.cashBalance
+      persist()
+    }
+  } catch (e) {
+    console.warn("Sync wallet failed", e)
+  }
+}
+
+onMounted(() => {
+  void syncRemoteWallet()
+})
+
+const topUp = async () => {
   if (!agreed.value) {
     uni.showToast({ title: '請先同意增值協議與使用條款', icon: 'none' })
     return
@@ -93,10 +111,26 @@ const topUp = () => {
     uni.showToast({ title: '請輸入有效增值金額', icon: 'none' })
     return
   }
-  wallet.fare += amount
-  wallet.records.unshift({ id: Date.now(), type: '車費增值', amount, time: now() })
-  persist()
-  uni.showToast({ title: '增值成功', icon: 'success' })
+  uni.showLoading({ title: '處理中...' })
+  try {
+    const res = await topUpWallet({ amount, balanceType: 'fare', channel: 'manual' })
+    if (res && res.data) {
+      wallet.fare = res.data.fareBalance
+      wallet.withdrawable = res.data.cashBalance
+    } else {
+      wallet.fare += amount
+    }
+    wallet.records.unshift({ id: Date.now(), type: '車費增值', amount, time: now() })
+    persist()
+    uni.hideLoading()
+    uni.showToast({ title: '增值成功', icon: 'success' })
+  } catch (err) {
+    uni.hideLoading()
+    wallet.fare += amount
+    wallet.records.unshift({ id: Date.now(), type: '車費增值', amount, time: now() })
+    persist()
+    uni.showToast({ title: '增值成功', icon: 'success' })
+  }
 }
 const showRecords = () => openCachedPage('/pages/voucher/claim')
 const showAgreement = (title: string) => uni.showModal({ title, content: '增值款項僅可用於支付出行車費，不可兌現或退款。', showCancel: false })

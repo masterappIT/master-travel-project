@@ -1,6 +1,7 @@
 {
   "pages": [
     { "path": "pages/login/login", "style": { "navigationStyle": "custom", "navigationBarTitleText": "" } },
+    { "path": "pages/login/verify", "style": { "navigationStyle": "custom", "navigationBarTitleText": "" } },
     { "path": "pages/index/index", "style": { "navigationStyle": "custom", "navigationBarTitleText": "" } },
     { "path": "pages/trips/trips", "style": { "navigationStyle": "custom", "navigationBarTitleText": "" } },
     { "path": "pages/trips/detail", "style": { "navigationStyle": "custom", "navigationBarTitleText": "" } },

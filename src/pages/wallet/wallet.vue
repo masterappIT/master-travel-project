@@ -29,11 +29,11 @@
 
 <script setup lang="ts">
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
-
 import { closeCachedPage, openCachedPage } from '../../utils/navigation'
+import { reactive, onMounted } from 'vue'
+import { getWalletMe } from '../../services/api'
 
 const { responsiveStyle } = useResponsiveCanvas()
-import { reactive } from 'vue'
 
 type ActionType = 'withdraw' | 'topUp'
 type WalletRecord = { id: number; type: string; amount: number; time: string }
@@ -47,6 +47,23 @@ const wallet = reactive<WalletState>({
 })
 
 const persist = () => uni.setStorageSync('wallet-state', { ...wallet, records: [...wallet.records] })
+
+const fetchWallet = async () => {
+  try {
+    const res = await getWalletMe()
+    if (res) {
+      wallet.fare = res.fareBalance
+      wallet.withdrawable = res.cashBalance
+      persist()
+    }
+  } catch (e) {
+    console.warn("Could not sync wallet from backend", e)
+  }
+}
+
+onMounted(() => {
+  void fetchWallet()
+})
 const now = () => {
   const date = new Date()
   const pad = (value: number) => String(value).padStart(2, '0')

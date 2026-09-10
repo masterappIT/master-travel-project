@@ -1,4 +1,5 @@
 import type { CrossBorderTrip } from '../../../shared/types/trip'
+import { getAuthToken } from '../utils/auth'
 
 let API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:3010'
 // #ifdef H5
@@ -11,12 +12,76 @@ const apiError = (response: UniApp.RequestSuccessCallbackResult, fallback: strin
   return new Error(message || `${fallback}（HTTP ${response.statusCode || 0}，請確認小程序可連線至 ${API_BASE_URL}）`)
 }
 
+const authHeaders = () => {
+  const token = getAuthToken()
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
+export type PhoneAuthChallenge = {
+  challengeId: string
+  expiresAt: string
+  developmentCode?: string
+}
+
+export type AuthResult = {
+  token: string
+  expiresAt: string
+  user: {
+    id: string
+    countryCode: string
+    phoneNumber: string
+    name: string | null
+  }
+}
+
+export async function requestPhoneVerificationCode(countryCode: string, phoneNumber: string): Promise<PhoneAuthChallenge> {
+  const response = await uni.request({
+    url: `${API_BASE_URL}/auth/phone/request`,
+    method: 'POST',
+    data: { countryCode, phoneNumber }
+  })
+  if (response.statusCode >= 400) throw apiError(response, '驗證碼發送失敗')
+  return response.data as PhoneAuthChallenge
+}
+
+export async function verifyPhoneVerificationCode(challengeId: string, code = '', developmentCode?: string): Promise<AuthResult> {
+  const response = await uni.request({
+    url: `${API_BASE_URL}/auth/phone/verify`,
+    method: 'POST',
+    data: { challengeId, code, developmentCode }
+  })
+  if (response.statusCode >= 400) throw apiError(response, '驗證碼錯誤或已過期')
+  return response.data as AuthResult
+}
+
+export async function authenticateThirdParty(provider: 'wechat' | 'apple', providerToken: string): Promise<AuthResult> {
+  const response = await uni.request({
+    url: `${API_BASE_URL}/auth/third-party`,
+    method: 'POST',
+    data: { provider, providerToken }
+  })
+  if (response.statusCode >= 400) throw apiError(response, '第三方登入失敗')
+  return response.data as AuthResult
+}
+
 export async function getHealth(): Promise<{ status: string }> {
   const response = await uni.request({ url: `${API_BASE_URL}/health` })
   return response.data as { status: string }
 }
 
-export type AppSettings = { language: string; region: string; currency: string; pricingCurrency?: string; exchangeRate?: number }
+export type AppSettings = {
+  language: string
+  region: string
+  currency: string
+  pricingCurrency?: string
+  exchangeRate?: number
+  fareBalancePayEnabled?: boolean
+  cashBalancePayEnabled?: boolean
+  wechatPayEnabled?: boolean
+  alipayPayEnabled?: boolean
+  bankCardPayEnabled?: boolean
+  sandboxMode?: boolean
+}
 
 export async function getSettings(): Promise<AppSettings> {
   const response = await uni.request({ url: `${API_BASE_URL}/settings` })
@@ -242,6 +307,81 @@ export async function listSupportMessages(): Promise<SupportMessage[]> {
 export async function sendSupportMessage(text: string): Promise<SupportMessage> {
   const clientId = `master-travel-project-${Date.now()}-${Math.random().toString(36).slice(2)}`
   return supportRequest<SupportMessage>('/messages', { method: 'POST', data: { text, clientId } })
+}
+
+export type WalletInfo = {
+  id: string
+  name: string
+  phone: string
+  email?: string
+  memberLevel: string
+  fareBalance: number
+  cashBalance: number
+  totalBalance: number
+}
+
+export async function getWalletMe(userIdOrPhone?: string): Promise<WalletInfo> {
+  const url = userIdOrPhone
+    ? `${API_BASE_URL}/wallet/me?userId=${encodeURIComponent(userIdOrPhone)}`
+    : `${API_BASE_URL}/wallet/me`
+  const response = await uni.request({ url })
+  if (response.statusCode >= 400) throw apiError(response, '無法獲取錢包餘額')
+  return response.data as WalletInfo
+}
+
+export async function topUpWallet(params: {
+  amount: number
+  balanceType?: 'fare' | 'cash'
+  channel?: string
+  userId?: string
+}): Promise<{ message: string; data: WalletInfo }> {
+  const response = await uni.request({
+    url: `${API_BASE_URL}/wallet/top-up`,
+    method: 'POST',
+    data: params
+  })
+  if (response.statusCode >= 400) throw apiError(response, '增值失敗')
+  return response.data as { message: string; data: WalletInfo }
+}
+
+export type TripPayRequest = {
+  userId?: string
+  quoteId: string
+  useFareBalance?: boolean
+  useCashBalance?: boolean
+  externalPaymentMethod?: 'wechat' | 'alipay' | 'bank_card'
+  origin?: string
+  destination?: string
+  scheduledAt?: string
+}
+
+export type TripPayResult = {
+  ok: boolean
+  tripId: string
+  quoteId: string
+  total: number
+  currency: string
+  paidSummary: {
+    fareBalance: number
+    cashBalance: number
+    external: number
+    externalMethod: string | null
+  }
+  user: {
+    id: string
+    fareBalance: number
+    cashBalance: number
+  }
+}
+
+export async function payTrip(params: TripPayRequest): Promise<TripPayResult> {
+  const response = await uni.request({
+    url: `${API_BASE_URL}/payments/trip-pay`,
+    method: 'POST',
+    data: params
+  })
+  if (response.statusCode >= 400) throw apiError(response, '支付失敗')
+  return response.data as TripPayResult
 }
 
 export type { CrossBorderTrip }

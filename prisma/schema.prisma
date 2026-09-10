@@ -18,8 +18,22 @@ model User {
   createdAt          DateTime            @default(now())
   trips              Trip[]
   walletTransactions WalletTransaction[]
+  authIdentities     AuthIdentity[]
 
   @@unique([countryCode, phoneNumber])
+}
+
+model AuthIdentity {
+  id         String   @id @default(cuid())
+  provider   String
+  providerId String
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([provider, providerId])
+  @@unique([provider, userId])
+  @@index([userId])
 }
 
 model WalletTransaction {

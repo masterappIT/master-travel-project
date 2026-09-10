@@ -41,7 +41,11 @@ export const useResponsiveCanvas = () => {
   })
 
   const responsiveStyle = computed(() => {
-    const scale = viewportWidth.value / 430
+    const widthScale = viewportWidth.value / 430
+    const heightScale = viewportHeight.value / 932
+    const scale = typeof window !== 'undefined' && viewportWidth.value >= 600
+      ? Math.min(widthScale, heightScale)
+      : widthScale
     const logicalHeight = viewportHeight.value / scale
     return {
       width: '430px',

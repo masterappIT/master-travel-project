@@ -31,9 +31,9 @@
         <text class="agreement-link">使用條款</text>
       </view>
 
-      <view class="login-button" @tap="handleLogin">
+      <button class="login-button" type="button" @tap="handleLogin" @click="handleLogin">
         <text>登入</text>
-      </view>
+      </button>
 
       <text class="third-party-label">第三方登入</text>
       <!-- #ifdef MP-WEIXIN -->
@@ -54,6 +54,9 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
+import { goHome } from '../../utils/navigation'
+import { authenticateThirdParty, requestPhoneVerificationCode } from '../../services/api'
+import { setAuthenticated } from '../../utils/auth'
 
 const { responsiveStyle } = useResponsiveCanvas()
 const phone = ref('6078')
@@ -70,16 +73,32 @@ const handleCountryChange = (event: { detail: { value: string | number } }) => {
 }
 
 const handleBack = () => {
-  if (getCurrentPages().length > 1) uni.navigateBack()
+  goHome()
 }
 
-const handleLogin = () => {
-  if (!agreed.value) return
-  // The API integration will be connected after the authentication contract is provided.
+const handleLogin = async () => {
+  if (!agreed.value && !import.meta.env.DEV) {
+    uni.showToast({ title: '請先同意私隱協議及使用條款', icon: 'none' })
+    return
+  }
+  try {
+    const challenge = await requestPhoneVerificationCode(countryCode.value, phone.value)
+    const query = `challengeId=${encodeURIComponent(challenge.challengeId)}&phone=${encodeURIComponent(`${countryCode.value}-${phone.value}`)}${challenge.developmentCode ? `&developmentCode=${encodeURIComponent(challenge.developmentCode)}` : ''}`
+    uni.navigateTo({ url: `/pages/login/verify?${query}`, animationType: 'none', animationDuration: 0 })
+  } catch (error) {
+    uni.showToast({ title: error instanceof Error ? error.message : '驗證碼發送失敗', icon: 'none' })
+  }
 }
 
-const handleThirdPartyLogin = (_provider: 'wechat' | 'apple') => {
-  // The provider flow will be connected after the authentication contract is provided.
+const handleThirdPartyLogin = async (provider: 'wechat' | 'apple') => {
+  try {
+    const providerToken = `${provider}-dev-account`
+    const result = await authenticateThirdParty(provider, providerToken)
+    setAuthenticated(result.token, result.user)
+    goHome()
+  } catch (error) {
+    uni.showToast({ title: error instanceof Error ? error.message : '第三方登入失敗', icon: 'none' })
+  }
 }
 </script>
 
@@ -281,6 +300,10 @@ const handleThirdPartyLogin = (_provider: 'wechat' | 'apple') => {
 }
 
 .login-button {
+  margin: 0;
+  padding: 0;
+  border: none;
+  outline: none;
   position: absolute;
   left: 35.5px;
   top: 375px;
@@ -291,6 +314,10 @@ const handleThirdPartyLogin = (_provider: 'wechat' | 'apple') => {
   height: 62px;
   border-radius: var(--login-control-radius);
   background: var(--login-accent);
+}
+
+.login-button::after {
+  border: none;
 }
 
 .login-button text {
