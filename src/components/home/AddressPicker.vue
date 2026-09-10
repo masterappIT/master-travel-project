@@ -25,7 +25,7 @@ import { listMainlandCities, listRecommendedAddresses, searchPlaces, type PlaceS
 const props = defineProps<{ selecting: 'origin' | 'destination'; locationLabel: string; detailedAddress: string; initialSelection?: AddressSelection | null; canUseCurrent?: boolean }>()
 type Region = '大陸' | '香港' | '澳門'
 interface Place { id?: string; name: string; address: string; displayAddress?: string; latitude?: number; longitude?: number; city?: string; district?: string; landmark?: string }
-interface AddressSelection extends Place { region: Region | null }
+export interface AddressSelection extends Place { region: Region | null }
 const emit = defineEmits<{ close: []; select: [value: string, selection: AddressSelection]; locate: []; 'use-current': [] }>()
 const formatVisibleAddress = (value: string) => value
   .replace(/香港(?:特別行政區|特别行政区)/g, '香港')
@@ -34,13 +34,16 @@ const formatVisibleAddress = (value: string) => value
 interface RegionData { currentCity: string; currentName: string; currentAddress: string; places: Place[] }
 const regions: Region[] = ['大陸', '香港', '澳門']
 const fallbackRecommendedPlaces: Array<Place & { region: Region }> = [
-  { id: 'hk-airport', region: '香港', name: '香港國際機場', address: '離島區-香港赤臘角天路1號' },
-  { id: 'hk-disney', region: '香港', name: '香港迪士尼樂園', address: '荃灣區-大嶼山竹篙灣' },
-  { id: 'sz-airport', region: '大陸', name: '深圳寶安國際機場', address: '深圳市-寶安區-寶安大道' },
-  { id: 'sz-bay', region: '大陸', name: '深圳灣口岸', address: '深圳市-南山區-東濱路' },
-  { id: 'macau-airport', region: '澳門', name: '澳門國際機場', address: '嘉模堂區-偉龍馬路' },
-  { id: 'macau-ruins', region: '澳門', name: '澳門大三巴牌坊', address: '花王堂區-炮台山下' },
+  { id: 'hk-airport', region: '香港', name: '香港國際機場', address: '離島區-香港赤臘角天路1號', latitude: 22.308046, longitude: 113.91848 },
+  { id: 'hk-disney', region: '香港', name: '香港迪士尼樂園', address: '荃灣區-大嶼山竹篙灣', latitude: 22.312966, longitude: 114.04195 },
+  { id: 'sz-airport', region: '大陸', name: '深圳寶安國際機場', address: '深圳市-寶安區-寶安大道', city: '深圳市', latitude: 22.639258, longitude: 113.810664 },
+  { id: 'sz-bay', region: '大陸', name: '深圳灣口岸', address: '深圳市-南山區-東濱路', city: '深圳市', latitude: 22.50739, longitude: 113.93652 },
+  { id: 'macau-airport', region: '澳門', name: '澳門國際機場', address: '嘉模堂區-偉龍馬路', latitude: 22.149556, longitude: 113.591558 },
+  { id: 'macau-ruins', region: '澳門', name: '澳門大三巴牌坊', address: '花王堂區-炮台山下', latitude: 22.197745, longitude: 113.54083 },
 ]
+const recommendedCoordinates: Record<string, { latitude: number; longitude: number }> = Object.fromEntries(
+  fallbackRecommendedPlaces.map(place => [place.id, { latitude: place.latitude!, longitude: place.longitude! }]),
+)
 const selectedRegion = ref<Region | null>(null)
 const selectedCity = ref<string | null>(null)
 const regionMenuOpen = ref(false)
@@ -97,7 +100,7 @@ const runSearch = async () => {
     searchResults.value = results.filter(place => validCoordinate(place.latitude, place.longitude))
   } catch (error) {
     searchResults.value = []
-    const message = error instanceof Error && error.message === '未開通服務' ? '未開通服務' : '位置搜索失敗，請稍後再試'
+    const message = error instanceof Error ? error.message : '位置搜索失敗，請稍後再試'
     uni.showToast({ title: message, icon: 'none' })
   } finally {
     searching.value = false
@@ -108,7 +111,9 @@ onMounted(async () => {
   if (addressesResult.status === 'fulfilled') {
     recommendedPlaces.value = addressesResult.value.length > 0
       ? addressesResult.value.map(({ id, region, city, name, address, displayAddress, latitude, longitude }) => ({
-          id, region, city: city || undefined, name, address, displayAddress, latitude: latitude ?? undefined, longitude: longitude ?? undefined,
+          id, region, city: city || undefined, name, address, displayAddress,
+          latitude: latitude ?? recommendedCoordinates[id]?.latitude,
+          longitude: longitude ?? recommendedCoordinates[id]?.longitude,
         }))
       : fallbackRecommendedPlaces
   } else {
@@ -142,8 +147,8 @@ const selectPlace = async (place: Place) => {
         return
       }
       resolvedPlace = { ...place, ...match }
-    } catch {
-      uni.showToast({ title: '未能取得地點座標', icon: 'none' })
+    } catch (error) {
+      uni.showToast({ title: error instanceof Error ? error.message : '未能取得地點座標', icon: 'none' })
       return
     } finally {
       searching.value = false

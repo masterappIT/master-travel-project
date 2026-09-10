@@ -7,6 +7,10 @@ export interface TripRoute {
   origin: string
   destination: string
   stops: string[]
+  originLatitude?: number
+  originLongitude?: number
+  destinationLatitude?: number
+  destinationLongitude?: number
   originRegion?: string
   originCity?: string
   destinationRegion?: string

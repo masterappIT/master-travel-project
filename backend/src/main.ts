@@ -30,7 +30,8 @@ interface MainlandCity { id: string; name: string; enabled: boolean; order: numb
 interface CharterOrder { id: string; userId: string; originRegion: string; origin: string; destinationRegion: string; destination: string; scheduledAt: string; durationHours: number; status: string; createdAt: string }
 interface VehicleCategory { id: string; name: string; tabLabel: string; order: number; enabled: boolean }
 interface VehicleCatalogItem { id: string; categoryId: string | null; brand: string; model: string; series: string; seats: number; image: string; colorLabel: string; modelChoiceLabel: string; enabled: boolean; order: number }
-interface VehicleExtraOption { id: string; name: string; label: string; price: number; currency: string; enabled: boolean; order: number }
+type VehicleExtraTriggerType = 'NONE' | 'IMMEDIATE' | 'NIGHT' | 'WEATHER'
+interface VehicleExtraOption { id: string; name: string; label: string; price: number; currency: string; enabled: boolean; order: number; requiredForImmediate: boolean; requiredWithinMinutes: number | null; triggerType: string; triggerEnabled: boolean; nightStartTime: string | null; nightEndTime: string | null }
 interface DistancePricingTier { id: string; fromKm: number; toKm: number | null; pricePerKm: number; order: number }
 interface DistancePricingSettings { categoryId: string; minimumFare: number; currency: string; tiers: DistancePricingTier[] }
 interface RouteMinimumFareSettings { id: string; originRegion: string; originCity: string | null; destinationRegion: string; destinationCity: string | null; categoryId: string | null; minimumFare: number; currency: string; enabled: boolean }
@@ -40,7 +41,7 @@ interface QuoteExtraSelection { id: string; quantity: number }
 interface PromotionInput { id?: unknown; name?: unknown; kind?: unknown; discountType?: unknown; stackingMode?: unknown; discountValue?: unknown; currency?: unknown; minimumSpend?: unknown; maximumDiscount?: unknown; priority?: unknown; startsAt?: unknown; endsAt?: unknown; enabled?: unknown; couponCode?: unknown; usageLimit?: unknown; membershipLevel?: unknown; originRegion?: unknown; originCity?: unknown; destinationRegion?: unknown; destinationCity?: unknown; weekdays?: unknown; timeStart?: unknown; timeEnd?: unknown }
 interface MembershipPlan { id: string; level: string; name: string; monthly: number; yearly: number; recommended: boolean; benefits: string[]; enabled: boolean; order: number }
 const prisma = new PrismaClient()
-const appSettingsDefaults = { id: 'default', language: '繁體中文', region: '香港', currency: 'HKD', exchangeRate: 0.92, adminLogo: null as string | null }
+const appSettingsDefaults = { id: 'default', language: '繁體中文', region: '香港', currency: 'HKD', exchangeRate: 0.92, adminLogo: null as string | null, severeWeatherEnabled: false }
 const currencyLabels = { RMB: 'RMB¥', HKD: 'HKD$' } as const
 const roundMoney = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100
 const normalizeRuleText = (value: unknown) => typeof value === 'string' ? value.trim() : ''
@@ -49,6 +50,43 @@ const timeToMinutes = (value: string | null | undefined) => {
   if (!value || !/^\d{2}:\d{2}$/.test(value)) return null
   const [hours, minutes] = value.split(':').map(Number)
   return hours <= 23 && minutes <= 59 ? hours * 60 + minutes : null
+}
+const normalizeTriggerType = (value: unknown, legacyImmediate = false): VehicleExtraTriggerType => {
+  if (value === 'IMMEDIATE' || value === 'NIGHT' || value === 'WEATHER') return value
+  return legacyImmediate ? 'IMMEDIATE' : 'NONE'
+}
+const hongKongMinutes = (value: Date) => {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Hong_Kong',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23'
+  }).formatToParts(value)
+  const hour = Number(parts.find(part => part.type === 'hour')?.value)
+  const minute = Number(parts.find(part => part.type === 'minute')?.value)
+  return Number.isFinite(hour) && Number.isFinite(minute) ? hour * 60 + minute : null
+}
+const extraTriggerMatches = (
+  extra: Pick<VehicleExtraOption, 'triggerType' | 'triggerEnabled' | 'requiredForImmediate' | 'requiredWithinMinutes' | 'nightStartTime' | 'nightEndTime'>,
+  scheduledAt: Date,
+  now: Date,
+  severeWeatherEnabled: boolean
+) => {
+  const triggerType = normalizeTriggerType(extra.triggerType, extra.requiredForImmediate)
+  if (!extra.triggerEnabled) return false
+  if (triggerType === 'IMMEDIATE') {
+    const window = extra.requiredWithinMinutes
+    if (window === null) return false
+    const minutesUntilDeparture = (scheduledAt.getTime() - now.getTime()) / 60000
+    return minutesUntilDeparture <= window
+  }
+  if (triggerType === 'WEATHER') return severeWeatherEnabled
+  if (triggerType !== 'NIGHT') return false
+  const start = timeToMinutes(extra.nightStartTime)
+  const end = timeToMinutes(extra.nightEndTime)
+  const current = hongKongMinutes(scheduledAt)
+  if (start === null || end === null || current === null) return false
+  return start <= end ? current >= start && current <= end : current >= start || current <= end
 }
 const promotionMatchesContext = (
   promotion: {
@@ -100,8 +138,11 @@ const vehicleCategoryDefaults: VehicleCategory[] = [
   { id: 'premium-car', name: '頂級跨境轎車', tabLabel: '頂級轎車', order: 4, enabled: true },
 ]
 const vehicleExtraDefaults: VehicleExtraOption[] = [
-  { id: 'child-seat', name: 'child-seat', label: '兒童安全座椅', price: 50, currency: 'RMB¥', enabled: true, order: 1 },
-  { id: 'additional-stop', name: 'additional-stop', label: '額外停靠點', price: 100, currency: 'RMB¥', enabled: true, order: 2 },
+  { id: 'instant-order', name: 'instant-order', label: '即時訂單', price: 0, currency: 'RMB¥', enabled: true, order: 0, requiredForImmediate: true, requiredWithinMinutes: 60, triggerType: 'IMMEDIATE', triggerEnabled: true, nightStartTime: null, nightEndTime: null },
+  { id: 'night-surcharge', name: 'night-surcharge', label: '深夜加班費', price: 100, currency: 'RMB¥', enabled: true, order: 1, requiredForImmediate: false, requiredWithinMinutes: null, triggerType: 'NIGHT', triggerEnabled: true, nightStartTime: '22:00', nightEndTime: '06:00' },
+  { id: 'severe-weather', name: 'severe-weather', label: '惡劣天氣費', price: 100, currency: 'RMB¥', enabled: true, order: 2, requiredForImmediate: false, requiredWithinMinutes: null, triggerType: 'WEATHER', triggerEnabled: true, nightStartTime: null, nightEndTime: null },
+  { id: 'child-seat', name: 'child-seat', label: '兒童安全座椅', price: 50, currency: 'RMB¥', enabled: true, order: 3, requiredForImmediate: false, requiredWithinMinutes: null, triggerType: 'NONE', triggerEnabled: true, nightStartTime: null, nightEndTime: null },
+  { id: 'additional-stop', name: 'additional-stop', label: '額外停靠點', price: 100, currency: 'RMB¥', enabled: true, order: 4, requiredForImmediate: false, requiredWithinMinutes: null, triggerType: 'NONE', triggerEnabled: true, nightStartTime: null, nightEndTime: null },
 ]
 const defaultDistancePricing = (categoryId: string): DistancePricingSettings => ({
   categoryId,
@@ -169,7 +210,7 @@ async function ensurePricingDefaults() {
   })
 }
 function appSettingsResponse(settings: typeof appSettingsDefaults) {
-  return { language: settings.language, region: settings.region, currency: settings.currency, exchangeRate: settings.exchangeRate, adminLogo: settings.adminLogo }
+  return { language: settings.language, region: settings.region, currency: settings.currency, exchangeRate: settings.exchangeRate, adminLogo: settings.adminLogo, severeWeatherEnabled: settings.severeWeatherEnabled }
 }
 function validateAdminLogo(value: string) {
   const match = /^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/.exec(value)
@@ -198,7 +239,7 @@ function vehicleResponse(vehicle: VehicleCatalogItem) {
   return { id: vehicle.id, categoryId: vehicle.categoryId, brand: vehicle.brand, model: vehicle.model, series: vehicle.series, seats: vehicle.seats, image: vehicle.image, colorLabel: vehicle.colorLabel, modelChoiceLabel: vehicle.modelChoiceLabel, enabled: vehicle.enabled, order: vehicle.order }
 }
 function vehicleExtraResponse(extra: VehicleExtraOption) {
-  return { id: extra.id, name: extra.name, label: extra.label, price: extra.price, currency: extra.currency, enabled: extra.enabled, order: extra.order }
+  return { id: extra.id, name: extra.name, label: extra.label, price: extra.price, currency: extra.currency, enabled: extra.enabled, order: extra.order, requiredForImmediate: extra.requiredForImmediate, requiredWithinMinutes: extra.requiredWithinMinutes, triggerType: extra.triggerType, triggerEnabled: extra.triggerEnabled, nightStartTime: extra.nightStartTime, nightEndTime: extra.nightEndTime }
 }
 function pricingResponse(pricing: DistancePricingSettings) {
   return {
@@ -716,13 +757,20 @@ class AdminController {
   }
   @Delete('vehicles/:id') async deleteVehicle(@Req() req: RequestLike, @Param('id') id: string) { requireAuth(req); const item = await prisma.vehicle.findUnique({ where: { id } }); if (!item) throw new HttpException('Vehicle not found', HttpStatus.NOT_FOUND); await prisma.vehicle.update({ where: { id }, data: { enabled: false } }); return { ok: true } }
 
-  @Get('vehicle-extras') async listVehicleExtras(@Req() req: RequestLike) { requireAuth(req); const [data, total] = await prisma.$transaction([prisma.vehicleExtra.findMany({ where: { enabled: true }, orderBy: { order: 'asc' } }), prisma.vehicleExtra.count()]); return { data: data.map(vehicleExtraResponse), total } }
+  @Get('vehicle-extras') async listVehicleExtras(@Req() req: RequestLike) { requireAuth(req); const [data, total] = await prisma.$transaction([prisma.vehicleExtra.findMany({ orderBy: [{ order: 'asc' }, { id: 'asc' }] }), prisma.vehicleExtra.count()]); return { data: data.map(vehicleExtraResponse), total } }
   @Post('vehicle-extras') async saveVehicleExtra(@Req() req: RequestLike, @Body() body: Partial<VehicleExtraOption>) {
     requireAuth(req)
     const existing = body.id ? await prisma.vehicleExtra.findUnique({ where: { id: body.id } }) : null
     const price = Number(body.price)
     if (!body.id || !body.label?.trim() || !Number.isFinite(price) || price < 0) throw new HttpException('Valid extra option fields are required', HttpStatus.BAD_REQUEST)
-    const values = { name: body.name?.trim() || body.id, label: body.label.trim(), price, currency: body.currency?.trim() || 'RMB¥', enabled: body.enabled ?? true, order: Number(body.order) || existing?.order || await prisma.vehicleExtra.count() + 1 }
+    const rawRequiredWithinMinutes = body.requiredWithinMinutes as unknown
+    const requiredWithinMinutes = rawRequiredWithinMinutes === null || rawRequiredWithinMinutes === '' ? null : Number(rawRequiredWithinMinutes)
+    if (requiredWithinMinutes !== null && (!Number.isInteger(requiredWithinMinutes) || requiredWithinMinutes <= 0 || requiredWithinMinutes > 24 * 60)) throw new HttpException('Required time window must be between 1 and 1440 minutes', HttpStatus.BAD_REQUEST)
+    const triggerType = normalizeTriggerType(body.triggerType, body.requiredForImmediate === true)
+    const nightStartTime = body.nightStartTime === null || body.nightStartTime === '' ? null : String(body.nightStartTime)
+    const nightEndTime = body.nightEndTime === null || body.nightEndTime === '' ? null : String(body.nightEndTime)
+    if (triggerType === 'NIGHT' && (timeToMinutes(nightStartTime) === null || timeToMinutes(nightEndTime) === null)) throw new HttpException('Night trigger requires valid start and end times', HttpStatus.BAD_REQUEST)
+    const values = { name: body.name?.trim() || body.id, label: body.label.trim(), price, currency: body.currency?.trim() || 'RMB¥', enabled: body.enabled ?? true, order: Number(body.order) || existing?.order || await prisma.vehicleExtra.count() + 1, requiredForImmediate: triggerType === 'IMMEDIATE', requiredWithinMinutes: triggerType === 'IMMEDIATE' ? requiredWithinMinutes : null, triggerType, triggerEnabled: body.triggerEnabled ?? true, nightStartTime: triggerType === 'NIGHT' ? nightStartTime : null, nightEndTime: triggerType === 'NIGHT' ? nightEndTime : null }
     return vehicleExtraResponse(existing ? await prisma.vehicleExtra.update({ where: { id: existing.id }, data: values }) : await prisma.vehicleExtra.create({ data: { id: body.id, ...values } }))
   }
   @Delete('vehicle-extras/:id') async deleteVehicleExtra(@Req() req: RequestLike, @Param('id') id: string) { requireAuth(req); const item = await prisma.vehicleExtra.findUnique({ where: { id } }); if (!item) throw new HttpException('Extra option not found', HttpStatus.NOT_FOUND); await prisma.vehicleExtra.update({ where: { id }, data: { enabled: false } }); return { ok: true } }
@@ -977,12 +1025,22 @@ class PublicPromotionsController {
 @Controller('vehicles')
 class PublicVehiclesController {
   @Get() async listPublicVehicles() {
-    const [categories, data, extras] = await Promise.all([
+    const [categories, data, extras, settings] = await Promise.all([
       prisma.vehicleCategory.findMany({ where: { enabled: true }, orderBy: { order: 'asc' } }),
       prisma.vehicle.findMany({ where: { enabled: true, category: { is: { enabled: true } } }, orderBy: { order: 'asc' } }),
-      prisma.vehicleExtra.findMany({ where: { enabled: true }, orderBy: { order: 'asc' } })
+      prisma.vehicleExtra.findMany({
+        where: {
+          OR: [
+            { enabled: true },
+            { triggerEnabled: true, triggerType: { in: ['IMMEDIATE', 'NIGHT'] } },
+            { triggerEnabled: true, triggerType: 'WEATHER' }
+          ]
+        },
+        orderBy: [{ order: 'asc' }, { id: 'asc' }]
+      }),
+      prisma.appSetting.findUniqueOrThrow({ where: { id: appSettingsDefaults.id } })
     ])
-    return { categories: categories.map(vehicleCategoryResponse), data: data.map(vehicleResponse), extras: extras.map(vehicleExtraResponse) }
+    return { categories: categories.map(vehicleCategoryResponse), data: data.map(vehicleResponse), extras: extras.map(vehicleExtraResponse), severeWeatherEnabled: settings.severeWeatherEnabled }
   }
 }
 @Controller('quotes')
@@ -1011,9 +1069,14 @@ class PublicQuotesController {
           include: { distancePricing: { include: { tiers: { orderBy: { order: 'asc' } } } } }
         }),
         tx.vehicle.findUnique({ where: { id: vehicleId } }),
-        requestedExtras.length
-          ? tx.vehicleExtra.findMany({ where: { id: { in: requestedExtras.map(extra => extra.id) }, enabled: true } })
-          : Promise.resolve([]),
+        tx.vehicleExtra.findMany({
+          where: {
+            OR: [
+              { enabled: true },
+              { triggerEnabled: true, triggerType: { in: ['IMMEDIATE', 'NIGHT', 'WEATHER'] } }
+            ]
+          }
+        }),
         originRegion && destinationRegion
           ? tx.routeMinimumFare.findMany({
               where: {
@@ -1029,7 +1092,12 @@ class PublicQuotesController {
       if (!category || !category.enabled) throw new HttpException('Vehicle category is unavailable', HttpStatus.NOT_FOUND)
       if (!category.distancePricing) throw new HttpException('Vehicle category pricing is unavailable', HttpStatus.CONFLICT)
       if (!vehicle || !vehicle.enabled || vehicle.categoryId !== category.id) throw new HttpException('Vehicle is unavailable for the selected category', HttpStatus.BAD_REQUEST)
-      if (extras.length !== requestedExtras.length) throw new HttpException('One or more extras are unavailable', HttpStatus.BAD_REQUEST)
+      const requestedExtraIds = new Set(requestedExtras.map(selection => selection.id))
+      if (extras.filter(extra => requestedExtraIds.has(extra.id)).length !== requestedExtraIds.size) throw new HttpException('One or more extras are unavailable', HttpStatus.BAD_REQUEST)
+      const requiredExtras = extras.filter(extra => extraTriggerMatches(extra, scheduledAtValue, new Date(), settings.severeWeatherEnabled))
+      for (const extra of requiredExtras) {
+        if (!requestedExtras.some(selection => selection.id === extra.id)) requestedExtras.push({ id: extra.id, quantity: 1 })
+      }
 
       const exchangeRate = Number(settings.exchangeRate)
       if (!Number.isFinite(exchangeRate) || exchangeRate <= 0) throw new HttpException('Exchange rate is unavailable', HttpStatus.CONFLICT)
@@ -1221,7 +1289,7 @@ class RecommendedAddressesController {
 @Controller('settings')
 class SettingsController {
   @Get() async get() { return appSettingsResponse(await prisma.appSetting.findUniqueOrThrow({ where: { id: appSettingsDefaults.id } })) }
-  @Post() async update(@Req() req: RequestLike, @Body() body: { language?: string; region?: string; currency?: string; exchangeRate?: number; adminLogo?: string | null }) {
+  @Post() async update(@Req() req: RequestLike, @Body() body: { language?: string; region?: string; currency?: string; exchangeRate?: number; adminLogo?: string | null; severeWeatherEnabled?: boolean }) {
     const session = requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
     if (body.adminLogo !== undefined && session.role !== 'SUPER_ADMIN') throw new ForbiddenException('Only super administrators may update the logo')
     const settings = await prisma.appSetting.findUniqueOrThrow({ where: { id: appSettingsDefaults.id } })
@@ -1232,7 +1300,8 @@ class SettingsController {
         region: body.region || settings.region,
         currency: body.currency && ['HKD', 'RMB'].includes(body.currency) ? body.currency : settings.currency,
         exchangeRate: body.exchangeRate !== undefined && Number.isFinite(Number(body.exchangeRate)) && Number(body.exchangeRate) > 0 ? Number(body.exchangeRate) : settings.exchangeRate,
-        adminLogo: body.adminLogo === undefined ? settings.adminLogo : body.adminLogo === null ? null : validateAdminLogo(body.adminLogo)
+        adminLogo: body.adminLogo === undefined ? settings.adminLogo : body.adminLogo === null ? null : validateAdminLogo(body.adminLogo),
+        severeWeatherEnabled: body.severeWeatherEnabled ?? settings.severeWeatherEnabled
       }
     })
     addAudit(req, 'SUCCESS')
@@ -1296,9 +1365,6 @@ class LocationController {
       const area = `${poi.pname || ''}${poi.cityname || ''}`
       return area.includes('广东') || area.includes('廣東') || area.includes('香港') || area.includes('澳門') || area.includes('澳门')
     })
-    if (region === '大陸' && pois.length > 0 && mainlandPois.length === 0) {
-      throw new HttpException('未開通服務', HttpStatus.FORBIDDEN)
-    }
     if (!region && pois.length > 0 && supportedPois.length === 0) {
       throw new HttpException('未開通服務', HttpStatus.FORBIDDEN)
     }
@@ -1326,7 +1392,35 @@ class LocationController {
         longitude
       }]
     })
-    return { data: results }
+    if (results.length > 0) return { data: results }
+
+    const geocodeParams = new URLSearchParams({ address: keyword })
+    if (region === '香港') geocodeParams.set('city', '香港')
+    else if (region === '澳門') geocodeParams.set('city', '澳門')
+    else if (region === '大陸' && req.query?.city?.trim()) geocodeParams.set('city', req.query.city.trim())
+    const geocode = await this.requestAmap<{ geocodes?: Array<{ formatted_address?: string; location?: string; level?: string; country?: string; province?: string; city?: string | string[]; district?: string }> }>('/v3/geocode/geo', geocodeParams)
+    const fallbackResults = (geocode.geocodes || []).flatMap((item, index) => {
+      const [longitude, latitude] = (item.location || '').split(',').map(Number)
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return []
+      const city = typeof item.city === 'string' ? item.city : item.province || ''
+      const area = `${item.province || ''}${city}`
+      const resultRegion: AddressRegion = area.includes('香港') ? '香港' : area.includes('澳門') || area.includes('澳门') ? '澳門' : '大陸'
+      if (region && resultRegion !== region) return []
+      const address = item.formatted_address || keyword
+      return [{
+        id: `${longitude},${latitude},geocode-${index}`,
+        name: keyword,
+        address,
+        displayAddress: formattedAddress(resultRegion, address),
+        region: resultRegion,
+        city,
+        district: item.district || '',
+        landmark: keyword,
+        latitude,
+        longitude,
+      }]
+    })
+    return { data: fallbackResults }
   }
 
   @Get('driving-route')

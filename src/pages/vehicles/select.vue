@@ -23,6 +23,8 @@
       :destination="tripStore.activeTrip?.destination || '廣東 · 深圳灣口岸'"
       :departure-time="tripStore.departureTime"
       @close="editSheetOpen = false"
+      :origin-selection="originSelection"
+      :destination-selection="destinationSelection"
       @confirm="saveTripChanges"
     />
   </view>
@@ -32,11 +34,12 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { useTripStore } from '../../stores/trip'
 import { openCachedPage, closeCachedPage } from '../../utils/navigation'
-import { createFareQuote, listPublicVehicles, type FareQuote, type PublicVehicleCatalog } from '../../services/api'
+import { createFareQuote, listPublicVehicles, planDrivingRoute, type FareQuote, type PublicVehicleCatalog } from '../../services/api'
 import { useCurrency } from '../../composables/useCurrency'
 import TripEditSheet from '../../components/home/TripEditSheet.vue'
 import VehicleCard from '../../components/vehicles/VehicleCard.vue'
 import type { Vehicle } from '../../types/vehicle'
+import type { AddressSelection } from '../../components/home/AddressPicker.vue'
 type Category = 'all' | string
 interface VehicleGroup { category: string; title: string; vehicles: Vehicle[] }
 const { responsiveStyle } = useResponsiveCanvas()
@@ -126,7 +129,58 @@ const bookingTime = computed(() => {
     : `${date.getMonth() + 1}月${date.getDate()}日 ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
 })
 const selectVehicle = (vehicle: Vehicle) => { if (!vehicle.selectable) return; tripStore.setChosenVehicle(vehicle); openCachedPage('/pages/vehicles/selected') }
-const saveTripChanges = (origin: string, destination: string, departureTime: string) => { tripStore.setRoute(origin, destination); tripStore.setDepartureTime(departureTime); editSheetOpen.value = false }
+const originSelection = computed<AddressSelection | null>(() => {
+  const route = tripStore.activeDraft.route
+  return route.originLatitude !== undefined && route.originLongitude !== undefined
+    ? { name: route.origin, address: route.origin, region: (route.originRegion as AddressSelection['region']) || null, city: route.originCity, latitude: route.originLatitude, longitude: route.originLongitude }
+    : null
+})
+const destinationSelection = computed<AddressSelection | null>(() => {
+  const route = tripStore.activeDraft.route
+  return route.destinationLatitude !== undefined && route.destinationLongitude !== undefined
+    ? { name: route.destination, address: route.destination, region: (route.destinationRegion as AddressSelection['region']) || null, city: route.destinationCity, latitude: route.destinationLatitude, longitude: route.destinationLongitude }
+    : null
+})
+const saveTripChanges = async (
+  origin: string,
+  destination: string,
+  departureTime: string,
+  nextOriginSelection: AddressSelection | null,
+  nextDestinationSelection: AddressSelection | null
+) => {
+  const currentRoute = tripStore.activeDraft.route
+  const originCoordinate = nextOriginSelection?.latitude !== undefined && nextOriginSelection.longitude !== undefined
+    ? { latitude: nextOriginSelection.latitude, longitude: nextOriginSelection.longitude }
+    : currentRoute.originLatitude !== undefined && currentRoute.originLongitude !== undefined
+      ? { latitude: currentRoute.originLatitude, longitude: currentRoute.originLongitude }
+      : undefined
+  const destinationCoordinate = nextDestinationSelection?.latitude !== undefined && nextDestinationSelection.longitude !== undefined
+    ? { latitude: nextDestinationSelection.latitude, longitude: nextDestinationSelection.longitude }
+    : currentRoute.destinationLatitude !== undefined && currentRoute.destinationLongitude !== undefined
+      ? { latitude: currentRoute.destinationLatitude, longitude: currentRoute.destinationLongitude }
+      : undefined
+  tripStore.setRoute(origin, destination, {
+    originRegion: nextOriginSelection?.region || undefined,
+    originCity: nextOriginSelection?.city || undefined,
+    destinationRegion: nextDestinationSelection?.region || undefined,
+    destinationCity: nextDestinationSelection?.city || undefined,
+    originLatitude: originCoordinate?.latitude,
+    originLongitude: originCoordinate?.longitude,
+    destinationLatitude: destinationCoordinate?.latitude,
+    destinationLongitude: destinationCoordinate?.longitude
+  })
+  tripStore.setDepartureTime(departureTime)
+  editSheetOpen.value = false
+  if (!originCoordinate || !destinationCoordinate) return
+  try {
+    const route = await planDrivingRoute(originCoordinate, destinationCoordinate)
+    tripStore.setRouteDistance(route.distance, route.duration)
+    await loadQuotes()
+  } catch (error) {
+    tripStore.clearRouteDistance()
+    uni.showToast({ title: error instanceof Error ? error.message : '路線規劃失敗，請稍後再試', icon: 'none' })
+  }
+}
 const goBack = () => closeCachedPage('/pages/index/index')
 </script>
 <style scoped>

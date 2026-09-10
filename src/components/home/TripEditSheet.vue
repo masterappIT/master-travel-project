@@ -22,6 +22,7 @@
       :selecting="addressPicker"
       location-label="香港 · 油尖旺區"
       detailed-address="香港九龍站附近"
+      :initial-selection="addressPicker === 'origin' ? originSelection : destinationSelection"
       @close="addressPicker = null"
       @select="selectAddress"
       @locate="showLocationUnavailable"
@@ -33,26 +34,49 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import BookingTimePicker from './BookingTimePicker.vue'
-import AddressPicker from './AddressPicker.vue'
+import AddressPicker, { type AddressSelection } from './AddressPicker.vue'
 
-const props = defineProps<{ origin: string; destination: string; departureTime: string }>()
-const emit = defineEmits<{ close: []; confirm: [origin: string, destination: string, departureTime: string] }>()
+const props = defineProps<{
+  origin: string
+  destination: string
+  departureTime: string
+  originSelection?: AddressSelection | null
+  destinationSelection?: AddressSelection | null
+}>()
+const emit = defineEmits<{
+  close: []
+  confirm: [origin: string, destination: string, departureTime: string, originSelection: AddressSelection | null, destinationSelection: AddressSelection | null]
+}>()
 const draftOrigin = ref(props.origin)
 const draftDestination = ref(props.destination)
 const draftDepartureTime = ref(props.departureTime)
+const originSelection = ref<AddressSelection | null>(props.originSelection || null)
+const destinationSelection = ref<AddressSelection | null>(props.destinationSelection || null)
 const timePickerOpen = ref(false)
 const addressPicker = ref<'origin' | 'destination' | null>(null)
 const draftDate = computed(() => draftDepartureTime.value.split(' ')[0] || '選擇日期')
 const draftTime = computed(() => draftDepartureTime.value.split(' ')[1] || '選擇時間')
 const openAddressPicker = (type: 'origin' | 'destination') => { addressPicker.value = type }
-const selectAddress = (value: string) => {
-  if (addressPicker.value === 'origin') draftOrigin.value = value
-  if (addressPicker.value === 'destination') draftDestination.value = value
+const selectAddress = (value: string, selection: AddressSelection) => {
+  if (addressPicker.value === 'origin') {
+    draftOrigin.value = value
+    originSelection.value = selection
+  }
+  if (addressPicker.value === 'destination') {
+    draftDestination.value = value
+    destinationSelection.value = selection
+  }
   addressPicker.value = null
 }
 const useCurrentLocation = () => {
-  if (addressPicker.value === 'origin') draftOrigin.value = '香港九龍站附近'
-  if (addressPicker.value === 'destination') draftDestination.value = '香港九龍站附近'
+  if (addressPicker.value === 'origin') {
+    draftOrigin.value = '香港九龍站附近'
+    originSelection.value = null
+  }
+  if (addressPicker.value === 'destination') {
+    draftDestination.value = '香港九龍站附近'
+    destinationSelection.value = null
+  }
   addressPicker.value = null
 }
 const showLocationUnavailable = () => uni.showToast({ title: '定位功能暫時不可用', icon: 'none' })
@@ -69,7 +93,7 @@ const confirm = () => {
     uni.showToast({ title: '請填寫出發地及目的地', icon: 'none' })
     return
   }
-  emit('confirm', origin, destination, draftDepartureTime.value)
+  emit('confirm', origin, destination, draftDepartureTime.value, originSelection.value, destinationSelection.value)
 }
 </script>
 

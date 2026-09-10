@@ -86,6 +86,7 @@ model AppSetting {
   currency     String
   exchangeRate Float
   adminLogo    String?  @db.Text
+  severeWeatherEnabled Boolean @default(false)
   updatedAt    DateTime @updatedAt
 }
 
@@ -196,13 +197,19 @@ model DistancePricingTier {
 }
 
 model VehicleExtra {
-  id        String   @id
-  name      String
-  label     String
-  price     Float
-  currency  String
-  enabled   Boolean  @default(true)
-  order     Int
+  id                     String   @id
+  name                   String
+  label                  String
+  price                  Float
+  currency               String
+  enabled                Boolean  @default(true)
+  order                  Int
+  requiredForImmediate   Boolean  @default(false)
+  requiredWithinMinutes  Int?
+  triggerType            String   @default("NONE")
+  triggerEnabled         Boolean  @default(true)
+  nightStartTime         String?
+  nightEndTime           String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

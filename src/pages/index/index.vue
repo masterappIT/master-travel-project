@@ -329,7 +329,11 @@ const updateRoute = async () => {
       originRegion: originSelection.value?.region || undefined,
       originCity: originSelection.value?.city || undefined,
       destinationRegion: destinationSelection.value?.region || undefined,
-      destinationCity: destinationSelection.value?.city || undefined
+      destinationCity: destinationSelection.value?.city || undefined,
+      originLatitude: originCoordinate.latitude,
+      originLongitude: originCoordinate.longitude,
+      destinationLatitude: destinationCoordinate.latitude,
+      destinationLongitude: destinationCoordinate.longitude
     })
     tripStore.setRouteDistance(route.distance, route.duration)
   } catch {
@@ -429,7 +433,7 @@ const remountMapAtCurrentLocation = async () => {
 }
 
 const useCurrentLocation = (closePicker = false, setAsOrigin = false) => {
-  uni.getLocation({
+  const getLocation = () => uni.getLocation({
     type: 'gcj02',
     success: ({ latitude, longitude }) => {
       mapLatitude.value = latitude
@@ -508,8 +512,28 @@ const useCurrentLocation = (closePicker = false, setAsOrigin = false) => {
         })
       uni.showToast({ title: '已定位到目前位置', icon: 'none' })
     },
-    fail: () => uni.showToast({ title: '無法取得位置，請允許定位權限', icon: 'none' })
+    fail: (error) => uni.showToast({ title: `無法取得位置：${error.errMsg || '請允許定位權限'}`, icon: 'none' })
   })
+  // 微信小程序拒絕過定位後，不會再次自動彈出授權框。
+  // #ifdef MP-WEIXIN
+  uni.getSetting({
+    success: (settings) => {
+     if (settings.authSetting?.['scope.userLocation'] === false) {
+       uni.showModal({
+         title: '需要定位權限',
+         content: '請在微信設定中允許定位，才能取得出發地座標。',
+         success: (result) => { if (result.confirm) uni.openSetting({}) },
+       })
+       return
+     }
+     getLocation()
+    },
+    fail: () => getLocation(),
+  })
+  // #endif
+  // #ifndef MP-WEIXIN
+  getLocation()
+  // #endif
 }
 const openTrips = () => {
   tripStore.setRoute(origin.value, destination.value)

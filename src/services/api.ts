@@ -4,6 +4,12 @@ let API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:3010'
 // #ifdef H5
 API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api'
 // #endif
+const apiError = (response: UniApp.RequestSuccessCallbackResult, fallback: string) => {
+  const message = typeof response.data === 'object' && response.data !== null && 'message' in response.data
+    ? String((response.data as { message?: unknown }).message || '')
+    : ''
+  return new Error(message || `${fallback}（HTTP ${response.statusCode || 0}，請確認小程序可連線至 ${API_BASE_URL}）`)
+}
 
 export async function getHealth(): Promise<{ status: string }> {
   const response = await uni.request({ url: `${API_BASE_URL}/health` })
@@ -42,6 +48,7 @@ export type DrivingRoute = {
 
 export async function reverseGeocode(latitude: number, longitude: number): Promise<LocationDetails> {
   const response = await uni.request({ url: `${API_BASE_URL}/location/reverse-geocode`, data: { latitude, longitude } })
+  if (response.statusCode >= 400) throw apiError(response, '地址解析失敗')
   return response.data as LocationDetails
 }
 
@@ -51,7 +58,7 @@ export async function searchPlaces(keyword: string, region?: string, city?: stri
     data: { keyword, region: region || '', city: city || '' }
   })
   if (response.statusCode === 403) throw new Error('未開通服務')
-  if (response.statusCode >= 400) throw new Error('位置搜索暫時無法使用')
+  if (response.statusCode >= 400) throw apiError(response, '位置搜索暫時無法使用')
   return (response.data as { data: PlaceSearchResult[] }).data
 }
 
@@ -63,7 +70,7 @@ export async function planDrivingRoute(origin: Coordinate, destination: Coordina
       destination: `${destination.longitude},${destination.latitude}`
     }
   })
-  if (response.statusCode >= 400) throw new Error('路線規劃暫時無法使用')
+  if (response.statusCode >= 400) throw apiError(response, '路線規劃暫時無法使用')
   return response.data as DrivingRoute
 }
 
@@ -81,8 +88,8 @@ export type PublicVehicle = {
   enabled: boolean
   order: number
 }
-export type PublicVehicleExtra = { id: string; name: string; label: string; price: number; currency: string; enabled: boolean; order: number }
-export type PublicVehicleCatalog = { categories: PublicVehicleCategory[]; data: PublicVehicle[]; extras: PublicVehicleExtra[] }
+export type PublicVehicleExtra = { id: string; name: string; label: string; price: number; currency: string; enabled: boolean; order: number; requiredForImmediate: boolean; requiredWithinMinutes: number | null; triggerType: 'NONE' | 'IMMEDIATE' | 'NIGHT' | 'WEATHER'; triggerEnabled: boolean; nightStartTime: string | null; nightEndTime: string | null }
+export type PublicVehicleCatalog = { categories: PublicVehicleCategory[]; data: PublicVehicle[]; extras: PublicVehicleExtra[]; severeWeatherEnabled: boolean }
 
 export async function listPublicVehicles(): Promise<PublicVehicleCatalog> {
   const response = await uni.request({ url: `${API_BASE_URL}/vehicles` })

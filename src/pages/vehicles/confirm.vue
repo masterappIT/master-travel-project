@@ -75,7 +75,7 @@
         <view class="payment-success-button" @tap="closePaymentSuccess">完成</view>
       </view>
     </view>
-    <TripEditSheet v-if="editSheetOpen" :origin="tripStore.activeTrip?.origin || '香港 · 九龍站'" :destination="tripStore.activeTrip?.destination || '廣東 · 深圳灣口岸'" :departure-time="tripStore.departureTime" @close="editSheetOpen = false" @confirm="saveTripChanges" />
+    <TripEditSheet v-if="editSheetOpen" :origin="tripStore.activeTrip?.origin || '香港 · 九龍站'" :destination="tripStore.activeTrip?.destination || '廣東 · 深圳灣口岸'" :departure-time="tripStore.departureTime" :origin-selection="originSelection" :destination-selection="destinationSelection" @close="editSheetOpen = false" @confirm="saveTripChanges" />
   </view>
 </template>
 
@@ -83,6 +83,8 @@
 import { computed, ref } from 'vue'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { useTripStore } from '../../stores/trip'
+import { planDrivingRoute } from '../../services/api'
+import type { AddressSelection } from '../../components/home/AddressPicker.vue'
 import { closeCachedPage, openCachedPage } from '../../utils/navigation'
 import TripEditSheet from '../../components/home/TripEditSheet.vue'
 import VehicleCard from '../../components/vehicles/VehicleCard.vue'
@@ -130,7 +132,30 @@ const formatQuoteAmount = (amount: number) => {
   return `${amount < 0 ? '-' : ''}${quoteCurrency.value}${formatQuoteNumber(Math.abs(amount))}`
 }
 const cityName = (value: string | undefined, fallback: string) => { const text = value?.trim() || ''; if (text.includes('香港')) return '香港'; if (text.includes('深圳') || text.includes('廣東')) return '深圳'; return text.split(/[·，,\s]/)[0] || fallback }
-const saveTripChanges = (origin: string, destination: string, departureTime: string) => { tripStore.setRoute(origin, destination); tripStore.setDepartureTime(departureTime); editSheetOpen.value = false }
+const originSelection = computed<AddressSelection | null>(() => {
+  const route = tripStore.activeDraft.route
+  return route.originLatitude !== undefined && route.originLongitude !== undefined ? { name: route.origin, address: route.origin, region: (route.originRegion as AddressSelection['region']) || null, city: route.originCity, latitude: route.originLatitude, longitude: route.originLongitude } : null
+})
+const destinationSelection = computed<AddressSelection | null>(() => {
+  const route = tripStore.activeDraft.route
+  return route.destinationLatitude !== undefined && route.destinationLongitude !== undefined ? { name: route.destination, address: route.destination, region: (route.destinationRegion as AddressSelection['region']) || null, city: route.destinationCity, latitude: route.destinationLatitude, longitude: route.destinationLongitude } : null
+})
+const saveTripChanges = async (origin: string, destination: string, departureTime: string, nextOriginSelection: AddressSelection | null, nextDestinationSelection: AddressSelection | null) => {
+  const currentRoute = tripStore.activeDraft.route
+  const originCoordinate = nextOriginSelection?.latitude !== undefined && nextOriginSelection.longitude !== undefined ? { latitude: nextOriginSelection.latitude, longitude: nextOriginSelection.longitude } : currentRoute.originLatitude !== undefined && currentRoute.originLongitude !== undefined ? { latitude: currentRoute.originLatitude, longitude: currentRoute.originLongitude } : undefined
+  const destinationCoordinate = nextDestinationSelection?.latitude !== undefined && nextDestinationSelection.longitude !== undefined ? { latitude: nextDestinationSelection.latitude, longitude: nextDestinationSelection.longitude } : currentRoute.destinationLatitude !== undefined && currentRoute.destinationLongitude !== undefined ? { latitude: currentRoute.destinationLatitude, longitude: currentRoute.destinationLongitude } : undefined
+  tripStore.setRoute(origin, destination, { originRegion: nextOriginSelection?.region || undefined, originCity: nextOriginSelection?.city || undefined, destinationRegion: nextDestinationSelection?.region || undefined, destinationCity: nextDestinationSelection?.city || undefined, originLatitude: originCoordinate?.latitude, originLongitude: originCoordinate?.longitude, destinationLatitude: destinationCoordinate?.latitude, destinationLongitude: destinationCoordinate?.longitude })
+  tripStore.setDepartureTime(departureTime)
+  editSheetOpen.value = false
+  if (!originCoordinate || !destinationCoordinate) return
+  try {
+    const route = await planDrivingRoute(originCoordinate, destinationCoordinate)
+    tripStore.setRouteDistance(route.distance, route.duration)
+  } catch (error) {
+    tripStore.clearRouteDistance()
+    uni.showToast({ title: error instanceof Error ? error.message : '路線規劃失敗，請稍後再試', icon: 'none' })
+  }
+}
 const goBack = () => openCachedPage('/pages/index/index')
 const openCoupons = () => openCachedPage('/pages/coupons/coupons')
 const payNow = () => {

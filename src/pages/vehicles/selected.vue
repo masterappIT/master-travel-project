@@ -15,9 +15,9 @@
     <view class="selected-vehicle-card"><VehicleCard :vehicle="vehicle" :quote="tripStore.selectedFareQuote" selectable :selected="true" /></view>
     <view class="promo-card"><text class="promo-copy">{{ promoApplied ? `已使用優惠「${tripStore.activeDraft.couponCode}」` : '可使用優惠券' }}</text><view class="promo-action" @tap="togglePromo"><text>{{ promoApplied ? '取消使用' : '選擇優惠' }}</text></view></view>
 
-    <scroll-view class="extras" scroll-y :show-scrollbar="false">
+    <scroll-view v-if="visibleExtras.length" class="extras" scroll-y :show-scrollbar="false">
       <view class="extras-title"><image src="/static/vehicles/extra-cart.svg" mode="aspectFit" /><text>額外選擇</text></view>
-      <view v-for="extra in extras" :key="extra.id" class="extra-row" @tap="toggleExtra(extra.id)"><image :src="selectedExtras.includes(extra.id) ? '/static/vehicles/extra-selected.svg' : '/static/vehicles/extra-radio.svg'" mode="aspectFit" /><text>{{ extra.label }}</text><text class="extra-price">{{ formatExtraPrice(extra.price, extra.currency) }}</text></view>
+      <view v-for="extra in visibleExtras" :key="extra.id" class="extra-row" :aria-disabled="isRequiredExtra(extra) ? 'true' : 'false'" @tap="handleExtraTap(extra)"><image :src="selectedExtras.includes(extra.id) ? '/static/vehicles/extra-selected.svg' : '/static/vehicles/extra-radio.svg'" mode="aspectFit" /><text>{{ extra.label }}</text><text class="extra-price">{{ formatExtraPrice(extra.price, extra.currency) }}</text></view>
     </scroll-view>
     <view class="next-button" @tap="goNext">下一步</view>
     <TripEditSheet
@@ -25,6 +25,8 @@
       :origin="tripStore.activeTrip?.origin || '香港 · 九龍站'"
       :destination="tripStore.activeTrip?.destination || '廣東 · 深圳灣口岸'"
       :departure-time="tripStore.departureTime"
+      :origin-selection="originSelection"
+      :destination-selection="destinationSelection"
       @close="editSheetOpen = false"
       @confirm="saveTripChanges"
     />
@@ -37,11 +39,12 @@ import { onShow } from '@dcloudio/uni-app'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { useTripStore } from '../../stores/trip'
 import { closeCachedPage, openCachedPage } from '../../utils/navigation'
-import { createFareQuote, listPublicVehicles, type PublicVehicleExtra } from '../../services/api'
+import { createFareQuote, listPublicVehicles, planDrivingRoute, type PublicVehicleExtra } from '../../services/api'
 import { useCurrency } from '../../composables/useCurrency'
 import TripEditSheet from '../../components/home/TripEditSheet.vue'
 import VehicleCard from '../../components/vehicles/VehicleCard.vue'
 import type { Vehicle } from '../../types/vehicle'
+import type { AddressSelection } from '../../components/home/AddressPicker.vue'
 const { responsiveStyle } = useResponsiveCanvas()
 const tripStore = useTripStore()
 const { currency } = useCurrency()
@@ -63,14 +66,98 @@ const bookingTime = computed(() => {
     ? tripStore.departureTime
     : `${date.getMonth() + 1}月${date.getDate()}日 ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
 })
-const saveTripChanges = (origin: string, destination: string, departureTime: string) => {
-  tripStore.setRoute(origin, destination)
+const originSelection = computed<AddressSelection | null>(() => {
+  const route = tripStore.activeDraft.route
+  return route.originLatitude !== undefined && route.originLongitude !== undefined
+    ? { name: route.origin, address: route.origin, region: (route.originRegion as AddressSelection['region']) || null, city: route.originCity, latitude: route.originLatitude, longitude: route.originLongitude }
+    : null
+})
+const destinationSelection = computed<AddressSelection | null>(() => {
+  const route = tripStore.activeDraft.route
+  return route.destinationLatitude !== undefined && route.destinationLongitude !== undefined
+    ? { name: route.destination, address: route.destination, region: (route.destinationRegion as AddressSelection['region']) || null, city: route.destinationCity, latitude: route.destinationLatitude, longitude: route.destinationLongitude }
+    : null
+})
+const saveTripChanges = async (
+  origin: string,
+  destination: string,
+  departureTime: string,
+  nextOriginSelection: AddressSelection | null,
+  nextDestinationSelection: AddressSelection | null
+) => {
+  const currentRoute = tripStore.activeDraft.route
+  const originCoordinate = nextOriginSelection?.latitude !== undefined && nextOriginSelection.longitude !== undefined ? { latitude: nextOriginSelection.latitude, longitude: nextOriginSelection.longitude } : currentRoute.originLatitude !== undefined && currentRoute.originLongitude !== undefined ? { latitude: currentRoute.originLatitude, longitude: currentRoute.originLongitude } : undefined
+  const destinationCoordinate = nextDestinationSelection?.latitude !== undefined && nextDestinationSelection.longitude !== undefined ? { latitude: nextDestinationSelection.latitude, longitude: nextDestinationSelection.longitude } : currentRoute.destinationLatitude !== undefined && currentRoute.destinationLongitude !== undefined ? { latitude: currentRoute.destinationLatitude, longitude: currentRoute.destinationLongitude } : undefined
+  tripStore.setRoute(origin, destination, {
+    originRegion: nextOriginSelection?.region || undefined,
+    originCity: nextOriginSelection?.city || undefined,
+    destinationRegion: nextDestinationSelection?.region || undefined,
+    destinationCity: nextDestinationSelection?.city || undefined,
+    originLatitude: originCoordinate?.latitude,
+    originLongitude: originCoordinate?.longitude,
+    destinationLatitude: destinationCoordinate?.latitude,
+    destinationLongitude: destinationCoordinate?.longitude
+  })
   tripStore.setDepartureTime(departureTime)
   editSheetOpen.value = false
+  if (!originCoordinate || !destinationCoordinate) return
+  try {
+    const route = await planDrivingRoute(originCoordinate, destinationCoordinate)
+    tripStore.setRouteDistance(route.distance, route.duration)
+    await refreshQuote()
+  } catch (error) {
+    tripStore.clearRouteDistance()
+    uni.showToast({ title: error instanceof Error ? error.message : '路線規劃失敗，請稍後再試', icon: 'none' })
+  }
 }
 const promoApplied = ref(false)
 const extras = ref<PublicVehicleExtra[]>([])
+const severeWeatherEnabled = ref(false)
 const selectedExtras = computed(() => tripStore.activeDraft.extras)
+const localTimeMinutes = (value: Date) => {
+  if (Number.isNaN(value.valueOf())) return null
+  const hongKongTime = new Date(value.getTime() + 8 * 60 * 60 * 1000)
+  return hongKongTime.getUTCHours() * 60 + hongKongTime.getUTCMinutes()
+}
+const timeMinutes = (value: string | null) => {
+  if (!value || !/^\d{2}:\d{2}$/.test(value)) return null
+  const [hour, minute] = value.split(':').map(Number)
+  return hour <= 23 && minute <= 59 ? hour * 60 + minute : null
+}
+const isTriggeredExtra = (extra: PublicVehicleExtra) => {
+  const triggerType = extra.triggerType || (extra.requiredForImmediate ? 'IMMEDIATE' : 'NONE')
+  if (!extra.triggerEnabled) return false
+  if (triggerType === 'WEATHER') return severeWeatherEnabled.value
+  if (triggerType === 'NIGHT') {
+    const start = timeMinutes(extra.nightStartTime)
+    const end = timeMinutes(extra.nightEndTime)
+    const departure = tripStore.departureTime ? new Date(tripStore.departureTime) : new Date()
+    const current = localTimeMinutes(departure)
+    if (start === null || end === null || current === null) return false
+    return start <= end ? current >= start && current <= end : current >= start || current <= end
+  }
+  if (triggerType !== 'IMMEDIATE' || extra.requiredWithinMinutes === null) return false
+  if (!tripStore.departureTime) return true
+  const departure = new Date(tripStore.departureTime)
+  return !Number.isNaN(departure.valueOf()) && departure.getTime() - Date.now() <= extra.requiredWithinMinutes * 60 * 1000
+}
+const isRequiredExtra = (extra: PublicVehicleExtra) => isTriggeredExtra(extra)
+const isTriggeredRule = (extra: PublicVehicleExtra) => isTriggeredExtra(extra)
+const isTriggerExtra = (extra: PublicVehicleExtra) => (extra.triggerType || (extra.requiredForImmediate ? 'IMMEDIATE' : 'NONE')) !== 'NONE'
+const visibleExtras = computed(() => extras.value
+  .filter(extra => isTriggerExtra(extra) ? isTriggeredExtra(extra) : extra.enabled)
+  .sort((a, b) => a.order - b.order || a.id.localeCompare(b.id)))
+const syncRequiredExtras = () => {
+  const requiredIds = new Set(extras.value.filter(isTriggeredExtra).map(extra => extra.id))
+  const synchronizedIds = selectedExtras.value
+    .filter(id => extras.value.some(extra => extra.id === id && (extra.enabled || requiredIds.has(id))))
+  for (const id of requiredIds) {
+    if (!synchronizedIds.includes(id)) synchronizedIds.push(id)
+  }
+  if (synchronizedIds.length !== selectedExtras.value.length || synchronizedIds.some((id, index) => id !== selectedExtras.value[index])) {
+    tripStore.updateActiveDraft({ extras: synchronizedIds })
+  }
+}
 const routeRegion = (value: string | undefined, fallback: string) => {
   const text = value?.trim() || ''
   if (text.includes('香港')) return '香港'
@@ -85,6 +172,12 @@ const formatExtraPrice = (amount: number, extraCurrency: string) => {
   return `${extraCurrency}${amount.toFixed(0)}`
 }
 const refreshQuote = async (extraIds = selectedExtras.value) => {
+  syncRequiredExtras()
+  const requiredIds = new Set(extras.value.filter(isTriggeredExtra).map(extra => extra.id))
+  const synchronizedExtraIds = Array.from(new Set([
+    ...extraIds.filter(id => !extras.value.some(extra => extra.id === id && isTriggeredRule(extra)) || requiredIds.has(id)),
+    ...requiredIds
+  ]))
   const chosenVehicle = tripStore.chosenVehicle
   const categoryId = chosenVehicle?.categoryId || tripStore.selectedFareQuote?.pricing?.categoryId
   const distanceMeters = tripStore.activeDraft.distanceMeters
@@ -102,7 +195,7 @@ const refreshQuote = async (extraIds = selectedExtras.value) => {
       destinationCity: tripStore.activeDraft.route.destinationCity,
       scheduledAt: tripStore.departureTime,
       couponCode: tripStore.activeDraft.couponCode,
-      extraIds,
+      extraIds: synchronizedExtraIds,
       displayCurrency: currency.value
     })
     if (requestId === quoteRequestId) tripStore.setFareQuote(quote)
@@ -112,7 +205,10 @@ const refreshQuote = async (extraIds = selectedExtras.value) => {
 }
 const loadExtras = async () => {
   try {
-    extras.value = (await listPublicVehicles()).extras
+    const catalog = await listPublicVehicles()
+    extras.value = [...catalog.extras].sort((a, b) => a.order - b.order)
+    severeWeatherEnabled.value = catalog.severeWeatherEnabled
+    syncRequiredExtras()
     const availableExtraIds = new Set(extras.value.map(extra => extra.id))
     const validExtraIds = selectedExtras.value.filter(id => availableExtraIds.has(id))
     if (validExtraIds.length !== selectedExtras.value.length) tripStore.updateActiveDraft({ extras: validExtraIds })
@@ -124,11 +220,13 @@ onMounted(async () => {
   await loadExtras()
   await refreshQuote()
 })
-onShow(() => {
+onShow(async () => {
+  await loadExtras()
+  await refreshQuote()
   const applied = Boolean(tripStore.activeDraft.couponCode)
   if (promoApplied.value !== applied) {
     promoApplied.value = applied
-    void refreshQuote()
+    await refreshQuote()
   }
 })
 const goBack = () => closeCachedPage('/pages/vehicles/select')
@@ -143,11 +241,17 @@ const togglePromo = () => {
   openCachedPage('/pages/coupons/coupons')
 }
 const toggleExtra = (id: string) => {
+  const extra = extras.value.find(item => item.id === id)
+  if (extra && isRequiredExtra(extra)) return
   const extraIds = selectedExtras.value.includes(id)
     ? selectedExtras.value.filter((extraId) => extraId !== id)
     : [...selectedExtras.value, id]
   tripStore.updateActiveDraft({ extras: extraIds })
   void refreshQuote(extraIds)
+}
+const handleExtraTap = (extra: PublicVehicleExtra) => {
+  if (isRequiredExtra(extra)) return
+  toggleExtra(extra.id)
 }
 const goNext = async () => {
   await refreshQuote()
