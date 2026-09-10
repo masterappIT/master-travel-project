@@ -23,16 +23,16 @@ model User {
 }
 
 model WalletTransaction {
-  id               String                @id @default(cuid())
-  userId           String
-  wallet           WalletType
-  type             WalletTransactionType
-  amount           Float
-  balanceAfter     Float
-  reason           String
-  administratorId  String?
-  createdAt        DateTime              @default(now())
-  user             User                  @relation(fields: [userId], references: [id], onDelete: Restrict)
+  id              String                @id @default(cuid())
+  userId          String
+  wallet          WalletType
+  type            WalletTransactionType
+  amount          Float
+  balanceAfter    Float
+  reason          String
+  administratorId String?
+  createdAt       DateTime              @default(now())
+  user            User                  @relation(fields: [userId], references: [id], onDelete: Restrict)
 
   @@index([userId, createdAt])
   @@index([type, createdAt])
@@ -85,7 +85,7 @@ model AppSetting {
   region       String
   currency     String
   exchangeRate Float
-  adminLogo   String?  @db.Text
+  adminLogo    String?  @db.Text
   updatedAt    DateTime @updatedAt
 }
 

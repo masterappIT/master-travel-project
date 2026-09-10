@@ -9,8 +9,8 @@
       </view>
     </view>
     <scroll-view class="address-scroll" scroll-y :show-scrollbar="false">
-      <view class="current-card"><text class="current-title">當前定位城市：{{ regionData.currentCity }}</text><view class="current-place" @tap="$emit('use-current')"><image src="/static/home/address/current.svg" mode="aspectFit" /><view><text class="place-name">{{ regionData.currentName }}</text><text class="place-address">{{ regionData.currentAddress }}</text></view></view></view>
-      <view class="recommend-list"><view class="recommend-content"><view class="recommend-title"><image src="/static/home/address/recommend.svg" mode="aspectFit" /><text>{{ searchResults === null ? '推薦地點' : '搜尋結果' }}</text></view><view v-for="place in filteredPlaces" :key="place.id || place.name" class="place-row" @tap="selectPlace(place)"><image src="/static/home/address/place.svg" mode="aspectFit" /><view><text class="place-name">{{ place.name }}</text><text class="place-address">{{ place.displayAddress || place.address }}</text></view></view><text v-if="searchResults?.length === 0" class="empty-result">找不到相關地點</text></view></view>
+      <view class="current-card"><text class="current-title">當前定位城市：{{ regionData.currentCity }}</text><view class="current-place" @tap="$emit('use-current')"><image src="/static/home/address/current.svg" mode="aspectFit" /><view><text class="place-name">{{ formatVisibleAddress(regionData.currentName) }}</text><text class="place-address">{{ formatVisibleAddress(regionData.currentAddress) }}</text></view></view></view>
+      <view class="recommend-list"><view class="recommend-content"><view class="recommend-title"><image src="/static/home/address/recommend.svg" mode="aspectFit" /><text>{{ searchResults === null ? '推薦地點' : '搜尋結果' }}</text></view><view v-for="place in filteredPlaces" :key="place.id || place.name" class="place-row" @tap="selectPlace(place)"><image src="/static/home/address/place.svg" mode="aspectFit" /><view><text class="place-name">{{ formatVisibleAddress(place.name) }}</text><text class="place-address">{{ formatVisibleAddress(place.displayAddress || place.address) }}</text></view></view><text v-if="searchResults?.length === 0" class="empty-result">找不到相關地點</text></view></view>
     </scroll-view>
     <view v-if="regionMenuOpen" class="region-menu" @tap.stop>
       <view class="region-menu-panel">
@@ -22,11 +22,15 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { listMainlandCities, listRecommendedAddresses, searchPlaces, type PlaceSearchResult } from '../../services/api'
-const props = defineProps<{ selecting: 'origin' | 'destination'; locationLabel: string; detailedAddress: string; canUseCurrent?: boolean }>()
+const props = defineProps<{ selecting: 'origin' | 'destination'; locationLabel: string; detailedAddress: string; initialSelection?: AddressSelection | null; canUseCurrent?: boolean }>()
 type Region = '大陸' | '香港' | '澳門'
 interface Place { id?: string; name: string; address: string; displayAddress?: string; latitude?: number; longitude?: number; city?: string; district?: string; landmark?: string }
 interface AddressSelection extends Place { region: Region | null }
 const emit = defineEmits<{ close: []; select: [value: string, selection: AddressSelection]; locate: []; 'use-current': [] }>()
+const formatVisibleAddress = (value: string) => value
+  .replace(/香港(?:特別行政區|特别行政区)/g, '香港')
+  .replace(/澳門(?:特別行政區|特别行政区)/g, '澳門')
+  .replace(/澳门(?:特别行政区)/g, '澳門')
 interface RegionData { currentCity: string; currentName: string; currentAddress: string; places: Place[] }
 const regions: Region[] = ['大陸', '香港', '澳門']
 const fallbackRecommendedPlaces: Array<Place & { region: Region }> = [
@@ -69,7 +73,19 @@ const regionData = computed<RegionData>(() => ({
       ? recommendedPlaces.value.filter(place => place.region === selectedRegion.value)
     : defaultData.value.places,
 }))
-const filteredPlaces = computed(() => searchResults.value ?? regionData.value.places.filter(place => !keyword.value || `${place.name}${place.address}`.includes(keyword.value)))
+const initialPlace = computed<Place | null>(() => props.initialSelection ? {
+  ...props.initialSelection,
+  displayAddress: props.initialSelection.displayAddress || props.initialSelection.address,
+} : null)
+const filteredPlaces = computed(() => {
+  if (searchResults.value) return searchResults.value
+  const places = regionData.value.places.filter(place => !keyword.value || `${place.name}${place.address}`.includes(keyword.value))
+  if (keyword.value && initialPlace.value && `${initialPlace.value.name}${initialPlace.value.address}`.includes(keyword.value)
+    && !places.some(place => place.id === initialPlace.value?.id)) {
+    return [initialPlace.value, ...places]
+  }
+  return places
+})
 const validCoordinate = (latitude?: number, longitude?: number) => Number.isFinite(latitude) && Number.isFinite(longitude) && Math.abs(latitude as number) <= 90 && Math.abs(longitude as number) <= 180
 const runSearch = async () => {
   const value = keyword.value.trim()
@@ -105,6 +121,7 @@ onMounted(async () => {
     mainlandCities.value = []
     uni.showToast({ title: '大陸城市暫時無法載入', icon: 'none' })
   }
+  if (props.initialSelection?.name) void runSearch()
 })
 const inferRegion = (place: Place): Region | null => {
   const text = `${place.name}${place.address}`
@@ -160,6 +177,12 @@ const selectRegion = (value: string) => {
   keyword.value = ''
   searchResults.value = null
   regionMenuOpen.value = false
+}
+if (props.initialSelection) {
+  const selection = props.initialSelection
+  selectedRegion.value = selection.region === '香港' || selection.region === '澳門' ? selection.region : '大陸'
+  selectedCity.value = selection.city || null
+  keyword.value = selection.name
 }
 </script>
 <style scoped>

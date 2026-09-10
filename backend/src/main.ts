@@ -5,7 +5,7 @@ import { APP_INTERCEPTOR } from '@nestjs/core'
 import { createHmac, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto'
 import { Observable, tap } from 'rxjs'
 import { loadEnvFile } from 'node:process'
-import { PrismaClient } from '@prisma/client'
+import { PrismaClient, PromotionKind, DiscountType } from '@prisma/client'
 
 try {
   loadEnvFile()
@@ -509,6 +509,30 @@ class AdminController {
   @Delete('administrators/:id') disableAdministrator(@Req() req: RequestLike, @Param('id') id: string) { const session = requireRole(req, ['SUPER_ADMIN']); if (session.sub === id) throw new HttpException('Cannot disable the current administrator', HttpStatus.BAD_REQUEST); const admin = administrators.find(item => item.id === id); if (!admin) throw new HttpException('Administrator not found', HttpStatus.NOT_FOUND); if (admin.role === 'SUPER_ADMIN' && admin.enabled && administrators.filter(item => item.role === 'SUPER_ADMIN' && item.enabled).length === 1) throw new HttpException('At least one enabled super administrator is required', HttpStatus.BAD_REQUEST); admin.enabled = false; admin.updatedAt = new Date().toISOString(); return { ok: true } }
   @Get('audit-logs') listAuditLogs(@Req() req: RequestLike) { requireRole(req, ['SUPER_ADMIN']); return { data: adminAuditLogs.slice(0, 300), total: adminAuditLogs.length } }
 
+  @Get('promotions') async listPromotions(@Req() req: RequestLike) { requireAuth(req); return { data: await prisma.promotion.findMany({ orderBy: { createdAt: 'desc' } }) } }
+  @Post('promotions') async savePromotion(@Req() req: RequestLike, @Body() body: PromotionInput) {
+    requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
+    const id = typeof body.id === 'string' ? body.id.trim() : ''
+    const name = typeof body.name === 'string' ? body.name.trim() : ''
+    const kind = body.kind === 'COUPON' || body.kind === 'MEMBER' || body.kind === 'CAMPAIGN' ? body.kind : ''
+    const discountType = body.discountType === 'FIXED_AMOUNT' || body.discountType === 'PERCENTAGE' ? body.discountType : ''
+    const discountValue = Number(body.discountValue)
+    const minimumSpend = Number(body.minimumSpend ?? 0)
+    const maximumDiscount = body.maximumDiscount === '' || body.maximumDiscount === null || body.maximumDiscount === undefined ? null : Number(body.maximumDiscount)
+    const usageLimit = body.usageLimit === '' || body.usageLimit === null || body.usageLimit === undefined ? null : Number(body.usageLimit)
+    const couponCode = typeof body.couponCode === 'string' && body.couponCode.trim() ? body.couponCode.trim().toUpperCase() : null
+    const membershipLevel = typeof body.membershipLevel === 'string' && body.membershipLevel.trim() ? body.membershipLevel.trim() : null
+    const startsAt = body.startsAt ? new Date(String(body.startsAt)) : null
+    const endsAt = body.endsAt ? new Date(String(body.endsAt)) : null
+    if (!name || !kind || !discountType || !Number.isFinite(discountValue) || discountValue <= 0 || (discountType === 'PERCENTAGE' && discountValue > 100) || !Number.isFinite(minimumSpend) || minimumSpend < 0 || (maximumDiscount !== null && (!Number.isFinite(maximumDiscount) || maximumDiscount <= 0)) || (usageLimit !== null && (!Number.isInteger(usageLimit) || usageLimit <= 0)) || (startsAt && Number.isNaN(startsAt.valueOf())) || (endsAt && Number.isNaN(endsAt.valueOf())) || (startsAt && endsAt && startsAt >= endsAt) || (kind === 'COUPON' && !couponCode) || (kind === 'MEMBER' && !membershipLevel)) throw new HttpException('Promotion fields are invalid', HttpStatus.BAD_REQUEST)
+    const data = { name, kind: kind as PromotionKind, discountType: discountType as DiscountType, discountValue, currency: typeof body.currency === 'string' && currencyCode(body.currency) ? currencyLabels[currencyCode(body.currency)!] : 'RMB¥', minimumSpend, maximumDiscount, startsAt, endsAt, enabled: body.enabled !== false, couponCode: kind === 'COUPON' ? couponCode : null, usageLimit, membershipLevel: kind === 'MEMBER' ? membershipLevel : null }
+    if (id) { const existing = await prisma.promotion.findUnique({ where: { id } }); if (!existing) throw new HttpException('Promotion not found', HttpStatus.NOT_FOUND); return prisma.promotion.update({ where: { id }, data }) }
+    return prisma.promotion.create({ data })
+  }
+  @Delete('promotions/:id') async deletePromotion(@Req() req: RequestLike, @Param('id') id: string) { requireRole(req, ['SUPER_ADMIN', 'OPERATOR']); const existing = await prisma.promotion.findUnique({ where: { id } }); if (!existing) throw new HttpException('Promotion not found', HttpStatus.NOT_FOUND); await prisma.promotion.delete({ where: { id } }); return { ok: true } }
+
+  @Post('users/:id/membership') async updateMembership(@Req() req: RequestLike, @Param('id') id: string, @Body() body: { membershipLevel?: string | null }) { requireRole(req, ['SUPER_ADMIN', 'OPERATOR']); const user = await prisma.user.update({ where: { id }, data: { membershipLevel: body.membershipLevel?.trim() || null } }); return userResponse(user) }
+
   @Get('dashboard') async dashboard(@Req() req: RequestLike) { requireAuth(req); return { users: await prisma.user.count(), trips: trips.length, pendingTrips: trips.filter(t => t.status === 'PENDING').length, completedTrips: trips.filter(t => t.status === 'COMPLETED').length, charterOrders: charterOrders.length, pendingCharters: charterOrders.filter(order => order.status === 'PENDING').length, recommendedAddresses: await prisma.recommendedAddress.count({ where: { enabled: true } }) } }
   @Get('users') async listUsers(@Req() req: RequestLike) {
     requireAuth(req)
@@ -818,12 +842,37 @@ class PublicQuotesController {
         })
       ].map((line, index) => ({ ...line, order: index + 1 }))
       const subtotal = roundMoney(lines.reduce((total, line) => total + line.totalAmount, 0))
+      const now = new Date()
+      const couponCode = typeof body.couponCode === 'string' ? body.couponCode.trim().toUpperCase() : ''
+      let membershipLevel = typeof body.membershipLevel === 'string' ? body.membershipLevel.trim() : ''
+      if (typeof body.userId === 'string' && body.userId.trim()) membershipLevel = (await tx.user.findUnique({ where: { id: body.userId.trim() }, select: { membershipLevel: true } }))?.membershipLevel || ''
+      const promotions = await tx.promotion.findMany({ where: { enabled: true, AND: [{ OR: [{ startsAt: null }, { startsAt: { lte: now } }] }, { OR: [{ endsAt: null }, { endsAt: { gte: now } }] }] } })
+      const eligiblePromotions = promotions.filter(promotion => {
+        if (promotion.kind === 'COUPON' && (!couponCode || promotion.couponCode !== couponCode || (promotion.usageLimit !== null && promotion.usageCount >= promotion.usageLimit))) return false
+        if (promotion.kind === 'MEMBER' && (!membershipLevel || promotion.membershipLevel !== membershipLevel)) return false
+        if (promotion.kind === 'CAMPAIGN' || promotion.kind === 'COUPON' || promotion.kind === 'MEMBER') {
+          const minimumSpend = convertCurrency(promotion.minimumSpend, promotion.currency, currency, exchangeRate)
+          return subtotal >= minimumSpend
+        }
+        return false
+      })
+      const promotionDiscounts = eligiblePromotions.map(promotion => {
+        const rawDiscount = promotion.discountType === 'PERCENTAGE'
+          ? subtotal * promotion.discountValue / 100
+          : convertCurrency(promotion.discountValue, promotion.currency, currency, exchangeRate)
+        const maximumDiscount = promotion.maximumDiscount === null ? null : convertCurrency(promotion.maximumDiscount, promotion.currency, currency, exchangeRate)
+        return { promotion, discount: roundMoney(Math.min(subtotal, maximumDiscount === null ? rawDiscount : Math.min(rawDiscount, maximumDiscount))) }
+      })
+      const applied = promotionDiscounts.sort((a, b) => b.discount - a.discount)[0]
+      const quotedLines = applied && applied.discount > 0 ? [...lines, { type: 'DISCOUNT' as const, sourceId: applied.promotion.id, label: applied.promotion.name, quantity: 1, unitAmount: -applied.discount, totalAmount: -applied.discount, currency: currencyLabels[currency], order: lines.length + 1 }] : lines
+      if (applied?.promotion.kind === 'COUPON') await tx.promotion.update({ where: { id: applied.promotion.id }, data: { usageCount: { increment: 1 } } })
+      const total = roundMoney(subtotal - (applied?.discount || 0))
       return tx.fareQuote.create({
         data: {
           distanceKm,
           currency: currencyLabels[currency],
           subtotal,
-          total: subtotal,
+          total,
           expiresAt: quoteExpiryDate(),
           pricing: {
             create: {
@@ -856,7 +905,7 @@ class PublicQuotesController {
               modelChoiceLabel: vehicle.modelChoiceLabel
             }
           },
-          lines: { create: lines }
+          lines: { create: quotedLines }
         },
         include: {
           pricing: { include: { tiers: { orderBy: { order: 'asc' } } } },

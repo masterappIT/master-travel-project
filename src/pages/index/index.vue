@@ -23,6 +23,7 @@
           :selecting="addressPicker"
           :location-label="locationLabel"
           :detailed-address="detailedAddress"
+          :initial-selection="addressPicker === 'origin' ? originSelection : destinationSelection"
           :can-use-current="addressPickerContext === 'business' || addressPicker === 'origin' || (!!origin && !originIsCurrent)"
           @close="addressPicker = null"
           @select="selectAddress"
@@ -51,6 +52,7 @@
         :selecting="addressPicker"
         :location-label="locationLabel"
         :detailed-address="detailedAddress"
+        :initial-selection="addressPicker === 'origin' ? originSelection : destinationSelection"
         @close="addressPicker = null"
         @select="selectAddress"
         @locate="locateCurrentAddress"
@@ -175,7 +177,10 @@ const origin = ref('')
 const originIsCurrent = ref(false)
 const destination = ref('')
 interface BusinessLocation { region: string; place: string }
-interface AddressSelection { region: '大陸' | '香港' | '澳門' | null; name: string; address: string; latitude?: number; longitude?: number; city?: string; district?: string; landmark?: string }
+interface AddressSelection { region: '大陸' | '香港' | '澳門' | null; name: string; address: string; displayAddress?: string; latitude?: number; longitude?: number; city?: string; district?: string; landmark?: string }
+type RouteSelection = AddressSelection
+const originSelection = ref<RouteSelection | null>(null)
+const destinationSelection = ref<RouteSelection | null>(null)
 const selectedCoordinates = ref<{ origin?: Coordinate; destination?: Coordinate }>({})
 type MapMarker = Coordinate & { id: number; title?: string; iconPath?: string; width?: number; height?: number }
 const mapMarkers = ref<MapMarker[]>([])
@@ -208,8 +213,10 @@ const switchRideMode = (mode: RideMode) => {
 
   if (mode === 'business') {
     origin.value = ''
+    originSelection.value = null
     originIsCurrent.value = false
     destination.value = ''
+    destinationSelection.value = null
     selectedCoordinates.value.origin = undefined
     selectedCoordinates.value.destination = undefined
     mapMarkers.value = []
@@ -220,6 +227,8 @@ const switchRideMode = (mode: RideMode) => {
     flightNumber.value = ''
     travelMode.value = 'cross-border'
   } else {
+    originSelection.value = null
+    destinationSelection.value = null
     businessOrigin.value = { ...initialBusinessOrigin }
     businessDestination.value = { ...initialBusinessDestination }
   }
@@ -242,6 +251,10 @@ const chooseOrigin = () => { addressPickerContext.value = 'cross-border'; addres
 const chooseDestination = () => { addressPickerContext.value = 'cross-border'; addressPicker.value = 'destination' }
 const chooseBusinessOrigin = () => { addressPickerContext.value = 'business'; addressPicker.value = 'origin' }
 const chooseBusinessDestination = () => { addressPickerContext.value = 'business'; addressPicker.value = 'destination' }
+const setRouteSelection = (target: 'origin' | 'destination', selection: RouteSelection | null) => {
+  if (target === 'origin') originSelection.value = selection
+  if (target === 'destination') destinationSelection.value = selection
+}
 const parseBusinessLocation = (value: string): BusinessLocation => {
   const [region, ...placeParts] = value.split(' · ')
   return { region: placeParts.length ? region : '', place: placeParts.length ? placeParts.join(' · ') : region }
@@ -281,6 +294,23 @@ const formatRouteAddress = (address: string, region?: AddressSelection['region']
   const roadAddress = cityStart.replace(new RegExp(`^${mainlandDistrict}`), '')
   return `${mainlandCity} · ${mainlandDistrict}${roadAddress}`
 }
+const formatSelectedAddressSummary = (selection: AddressSelection) => {
+  const normalized = selection.address.replace(/\s+/g, '').replace(/[·/]/g, '-')
+  const parts = normalized.split('-').map(part => part.trim()).filter(Boolean)
+  const city = (selection.city?.trim() || parts.find(part => part.endsWith('市')) || '')
+    .replace(/特別行政區$|特别行政区$/, '')
+  const region = selection.region === '香港'
+    ? '香港'
+    : selection.region === '澳門'
+      ? '澳門'
+      : city.replace(/市$/, '')
+  const district = (selection.district?.trim()
+    || parts.find(part => /(?:區|区|堂區|堂区|縣|县)$/.test(part) && part !== city)
+    || '').replace(/区/g, '區').replace(/县/g, '縣').replace(/堂区/g, '堂區')
+  const placeName = selection.name.trim().replace(/\s+/g, '')
+  const location = `${district}${placeName}`.trim()
+  return [region, location].filter(Boolean).join(' · ')
+}
 const updateRoute = async () => {
   const { origin: originCoordinate, destination: destinationCoordinate } = selectedCoordinates.value
   if (!originCoordinate || !destinationCoordinate) return
@@ -311,12 +341,16 @@ const selectAddress = (value: string, selection?: AddressSelection) => {
     if (target === 'origin') businessOrigin.value = location
     if (target === 'destination') businessDestination.value = location
   } else {
-    const formattedValue = selection?.displayAddress || (selection ? formatRouteAddress(selection.address, selection.region, selection.city, selection.district, selection.landmark || selection.name) : value)
+    const formattedValue = selection ? formatSelectedAddressSummary(selection) : value
     if (target === 'origin') {
       origin.value = formattedValue
+      originSelection.value = selection ? { ...selection } : null
       originIsCurrent.value = false
     }
-    if (target === 'destination') destination.value = formattedValue
+    if (target === 'destination') {
+      destination.value = formattedValue
+      destinationSelection.value = selection ? { ...selection } : null
+    }
     tripStore.setRoute(origin.value, destination.value)
   }
   if (target && selection?.latitude !== undefined && selection.longitude !== undefined) {
@@ -404,6 +438,18 @@ const useCurrentLocation = (closePicker = false, setAsOrigin = false) => {
       }
       locationLabel.value = localRegion ? `${localRegion.region} · ${localRegion.district}` : '目前位置'
       detailedAddress.value = localRegion ? `${locationLabel.value}附近` : `目前位置（${latitude.toFixed(5)}, ${longitude.toFixed(5)}）`
+      const target = addressPicker.value
+      if (target) {
+        setRouteSelection(target, {
+          region: localRegion.region === '中國內地' ? '大陸' : localRegion.region as AddressSelection['region'],
+          name: locationLabel.value,
+          address: detailedAddress.value,
+          displayAddress: detailedAddress.value,
+          latitude,
+          longitude,
+          district: localRegion.district,
+        })
+      }
       if (setAsOrigin) {
         selectedCoordinates.value.origin = { latitude, longitude }
         origin.value = formatRouteAddress(detailedAddress.value, localRegion?.region || null)
@@ -417,6 +463,32 @@ const useCurrentLocation = (closePicker = false, setAsOrigin = false) => {
             locationLabel.value = `澳門 · ${location.district || localRegion.district}`
           } else if (location.city) {
             locationLabel.value = location.district ? `${location.city} · ${location.district}` : location.city
+          }
+          const currentTarget = addressPicker.value
+          if (currentTarget) {
+            setRouteSelection(currentTarget, {
+              region: localRegion.region === '中國內地' ? '大陸' : localRegion.region as AddressSelection['region'],
+              name: location.landmark || location.district || locationLabel.value,
+              address: location.address || detailedAddress.value,
+              displayAddress: location.address || detailedAddress.value,
+              latitude,
+              longitude,
+              city: location.city,
+              district: location.district || localRegion.district,
+              landmark: location.landmark,
+            })
+          } else if (setAsOrigin) {
+            setRouteSelection('origin', {
+              region: localRegion.region === '中國內地' ? '大陸' : localRegion.region as AddressSelection['region'],
+              name: location.landmark || location.district || locationLabel.value,
+              address: location.address || detailedAddress.value,
+              displayAddress: location.address || detailedAddress.value,
+              latitude,
+              longitude,
+              city: location.city,
+              district: location.district || localRegion.district,
+              landmark: location.landmark,
+            })
           }
           if (setAsOrigin) origin.value = formatRouteAddress(location.address || detailedAddress.value, localRegion?.region || null, location.city, location.district, location.landmark)
         })
