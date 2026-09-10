@@ -4,12 +4,14 @@
       <image class="back" src="/static/messages/back.svg" mode="aspectFit" @tap.stop="$emit('close')" />
       <text class="title">地址選擇</text>
       <view class="city-search">
-        <view class="region-trigger" @tap.stop="handleRegionTriggerTap"><text class="city">{{ selectedRegion || currentCity }}</text><image class="city-location" :class="{ 'city-location--open': !selectedRegion && regionMenuOpen }" :src="selectedRegion ? '/static/home/address/region-clear.svg' : '/static/home/address/city-location.svg'" mode="aspectFit" /></view>
+        <view class="region-trigger" @tap.stop="handleRegionTriggerTap"><text class="city">{{ selectedRegion || '城市' }}</text><image class="city-location" :class="{ 'city-location--open': !selectedRegion && regionMenuOpen }" :src="selectedRegion ? '/static/home/address/region-clear.svg' : '/static/home/address/city-location.svg'" mode="aspectFit" /></view>
         <view class="search-box"><image class="search-icon" src="/static/home/address/search.svg" mode="aspectFit" /><input v-model="keyword" class="search-input" placeholder="搜尋地點" confirm-type="search" @confirm="runSearch" /></view><text class="search-action" @tap="runSearch">{{ searching ? '搜尋中' : '搜索' }}</text>
       </view>
     </view>
-    <view class="current-card"><text class="current-title">當前定位城市：{{ regionData.currentCity }}</text><view class="current-place" @tap="$emit('use-current')"><image src="/static/home/address/current.svg" mode="aspectFit" /><view><text class="place-name">{{ regionData.currentName }}</text><text class="place-address">{{ regionData.currentAddress }}</text></view></view></view>
-    <view class="recommend-list"><view class="recommend-content"><view class="recommend-title"><image src="/static/home/address/recommend.svg" mode="aspectFit" /><text>{{ searchResults === null ? '推薦地點' : '搜尋結果' }}</text></view><view v-for="place in filteredPlaces" :key="place.id || place.name" class="place-row" @tap="selectPlace(place)"><image src="/static/home/address/place.svg" mode="aspectFit" /><view><text class="place-name">{{ place.name }}</text><text class="place-address">{{ place.address }}</text></view></view><text v-if="searchResults?.length === 0" class="empty-result">找不到相關地點</text></view></view>
+    <scroll-view class="address-scroll" scroll-y :show-scrollbar="false">
+      <view class="current-card"><text class="current-title">當前定位城市：{{ regionData.currentCity }}</text><view class="current-place" @tap="$emit('use-current')"><image src="/static/home/address/current.svg" mode="aspectFit" /><view><text class="place-name">{{ regionData.currentName }}</text><text class="place-address">{{ regionData.currentAddress }}</text></view></view></view>
+      <view class="recommend-list"><view class="recommend-content"><view class="recommend-title"><image src="/static/home/address/recommend.svg" mode="aspectFit" /><text>{{ searchResults === null ? '推薦地點' : '搜尋結果' }}</text></view><view v-for="place in filteredPlaces" :key="place.id || place.name" class="place-row" @tap="selectPlace(place)"><image src="/static/home/address/place.svg" mode="aspectFit" /><view><text class="place-name">{{ place.name }}</text><text class="place-address">{{ place.address }}</text></view></view><text v-if="searchResults?.length === 0" class="empty-result">找不到相關地點</text></view></view>
+    </scroll-view>
     <view v-if="regionMenuOpen" class="region-menu" @tap.stop>
       <view class="region-menu-panel">
         <view v-for="region in regions" :key="region" class="region-option" @tap="selectRegion(region)">{{ region }}</view>
@@ -20,7 +22,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { listRecommendedAddresses, searchPlaces, type PlaceSearchResult } from '../../services/api'
-const props = defineProps<{ selecting: 'origin' | 'destination'; locationLabel: string; detailedAddress: string }>()
+const props = defineProps<{ selecting: 'origin' | 'destination'; locationLabel: string; detailedAddress: string; canUseCurrent?: boolean }>()
 type Region = '大陸' | '香港' | '澳門'
 interface Place { id?: string; name: string; address: string; latitude?: number; longitude?: number; city?: string; district?: string; landmark?: string }
 interface AddressSelection extends Place { region: Region | null }
@@ -80,13 +82,27 @@ const regionData = computed<RegionData>(() => ({
       : hongKongPlaces.value,
 }))
 const filteredPlaces = computed(() => searchResults.value ?? regionData.value.places.filter(place => !keyword.value || `${place.name}${place.address}`.includes(keyword.value)))
+const validCoordinate = (latitude?: number, longitude?: number) => Number.isFinite(latitude) && Number.isFinite(longitude) && Math.abs(latitude as number) <= 90 && Math.abs(longitude as number) <= 180
+const mergePlaces = (base: Place[], remote: Place[]) => {
+  const merged = [...remote, ...base]
+  const seen = new Set<string>()
+  return merged.filter(place => {
+    const key = `${place.name.trim()}|${place.address.trim()}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
 const runSearch = async () => {
   const value = keyword.value.trim()
   if (!value || searching.value) return
   searching.value = true
+  searchResults.value = null
   try {
-    searchResults.value = await searchPlaces(value, selectedRegion.value || undefined)
+    const results = await searchPlaces(value, selectedRegion.value || undefined)
+    searchResults.value = results.filter(place => validCoordinate(place.latitude, place.longitude))
   } catch {
+    searchResults.value = []
     uni.showToast({ title: '位置搜索失敗，請稍後再試', icon: 'none' })
   } finally {
     searching.value = false
@@ -95,13 +111,13 @@ const runSearch = async () => {
 onMounted(async () => {
   try {
     const addresses = await listRecommendedAddresses()
-    const grouped = (region: Region) => addresses.filter(item => item.region === region).map(({ name, address }) => ({ name, address }))
+    const grouped = (region: Region) => addresses.filter(item => item.region === region).map(({ id, name, address }) => ({ id, name, address }))
     const hongKong = grouped('香港')
     const mainland = grouped('大陸')
     const macau = grouped('澳門')
-    if (hongKong.length) hongKongPlaces.value = hongKong
-    if (mainland.length) mainlandPlaces.value = mainland
-    if (macau.length) macauPlaces.value = macau
+    hongKongPlaces.value = mergePlaces(hongKongPlaces.value, hongKong)
+    mainlandPlaces.value = mergePlaces(mainlandPlaces.value, mainland)
+    macauPlaces.value = mergePlaces(macauPlaces.value, macau)
   } catch {
     // Keep bundled recommendations when the API is unavailable.
   }
@@ -115,11 +131,11 @@ const inferRegion = (place: Place): Region | null => {
 const selectPlace = async (place: Place) => {
   let resolvedPlace = place
   const region = inferRegion(place)
-  if (place.latitude === undefined || place.longitude === undefined) {
+  if (!validCoordinate(place.latitude, place.longitude)) {
     searching.value = true
     try {
       const matches = await searchPlaces(place.name, region || undefined)
-      const match = matches.find(item => item.name === place.name) || matches[0]
+      const match = matches.find(item => item.name === place.name && validCoordinate(item.latitude, item.longitude)) || matches.find(item => validCoordinate(item.latitude, item.longitude))
       if (!match) {
         uni.showToast({ title: '未能取得地點座標', icon: 'none' })
         return
@@ -151,5 +167,5 @@ const handleRegionTriggerTap = () => {
 const selectRegion = (region: Region) => { selectedRegion.value = region; keyword.value = ''; searchResults.value = null; regionMenuOpen.value = false }
 </script>
 <style scoped>
-.address-page{position:fixed;top:0;left:0;width:430px;height:932px;z-index:50;background:#f0f2f5;color:#38434a;font-family:'Noto Sans TC',sans-serif;overflow:hidden}.address-header{position:absolute;top:0;left:0;width:430px;height:155px;border-radius:25px;background:#fff}.back{position:absolute;top:60px;left:33px;width:12px;height:25px}.title{position:absolute;top:58px;left:calc(50% - 36px);font-size:18px;font-weight:500}.city-search{position:absolute;top:110px;left:21px;width:388px;height:35px}.region-trigger{position:absolute;left:0;top:0;width:58px;height:35px}.city{position:absolute;left:0;top:7px;font-size:14px;white-space:nowrap}.city-location{position:absolute;left:38px;top:7px;width:20px;height:20px;transition:transform .2s ease}.city-location--open{transform:rotate(180deg)}.search-box{position:absolute;left:63px;top:0;width:287px;height:35px;border-radius:20px;background:#f0f2f5}.search-icon{position:absolute;left:11px;top:7px;width:20px;height:20px}.search-input{width:100%;height:35px;padding:0 10px 0 38px;border:0;border-radius:20px;background:transparent;color:#38434a;font-size:14px;box-sizing:border-box}.search-action{position:absolute;left:360px;top:7px;color:#38434a;font-size:14px;white-space:nowrap}.current-card{position:absolute;top:165px;left:5px;width:420px;height:93px;padding:14px 15px;box-sizing:border-box;border-radius:10px;background:#fff}.current-title{display:block;font-size:16px}.current-place{display:flex;align-items:center;margin-top:5px}.current-place image{width:8px;height:14.517px;margin-right:8px;flex:none}.place-name,.place-address{display:block}.place-name{font-size:14px;font-weight:700}.place-address{font-size:12px;font-weight:350;white-space:nowrap}.recommend-list{position:absolute;top:278px;left:5px;width:420px;height:auto;overflow:visible}.recommend-content{display:flex;flex-direction:column;width:420px}.recommend-title{height:60px;min-height:60px;flex:none;border-radius:10px;background:#285cfc;color:#fff;display:flex;align-items:center;padding-left:20px;box-sizing:border-box;font-size:18px;font-weight:500}.recommend-title image{width:15px;height:22.458px;margin-right:10px;flex:none}.place-row{height:57px;min-height:57px;flex:none;margin-top:5px;border-radius:10px;background:#fff;display:flex;align-items:flex-start;padding:10px 15px;box-sizing:border-box}.place-row image{width:10px;height:14.972px;margin:5px 6px 0 0;flex:none}.place-row .place-address{overflow:hidden;text-overflow:ellipsis;max-width:370px}.region-menu{position:absolute;z-index:2;top:155px;left:3px;width:86px;height:117.21px;padding-top:7px;box-sizing:border-box;color:#38434a}.region-menu-panel{position:relative;width:86px;height:110px;padding:0 10px;box-sizing:border-box;border-radius:5px;background:#fff;box-shadow:0 4px 4px rgba(217,217,217,.25)}.region-menu-panel::before{position:absolute;top:-7px;left:18px;width:0;height:0;border-right:7px solid transparent;border-bottom:7px solid #fff;border-left:7px solid transparent;content:''}.region-option{position:relative;height:35px;font-size:14px;font-weight:500;line-height:35px}
+.address-page{position:fixed;top:0;left:0;width:430px;height:932px;z-index:50;background:#f0f2f5;color:#38434a;font-family:'Noto Sans TC',sans-serif;overflow:hidden}.address-header{position:absolute;top:0;left:0;width:430px;height:155px;border-radius:25px;background:#fff}.back{position:absolute;top:60px;left:33px;width:12px;height:25px}.title{position:absolute;top:58px;left:calc(50% - 36px);font-size:18px;font-weight:500}.city-search{position:absolute;top:110px;left:21px;width:388px;height:35px}.region-trigger{position:absolute;left:0;top:0;width:58px;height:35px}.city{position:absolute;left:0;top:7px;font-size:14px;white-space:nowrap}.city-location{position:absolute;left:38px;top:7px;width:20px;height:20px;transition:transform .2s ease}.city-location--open{transform:rotate(180deg)}.search-box{position:absolute;left:63px;top:0;width:287px;height:35px;border-radius:20px;background:#f0f2f5}.search-icon{position:absolute;left:11px;top:7px;width:20px;height:20px}.search-input{width:100%;height:35px;padding:0 10px 0 38px;border:0;border-radius:20px;background:transparent;color:#38434a;font-size:14px;box-sizing:border-box}.search-action{position:absolute;left:360px;top:7px;color:#38434a;font-size:14px;white-space:nowrap}.address-scroll{position:absolute;top:155px;left:0;width:430px;height:777px;overflow:hidden}.current-card{position:relative;top:auto;left:5px;width:420px;height:93px;margin:10px 0 20px;padding:14px 15px;box-sizing:border-box;border-radius:10px;background:#fff}.current-title{display:block;font-size:16px}.current-place{display:flex;align-items:center;margin-top:5px}.current-place image{width:8px;height:14.517px;margin-right:8px;flex:none}.place-name,.place-address{display:block}.place-name{font-size:14px;font-weight:700}.place-address{font-size:12px;font-weight:350;white-space:nowrap}.recommend-list{position:relative;top:auto;left:5px;width:420px;height:auto;overflow:visible}.recommend-content{display:flex;flex-direction:column;width:420px}.recommend-title{height:60px;min-height:60px;flex:none;border-radius:10px;background:#285cfc;color:#fff;display:flex;align-items:center;padding-left:20px;box-sizing:border-box;font-size:18px;font-weight:500}.recommend-title image{width:15px;height:22.458px;margin-right:10px;flex:none}.place-row{height:57px;min-height:57px;flex:none;margin-top:5px;border-radius:10px;background:#fff;display:flex;align-items:flex-start;padding:10px 15px;box-sizing:border-box}.place-row image{width:10px;height:14.972px;margin:5px 6px 0 0;flex:none}.place-row .place-address{overflow:hidden;text-overflow:ellipsis;max-width:370px}.region-menu{position:absolute;z-index:2;top:155px;left:3px;width:86px;height:117.21px;padding-top:7px;box-sizing:border-box;color:#38434a}.region-menu-panel{position:relative;width:86px;height:110px;padding:0 10px;box-sizing:border-box;border-radius:5px;background:#fff;box-shadow:0 4px 4px rgba(217,217,217,.25)}.region-menu-panel::before{position:absolute;top:-7px;left:18px;width:0;height:0;border-right:7px solid transparent;border-bottom:7px solid #fff;border-left:7px solid transparent;content:''}.region-option{position:relative;height:35px;font-size:14px;font-weight:500;line-height:35px}
 </style>

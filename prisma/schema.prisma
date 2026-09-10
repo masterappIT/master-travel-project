@@ -8,11 +8,45 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  phone     String?  @unique
-  name      String?
-  createdAt DateTime @default(now())
-  trips     Trip[]
+  id                 String              @id @default(cuid())
+  countryCode        String              @default("+852")
+  phoneNumber        String
+  name               String?
+  cashBalance        Float               @default(0)
+  fareBalance        Float               @default(0)
+  createdAt          DateTime            @default(now())
+  trips              Trip[]
+  walletTransactions WalletTransaction[]
+
+  @@unique([countryCode, phoneNumber])
+}
+
+model WalletTransaction {
+  id               String                @id @default(cuid())
+  userId           String
+  wallet           WalletType
+  type             WalletTransactionType
+  amount           Float
+  balanceAfter     Float
+  reason           String
+  administratorId  String?
+  createdAt        DateTime              @default(now())
+  user             User                  @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId, createdAt])
+  @@index([type, createdAt])
+}
+
+enum WalletType {
+  CASH
+  FARE
+}
+
+enum WalletTransactionType {
+  ADMIN_INCREASE
+  ADMIN_DECREASE
+  TOP_UP
+  WITHDRAWAL
 }
 
 model Trip {
