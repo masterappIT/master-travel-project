@@ -80,15 +80,21 @@ enum TripStatus {
 }
 
 model AppSetting {
-  id           String   @id
-  language     String
-  region       String
-  currency     String
-  pricingCurrency String @default("RMB")
-  exchangeRate Float
-  adminLogo    String?  @db.Text
-  severeWeatherEnabled Boolean @default(false)
-  updatedAt    DateTime @updatedAt
+  id                    String   @id
+  language              String
+  region                String
+  currency              String
+  pricingCurrency       String   @default("RMB")
+  exchangeRate          Float
+  adminLogo             String?  @db.Text
+  severeWeatherEnabled  Boolean  @default(false)
+  fareBalancePayEnabled Boolean  @default(true)
+  cashBalancePayEnabled Boolean  @default(true)
+  wechatPayEnabled      Boolean  @default(true)
+  alipayPayEnabled      Boolean  @default(true)
+  bankCardPayEnabled    Boolean  @default(true)
+  sandboxMode           Boolean  @default(false)
+  updatedAt             DateTime @updatedAt
 }
 
 model RecommendedAddress {

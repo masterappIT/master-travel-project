@@ -84,6 +84,21 @@ h1 { margin: 8px 0 0; color: #12243b; font-size: clamp(28px, 4vw, 38px); line-he
 .cards strong { display: block; margin-top: 18px; color: #12243b; font-size: 36px; letter-spacing: -.04em; }
 .panel { overflow-x: auto; }
 table { width: 100%; min-width: 620px; border-collapse: collapse; text-align: left; font-size: 14px; }
+.operations-management, .operations-report { display: grid; gap: 18px; }
+.operations-management .panel, .operations-report .panel { overflow: hidden; }
+.operations-management h2, .operations-report h2 { margin: 4px 0 0; }
+.toolbar-actions { display: flex; align-items: center; gap: 10px; }
+.toolbar-actions select { border: 1px solid #ccd8e7; border-radius: 10px; padding: 10px 12px; color: #425974; background: #f8fafd; }
+.toolbar-actions button { white-space: nowrap; }
+.tag { display: inline-block; border-radius: 999px; padding: 5px 9px; color: #1769e0; background: #e7f0ff; font-size: 11px; font-weight: 750; }
+.report-cards { grid-template-columns: repeat(3, 1fr); }
+.report-cards article { min-height: 125px; }
+.report-cards strong { font-size: 28px; }
+.expense-total { display: flex; align-items: center; justify-content: space-between; padding: 16px 24px; color: #647892; background: #f8fafd; font-size: 13px; }
+.expense-total strong { color: #12243b; font-size: 24px; }
+.operations-nav { margin: 6px 0; padding: 8px; border: 1px solid rgba(255,255,255,.12); border-radius: 14px; background: rgba(0,0,0,.1); }
+.operations-nav .nav-group-items { display: grid; gap: 3px; margin-top: 4px; }
+.operations-nav .nav-group-items button { padding: 10px 11px; font-size: 12px; }
 th, td { padding: 19px 24px; border-bottom: 1px solid #edf1f6; }
 th { color: #667a94; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; }
 tr:last-child td { border-bottom: 0; }
@@ -280,6 +295,10 @@ tr.disabled td { opacity: 0.65; background: #f8fafc; }
   .panel { border-radius: 16px; }
   .admin-toolbar, .currency-switcher { align-items: stretch; flex-direction: column; gap: 12px; padding: 15px; }
   .admin-toolbar button { width: 100%; }
+  .toolbar-actions { align-items: stretch; flex-direction: column; width: 100%; }
+  .toolbar-actions select, .toolbar-actions button { width: 100%; min-height: 42px; }
+  .report-cards { grid-template-columns: 1fr; }
+  .expense-total { padding: 14px; }
   .extra-settings { padding: 0; }.extra-settings > .admin-toolbar { padding: 16px; }.trigger-cards { grid-template-columns: 1fr; padding: 0 14px 14px; }.extra-editor { margin: 0 14px 14px; padding: 14px; }.extra-editor .record-form { grid-template-columns: 1fr; }.table-heading { padding: 16px 14px 4px; }.extra-sort-toolbar { align-items: stretch; flex-direction: column; margin-top: 12px; }.extra-sort-actions { display: grid; grid-template-columns: 1fr 1fr; }.extra-sort-actions select { grid-column: 1 / -1; width: 100%; }.extra-sort-actions button { width: 100%; }
   .currency-switcher-actions { display: grid; grid-template-columns: 1fr auto; width: 100%; }
   .currency-switcher select, .currency-switcher button { min-height: 42px; }

@@ -1,0 +1,13 @@
+:global(:root) {
+  --login-background: #f0f2f5;
+  --login-surface: #ffffff;
+  --login-text: #38434a;
+  --login-accent: #285cfc;
+  --login-link: #f95c5c;
+  --login-border: #d9d9d9;
+  --login-shadow: 0 4px 4px rgba(56, 67, 74, 0.5);
+  --login-field-shadow: 0 4px 4px #d9d9d9;
+  --login-screen-radius: 35px;
+  --login-card-radius: 25px;
+  --login-control-radius: 10px;
+}

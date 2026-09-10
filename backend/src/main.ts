@@ -41,7 +41,22 @@ interface QuoteExtraSelection { id: string; quantity: number }
 interface PromotionInput { id?: unknown; name?: unknown; kind?: unknown; discountType?: unknown; stackingMode?: unknown; discountValue?: unknown; currency?: unknown; minimumSpend?: unknown; maximumDiscount?: unknown; priority?: unknown; startsAt?: unknown; endsAt?: unknown; enabled?: unknown; couponCode?: unknown; usageLimit?: unknown; membershipLevel?: unknown; originRegion?: unknown; originCity?: unknown; destinationRegion?: unknown; destinationCity?: unknown; weekdays?: unknown; timeStart?: unknown; timeEnd?: unknown }
 interface MembershipPlan { id: string; level: string; name: string; monthly: number; yearly: number; recommended: boolean; benefits: string[]; enabled: boolean; order: number }
 const prisma = new PrismaClient()
-const appSettingsDefaults = { id: 'default', language: '繁體中文', region: '香港', currency: 'HKD', pricingCurrency: 'RMB', exchangeRate: 0.92, adminLogo: null as string | null, severeWeatherEnabled: false }
+const appSettingsDefaults = {
+  id: 'default',
+  language: '繁體中文',
+  region: '香港',
+  currency: 'HKD',
+  pricingCurrency: 'RMB',
+  exchangeRate: 0.92,
+  adminLogo: null as string | null,
+  severeWeatherEnabled: false,
+  fareBalancePayEnabled: true,
+  cashBalancePayEnabled: true,
+  wechatPayEnabled: true,
+  alipayPayEnabled: true,
+  bankCardPayEnabled: true,
+  sandboxMode: false
+}
 const currencyLabels = { RMB: 'RMB¥', HKD: 'HKD$' } as const
 const configuredCurrencyLabel = (settings: { pricingCurrency: string }) => currencyLabels[settings.pricingCurrency as keyof typeof currencyLabels] || currencyLabels.RMB
 const roundMoney = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100
@@ -212,7 +227,21 @@ async function ensurePricingDefaults() {
   })
 }
 function appSettingsResponse(settings: typeof appSettingsDefaults) {
-  return { language: settings.language, region: settings.region, currency: settings.currency, pricingCurrency: settings.pricingCurrency, exchangeRate: settings.exchangeRate, adminLogo: settings.adminLogo, severeWeatherEnabled: settings.severeWeatherEnabled }
+  return {
+    language: settings.language,
+    region: settings.region,
+    currency: settings.currency,
+    pricingCurrency: settings.pricingCurrency,
+    exchangeRate: settings.exchangeRate,
+    adminLogo: settings.adminLogo,
+    severeWeatherEnabled: settings.severeWeatherEnabled,
+    fareBalancePayEnabled: settings.fareBalancePayEnabled ?? true,
+    cashBalancePayEnabled: settings.cashBalancePayEnabled ?? true,
+    wechatPayEnabled: settings.wechatPayEnabled ?? true,
+    alipayPayEnabled: settings.alipayPayEnabled ?? true,
+    bankCardPayEnabled: settings.bankCardPayEnabled ?? true,
+    sandboxMode: settings.sandboxMode ?? false
+  }
 }
 function validateAdminLogo(value: string) {
   const match = /^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/.exec(value)
@@ -1336,7 +1365,7 @@ class RecommendedAddressesController {
 @Controller('settings')
 class SettingsController {
   @Get() async get() { return appSettingsResponse(await prisma.appSetting.findUniqueOrThrow({ where: { id: appSettingsDefaults.id } })) }
-  @Post() async update(@Req() req: RequestLike, @Body() body: { language?: string; region?: string; currency?: string; pricingCurrency?: string; exchangeRate?: number; adminLogo?: string | null; severeWeatherEnabled?: boolean }) {
+  @Post() async update(@Req() req: RequestLike, @Body() body: { language?: string; region?: string; currency?: string; pricingCurrency?: string; exchangeRate?: number; adminLogo?: string | null; severeWeatherEnabled?: boolean; fareBalancePayEnabled?: boolean; cashBalancePayEnabled?: boolean; wechatPayEnabled?: boolean; alipayPayEnabled?: boolean; bankCardPayEnabled?: boolean; sandboxMode?: boolean }) {
     const session = requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
     if (body.adminLogo !== undefined && session.role !== 'SUPER_ADMIN') throw new ForbiddenException('Only super administrators may update the logo')
     const settings = await prisma.appSetting.findUniqueOrThrow({ where: { id: appSettingsDefaults.id } })
@@ -1348,7 +1377,13 @@ class SettingsController {
         pricingCurrency,
         exchangeRate: body.exchangeRate !== undefined && Number.isFinite(Number(body.exchangeRate)) && Number(body.exchangeRate) > 0 ? Number(body.exchangeRate) : settings.exchangeRate,
         adminLogo: body.adminLogo === undefined ? settings.adminLogo : body.adminLogo === null ? null : validateAdminLogo(body.adminLogo),
-        severeWeatherEnabled: body.severeWeatherEnabled ?? settings.severeWeatherEnabled
+        severeWeatherEnabled: body.severeWeatherEnabled ?? settings.severeWeatherEnabled,
+        fareBalancePayEnabled: body.fareBalancePayEnabled ?? settings.fareBalancePayEnabled,
+        cashBalancePayEnabled: body.cashBalancePayEnabled ?? settings.cashBalancePayEnabled,
+        wechatPayEnabled: body.wechatPayEnabled ?? settings.wechatPayEnabled,
+        alipayPayEnabled: body.alipayPayEnabled ?? settings.alipayPayEnabled,
+        bankCardPayEnabled: body.bankCardPayEnabled ?? settings.bankCardPayEnabled,
+        sandboxMode: body.sandboxMode ?? settings.sandboxMode
       }
     const updated = await prisma.$transaction(async tx => {
       const result = await tx.appSetting.update({ where: { id: settings.id }, data })
@@ -1535,8 +1570,214 @@ class PaymentCardsController {
   }
 }
 
+@Controller('wallet')
+class WalletController {
+  @Get('me')
+  async getMe(@Req() req: RequestLike) {
+    const phone = req.query?.phoneNumber || req.headers?.authorization?.replace('Bearer ', '') || '55550101'
+    let user = await prisma.user.findFirst({
+      where: { OR: [{ phoneNumber: phone }, { id: phone }] },
+      include: { walletTransactions: { orderBy: { createdAt: 'desc' }, take: 50 } }
+    })
+    if (!user) {
+      user = await prisma.user.findFirst({
+        orderBy: { createdAt: 'asc' },
+        include: { walletTransactions: { orderBy: { createdAt: 'desc' }, take: 50 } }
+      })
+    }
+    if (!user) throw new HttpException('User not found', HttpStatus.NOT_FOUND)
+    return {
+      id: user.id,
+      name: user.name,
+      phoneNumber: user.phoneNumber,
+      countryCode: user.countryCode,
+      cashBalance: user.cashBalance,
+      fareBalance: user.fareBalance,
+      transactions: user.walletTransactions
+    }
+  }
+
+  @Post('top-up')
+  async topUp(@Body() body: { amount?: number; userId?: string; method?: string }) {
+    const amount = roundMoney(Number(body.amount))
+    if (!Number.isFinite(amount) || amount <= 0) {
+      throw new HttpException('Valid positive top up amount is required', HttpStatus.BAD_REQUEST)
+    }
+    const settings = await prisma.appSetting.findUniqueOrThrow({ where: { id: appSettingsDefaults.id } })
+    const userTarget = body.userId
+      ? await prisma.user.findUnique({ where: { id: body.userId } })
+      : await prisma.user.findFirst({ orderBy: { createdAt: 'asc' } })
+    if (!userTarget) throw new HttpException('User not found', HttpStatus.NOT_FOUND)
+
+    const result = await prisma.$transaction(async tx => {
+      const user = await tx.user.findUniqueOrThrow({ where: { id: userTarget.id } })
+      const balanceAfter = roundMoney(user.fareBalance + amount)
+      const updated = await tx.user.update({
+        where: { id: user.id },
+        data: { fareBalance: balanceAfter }
+      })
+      const transaction = await tx.walletTransaction.create({
+        data: {
+          userId: user.id,
+          wallet: 'FARE',
+          type: 'TOP_UP',
+          amount,
+          balanceAfter,
+          reason: `車費增值 (${body.method || '在線支付'})${settings.sandboxMode ? ' [測試模式]' : ''}`
+        }
+      })
+      return { user: userResponse(updated), transaction }
+    })
+    return { ok: true, ...result }
+  }
+}
+
+@Controller('payments')
+class PaymentsController {
+  @Post('trip-pay')
+  async tripPay(@Body() body: {
+    quoteId?: string
+    userId?: string
+    useFareBalance?: boolean
+    useCashBalance?: boolean
+    externalPaymentMethod?: string
+    origin?: string
+    destination?: string
+    scheduledAt?: string
+  }) {
+    const quoteId = typeof body.quoteId === 'string' ? body.quoteId.trim() : ''
+    if (!quoteId) throw new HttpException('quoteId is required', HttpStatus.BAD_REQUEST)
+
+    const settings = await prisma.appSetting.findUniqueOrThrow({ where: { id: appSettingsDefaults.id } })
+    const userTarget = body.userId
+      ? await prisma.user.findUnique({ where: { id: body.userId } })
+      : await prisma.user.findFirst({ orderBy: { createdAt: 'asc' } })
+    if (!userTarget) throw new HttpException('User not found', HttpStatus.NOT_FOUND)
+
+    return prisma.$transaction(async tx => {
+      const quote = await tx.fareQuote.findUnique({
+        where: { id: quoteId },
+        include: {
+          pricing: true,
+          vehicle: true,
+          promotionUsages: true,
+          lines: { orderBy: { order: 'asc' } }
+        }
+      })
+      if (!quote) throw new HttpException('Quote not found', HttpStatus.NOT_FOUND)
+      if (quote.expiresAt && quote.expiresAt.getTime() <= Date.now()) {
+        throw new HttpException('Quote has expired', HttpStatus.GONE)
+      }
+
+      const totalAmount = roundMoney(quote.total)
+      const useFare = body.useFareBalance !== false && settings.fareBalancePayEnabled
+      const useCash = body.useCashBalance !== false && settings.cashBalancePayEnabled
+
+      const user = await tx.user.findUniqueOrThrow({ where: { id: userTarget.id } })
+
+      let farePaid = 0
+      let cashPaid = 0
+
+      if (useFare && user.fareBalance > 0) {
+        farePaid = roundMoney(Math.min(user.fareBalance, totalAmount))
+      }
+      const remainingAfterFare = roundMoney(totalAmount - farePaid)
+
+      if (useCash && remainingAfterFare > 0 && user.cashBalance > 0) {
+        cashPaid = roundMoney(Math.min(user.cashBalance, remainingAfterFare))
+      }
+      const externalPaid = roundMoney(totalAmount - farePaid - cashPaid)
+
+      if (externalPaid > 0 && !body.externalPaymentMethod) {
+        throw new HttpException('External payment method required for remaining balance', HttpStatus.BAD_REQUEST)
+      }
+
+      let currentFare = user.fareBalance
+      let currentCash = user.cashBalance
+
+      if (farePaid > 0) {
+        currentFare = roundMoney(currentFare - farePaid)
+        await tx.user.update({
+          where: { id: user.id },
+          data: { fareBalance: currentFare }
+        })
+        await tx.walletTransaction.create({
+          data: {
+            userId: user.id,
+            wallet: 'FARE',
+            type: 'ADMIN_DECREASE',
+            amount: farePaid,
+            balanceAfter: currentFare,
+            reason: `出行支付 - 車費餘額抵扣 (訂單: ${quote.id.slice(-8)})`
+          }
+        })
+      }
+
+      if (cashPaid > 0) {
+        currentCash = roundMoney(currentCash - cashPaid)
+        await tx.user.update({
+          where: { id: user.id },
+          data: { cashBalance: currentCash }
+        })
+        await tx.walletTransaction.create({
+          data: {
+            userId: user.id,
+            wallet: 'CASH',
+            type: 'ADMIN_DECREASE',
+            amount: cashPaid,
+            balanceAfter: currentCash,
+            reason: `出行支付 - 現金餘額抵扣 (訂單: ${quote.id.slice(-8)})`
+          }
+        })
+      }
+
+      // Consume promotions attached to quote
+      const now = new Date()
+      for (const usage of quote.promotionUsages.filter(item => item.status === 'RESERVED')) {
+        await tx.promotionUsage.update({ where: { id: usage.id }, data: { status: 'USED', usedAt: now } })
+        await tx.promotion.update({ where: { id: usage.promotionId }, data: { usageCount: { increment: 1 } } })
+      }
+
+      // Create Trip record
+      const origin = body.origin || quote.pricing?.routeOriginCity || '香港'
+      const destination = body.destination || quote.pricing?.routeDestinationCity || '深圳'
+      const scheduledAt = body.scheduledAt ? new Date(body.scheduledAt) : new Date(Date.now() + 3600000)
+
+      const trip = await tx.trip.create({
+        data: {
+          userId: user.id,
+          origin,
+          destination,
+          region: 'GUANGDONG',
+          scheduledAt: Number.isNaN(scheduledAt.getTime()) ? new Date() : scheduledAt,
+          status: 'CONFIRMED'
+        }
+      })
+
+      return {
+        ok: true,
+        tripId: trip.id,
+        quoteId: quote.id,
+        total: totalAmount,
+        currency: quote.currency,
+        paidSummary: {
+          fareBalance: farePaid,
+          cashBalance: cashPaid,
+          external: externalPaid,
+          externalMethod: externalPaid > 0 ? body.externalPaymentMethod : null
+        },
+        user: {
+          id: user.id,
+          fareBalance: currentFare,
+          cashBalance: currentCash
+        }
+      }
+    })
+  }
+}
+
 @Controller('health') class HealthController { @Get() check() { return { status: 'ok', service: 'master-travel-project-api' } } }
-@Module({ controllers: [HealthController, LocationController, SettingsController, RecommendedAddressesController, PublicVehiclesController, PublicQuotesController, PublicMembershipPlansController, PublicPromotionsController, PaymentCardsController, AdminAuthController, AdminController, SupportController], providers: [{ provide: APP_INTERCEPTOR, useClass: AdminAccessInterceptor }] }) class AppModule {}
+@Module({ controllers: [HealthController, LocationController, SettingsController, RecommendedAddressesController, PublicVehiclesController, PublicQuotesController, PublicMembershipPlansController, PublicPromotionsController, PaymentCardsController, WalletController, PaymentsController, AdminAuthController, AdminController, SupportController], providers: [{ provide: APP_INTERCEPTOR, useClass: AdminAccessInterceptor }] }) class AppModule {}
 async function bootstrap() {
   await prisma.$connect()
   await ensurePricingDefaults()
