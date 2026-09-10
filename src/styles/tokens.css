@@ -1,4 +1,4 @@
-:global(:root) {
+.login-page {
   --login-background: #f0f2f5;
   --login-surface: #ffffff;
   --login-text: #38434a;
@@ -10,4 +10,6 @@
   --login-screen-radius: 35px;
   --login-card-radius: 25px;
   --login-control-radius: 10px;
+  --login-phone-divider-left: 89.5px;
+  --login-phone-number-left: 116.5px;
 }

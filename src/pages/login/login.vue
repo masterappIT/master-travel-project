@@ -9,8 +9,12 @@
       <text class="register-label">註冊/登入</text>
 
       <view class="phone-field">
-        <text class="country-code">+852</text>
-        <image class="phone-mark" src="/static/login/phone-mark.svg" mode="scaleToFill" />
+        <picker class="country-picker" mode="selector" :range="countryOptions" :value="countryIndex" @change="handleCountryChange">
+          <view class="country-picker-content">
+            <text class="country-code">{{ countryCode }}</text>
+            <image class="phone-mark" src="/static/login/phone-mark.svg" mode="scaleToFill" />
+          </view>
+        </picker>
         <view class="phone-divider">
           <image src="/static/login/phone-divider.svg" mode="scaleToFill" />
         </view>
@@ -32,10 +36,17 @@
       </view>
 
       <text class="third-party-label">第三方登入</text>
-      <view class="third-party-options">
-        <image class="wechat-icon" src="/static/login/apple.svg" mode="scaleToFill" @tap="handleThirdPartyLogin('wechat')" />
-        <image class="apple-icon" src="/static/login/wechat.svg" mode="scaleToFill" @tap="handleThirdPartyLogin('apple')" />
+      <!-- #ifdef MP-WEIXIN -->
+      <view class="third-party-options third-party-options-single">
+        <image class="wechat-icon" src="/static/login/wechat.svg" mode="scaleToFill" @tap="handleThirdPartyLogin('wechat')" />
       </view>
+      <!-- #endif -->
+      <!-- #ifndef MP-WEIXIN -->
+      <view class="third-party-options">
+        <image class="wechat-icon" src="/static/login/wechat.svg" mode="scaleToFill" @tap="handleThirdPartyLogin('wechat')" />
+        <image class="apple-icon" src="/static/login/apple.svg" mode="scaleToFill" @tap="handleThirdPartyLogin('apple')" />
+      </view>
+      <!-- #endif -->
     </view>
   </view>
 </template>
@@ -47,6 +58,16 @@ import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 const { responsiveStyle } = useResponsiveCanvas()
 const phone = ref('6078')
 const agreed = ref(false)
+const countryOptions = ['香港 +852', '澳門 +852', '內地 +86']
+const countryCodes = ['+852', '+852', '+86']
+const countryIndex = ref(0)
+const countryCode = ref(countryCodes[countryIndex.value])
+
+const handleCountryChange = (event: { detail: { value: string | number } }) => {
+  const index = Number(event.detail.value)
+  countryIndex.value = index
+  countryCode.value = countryCodes[index]
+}
 
 const handleBack = () => {
   if (getCurrentPages().length > 1) uni.navigateBack()
@@ -154,49 +175,68 @@ const handleThirdPartyLogin = (_provider: 'wechat' | 'apple') => {
 .country-code {
   position: absolute;
   left: 22.5px;
-  top: 16.5px;
+  top: 0;
+  width: 43px;
+  height: 64px;
   color: #000;
   font-family: 'Noto Sans TC', sans-serif;
   font-size: 20px;
   font-weight: 350;
-  line-height: normal;
+  line-height: 64px;
+}
+
+.country-picker {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100px;
+  height: 64px;
+}
+
+.country-picker-content {
+  position: relative;
+  width: 100px;
+  height: 64px;
 }
 
 .phone-mark {
   position: absolute;
-  left: 69.5px;
-  top: 24.5px;
+  left: 71.5px;
+  top: 24px;
   width: 15px;
   height: 15px;
 }
 
 .phone-divider {
   position: absolute;
-  left: 89.5px;
-  top: 19.5px;
-  width: 26px;
-  height: 0;
-  transform: rotate(90deg);
+  left: var(--login-phone-divider-left);
+  top: 19px;
+  width: 3px;
+  height: 26px;
 }
 
 .phone-divider image {
+  position: absolute;
+  left: -11.5px;
+  top: 11.5px;
   display: block;
   width: 26px;
-  height: 1px;
+  height: 3px;
+  transform: rotate(90deg);
 }
 
 .phone-input {
   position: absolute;
-  left: 114.5px;
-  top: 11px;
+  left: var(--login-phone-number-left);
+  top: 0;
   width: 220px;
-  height: 42px;
+  height: 64px;
   padding: 0;
   color: #000;
   font-family: 'Noto Sans TC', sans-serif;
   font-size: 20px;
   font-weight: 700;
-  line-height: 42px;
+  line-height: 64px;
 }
 
 .agreement {
@@ -278,6 +318,11 @@ const handleThirdPartyLogin = (_provider: 'wechat' | 'apple') => {
   top: 507px;
   width: 115px;
   height: 45px;
+}
+
+.third-party-options-single {
+  left: 192.5px;
+  width: 45px;
 }
 
 .wechat-icon {
