@@ -2,10 +2,10 @@
   <view v-show="activePagePath === '/pages/index/index'" class="page" :style="responsiveStyle">
     <view v-if="rideMode === 'cross-border'" class="page-content">
       <view class="canvas">
-        <HomeMap :latitude="mapLatitude" :longitude="mapLongitude" />
+        <HomeMap v-if="mapVisible" :key="mapMountKey" :latitude="mapLatitude" :longitude="mapLongitude" :scale="mapScale" :markers="mapMarkers" :polyline="mapPolyline" :include-points="mapIncludePoints" :fit-trigger="mapFitTrigger" :center-trigger="mapCenterTrigger" :booking-picker-open="bookingTimePicker" />
         <HomeHeader :location-label="locationLabel" />
         <HomeTravelModeSwitch :mode="rideMode" @update:mode="switchRideMode" />
-        <HomeMapActions @location="useCurrentLocation" />
+        <HomeMapActions @location="handleMapLocation" />
         <HomeRoutePanel
           v-model:mode="travelMode"
           :origin="origin"
@@ -23,6 +23,7 @@
           :selecting="addressPicker"
           :location-label="locationLabel"
           :detailed-address="detailedAddress"
+          :can-use-current="addressPickerContext === 'business' || addressPicker === 'origin' || (!!origin && !originIsCurrent)"
           @close="addressPicker = null"
           @select="selectAddress"
           @locate="locateCurrentAddress"
@@ -102,7 +103,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { nextTick, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useTripStore } from '../../stores/trip'
 import HomeHeader from '../../components/home/HomeHeader.vue'
@@ -116,7 +117,7 @@ import AddressPicker from '../../components/home/AddressPicker.vue'
 import BookingTimePicker from '../../components/home/BookingTimePicker.vue'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { activateEmbeddedPageHost, cachedPagePath, visitedPages, openCachedPage } from '../../utils/navigation'
-import { reverseGeocode } from '../../services/api'
+import { planDrivingRoute, reverseGeocode, type Coordinate } from '../../services/api'
 import { findLocalRegion } from '../../utils/localRegions'
 
 const { responsiveStyle } = useResponsiveCanvas()
@@ -170,10 +171,16 @@ activateEmbeddedPageHost()
 const tripStore = useTripStore()
 const rideMode = ref<RideMode>('cross-border')
 const travelMode = ref<TravelMode>('cross-border')
-const origin = ref('香港 · 九龍站')
-const destination = ref('廣東 · 深圳灣口岸')
+const origin = ref('')
+const originIsCurrent = ref(false)
+const destination = ref('')
 interface BusinessLocation { region: string; place: string }
-interface AddressSelection { region: '大陸' | '香港' | '澳門' | null; name: string; address: string }
+interface AddressSelection { region: '大陸' | '香港' | '澳門' | null; name: string; address: string; latitude?: number; longitude?: number; city?: string; district?: string; landmark?: string }
+const selectedCoordinates = ref<{ origin?: Coordinate; destination?: Coordinate }>({})
+type MapMarker = Coordinate & { id: number; title?: string; iconPath?: string; width?: number; height?: number }
+const mapMarkers = ref<MapMarker[]>([])
+const mapPolyline = ref<Array<{ points: Coordinate[]; color: string; width: number; arrowLine: boolean }>>([])
+const mapIncludePoints = ref<Coordinate[]>([])
 const businessOrigin = ref<BusinessLocation>({ region: '香港', place: '香港國際機場' })
 const businessDestination = ref<BusinessLocation>({ region: '大陸', place: '' })
 const initialBusinessOrigin: BusinessLocation = { region: '香港', place: '香港國際機場' }
@@ -182,6 +189,11 @@ const departureTime = ref('')
 const flightNumber = ref('')
 const mapLatitude = ref(22.3046)
 const mapLongitude = ref(114.1619)
+const mapScale = ref(13)
+const mapFitTrigger = ref(0)
+const mapCenterTrigger = ref(0)
+const mapMountKey = ref(0)
+const mapVisible = ref(true)
 const locationLabel = ref('香港 · 油尖旺區')
 const detailedAddress = ref('香港九龍站附近')
 const bookingTimePicker = ref(false)
@@ -194,8 +206,14 @@ const switchRideMode = (mode: RideMode) => {
   bookingTimePicker.value = false
 
   if (mode === 'business') {
-    origin.value = '香港 · 九龍站'
-    destination.value = '廣東 · 深圳灣口岸'
+    origin.value = ''
+    originIsCurrent.value = false
+    destination.value = ''
+    selectedCoordinates.value.origin = undefined
+    selectedCoordinates.value.destination = undefined
+    mapMarkers.value = []
+    mapPolyline.value = []
+    mapIncludePoints.value = []
     departureTime.value = ''
     flightNumber.value = ''
     travelMode.value = 'cross-border'
@@ -208,7 +226,11 @@ const switchRideMode = (mode: RideMode) => {
 }
 
 onShow(() => {
-  if (hasShown) rideMode.value = 'cross-border'
+  if (hasShown) {
+    rideMode.value = 'cross-border'
+  } else {
+    void useCurrentLocation(false, true)
+  }
   hasShown = true
 })
 
@@ -234,14 +256,66 @@ const formatBusinessLocation = (selection: AddressSelection): BusinessLocation =
   const details = cityIndex >= 0 ? parts.slice(cityIndex + 1) : parts.slice(1)
   return { region, place: details.join(' · ') || selection.name }
 }
+const formatRouteAddress = (address: string, region?: AddressSelection['region'], city = '', district = '', landmark = '') => {
+  const normalized = address.replace(/-/g, '').replace(/\s+/g, '')
+  const locationText = `${city}${normalized}`
+  if (region === '香港' || /香港/.test(locationText)) {
+    const details = normalized.replace(/^香港(?:特別行政區|特别行政区)?/, '')
+    const area = district.replace(/^香港(?:特別行政區|特别行政区)?/, '') || details.match(/^.+?區/)?.[0] || ''
+    if (landmark) return `香港 · ${area}${landmark}`
+    return `香港 · ${details || area || '目前位置'}`
+  }
+  if (region === '澳門' || /澳(?:門|门)/.test(locationText)) {
+    const details = normalized.replace(/^澳(?:門|门)(?:特別行政區|特别行政区)?/, '')
+    const area = district.replace(/^澳(?:門|门)(?:特別行政區|特别行政区)?/, '') || details.match(/^.+?(?:堂區|堂区|澳門半島|澳门半岛|路氹城)/)?.[0] || ''
+    if (landmark) return `澳門 · ${area}${landmark}`
+    return `澳門 · ${details || area || '目前位置'}`
+  }
+  const cityWithSuffix = city || normalized.match(/[^省自治區自治区]+市/)?.[0] || ''
+  const mainlandCity = cityWithSuffix.replace(/市$/, '')
+  const mainlandDistrict = district || normalized.match(/[^省市]+(?:區|区|縣|县)/)?.[0] || ''
+  if (landmark) return `${mainlandCity} · ${mainlandDistrict}${landmark}`
+  const cityStart = cityWithSuffix && normalized.includes(cityWithSuffix) ? normalized.slice(normalized.indexOf(cityWithSuffix) + cityWithSuffix.length) : normalized
+  const roadAddress = cityStart.replace(new RegExp(`^${mainlandDistrict}`), '')
+  return `${mainlandCity} · ${mainlandDistrict}${roadAddress}`
+}
+const updateRoute = async () => {
+  const { origin: originCoordinate, destination: destinationCoordinate } = selectedCoordinates.value
+  if (!originCoordinate || !destinationCoordinate) return
+  try {
+    const route = await planDrivingRoute(originCoordinate, destinationCoordinate)
+    mapMarkers.value = [
+      { id: 1, ...originCoordinate, title: '出發地', iconPath: '/static/home/route/origin.svg', width: 20, height: 36 },
+      { id: 2, ...destinationCoordinate, title: '目的地', iconPath: '/static/home/route/destination.svg', width: 24, height: 36 }
+    ]
+    mapPolyline.value = [{ points: route.points, color: '#285CFC', width: 6, arrowLine: true }]
+    mapIncludePoints.value = route.points.length > 1 ? route.points : [originCoordinate, destinationCoordinate]
+    tripStore.setRoute(origin.value, destination.value)
+    tripStore.setRouteDistance(route.distance, route.duration)
+  } catch {
+    mapPolyline.value = []
+    tripStore.clearRouteDistance()
+    uni.showToast({ title: '路線規劃失敗，請稍後再試', icon: 'none' })
+  }
+}
 const selectAddress = (value: string, selection?: AddressSelection) => {
+  const target = addressPicker.value
   if (addressPickerContext.value === 'business') {
     const location = selection ? formatBusinessLocation(selection) : parseBusinessLocation(value)
-    if (addressPicker.value === 'origin') businessOrigin.value = location
-    if (addressPicker.value === 'destination') businessDestination.value = location
+    if (target === 'origin') businessOrigin.value = location
+    if (target === 'destination') businessDestination.value = location
   } else {
-    if (addressPicker.value === 'origin') origin.value = value
-    if (addressPicker.value === 'destination') destination.value = value
+    const formattedValue = selection ? formatRouteAddress(selection.address, selection.region, selection.city, selection.district, selection.landmark || selection.name) : value
+    if (target === 'origin') {
+      origin.value = formattedValue
+      originIsCurrent.value = false
+    }
+    if (target === 'destination') destination.value = formattedValue
+    tripStore.setRoute(origin.value, destination.value)
+  }
+  if (target && selection?.latitude !== undefined && selection.longitude !== undefined) {
+    selectedCoordinates.value[target] = { latitude: selection.latitude, longitude: selection.longitude }
+    void updateRoute()
   }
   addressPicker.value = null
 }
@@ -259,11 +333,20 @@ const selectCurrentLocation = () => {
     if (addressPicker.value === 'origin') businessOrigin.value = location
     if (addressPicker.value === 'destination') businessDestination.value = location
   } else {
-    const currentAddress = locationLabel.value.startsWith('澳門')
-      ? `${locationLabel.value} · ${detailedAddress.value.replace(/澳门/g, '澳門')}`
-      : detailedAddress.value
-    if (addressPicker.value === 'origin') origin.value = currentAddress
+    const currentAddress = formatRouteAddress(
+      detailedAddress.value,
+      locationLabel.value.startsWith('香港') ? '香港' : locationLabel.value.startsWith('澳門') ? '澳門' : '大陸',
+      locationLabel.value.split(' · ')[0]
+    )
+    if (addressPicker.value === 'origin') {
+      origin.value = currentAddress
+      originIsCurrent.value = true
+    }
     if (addressPicker.value === 'destination') destination.value = currentAddress
+  }
+  if (addressPickerContext.value === 'cross-border') {
+    tripStore.setRoute(origin.value, destination.value)
+    if (selectedCoordinates.value.origin && selectedCoordinates.value.destination) void updateRoute()
   }
   addressPicker.value = null
 }
@@ -280,15 +363,43 @@ const confirmDepartureTime = (value: string) => {
   openCachedPage('/pages/vehicles/select')
 }
 
-const useCurrentLocation = (closePicker = false) => {
+const handleMapLocation = () => {
+  if (mapPolyline.value.length > 0 && mapIncludePoints.value.length > 1) {
+    mapFitTrigger.value += 1
+    return
+  }
+  useCurrentLocation()
+}
+
+const remountMapAtCurrentLocation = async () => {
+  mapVisible.value = false
+  await nextTick()
+  mapMountKey.value += 1
+  mapVisible.value = true
+}
+
+const useCurrentLocation = (closePicker = false, setAsOrigin = false) => {
   uni.getLocation({
     type: 'gcj02',
     success: ({ latitude, longitude }) => {
       mapLatitude.value = latitude
       mapLongitude.value = longitude
+      if (mapPolyline.value.length === 0) {
+        mapScale.value = 17
+        mapIncludePoints.value = []
+        mapCenterTrigger.value += 1
+        void remountMapAtCurrentLocation()
+      }
+      if (addressPicker.value) selectedCoordinates.value[addressPicker.value] = { latitude, longitude }
       const localRegion = findLocalRegion(latitude, longitude)
       locationLabel.value = localRegion ? `${localRegion.region} · ${localRegion.district}` : '目前位置'
       detailedAddress.value = localRegion ? `${locationLabel.value}附近` : `目前位置（${latitude.toFixed(5)}, ${longitude.toFixed(5)}）`
+      if (setAsOrigin) {
+        selectedCoordinates.value.origin = { latitude, longitude }
+        origin.value = formatRouteAddress(detailedAddress.value, localRegion?.region || null)
+        originIsCurrent.value = true
+        mapMarkers.value = [{ id: 1, latitude, longitude, title: '出發地' }]
+      }
       reverseGeocode(latitude, longitude)
         .then((location) => {
           if (location.address) detailedAddress.value = location.address
@@ -297,6 +408,7 @@ const useCurrentLocation = (closePicker = false) => {
           } else if (location.city) {
             locationLabel.value = location.district ? `${location.city} · ${location.district}` : location.city
           }
+          if (setAsOrigin) origin.value = formatRouteAddress(location.address || detailedAddress.value, localRegion?.region || null, location.city, location.district, location.landmark)
         })
         .catch(() => undefined)
         .finally(() => {

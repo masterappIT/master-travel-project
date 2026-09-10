@@ -31,6 +31,7 @@ export interface TripDraft {
   route: TripRoute
   departureTime: string
   returnTime?: string
+  distanceMeters?: number
   distanceKm?: number
   durationHours?: number
   selectedPackageId?: string

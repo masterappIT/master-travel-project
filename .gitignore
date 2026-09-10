@@ -10,6 +10,9 @@ lerna-debug.log*
 node_modules
 .DS_Store
 dist
+.env
+.env.*
+!.env.example
 *.local
 
 # Editor directories and files

@@ -43,3 +43,167 @@ enum TripStatus {
   COMPLETED
   CANCELLED
 }
+
+model AppSetting {
+  id           String   @id
+  language     String
+  region       String
+  currency     String
+  exchangeRate Float
+  adminLogo   String?  @db.Text
+  updatedAt    DateTime @updatedAt
+}
+
+model VehicleCategory {
+  id              String                   @id
+  name            String
+  tabLabel        String
+  order           Int
+  enabled         Boolean                  @default(true)
+  vehicles        Vehicle[]
+  distancePricing CategoryDistancePricing?
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+
+  @@index([enabled, order])
+}
+
+model Vehicle {
+  id               String           @id
+  categoryId       String?
+  brand            String
+  model            String
+  series           String
+  seats            Int
+  image            String
+  colorLabel       String
+  modelChoiceLabel String
+  enabled          Boolean          @default(true)
+  order            Int
+  category         VehicleCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  @@index([categoryId])
+  @@index([enabled, order])
+}
+
+model CategoryDistancePricing {
+  id          String                @id @default(cuid())
+  categoryId  String                @unique
+  minimumFare Float
+  currency    String
+  category    VehicleCategory       @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  tiers       DistancePricingTier[]
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+}
+
+model DistancePricingTier {
+  id         String                  @id
+  pricingId  String
+  fromKm     Float
+  toKm       Float?
+  pricePerKm Float
+  order      Int
+  pricing    CategoryDistancePricing @relation(fields: [pricingId], references: [id], onDelete: Cascade)
+  createdAt  DateTime                @default(now())
+  updatedAt  DateTime                @updatedAt
+
+  @@unique([pricingId, order])
+  @@index([pricingId, order])
+}
+
+model VehicleExtra {
+  id        String   @id
+  name      String
+  label     String
+  price     Float
+  currency  String
+  enabled   Boolean  @default(true)
+  order     Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([enabled, order])
+}
+
+model FareQuote {
+  id         String                    @id @default(cuid())
+  distanceKm Float
+  currency   String
+  subtotal   Float
+  total      Float
+  expiresAt  DateTime?
+  createdAt  DateTime                  @default(now())
+  pricing    FareQuotePricingSnapshot?
+  vehicle    FareQuoteVehicleSnapshot?
+  lines      FareQuoteLine[]
+}
+
+model FareQuotePricingSnapshot {
+  id           String                  @id @default(cuid())
+  quoteId      String                  @unique
+  categoryId   String
+  categoryName String
+  tabLabel     String
+  minimumFare  Float
+  currency     String
+  quote        FareQuote               @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  tiers        FareQuoteTierSnapshot[]
+  createdAt    DateTime                @default(now())
+}
+
+model FareQuoteTierSnapshot {
+  id           String                   @id @default(cuid())
+  snapshotId   String
+  sourceTierId String
+  fromKm       Float
+  toKm         Float?
+  pricePerKm   Float
+  order        Int
+  snapshot     FareQuotePricingSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+
+  @@unique([snapshotId, order])
+}
+
+model FareQuoteVehicleSnapshot {
+  id               String    @id @default(cuid())
+  quoteId          String    @unique
+  vehicleId        String
+  categoryId       String?
+  brand            String
+  model            String
+  series           String
+  seats            Int
+  image            String
+  colorLabel       String
+  modelChoiceLabel String
+  quote            FareQuote @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  createdAt        DateTime  @default(now())
+}
+
+model FareQuoteLine {
+  id          String            @id @default(cuid())
+  quoteId     String
+  type        FareQuoteLineType
+  sourceId    String?
+  label       String
+  quantity    Float
+  unitAmount  Float
+  totalAmount Float
+  currency    String
+  order       Int
+  quote       FareQuote         @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  createdAt   DateTime          @default(now())
+
+  @@unique([quoteId, order])
+}
+
+enum FareQuoteLineType {
+  MINIMUM_FARE
+  DISTANCE_TIER
+  VEHICLE
+  EXTRA
+  ADJUSTMENT
+}

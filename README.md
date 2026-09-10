@@ -63,7 +63,7 @@ H5 與管理後台使用固定連接埠；若連接埠已被其他程序占用�
 | `ADMIN_SESSION_SECRET` | 管理 session 簽章密鑰 |
 | `ADMIN_CORS_ORIGIN` | 管理後台允許來源 |
 | `APP_CORS_ORIGINS` | 客戶端與後台允許來源，以逗號分隔 |
-| `TENCENT_MAP_KEY` | 騰訊位置服務金鑰 |
+| `AMAP_WEB_SERVICE_KEY` | 高德 Web 服務金鑰，用於位置搜索、逆地理編碼及路線規劃；僅存放於後端 |
 | `MASTERBOX_BASE_URL`、`MASTERBOX_APP_ID`、`MASTERBOX_API_KEY` | Master Box Integration 設定 |
 | `SUPPORT_SESSION_SECRET` | 客服 session 簽章密鑰 |
 

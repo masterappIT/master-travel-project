@@ -12,7 +12,7 @@
     </view>
 
     <view class="vehicle-tag">高級跨境商務車</view>
-    <view class="selected-vehicle-card"><VehicleCard :vehicle="vehicle" selectable :selected="true" /></view>
+    <view class="selected-vehicle-card"><VehicleCard :vehicle="vehicle" :quote="tripStore.selectedFareQuote" selectable :selected="true" /></view>
     <view class="promo-card"><text class="promo-copy">{{ promoApplied ? '已使用組合優惠“現金券50”' : '可使用組合優惠“現金券50”' }}</text><view class="promo-action" @tap="togglePromo"><text>{{ promoApplied ? '取消使用' : '立即使用' }}</text></view></view>
 
     <view class="extras">
