@@ -1,0 +1,1 @@
+ALTER TYPE "DiscountType" ADD VALUE 'TOTAL_PRICE';

@@ -5,7 +5,7 @@ import { APP_INTERCEPTOR } from '@nestjs/core'
 import { createHmac, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto'
 import { Observable, tap } from 'rxjs'
 import { loadEnvFile } from 'node:process'
-import { PrismaClient, PromotionKind, DiscountType } from '@prisma/client'
+import { Prisma, PrismaClient, PromotionKind, DiscountType, PromotionStackingMode } from '@prisma/client'
 
 try {
   loadEnvFile()
@@ -33,15 +33,50 @@ interface VehicleCatalogItem { id: string; categoryId: string | null; brand: str
 interface VehicleExtraOption { id: string; name: string; label: string; price: number; currency: string; enabled: boolean; order: number }
 interface DistancePricingTier { id: string; fromKm: number; toKm: number | null; pricePerKm: number; order: number }
 interface DistancePricingSettings { categoryId: string; minimumFare: number; currency: string; tiers: DistancePricingTier[] }
+interface RouteMinimumFareSettings { id: string; originRegion: string; originCity: string | null; destinationRegion: string; destinationCity: string | null; categoryId: string | null; minimumFare: number; currency: string; enabled: boolean }
 interface QuoteExtraRequest { id?: unknown; quantity?: unknown }
-interface CreateQuoteRequest { categoryId?: unknown; vehicleId?: unknown; distanceMeters?: unknown; extraIds?: unknown; extras?: unknown; displayCurrency?: unknown; currency?: unknown; couponCode?: unknown; userId?: unknown; membershipLevel?: unknown }
+interface CreateQuoteRequest { categoryId?: unknown; vehicleId?: unknown; distanceMeters?: unknown; extraIds?: unknown; extras?: unknown; displayCurrency?: unknown; currency?: unknown; couponCode?: unknown; userId?: unknown; membershipLevel?: unknown; originRegion?: unknown; originCity?: unknown; destinationRegion?: unknown; destinationCity?: unknown; scheduledAt?: unknown }
 interface QuoteExtraSelection { id: string; quantity: number }
-interface PromotionInput { id?: unknown; name?: unknown; kind?: unknown; discountType?: unknown; discountValue?: unknown; currency?: unknown; minimumSpend?: unknown; maximumDiscount?: unknown; startsAt?: unknown; endsAt?: unknown; enabled?: unknown; couponCode?: unknown; usageLimit?: unknown; membershipLevel?: unknown }
+interface PromotionInput { id?: unknown; name?: unknown; kind?: unknown; discountType?: unknown; stackingMode?: unknown; discountValue?: unknown; currency?: unknown; minimumSpend?: unknown; maximumDiscount?: unknown; priority?: unknown; startsAt?: unknown; endsAt?: unknown; enabled?: unknown; couponCode?: unknown; usageLimit?: unknown; membershipLevel?: unknown; originRegion?: unknown; originCity?: unknown; destinationRegion?: unknown; destinationCity?: unknown; weekdays?: unknown; timeStart?: unknown; timeEnd?: unknown }
 interface MembershipPlan { id: string; level: string; name: string; monthly: number; yearly: number; recommended: boolean; benefits: string[]; enabled: boolean; order: number }
 const prisma = new PrismaClient()
 const appSettingsDefaults = { id: 'default', language: '繁體中文', region: '香港', currency: 'HKD', exchangeRate: 0.92, adminLogo: null as string | null }
 const currencyLabels = { RMB: 'RMB¥', HKD: 'HKD$' } as const
 const roundMoney = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100
+const normalizeRuleText = (value: unknown) => typeof value === 'string' ? value.trim() : ''
+const normalizeWeekdays = (value: unknown) => Array.isArray(value) ? value.map(Number).filter(day => Number.isInteger(day) && day >= 1 && day <= 7) : []
+const timeToMinutes = (value: string | null | undefined) => {
+  if (!value || !/^\d{2}:\d{2}$/.test(value)) return null
+  const [hours, minutes] = value.split(':').map(Number)
+  return hours <= 23 && minutes <= 59 ? hours * 60 + minutes : null
+}
+const promotionMatchesContext = (
+  promotion: {
+    originRegion: string | null
+    originCity: string | null
+    destinationRegion: string | null
+    destinationCity: string | null
+    weekdays: unknown
+    timeStart: string | null
+    timeEnd: string | null
+  },
+  context: { originRegion: string; originCity: string; destinationRegion: string; destinationCity: string; scheduledAt: Date }
+) => {
+  if (promotion.originRegion && promotion.originRegion !== context.originRegion) return false
+  if (promotion.originCity && promotion.originCity !== context.originCity) return false
+  if (promotion.destinationRegion && promotion.destinationRegion !== context.destinationRegion) return false
+  if (promotion.destinationCity && promotion.destinationCity !== context.destinationCity) return false
+  const weekdays = normalizeWeekdays(promotion.weekdays)
+  if (weekdays.length && !weekdays.includes(context.scheduledAt.getDay() || 7)) return false
+  const start = timeToMinutes(promotion.timeStart)
+  const end = timeToMinutes(promotion.timeEnd)
+  if (start !== null && end !== null) {
+    const current = context.scheduledAt.getHours() * 60 + context.scheduledAt.getMinutes()
+    const inRange = start <= end ? current >= start && current <= end : current >= start || current <= end
+    if (!inRange) return false
+  }
+  return true
+}
 const membershipPlans: MembershipPlan[] = [
   { id: 'silver', level: 'SILVER', name: '銀卡會員', monthly: 68, yearly: 688, recommended: false, benefits: ['每月 2 張乘車券', '優先客服通道', '免費等候 10 分鐘'], enabled: true, order: 1 },
   { id: 'black', level: 'BLACK GOLD', name: '黑金會員', monthly: 128, yearly: 1288, recommended: true, benefits: ['每月 4 張乘車券', '專屬行程管家', '免費等候 20 分鐘'], enabled: true, order: 2 },
@@ -173,6 +208,31 @@ function pricingResponse(pricing: DistancePricingSettings) {
     tiers: pricing.tiers.map(tier => ({ id: tier.id, fromKm: tier.fromKm, toKm: tier.toKm, pricePerKm: tier.pricePerKm, order: tier.order }))
   }
 }
+function routeMinimumFareResponse(item: RouteMinimumFareSettings) {
+  return {
+    id: item.id,
+    originRegion: item.originRegion,
+    originCity: item.originCity,
+    destinationRegion: item.destinationRegion,
+    destinationCity: item.destinationCity,
+    categoryId: item.categoryId,
+    minimumFare: item.minimumFare,
+    currency: item.currency,
+    enabled: item.enabled
+  }
+}
+function parseRouteMinimumFare(body: Partial<RouteMinimumFareSettings>) {
+  const originRegion = body.originRegion?.trim()
+  const destinationRegion = body.destinationRegion?.trim()
+  const originCity = body.originCity?.trim() || null
+  const destinationCity = body.destinationCity?.trim() || null
+  const minimumFare = Number(body.minimumFare)
+  const currency = body.currency?.trim()
+  if (!originRegion || !destinationRegion || !Number.isFinite(minimumFare) || minimumFare < 0 || !currency || !currencyCode(currency)) {
+    throw new HttpException('Valid route minimum fare fields are required', HttpStatus.BAD_REQUEST)
+  }
+  return { originRegion, originCity, destinationRegion, destinationCity, categoryId: body.categoryId?.trim() || null, minimumFare, currency, enabled: body.enabled ?? true }
+}
 function validVehicleCategory(body: Partial<VehicleCategory>) { return body.id && body.name?.trim() && body.tabLabel?.trim() }
 type ManagedUser = { id: string; countryCode: string; phoneNumber: string; name: string | null; cashBalance: number; fareBalance: number; membershipLevel: string | null; createdAt: Date }
 function userResponse(user: ManagedUser) {
@@ -248,7 +308,14 @@ function quoteDistanceLines(distanceKm: number, pricing: DistancePricingSettings
   if (tierSubtotal <= pricing.minimumFare) {
     return [{ type: 'MINIMUM_FARE' as const, sourceId: null, label: '最低車資', quantity: 1, unitAmount: pricing.minimumFare, totalAmount: pricing.minimumFare }]
   }
+
   return tierLines
+}
+function routeMinimumFareLine(routeMinimumFare: RouteMinimumFareSettings | null, distanceFare: number, exchangeRate: number) {
+  if (!routeMinimumFare) return []
+  const minimumFare = convertCurrency(routeMinimumFare.minimumFare, routeMinimumFare.currency, 'RMB', exchangeRate)
+  if (minimumFare <= distanceFare) return []
+  return [{ type: 'ADJUSTMENT' as const, sourceId: routeMinimumFare.id, label: '路線最低車資', quantity: 1, unitAmount: minimumFare, totalAmount: minimumFare - distanceFare }]
 }
 function quoteExpiryDate() {
   const configuredMinutes = Number(process.env.QUOTE_TTL_MINUTES)
@@ -515,17 +582,26 @@ class AdminController {
     const id = typeof body.id === 'string' ? body.id.trim() : ''
     const name = typeof body.name === 'string' ? body.name.trim() : ''
     const kind = body.kind === 'COUPON' || body.kind === 'MEMBER' || body.kind === 'CAMPAIGN' ? body.kind : ''
-    const discountType = body.discountType === 'FIXED_AMOUNT' || body.discountType === 'PERCENTAGE' ? body.discountType : ''
+    const discountType = body.discountType === 'FIXED_AMOUNT' || body.discountType === 'PERCENTAGE' || body.discountType === 'TOTAL_PRICE' ? body.discountType : ''
+    const stackingMode = body.stackingMode === 'PERCENTAGE_AND_VOUCHER' || body.stackingMode === 'ALL' ? body.stackingMode : 'NONE'
     const discountValue = Number(body.discountValue)
     const minimumSpend = Number(body.minimumSpend ?? 0)
     const maximumDiscount = body.maximumDiscount === '' || body.maximumDiscount === null || body.maximumDiscount === undefined ? null : Number(body.maximumDiscount)
     const usageLimit = body.usageLimit === '' || body.usageLimit === null || body.usageLimit === undefined ? null : Number(body.usageLimit)
+    const priority = Number(body.priority ?? 0)
     const couponCode = typeof body.couponCode === 'string' && body.couponCode.trim() ? body.couponCode.trim().toUpperCase() : null
     const membershipLevel = typeof body.membershipLevel === 'string' && body.membershipLevel.trim() ? body.membershipLevel.trim() : null
+    const originRegion = normalizeRuleText(body.originRegion) || null
+    const originCity = normalizeRuleText(body.originCity) || null
+    const destinationRegion = normalizeRuleText(body.destinationRegion) || null
+    const destinationCity = normalizeRuleText(body.destinationCity) || null
+    const weekdays = normalizeWeekdays(body.weekdays)
+    const timeStart = normalizeRuleText(body.timeStart) || null
+    const timeEnd = normalizeRuleText(body.timeEnd) || null
     const startsAt = body.startsAt ? new Date(String(body.startsAt)) : null
     const endsAt = body.endsAt ? new Date(String(body.endsAt)) : null
-    if (!name || !kind || !discountType || !Number.isFinite(discountValue) || discountValue <= 0 || (discountType === 'PERCENTAGE' && discountValue > 100) || !Number.isFinite(minimumSpend) || minimumSpend < 0 || (maximumDiscount !== null && (!Number.isFinite(maximumDiscount) || maximumDiscount <= 0)) || (usageLimit !== null && (!Number.isInteger(usageLimit) || usageLimit <= 0)) || (startsAt && Number.isNaN(startsAt.valueOf())) || (endsAt && Number.isNaN(endsAt.valueOf())) || (startsAt && endsAt && startsAt >= endsAt) || (kind === 'COUPON' && !couponCode) || (kind === 'MEMBER' && !membershipLevel)) throw new HttpException('Promotion fields are invalid', HttpStatus.BAD_REQUEST)
-    const data = { name, kind: kind as PromotionKind, discountType: discountType as DiscountType, discountValue, currency: typeof body.currency === 'string' && currencyCode(body.currency) ? currencyLabels[currencyCode(body.currency)!] : 'RMB¥', minimumSpend, maximumDiscount, startsAt, endsAt, enabled: body.enabled !== false, couponCode: kind === 'COUPON' ? couponCode : null, usageLimit, membershipLevel: kind === 'MEMBER' ? membershipLevel : null }
+    if (!name || !kind || !discountType || !Number.isFinite(discountValue) || discountValue <= 0 || (discountType === 'PERCENTAGE' && discountValue > 100) || !Number.isFinite(minimumSpend) || minimumSpend < 0 || !Number.isInteger(priority) || (maximumDiscount !== null && (!Number.isFinite(maximumDiscount) || maximumDiscount <= 0)) || (usageLimit !== null && (!Number.isInteger(usageLimit) || usageLimit <= 0)) || (startsAt && Number.isNaN(startsAt.valueOf())) || (endsAt && Number.isNaN(endsAt.valueOf())) || (startsAt && endsAt && startsAt >= endsAt) || (timeStart && timeToMinutes(timeStart) === null) || (timeEnd && timeToMinutes(timeEnd) === null) || (kind === 'COUPON' && !couponCode) || (kind === 'MEMBER' && !membershipLevel)) throw new HttpException('Promotion fields are invalid', HttpStatus.BAD_REQUEST)
+    const data = { name, kind: kind as PromotionKind, discountType: discountType as DiscountType, stackingMode: stackingMode as PromotionStackingMode, discountValue, currency: typeof body.currency === 'string' && currencyCode(body.currency) ? currencyLabels[currencyCode(body.currency)!] : 'RMB¥', minimumSpend, maximumDiscount, priority, startsAt, endsAt, enabled: body.enabled !== false, couponCode: kind === 'COUPON' ? couponCode : null, usageLimit, membershipLevel: kind === 'MEMBER' ? membershipLevel : null, originRegion, originCity, destinationRegion, destinationCity, weekdays: weekdays.length ? weekdays : Prisma.JsonNull, timeStart, timeEnd }
     if (id) { const existing = await prisma.promotion.findUnique({ where: { id } }); if (!existing) throw new HttpException('Promotion not found', HttpStatus.NOT_FOUND); return prisma.promotion.update({ where: { id }, data }) }
     return prisma.promotion.create({ data })
   }
@@ -694,6 +770,69 @@ class AdminController {
     if (!Number.isFinite(distanceKm) || distanceKm < 0) throw new HttpException('Valid distance is required', HttpStatus.BAD_REQUEST)
     return { categoryId, distanceKm, fare: calculateDistanceFare(distanceKm, pricing), currency: pricing.currency }
   }
+  @Get('route-minimum-fares') async listRouteMinimumFares(@Req() req: RequestLike) {
+    requireAuth(req)
+    const data = await prisma.routeMinimumFare.findMany({ orderBy: [{ originRegion: 'asc' }, { destinationRegion: 'asc' }, { createdAt: 'asc' }] })
+    return { data: data.map(routeMinimumFareResponse) }
+  }
+  @Post('route-minimum-fares') async saveRouteMinimumFare(@Req() req: RequestLike, @Body() body: Partial<RouteMinimumFareSettings>) {
+    requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
+    const values = parseRouteMinimumFare(body)
+    if (values.categoryId && !await prisma.vehicleCategory.findUnique({ where: { id: values.categoryId } })) {
+      throw new HttpException('Vehicle category not found', HttpStatus.NOT_FOUND)
+    }
+    const mirrorWhere = {
+      originRegion: values.destinationRegion,
+      originCity: values.destinationCity,
+      destinationRegion: values.originRegion,
+      destinationCity: values.originCity,
+      categoryId: values.categoryId
+    }
+    const item = await prisma.$transaction(async tx => {
+      const current = body.id ? await tx.routeMinimumFare.findUnique({ where: { id: body.id } }) : null
+      if (body.id && !current) throw new HttpException('Route minimum fare not found', HttpStatus.NOT_FOUND)
+      const saved = current
+        ? await tx.routeMinimumFare.update({ where: { id: current.id }, data: values })
+        : await tx.routeMinimumFare.create({ data: values })
+      const mirror = await tx.routeMinimumFare.findFirst({ where: { ...mirrorWhere, id: { not: saved.id } } })
+      const mirrorValues = {
+        ...values,
+        originRegion: mirrorWhere.originRegion,
+        originCity: mirrorWhere.originCity,
+        destinationRegion: mirrorWhere.destinationRegion,
+        destinationCity: mirrorWhere.destinationCity
+      }
+      if (mirror) {
+        await tx.routeMinimumFare.update({ where: { id: mirror.id }, data: mirrorValues })
+      } else {
+        await tx.routeMinimumFare.create({ data: mirrorValues })
+      }
+      return saved
+    })
+    return routeMinimumFareResponse(item)
+  }
+  @Delete('route-minimum-fares/:id') async deleteRouteMinimumFare(@Req() req: RequestLike, @Param('id') id: string) {
+    requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
+    await prisma.$transaction(async tx => {
+      const item = await tx.routeMinimumFare.findUnique({ where: { id } })
+      if (!item) throw new HttpException('Route minimum fare not found', HttpStatus.NOT_FOUND)
+      await tx.routeMinimumFare.deleteMany({
+        where: {
+          OR: [
+            { id: item.id },
+            {
+              originRegion: item.destinationRegion,
+              originCity: item.destinationCity,
+              destinationRegion: item.originRegion,
+              destinationCity: item.originCity,
+              categoryId: item.categoryId
+            }
+          ]
+        },
+      })
+    })
+    return { ok: true }
+  }
   @Get('recommended-addresses') async listRecommendedAddresses(@Req() req: RequestLike) {
     requireAuth(req)
     const [data, total] = await prisma.$transaction([
@@ -775,6 +914,66 @@ class AdminController {
 @Controller('membership-plans')
 class PublicMembershipPlansController { @Get() list() { return { data: membershipPlans.filter(item => item.enabled).sort((a, b) => a.order - b.order) } } }
 
+@Controller('promotions')
+class PublicPromotionsController {
+  private publicPromotion(promotion: Prisma.PromotionGetPayload<object>) {
+    return {
+      id: promotion.id,
+      name: promotion.name,
+      kind: promotion.kind,
+      discountType: promotion.discountType,
+      discountValue: promotion.discountValue,
+      currency: promotion.currency,
+      startsAt: promotion.startsAt,
+      endsAt: promotion.endsAt,
+      minimumSpend: promotion.minimumSpend,
+      originRegion: promotion.originRegion,
+      destinationRegion: promotion.destinationRegion,
+      couponCode: promotion.kind === 'COUPON' ? promotion.couponCode : null
+    }
+  }
+
+  @Get()
+  async list() {
+    const now = new Date()
+    const promotions = await prisma.promotion.findMany({
+      where: {
+        enabled: true,
+        AND: [
+          { OR: [{ startsAt: null }, { startsAt: { lte: now } }] },
+          { OR: [{ endsAt: null }, { endsAt: { gte: now } }] }
+        ]
+      },
+      orderBy: [{ priority: 'asc' }, { createdAt: 'desc' }]
+    })
+    return { data: promotions.map(promotion => this.publicPromotion(promotion)) }
+  }
+
+  @Post('redeem')
+  async redeem(@Body() body: { couponCode?: unknown }) {
+    const couponCode = typeof body.couponCode === 'string' ? body.couponCode.trim().toUpperCase() : ''
+    if (!couponCode) throw new HttpException('請輸入優惠代碼', HttpStatus.BAD_REQUEST)
+    const now = new Date()
+    const promotion = await prisma.promotion.findFirst({
+      where: {
+        enabled: true,
+        kind: 'COUPON',
+        couponCode,
+        AND: [
+          { OR: [{ startsAt: null }, { startsAt: { lte: now } }] },
+          { OR: [{ endsAt: null }, { endsAt: { gte: now } }] }
+        ]
+      }
+    })
+    if (!promotion) throw new HttpException('優惠代碼無效或已過期', HttpStatus.NOT_FOUND)
+    if (promotion.usageLimit !== null) {
+      const reserved = await prisma.promotionUsage.count({ where: { promotionId: promotion.id, status: 'RESERVED' } })
+      if (promotion.usageCount + reserved >= promotion.usageLimit) throw new HttpException('優惠代碼已達使用上限', HttpStatus.CONFLICT)
+    }
+    return { data: this.publicPromotion(promotion), message: '優惠代碼有效，可於預約行程時使用' }
+  }
+}
+
 @Controller('vehicles')
 class PublicVehiclesController {
   @Get() async listPublicVehicles() {
@@ -797,9 +996,15 @@ class PublicQuotesController {
       throw new HttpException('Category, vehicle, and a valid distance in meters are required', HttpStatus.BAD_REQUEST)
     }
     const distanceKm = distanceMeters / 1000
+    const originRegion = typeof body.originRegion === 'string' ? body.originRegion.trim() : ''
+    const originCity = typeof body.originCity === 'string' ? body.originCity.trim() : ''
+    const destinationRegion = typeof body.destinationRegion === 'string' ? body.destinationRegion.trim() : ''
+    const destinationCity = typeof body.destinationCity === 'string' ? body.destinationCity.trim() : ''
+    const scheduledAtValue = body.scheduledAt ? new Date(String(body.scheduledAt)) : new Date()
+    if (Number.isNaN(scheduledAtValue.valueOf())) throw new HttpException('Scheduled time is invalid', HttpStatus.BAD_REQUEST)
     const requestedExtras = parseQuoteExtras(body)
     const quote = await prisma.$transaction(async tx => {
-      const [settings, category, vehicle, extras] = await Promise.all([
+      const [settings, category, vehicle, extras, routeMinimumFares] = await Promise.all([
         tx.appSetting.findUniqueOrThrow({ where: { id: appSettingsDefaults.id } }),
         tx.vehicleCategory.findUnique({
           where: { id: categoryId },
@@ -808,6 +1013,17 @@ class PublicQuotesController {
         tx.vehicle.findUnique({ where: { id: vehicleId } }),
         requestedExtras.length
           ? tx.vehicleExtra.findMany({ where: { id: { in: requestedExtras.map(extra => extra.id) }, enabled: true } })
+          : Promise.resolve([]),
+        originRegion && destinationRegion
+          ? tx.routeMinimumFare.findMany({
+              where: {
+                enabled: true,
+                originRegion,
+                destinationRegion,
+                OR: [{ originCity: null }, ...(originCity ? [{ originCity }] : [])],
+                AND: [{ OR: [{ destinationCity: null }, ...(destinationCity ? [{ destinationCity }] : [])] }, { OR: [{ categoryId: null }, { categoryId }] }]
+              }
+            })
           : Promise.resolve([])
       ])
       if (!category || !category.enabled) throw new HttpException('Vehicle category is unavailable', HttpStatus.NOT_FOUND)
@@ -819,12 +1035,20 @@ class PublicQuotesController {
       if (!Number.isFinite(exchangeRate) || exchangeRate <= 0) throw new HttpException('Exchange rate is unavailable', HttpStatus.CONFLICT)
       const currency = displayCurrency(body.displayCurrency ?? body.currency, settings.currency)
       const pricing = category.distancePricing
+      const routeMinimumFare = routeMinimumFares
+        .sort((a, b) => (Number(Boolean(b.originCity)) + Number(Boolean(b.destinationCity)) + Number(Boolean(b.categoryId))) - (Number(Boolean(a.originCity)) + Number(Boolean(a.destinationCity)) + Number(Boolean(a.categoryId))))[0] || null
       const extraById = new Map(extras.map(extra => [extra.id, extra]))
       const lines = [
         ...quoteDistanceLines(distanceKm, pricing).map(line => ({
           ...line,
           unitAmount: convertCurrency(line.unitAmount, pricing.currency, currency, exchangeRate),
           totalAmount: convertCurrency(line.totalAmount, pricing.currency, currency, exchangeRate),
+          currency: currencyLabels[currency]
+        })),
+        ...routeMinimumFareLine(routeMinimumFare, convertCurrency(calculateDistanceFare(distanceKm, pricing), pricing.currency, 'RMB', exchangeRate), exchangeRate).map(line => ({
+          ...line,
+          unitAmount: convertCurrency(line.unitAmount, 'RMB', currency, exchangeRate),
+          totalAmount: convertCurrency(line.totalAmount, 'RMB', currency, exchangeRate),
           currency: currencyLabels[currency]
         })),
         ...requestedExtras.map(selection => {
@@ -847,9 +1071,15 @@ class PublicQuotesController {
       let membershipLevel = typeof body.membershipLevel === 'string' ? body.membershipLevel.trim() : ''
       if (typeof body.userId === 'string' && body.userId.trim()) membershipLevel = (await tx.user.findUnique({ where: { id: body.userId.trim() }, select: { membershipLevel: true } }))?.membershipLevel || ''
       const promotions = await tx.promotion.findMany({ where: { enabled: true, AND: [{ OR: [{ startsAt: null }, { startsAt: { lte: now } }] }, { OR: [{ endsAt: null }, { endsAt: { gte: now } }] }] } })
+      await tx.promotionUsage.updateMany({ where: { status: 'RESERVED', quote: { expiresAt: { lte: now } } }, data: { status: 'RELEASED', releasedAt: now } })
+      const reservedCounts = new Map(await Promise.all(promotions.filter(promotion => promotion.kind === 'COUPON').map(async promotion => [
+        promotion.id,
+        await tx.promotionUsage.count({ where: { promotionId: promotion.id, status: 'RESERVED' } })
+      ] as const)))
       const eligiblePromotions = promotions.filter(promotion => {
-        if (promotion.kind === 'COUPON' && (!couponCode || promotion.couponCode !== couponCode || (promotion.usageLimit !== null && promotion.usageCount >= promotion.usageLimit))) return false
+        if (promotion.kind === 'COUPON' && (!couponCode || promotion.couponCode !== couponCode || (promotion.usageLimit !== null && promotion.usageCount + (reservedCounts.get(promotion.id) || 0) >= promotion.usageLimit))) return false
         if (promotion.kind === 'MEMBER' && (!membershipLevel || promotion.membershipLevel !== membershipLevel)) return false
+        if (!promotionMatchesContext(promotion, { originRegion, originCity, destinationRegion, destinationCity, scheduledAt: scheduledAtValue })) return false
         if (promotion.kind === 'CAMPAIGN' || promotion.kind === 'COUPON' || promotion.kind === 'MEMBER') {
           const minimumSpend = convertCurrency(promotion.minimumSpend, promotion.currency, currency, exchangeRate)
           return subtotal >= minimumSpend
@@ -859,13 +1089,29 @@ class PublicQuotesController {
       const promotionDiscounts = eligiblePromotions.map(promotion => {
         const rawDiscount = promotion.discountType === 'PERCENTAGE'
           ? subtotal * promotion.discountValue / 100
-          : convertCurrency(promotion.discountValue, promotion.currency, currency, exchangeRate)
+          : promotion.discountType === 'TOTAL_PRICE'
+            ? Math.max(0, subtotal - convertCurrency(promotion.discountValue, promotion.currency, currency, exchangeRate))
+            : convertCurrency(promotion.discountValue, promotion.currency, currency, exchangeRate)
         const maximumDiscount = promotion.maximumDiscount === null ? null : convertCurrency(promotion.maximumDiscount, promotion.currency, currency, exchangeRate)
         return { promotion, discount: roundMoney(Math.min(subtotal, maximumDiscount === null ? rawDiscount : Math.min(rawDiscount, maximumDiscount))) }
       })
-      const applied = promotionDiscounts.sort((a, b) => b.discount - a.discount)[0]
-      const quotedLines = applied && applied.discount > 0 ? [...lines, { type: 'DISCOUNT' as const, sourceId: applied.promotion.id, label: applied.promotion.name, quantity: 1, unitAmount: -applied.discount, totalAmount: -applied.discount, currency: currencyLabels[currency], order: lines.length + 1 }] : lines
-      if (applied?.promotion.kind === 'COUPON') await tx.promotion.update({ where: { id: applied.promotion.id }, data: { usageCount: { increment: 1 } } })
+      const combinations = promotionDiscounts.flatMap(first => promotionDiscounts
+        .filter(second => second.promotion.id > first.promotion.id)
+        .map(second => {
+          const canStack = first.promotion.stackingMode !== 'NONE' && second.promotion.stackingMode !== 'NONE'
+            && (first.promotion.stackingMode === 'ALL' || second.promotion.stackingMode === 'ALL'
+              || first.promotion.stackingMode === 'PERCENTAGE_AND_VOUCHER' && second.promotion.stackingMode === 'PERCENTAGE_AND_VOUCHER')
+          if (!canStack || first.promotion.discountType === 'TOTAL_PRICE' || second.promotion.discountType === 'TOTAL_PRICE' || first.promotion.discountType === second.promotion.discountType) return []
+          const percentage = first.promotion.discountType === 'PERCENTAGE' ? first : second
+          const voucher = first.promotion.discountType === 'PERCENTAGE' ? second : first
+          const afterPercentage = roundMoney(subtotal - percentage.discount)
+          const voucherDiscount = Math.min(afterPercentage, voucher.discount)
+          return [{ promotion: percentage.promotion, secondaryPromotion: voucher.promotion, discount: roundMoney(percentage.discount + voucherDiscount) }]
+        }).flat())
+      const applied = [...promotionDiscounts.map(item => ({ ...item, secondaryPromotion: null })), ...combinations]
+        .sort((a, b) => b.discount - a.discount || (b.promotion.priority - a.promotion.priority))[0]
+      const quotedLines = applied && applied.discount > 0 ? [...lines, { type: 'DISCOUNT' as const, sourceId: applied.promotion.id, label: applied.secondaryPromotion ? `${applied.promotion.name} + ${applied.secondaryPromotion.name}` : applied.promotion.name, quantity: 1, unitAmount: -applied.discount, totalAmount: -applied.discount, currency: currencyLabels[currency], order: lines.length + 1 }] : lines
+      const reservedPromotions = [applied?.promotion, applied?.secondaryPromotion].filter((promotion): promotion is NonNullable<typeof applied>['promotion'] => Boolean(promotion && promotion.kind === 'COUPON'))
       const total = roundMoney(subtotal - (applied?.discount || 0))
       return tx.fareQuote.create({
         data: {
@@ -880,6 +1126,11 @@ class PublicQuotesController {
               categoryName: category.name,
               tabLabel: category.tabLabel,
               minimumFare: pricing.minimumFare,
+              routeMinimumFare: routeMinimumFare ? convertCurrency(routeMinimumFare.minimumFare, routeMinimumFare.currency, currency, exchangeRate) : null,
+              routeOriginRegion: routeMinimumFare ? originRegion : null,
+              routeOriginCity: routeMinimumFare ? originCity || null : null,
+              routeDestinationRegion: routeMinimumFare ? destinationRegion : null,
+              routeDestinationCity: routeMinimumFare ? destinationCity || null : null,
               currency: pricing.currency,
               tiers: {
                 create: pricing.tiers.map(tier => ({
@@ -905,7 +1156,8 @@ class PublicQuotesController {
               modelChoiceLabel: vehicle.modelChoiceLabel
             }
           },
-          lines: { create: quotedLines }
+          lines: { create: quotedLines },
+          promotionUsages: { create: reservedPromotions.map(promotion => ({ promotionId: promotion.id })) }
         },
         include: {
           pricing: { include: { tiers: { orderBy: { order: 'asc' } } } },
@@ -930,6 +1182,27 @@ class PublicQuotesController {
     if (!quote) throw new HttpException('Quote not found', HttpStatus.NOT_FOUND)
     if (quote.expiresAt && quote.expiresAt.getTime() <= Date.now()) throw new HttpException('Quote has expired', HttpStatus.GONE)
     return quoteResponse(quote)
+  }
+
+  @Post(':id/consume')
+  async consume(@Param('id') id: string) {
+    const now = new Date()
+    return prisma.$transaction(async tx => {
+      const quote = await tx.fareQuote.findUnique({ where: { id }, include: { promotionUsages: true } })
+      if (!quote) throw new HttpException('Quote not found', HttpStatus.NOT_FOUND)
+      if (quote.expiresAt && quote.expiresAt <= now) throw new HttpException('Quote has expired', HttpStatus.GONE)
+      for (const usage of quote.promotionUsages.filter(item => item.status === 'RESERVED')) {
+        await tx.promotionUsage.update({ where: { id: usage.id }, data: { status: 'USED', usedAt: now } })
+        await tx.promotion.update({ where: { id: usage.promotionId }, data: { usageCount: { increment: 1 } } })
+      }
+      return { ok: true, quoteId: id }
+    })
+  }
+
+  @Post(':id/release')
+  async release(@Param('id') id: string) {
+    const result = await prisma.promotionUsage.updateMany({ where: { quoteId: id, status: 'RESERVED' }, data: { status: 'RELEASED', releasedAt: new Date() } })
+    return { ok: true, quoteId: id, released: result.count }
   }
 }
 @Controller('recommended-addresses')
@@ -1110,7 +1383,7 @@ class PaymentCardsController {
 }
 
 @Controller('health') class HealthController { @Get() check() { return { status: 'ok', service: 'master-travel-project-api' } } }
-@Module({ controllers: [HealthController, LocationController, SettingsController, RecommendedAddressesController, PublicVehiclesController, PublicQuotesController, PublicMembershipPlansController, PaymentCardsController, AdminAuthController, AdminController, SupportController], providers: [{ provide: APP_INTERCEPTOR, useClass: AdminAccessInterceptor }] }) class AppModule {}
+@Module({ controllers: [HealthController, LocationController, SettingsController, RecommendedAddressesController, PublicVehiclesController, PublicQuotesController, PublicMembershipPlansController, PublicPromotionsController, PaymentCardsController, AdminAuthController, AdminController, SupportController], providers: [{ provide: APP_INTERCEPTOR, useClass: AdminAccessInterceptor }] }) class AppModule {}
 async function bootstrap() {
   await prisma.$connect()
   await ensurePricingDefaults()
@@ -1132,6 +1405,6 @@ async function bootstrap() {
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization']
   })
-  await app.listen(Number(process.env.PORT) || 3010, '127.0.0.1')
+  await app.listen(Number(process.env.PORT) || 3010, process.env.API_HOST || '0.0.0.0')
 }
 bootstrap()

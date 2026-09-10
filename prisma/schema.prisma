@@ -117,17 +117,36 @@ model MainlandCity {
 }
 
 model VehicleCategory {
-  id              String                   @id
-  name            String
-  tabLabel        String
-  order           Int
-  enabled         Boolean                  @default(true)
-  vehicles        Vehicle[]
-  distancePricing CategoryDistancePricing?
-  createdAt       DateTime                 @default(now())
-  updatedAt       DateTime                 @updatedAt
+  id                String                   @id
+  name              String
+  tabLabel          String
+  order             Int
+  enabled           Boolean                  @default(true)
+  vehicles          Vehicle[]
+  distancePricing   CategoryDistancePricing?
+  routeMinimumFares RouteMinimumFare[]
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
 
   @@index([enabled, order])
+}
+
+model RouteMinimumFare {
+  id                String           @id @default(cuid())
+  originRegion      String
+  originCity        String?
+  destinationRegion String
+  destinationCity   String?
+  categoryId        String?
+  minimumFare       Float
+  currency          String
+  enabled           Boolean          @default(true)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  category          VehicleCategory? @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@index([originRegion, originCity, destinationRegion, destinationCity, enabled])
+  @@index([categoryId, enabled])
 }
 
 model Vehicle {
@@ -191,29 +210,35 @@ model VehicleExtra {
 }
 
 model FareQuote {
-  id         String                    @id @default(cuid())
-  distanceKm Float
-  currency   String
-  subtotal   Float
-  total      Float
-  expiresAt  DateTime?
-  createdAt  DateTime                  @default(now())
-  pricing    FareQuotePricingSnapshot?
-  vehicle    FareQuoteVehicleSnapshot?
-  lines      FareQuoteLine[]
+  id              String                    @id @default(cuid())
+  distanceKm      Float
+  currency        String
+  subtotal        Float
+  total           Float
+  expiresAt       DateTime?
+  createdAt       DateTime                  @default(now())
+  pricing         FareQuotePricingSnapshot?
+  vehicle         FareQuoteVehicleSnapshot?
+  lines           FareQuoteLine[]
+  promotionUsages PromotionUsage[]
 }
 
 model FareQuotePricingSnapshot {
-  id           String                  @id @default(cuid())
-  quoteId      String                  @unique
-  categoryId   String
-  categoryName String
-  tabLabel     String
-  minimumFare  Float
-  currency     String
-  quote        FareQuote               @relation(fields: [quoteId], references: [id], onDelete: Cascade)
-  tiers        FareQuoteTierSnapshot[]
-  createdAt    DateTime                @default(now())
+  id                     String                  @id @default(cuid())
+  quoteId                String                  @unique
+  categoryId             String
+  categoryName           String
+  tabLabel               String
+  minimumFare            Float
+  routeMinimumFare       Float?
+  routeOriginRegion      String?
+  routeOriginCity        String?
+  routeDestinationRegion String?
+  routeDestinationCity   String?
+  currency               String
+  quote                  FareQuote               @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  tiers                  FareQuoteTierSnapshot[]
+  createdAt              DateTime                @default(now())
 }
 
 model FareQuoteTierSnapshot {
@@ -272,25 +297,56 @@ enum FareQuoteLineType {
 }
 
 model Promotion {
-  id              String        @id @default(cuid())
-  name            String
-  kind            PromotionKind
-  discountType    DiscountType
-  discountValue   Float
-  currency        String        @default("RMB¥")
-  minimumSpend    Float         @default(0)
-  maximumDiscount Float?
-  startsAt        DateTime?
-  endsAt          DateTime?
-  enabled         Boolean       @default(true)
-  couponCode      String?       @unique
-  usageLimit      Int?
-  usageCount      Int           @default(0)
-  membershipLevel String?
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  id                String                @id @default(cuid())
+  name              String
+  kind              PromotionKind
+  discountType      DiscountType
+  stackingMode      PromotionStackingMode @default(NONE)
+  discountValue     Float
+  currency          String                @default("RMB¥")
+  minimumSpend      Float                 @default(0)
+  maximumDiscount   Float?
+  priority          Int                   @default(0)
+  startsAt          DateTime?
+  endsAt            DateTime?
+  enabled           Boolean               @default(true)
+  couponCode        String?               @unique
+  usageLimit        Int?
+  usageCount        Int                   @default(0)
+  membershipLevel   String?
+  originRegion      String?
+  originCity        String?
+  destinationRegion String?
+  destinationCity   String?
+  weekdays          Json?
+  timeStart         String?
+  timeEnd           String?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  usages            PromotionUsage[]
 
   @@index([kind, enabled, startsAt, endsAt])
+}
+
+model PromotionUsage {
+  id          String               @id @default(cuid())
+  promotionId String
+  quoteId     String
+  status      PromotionUsageStatus @default(RESERVED)
+  createdAt   DateTime             @default(now())
+  usedAt      DateTime?
+  releasedAt  DateTime?
+  promotion   Promotion            @relation(fields: [promotionId], references: [id], onDelete: Cascade)
+  quote       FareQuote            @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  @@unique([promotionId, quoteId])
+  @@index([promotionId, status])
+}
+
+enum PromotionUsageStatus {
+  RESERVED
+  USED
+  RELEASED
 }
 
 enum PromotionKind {
@@ -302,4 +358,11 @@ enum PromotionKind {
 enum DiscountType {
   PERCENTAGE
   FIXED_AMOUNT
+  TOTAL_PRICE
+}
+
+enum PromotionStackingMode {
+  NONE
+  PERCENTAGE_AND_VOUCHER
+  ALL
 }

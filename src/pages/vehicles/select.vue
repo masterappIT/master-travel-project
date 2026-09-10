@@ -57,6 +57,13 @@ const visibleGroups = computed(() => {
   return activeCategory.value === 'all' ? available : available.filter(group => group.category === activeCategory.value)
 })
 const selectedVehicleId = computed(() => tripStore.chosenVehicle?.id || '')
+const routeRegion = (value: string | undefined, fallback: string) => {
+  const text = value?.trim() || ''
+  if (text.includes('香港')) return '香港'
+  if (text.includes('澳門') || text.includes('澳门')) return '澳門'
+  if (text.includes('廣東') || text.includes('广东') || text.includes('深圳') || text.includes('珠海') || text.includes('廣州') || text.includes('广州')) return '大陸'
+  return fallback
+}
 let quoteRequestId = 0
 const loadQuotes = async () => {
   const requestId = ++quoteRequestId
@@ -71,9 +78,18 @@ const loadQuotes = async () => {
     categoryId: vehicle.categoryId!,
     vehicleId: vehicle.id,
     distanceMeters: distanceMeters!,
+    originRegion: tripStore.activeDraft.route.originRegion || routeRegion(tripStore.activeDraft.route.origin, ''),
+    originCity: tripStore.activeDraft.route.originCity,
+    destinationRegion: tripStore.activeDraft.route.destinationRegion || routeRegion(tripStore.activeDraft.route.destination, ''),
+    destinationCity: tripStore.activeDraft.route.destinationCity,
+    scheduledAt: tripStore.departureTime,
     displayCurrency: currency.value
   })))
   if (requestId !== quoteRequestId) return
+  const rejected = results.find((result): result is PromiseRejectedResult => result.status === 'rejected')
+  if (rejected && results.every(result => result.status === 'rejected')) {
+    catalogError.value = rejected.reason instanceof Error ? rejected.reason.message : '報價暫時無法取得'
+  }
   tripStore.setFareQuotes(results
     .filter((result): result is PromiseFulfilledResult<FareQuote> => result.status === 'fulfilled')
     .map(result => result.value))
@@ -101,7 +117,13 @@ const cityName = (value: string | undefined, fallback: string) => {
 }
 const originLabel = computed(() => cityName(tripStore.activeTrip?.origin, '香港'))
 const destinationLabel = computed(() => cityName(tripStore.activeTrip?.destination, '深圳'))
-const bookingTime = computed(() => tripStore.departureTime || 'March 15 2024 14:00')
+const bookingTime = computed(() => {
+  if (!tripStore.departureTime) return 'March 15 2024 14:00'
+  const date = new Date(tripStore.departureTime)
+  return Number.isNaN(date.valueOf())
+    ? tripStore.departureTime
+    : `${date.getMonth() + 1}月${date.getDate()}日 ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+})
 const selectVehicle = (vehicle: Vehicle) => { if (!vehicle.selectable) return; tripStore.setChosenVehicle(vehicle); openCachedPage('/pages/vehicles/selected') }
 const saveTripChanges = (origin: string, destination: string, departureTime: string) => { tripStore.setRoute(origin, destination); tripStore.setDepartureTime(departureTime); editSheetOpen.value = false }
 const goBack = () => closeCachedPage('/pages/index/index')

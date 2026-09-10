@@ -90,6 +90,7 @@ import HomeMap from '../../components/home/HomeMap.vue'
 import { useCurrency } from '../../composables/useCurrency'
 import { reactive } from 'vue'
 import { persistWallet, readWallet, type WalletState } from '../../utils/wallet'
+import { consumeFareQuote } from '../../services/api'
 const { responsiveStyle } = useResponsiveCanvas()
 const { format } = useCurrency()
 const wallet = reactive<WalletState>(readWallet())
@@ -110,7 +111,13 @@ const fareLines = computed(() => selectedFareQuote.value?.lines || [])
 const total = computed(() => selectedFareQuote.value?.total ?? 0)
 const originLabel = computed(() => cityName(tripStore.activeTrip?.origin, '香港'))
 const destinationLabel = computed(() => cityName(tripStore.activeTrip?.destination, '深圳'))
-const bookingTime = computed(() => tripStore.departureTime || 'March 15 2024 14:00')
+const bookingTime = computed(() => {
+  if (!tripStore.departureTime) return 'March 15 2024 14:00'
+  const date = new Date(tripStore.departureTime)
+  return Number.isNaN(date.valueOf())
+    ? tripStore.departureTime
+    : `${date.getMonth() + 1}月${date.getDate()}日 ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+})
 const currencySymbol = (value: string | undefined) => {
   if (value === 'HKD' || value === 'HKD$') return 'HK$'
   if (value === 'RMB' || value === 'RMB¥') return '¥'
@@ -135,13 +142,19 @@ const payNow = () => {
 }
 const closePayment = () => { paymentOpen.value = false }
 const toggleWallet = (type: 'fare' | 'cash') => { walletSelections[type] = !walletSelections[type] }
-const confirmPayment = () => {
+const confirmPayment = async () => {
   if (!selectedFareQuote.value) {
     uni.showToast({ title: '報價暫時無法取得', icon: 'none' })
     return
   }
   if (externalAllocation.value > 0 && !selectedPayment.value) {
     uni.showToast({ title: '請選擇外部付款方式', icon: 'none' })
+    return
+  }
+  try {
+    await consumeFareQuote(selectedFareQuote.value.id)
+  } catch (error) {
+    uni.showToast({ title: error instanceof Error ? error.message : '優惠使用失敗', icon: 'none' })
     return
   }
   wallet.fare = Math.max(0, wallet.fare - fareAllocation.value)

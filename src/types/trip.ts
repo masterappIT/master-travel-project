@@ -7,6 +7,10 @@ export interface TripRoute {
   origin: string
   destination: string
   stops: string[]
+  originRegion?: string
+  originCity?: string
+  destinationRegion?: string
+  destinationCity?: string
 }
 
 export interface FareBreakdown {

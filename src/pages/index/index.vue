@@ -325,7 +325,12 @@ const updateRoute = async () => {
     const distanceKm = route.distance / 1000
     const durationMinutes = Math.max(1, Math.round(route.duration / 60))
     routeSummary.value = `共 ${distanceKm < 10 ? distanceKm.toFixed(1) : Math.round(distanceKm)} 公里 · 約 ${durationMinutes >= 60 ? `${Math.floor(durationMinutes / 60)} 小時${durationMinutes % 60 ? ` ${durationMinutes % 60} 分鐘` : ''}` : `${durationMinutes} 分鐘`}`
-    tripStore.setRoute(origin.value, destination.value)
+    tripStore.setRoute(origin.value, destination.value, {
+      originRegion: originSelection.value?.region || undefined,
+      originCity: originSelection.value?.city || undefined,
+      destinationRegion: destinationSelection.value?.region || undefined,
+      destinationCity: destinationSelection.value?.city || undefined
+    })
     tripStore.setRouteDistance(route.distance, route.duration)
   } catch {
     mapPolyline.value = []
@@ -351,7 +356,12 @@ const selectAddress = (value: string, selection?: AddressSelection) => {
       destination.value = formattedValue
       destinationSelection.value = selection ? { ...selection } : null
     }
-    tripStore.setRoute(origin.value, destination.value)
+    tripStore.setRoute(origin.value, destination.value, {
+      originRegion: originSelection.value?.region || undefined,
+      originCity: originSelection.value?.city || undefined,
+      destinationRegion: destinationSelection.value?.region || undefined,
+      destinationCity: destinationSelection.value?.city || undefined
+    })
   }
   if (target && selection?.latitude !== undefined && selection.longitude !== undefined) {
     selectedCoordinates.value[target] = { latitude: selection.latitude, longitude: selection.longitude }

@@ -60,7 +60,9 @@ const changePicker = (event: { detail: { value: number[] } }) => {
 const close = () => emit('close')
 const confirm = () => {
   const date = dates[dateIndex.value]
-  emit('confirm', `${date.getMonth() + 1}月${date.getDate()}日 ${timeOptions.value[timeIndex.value]}`)
+  const [hours, minutes] = timeOptions.value[timeIndex.value].split(':').map(Number)
+  const scheduledAt = new Date(date.getFullYear(), date.getMonth(), date.getDate(), hours, minutes)
+  emit('confirm', scheduledAt.toISOString())
 }
 </script>
 

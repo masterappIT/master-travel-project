@@ -36,10 +36,11 @@ export const useTripStore = defineStore('trip', () => {
     activeDraft.value.estimatedFare = fareQuotes.value[vehicle.id]?.total
   }
 
-  function setRoute(origin: string, destination: string) {
+  function setRoute(origin: string, destination: string, location?: Pick<TripDraft['route'], 'originRegion' | 'originCity' | 'destinationRegion' | 'destinationCity'>) {
     const routeChanged = activeDraft.value.route.origin !== origin || activeDraft.value.route.destination !== destination
     activeDraft.value.route.origin = origin
     activeDraft.value.route.destination = destination
+    if (location) Object.assign(activeDraft.value.route, location)
     if (routeChanged) clearRouteDistance()
   }
 

@@ -55,7 +55,13 @@ const cityName = (value: string | undefined, fallback: string) => {
   return text.split(/[·，,\s]/)[0] || fallback
 }
 const tabs = [{ label: '全部', active: false }, { label: '普通MPV', active: false }, { label: '高級MPV', active: true }, { label: '普通轎車', active: false }, { label: '頂級轎車', active: false }]
-const bookingTime = computed(() => tripStore.departureTime || 'March 15 2024 14:00')
+const bookingTime = computed(() => {
+  if (!tripStore.departureTime) return 'March 15 2024 14:00'
+  const date = new Date(tripStore.departureTime)
+  return Number.isNaN(date.valueOf())
+    ? tripStore.departureTime
+    : `${date.getMonth() + 1}月${date.getDate()}日 ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+})
 const saveTripChanges = (origin: string, destination: string, departureTime: string) => {
   tripStore.setRoute(origin, destination)
   tripStore.setDepartureTime(departureTime)
@@ -64,6 +70,13 @@ const saveTripChanges = (origin: string, destination: string, departureTime: str
 const promoApplied = ref(false)
 const extras = ref<PublicVehicleExtra[]>([])
 const selectedExtras = computed(() => tripStore.activeDraft.extras)
+const routeRegion = (value: string | undefined, fallback: string) => {
+  const text = value?.trim() || ''
+  if (text.includes('香港')) return '香港'
+  if (text.includes('澳門') || text.includes('澳门')) return '澳門'
+  if (text.includes('廣東') || text.includes('广东') || text.includes('深圳') || text.includes('珠海') || text.includes('廣州') || text.includes('广州')) return '大陸'
+  return fallback
+}
 let quoteRequestId = 0
 const formatExtraPrice = (amount: number, extraCurrency: string) => {
   if (extraCurrency === 'HKD' || extraCurrency === 'HKD$') return `HKD$${amount.toFixed(0)}`
@@ -82,6 +95,11 @@ const refreshQuote = async (extraIds = selectedExtras.value) => {
       categoryId,
       vehicleId: chosenVehicle.id,
       distanceMeters: distanceMeters!,
+      originRegion: tripStore.activeDraft.route.originRegion || routeRegion(tripStore.activeDraft.route.origin, ''),
+      originCity: tripStore.activeDraft.route.originCity,
+      destinationRegion: tripStore.activeDraft.route.destinationRegion || routeRegion(tripStore.activeDraft.route.destination, ''),
+      destinationCity: tripStore.activeDraft.route.destinationCity,
+      scheduledAt: tripStore.departureTime,
       extraIds,
       displayCurrency: currency.value
     })

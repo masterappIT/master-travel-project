@@ -104,10 +104,20 @@ export type FareQuote = {
   lines: Array<{ type: string; sourceId: string | null; label: string; quantity: number; unitAmount: number; totalAmount: number; currency: string; order: number }>
 }
 
-export async function createFareQuote(input: { categoryId: string; vehicleId: string; distanceMeters: number; extraIds?: string[]; displayCurrency?: 'RMB' | 'HKD' }): Promise<FareQuote> {
+export async function createFareQuote(input: { categoryId: string; vehicleId: string; distanceMeters: number; extraIds?: string[]; displayCurrency?: 'RMB' | 'HKD'; originRegion?: string; originCity?: string; destinationRegion?: string; destinationCity?: string; scheduledAt?: string }): Promise<FareQuote> {
   const response = await uni.request({ url: `${API_BASE_URL}/quotes`, method: 'POST', data: input })
   if (response.statusCode >= 400) throw new Error((response.data as { message?: string })?.message || '報價暫時無法取得')
   return response.data as FareQuote
+}
+
+export async function consumeFareQuote(quoteId: string): Promise<void> {
+  const response = await uni.request({ url: `${API_BASE_URL}/quotes/${encodeURIComponent(quoteId)}/consume`, method: 'POST' })
+  if (response.statusCode >= 400) throw new Error((response.data as { message?: string })?.message || '優惠使用失敗')
+}
+
+export async function releaseFareQuote(quoteId: string): Promise<void> {
+  const response = await uni.request({ url: `${API_BASE_URL}/quotes/${encodeURIComponent(quoteId)}/release`, method: 'POST' })
+  if (response.statusCode >= 400) throw new Error((response.data as { message?: string })?.message || '優惠釋放失敗')
 }
 
 export type RecommendedAddress = {
@@ -142,6 +152,34 @@ export async function listMembershipPlans(): Promise<MembershipPlan[]> {
   const response = await uni.request({ url: `${API_BASE_URL}/membership-plans` })
   if (response.statusCode >= 400) throw new Error('會員方案暫時無法載入')
   return (response.data as { data: MembershipPlan[] }).data
+}
+
+export type PublicPromotion = {
+  id: string
+  name: string
+  kind: 'CAMPAIGN' | 'COUPON' | 'MEMBER'
+  discountType: 'PERCENTAGE' | 'FIXED_AMOUNT' | 'TOTAL_PRICE'
+  discountValue: number
+  currency: string
+  startsAt: string | null
+  endsAt: string | null
+  minimumSpend: number
+  originRegion: string | null
+  destinationRegion: string | null
+  couponCode: string | null
+}
+
+export async function listPublicPromotions(): Promise<PublicPromotion[]> {
+  const response = await uni.request({ url: `${API_BASE_URL}/promotions` })
+  if (response.statusCode >= 400) throw new Error('優惠資料暫時無法載入')
+  return (response.data as { data: PublicPromotion[] }).data
+}
+
+export async function redeemPromotionCode(couponCode: string): Promise<{ promotion: PublicPromotion; message: string }> {
+  const response = await uni.request({ url: `${API_BASE_URL}/promotions/redeem`, method: 'POST', data: { couponCode } })
+  if (response.statusCode >= 400) throw new Error((response.data as { message?: string })?.message || '優惠代碼兌換失敗')
+  const data = response.data as { data: PublicPromotion; message: string }
+  return { promotion: data.data, message: data.message }
 }
 export type CardNetwork = 'visa' | 'mastercard' | 'unionpay' | 'amex' | 'jcb' | 'unknown'
 
