@@ -13,7 +13,7 @@
 
     <view class="vehicle-tag">高級跨境商務車</view>
     <view class="selected-vehicle-card"><VehicleCard :vehicle="vehicle" :quote="tripStore.selectedFareQuote" selectable :selected="true" /></view>
-    <view class="promo-card"><text class="promo-copy">{{ promoApplied ? '已使用組合優惠“現金券50”' : '可使用組合優惠“現金券50”' }}</text><view class="promo-action" @tap="togglePromo"><text>{{ promoApplied ? '取消使用' : '立即使用' }}</text></view></view>
+    <view class="promo-card"><text class="promo-copy">{{ promoApplied ? `已使用優惠「${tripStore.activeDraft.couponCode}」` : '可使用優惠券' }}</text><view class="promo-action" @tap="togglePromo"><text>{{ promoApplied ? '取消使用' : '選擇優惠' }}</text></view></view>
 
     <scroll-view class="extras" scroll-y :show-scrollbar="false">
       <view class="extras-title"><image src="/static/vehicles/extra-cart.svg" mode="aspectFit" /><text>額外選擇</text></view>
@@ -33,6 +33,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { useTripStore } from '../../stores/trip'
 import { closeCachedPage, openCachedPage } from '../../utils/navigation'
@@ -100,6 +101,7 @@ const refreshQuote = async (extraIds = selectedExtras.value) => {
       destinationRegion: tripStore.activeDraft.route.destinationRegion || routeRegion(tripStore.activeDraft.route.destination, ''),
       destinationCity: tripStore.activeDraft.route.destinationCity,
       scheduledAt: tripStore.departureTime,
+      couponCode: tripStore.activeDraft.couponCode,
       extraIds,
       displayCurrency: currency.value
     })
@@ -122,10 +124,23 @@ onMounted(async () => {
   await loadExtras()
   await refreshQuote()
 })
+onShow(() => {
+  const applied = Boolean(tripStore.activeDraft.couponCode)
+  if (promoApplied.value !== applied) {
+    promoApplied.value = applied
+    void refreshQuote()
+  }
+})
 const goBack = () => closeCachedPage('/pages/vehicles/select')
 const togglePromo = () => {
-  promoApplied.value = !promoApplied.value
-  uni.showToast({ title: promoApplied.value ? '優惠已使用' : '已取消優惠', icon: 'none' })
+  if (promoApplied.value) {
+    tripStore.setCouponCode()
+    promoApplied.value = false
+    void refreshQuote()
+    uni.showToast({ title: '已取消優惠', icon: 'none' })
+    return
+  }
+  openCachedPage('/pages/coupons/coupons')
 }
 const toggleExtra = (id: string) => {
   const extraIds = selectedExtras.value.includes(id)

@@ -85,6 +85,12 @@ export const useTripStore = defineStore('trip', () => {
     activeDraft.value.departureTime = value
   }
 
+  function setCouponCode(value?: string) {
+    updateActiveDraft({ couponCode: value?.trim().toUpperCase() || undefined })
+    fareQuotes.value = {}
+    activeDraft.value.estimatedFare = undefined
+  }
+
   function updateActiveDraft(values: Partial<TripDraft>) {
     const draft = activeDraft.value
     drafts.value[serviceMode.value] = {
@@ -122,6 +128,7 @@ export const useTripStore = defineStore('trip', () => {
     setRoute,
     setRouteDistance,
     setDepartureTime,
+    setCouponCode,
     setChosenVehicle,
     setFareQuotes,
     setFareQuote,

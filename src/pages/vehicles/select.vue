@@ -83,6 +83,7 @@ const loadQuotes = async () => {
     destinationRegion: tripStore.activeDraft.route.destinationRegion || routeRegion(tripStore.activeDraft.route.destination, ''),
     destinationCity: tripStore.activeDraft.route.destinationCity,
     scheduledAt: tripStore.departureTime,
+    couponCode: tripStore.activeDraft.couponCode,
     displayCurrency: currency.value
   })))
   if (requestId !== quoteRequestId) return

@@ -45,5 +45,6 @@ export interface TripDraft {
   estimatedFare?: number
   extras: string[]
   couponId?: string
+  couponCode?: string
   fare?: FareBreakdown
 }

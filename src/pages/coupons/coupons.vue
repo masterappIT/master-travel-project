@@ -4,7 +4,9 @@
     <view class="coupon-content">
       <view class="code-input"><input v-model="couponCode" placeholder="輸入優惠代碼" confirm-type="done" /><text class="apply" @tap="applyCode">兌換</text></view>
       <view v-if="message" class="message">{{ message }}</view>
-      <view v-for="(promotion, index) in promotions" :key="promotion.id" class="coupon-card" :class="{ featured: index === 0 }"><view class="badge">{{ promotionBadge(promotion) }}<text>{{ promotionDiscount(promotion) }}</text></view><image class="vehicle" src="/static/coupons/vehicle.svg" mode="aspectFit" /><text class="coupon-name">{{ promotion.name }}</text><text class="coupon-period">{{ promotionPeriod(promotion) }}</text><image class="status" src="/static/coupons/status-unused.svg" mode="aspectFit" /><text class="coupon-action">立即使用</text></view>
+      <view class="coupon-card featured"><view class="badge">限時優惠<text>- ¥100</text></view><image class="vehicle" src="/static/coupons/vehicle.svg" mode="aspectFit" /><text class="coupon-name">高級商務車</text><text class="coupon-period">有效期：2026/03/01 - 2026/03/31</text><image class="status" src="/static/coupons/status-active.svg" mode="aspectFit" /><text class="coupon-action">立即使用</text></view>
+      <view class="coupon-card"><view class="badge">現金券 <text>¥200</text></view><image class="vehicle" src="/static/coupons/vehicle.svg" mode="aspectFit" /><text class="coupon-name">跨境行程現金券</text><text class="coupon-period">適用於香港、澳門至大灣區行程</text><image class="status" src="/static/coupons/status-unused.svg" mode="aspectFit" /><text class="coupon-action">查看詳情</text></view>
+      <view v-for="(promotion, index) in promotions" :key="promotion.id" class="coupon-card" :class="{ featured: index === 0 }" @tap="usePromotion(promotion)"><view class="badge">{{ promotionBadge(promotion) }}<text>{{ promotionDiscount(promotion) }}</text></view><image class="vehicle" src="/static/coupons/vehicle.svg" mode="aspectFit" /><text class="coupon-name">{{ promotion.name }}</text><text class="coupon-period">{{ promotionPeriod(promotion) }}</text><image class="status" src="/static/coupons/status-unused.svg" mode="aspectFit" /><text class="coupon-action">立即使用</text></view>
       <view class="empty-note">優惠券可於預約行程時使用</view>
     </view>
   </view>
@@ -13,9 +15,11 @@
 import { onShow } from '@dcloudio/uni-app'
 import { ref } from 'vue'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
-import { closeCachedPage } from '../../utils/navigation'
+import { closeCachedPage, openCachedPage } from '../../utils/navigation'
+import { useTripStore } from '../../stores/trip'
 import { listPublicPromotions, redeemPromotionCode, type PublicPromotion } from '../../services/api'
 const { responsiveStyle } = useResponsiveCanvas()
+const tripStore = useTripStore()
 const couponCode = ref('')
 const message = ref('')
 const promotions = ref<PublicPromotion[]>([])
@@ -27,6 +31,7 @@ const applyCode = async () => {
   try {
     const result = await redeemPromotionCode(couponCode.value)
     if (!promotions.value.some(item => item.id === result.promotion.id)) promotions.value = [result.promotion, ...promotions.value]
+    tripStore.setCouponCode(result.promotion.couponCode || undefined)
     message.value = result.message
     couponCode.value = ''
   } catch (error) { message.value = error instanceof Error ? error.message : '優惠代碼兌換失敗' }
@@ -34,6 +39,15 @@ const applyCode = async () => {
 const promotionBadge = (promotion: PublicPromotion) => promotion.kind === 'COUPON' ? '現金券' : promotion.kind === 'MEMBER' ? '會員優惠' : '限時優惠'
 const promotionDiscount = (promotion: PublicPromotion) => promotion.discountType === 'PERCENTAGE' ? `-${promotion.discountValue}%` : promotion.discountType === 'TOTAL_PRICE' ? `總價 ${promotion.currency}${promotion.discountValue}` : `-${promotion.currency}${promotion.discountValue}`
 const promotionPeriod = (promotion: PublicPromotion) => promotion.endsAt ? `有效期：${promotion.endsAt.slice(0, 10).replaceAll('-', '/')}` : promotion.originRegion || promotion.destinationRegion ? `適用於${promotion.originRegion || '指定地區'}至${promotion.destinationRegion || '指定地區'}行程` : '長期有效'
+const usePromotion = (promotion: PublicPromotion) => {
+  if (!promotion.couponCode) {
+    message.value = '此優惠會在符合地區、時段或會員條件時自動套用'
+    return
+  }
+  tripStore.setCouponCode(promotion.couponCode)
+  uni.showToast({ title: '優惠已選用', icon: 'success' })
+  openCachedPage('/pages/vehicles/select')
+}
 onShow(loadPromotions)
 const goBack = () => closeCachedPage('/pages/trips/trips')
 </script>
