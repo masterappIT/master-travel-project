@@ -132,7 +132,6 @@ function validateAdminLogo(value: string) {
     if (kind === 'VP8L' && image[20] === 0x2f) { const bits = image.readUInt32LE(21); dimensions = [(bits & 0x3fff) + 1, ((bits >> 14) & 0x3fff) + 1] }
   }
   if (!dimensions) throw new HttpException('Invalid or unsupported logo image', HttpStatus.BAD_REQUEST)
-  if (dimensions[0] !== 180 || dimensions[1] !== 56) throw new HttpException('Logo image must be exactly 180 × 56 pixels', HttpStatus.BAD_REQUEST)
   return value
 }
 function vehicleCategoryResponse(category: VehicleCategory) {

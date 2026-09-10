@@ -2,7 +2,7 @@
   <view v-show="activePagePath === '/pages/index/index'" class="page" :style="responsiveStyle">
     <view v-if="rideMode === 'cross-border'" class="page-content">
       <view class="canvas">
-        <HomeMap v-if="mapVisible" :key="mapMountKey" :latitude="mapLatitude" :longitude="mapLongitude" :scale="mapScale" :markers="mapMarkers" :polyline="mapPolyline" :include-points="mapIncludePoints" :fit-trigger="mapFitTrigger" :center-trigger="mapCenterTrigger" :booking-picker-open="bookingTimePicker" />
+        <HomeMap v-if="mapVisible" :key="mapMountKey" :latitude="mapLatitude" :longitude="mapLongitude" :scale="mapScale" :markers="mapMarkers" :polyline="mapPolyline" :include-points="mapIncludePoints" :fit-trigger="mapFitTrigger" :center-trigger="mapCenterTrigger" :booking-picker-open="bookingTimePicker" :pickup-label="origin" :destination-label="destination" :route-summary="routeSummary" />
         <HomeHeader :location-label="locationLabel" />
         <HomeTravelModeSwitch :mode="rideMode" @update:mode="switchRideMode" />
         <HomeMapActions @location="handleMapLocation" />
@@ -181,6 +181,7 @@ type MapMarker = Coordinate & { id: number; title?: string; iconPath?: string; w
 const mapMarkers = ref<MapMarker[]>([])
 const mapPolyline = ref<Array<{ points: Coordinate[]; color: string; width: number; arrowLine: boolean }>>([])
 const mapIncludePoints = ref<Coordinate[]>([])
+const routeSummary = ref('')
 const businessOrigin = ref<BusinessLocation>({ region: '香港', place: '香港國際機場' })
 const businessDestination = ref<BusinessLocation>({ region: '大陸', place: '' })
 const initialBusinessOrigin: BusinessLocation = { region: '香港', place: '香港國際機場' }
@@ -214,6 +215,7 @@ const switchRideMode = (mode: RideMode) => {
     mapMarkers.value = []
     mapPolyline.value = []
     mapIncludePoints.value = []
+    routeSummary.value = ''
     departureTime.value = ''
     flightNumber.value = ''
     travelMode.value = 'cross-border'
@@ -290,10 +292,14 @@ const updateRoute = async () => {
     ]
     mapPolyline.value = [{ points: route.points, color: '#285CFC', width: 6, arrowLine: true }]
     mapIncludePoints.value = route.points.length > 1 ? route.points : [originCoordinate, destinationCoordinate]
+    const distanceKm = route.distance / 1000
+    const durationMinutes = Math.max(1, Math.round(route.duration / 60))
+    routeSummary.value = `共 ${distanceKm < 10 ? distanceKm.toFixed(1) : Math.round(distanceKm)} 公里 · 約 ${durationMinutes >= 60 ? `${Math.floor(durationMinutes / 60)} 小時${durationMinutes % 60 ? ` ${durationMinutes % 60} 分鐘` : ''}` : `${durationMinutes} 分鐘`}`
     tripStore.setRoute(origin.value, destination.value)
     tripStore.setRouteDistance(route.distance, route.duration)
   } catch {
     mapPolyline.value = []
+    routeSummary.value = ''
     tripStore.clearRouteDistance()
     uni.showToast({ title: '路線規劃失敗，請稍後再試', icon: 'none' })
   }

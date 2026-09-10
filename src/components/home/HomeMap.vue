@@ -8,7 +8,7 @@
       :latitude="latitude"
       :longitude="longitude"
       :scale="nativeScale"
-      :markers="markers"
+      :markers="nativeMarkers"
       :polyline="polyline"
       :include-points="includePoints"
       show-location
@@ -21,8 +21,11 @@
       <svg v-if="projectedRoute" class="route-preview" viewBox="0 0 430 519" preserveAspectRatio="none" aria-hidden="true">
         <polyline :points="projectedRoute" fill="none" stroke="#285CFC" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
       </svg>
-      <view v-if="routeBounds" class="map-marker origin-marker" :style="markerStyle(routeBounds.origin)">起</view>
-      <view v-if="routeBounds" class="map-marker destination-marker" :style="markerStyle(routeBounds.destination)">終</view>
+      <view v-if="routeBounds" class="map-pin pickup-pin" :style="pinStyle(routeBounds.origin)" aria-label="上車位置"></view>
+      <view v-if="routeBounds" class="map-pin destination-pin" :style="pinStyle(routeBounds.destination)" aria-label="目的地"></view>
+      <view v-if="routeBounds" class="map-callout pickup-callout" :style="markerStyle(routeBounds.origin)"><text class="callout-title">上車位置</text><text class="callout-value">{{ props.pickupLabel || '目前定位' }}</text></view>
+      <view v-else-if="nativeMarkers.length" class="map-callout pickup-callout pickup-callout--center"><text class="callout-title">上車位置</text><text class="callout-value">{{ props.pickupLabel || '目前定位' }}</text></view>
+      <view v-if="routeBounds && props.routeSummary" class="map-callout destination-callout" :style="markerStyle(routeBounds.destination)"><text class="callout-title">目的地 · 行程資訊</text><text class="callout-value">{{ props.destinationLabel || '目的地' }}</text><text class="callout-summary">{{ props.routeSummary }}</text></view>
       <text v-if="!projectedRoute">香港 · 九龍站</text>
     </view>
     <!-- #endif -->
@@ -32,7 +35,7 @@
 <script setup lang="ts">
 import { computed, getCurrentInstance, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
-type MapMarker = { id: number; latitude: number; longitude: number; title?: string; iconPath?: string; width?: number; height?: number }
+type MapMarker = { id: number; latitude: number; longitude: number; title?: string; iconPath?: string; width?: number; height?: number; callout?: { content: string; display?: 'ALWAYS' | 'BYCLICK'; color?: string; fontSize?: number; borderRadius?: number; bgColor?: string; padding?: number; textAlign?: 'left' | 'center' } }
 type MapPoint = { latitude: number; longitude: number }
 type MapPolyline = { points: MapPoint[]; color: string; width: number; arrowLine?: boolean }
 
@@ -47,9 +50,23 @@ const props = withDefaults(defineProps<{
   centerTrigger?: number
   fullScreen?: boolean
   bookingPickerOpen?: boolean
+  pickupLabel?: string
+  destinationLabel?: string
+  routeSummary?: string
 }>(), {
   scale: 13
 })
+
+const nativeMarkers = computed<MapMarker[]>(() => (props.markers || []).map(marker => {
+  const content = marker.id === 1
+    ? `【上車位置】\n${props.pickupLabel || '目前定位'}`
+    : marker.id === 2 && props.routeSummary
+      ? `【目的地 · 行程資訊】\n${props.destinationLabel || marker.title || '目的地'}\n${props.routeSummary}`
+      : ''
+  return content
+    ? { ...marker, callout: { content, display: 'ALWAYS', color: '#263238', fontSize: 14, borderRadius: 8, bgColor: '#FFFFFF', padding: 10, textAlign: 'center' } }
+    : marker
+}))
 
 const routeBounds = computed(() => {
   const points = props.polyline?.[0]?.points
@@ -78,7 +95,8 @@ const projectedRoute = computed(() => {
   }).join(' ')
 })
 
-const markerStyle = (point: { x: number; y: number }) => ({ left: `${point.x}px`, top: `${point.y}px` })
+const pinStyle = (point: { x: number; y: number }) => ({ left: `${point.x}px`, top: `${point.y}px` })
+const markerStyle = (point: { x: number; y: number }) => ({ left: `${Math.min(320, Math.max(110, point.x))}px`, top: `${Math.min(390, Math.max(100, point.y + 14))}px` })
 
 const instance = getCurrentInstance()
 const nativeScale = ref(props.scale)
@@ -183,5 +201,5 @@ watch(
 /* #ifdef APP-PLUS */
 .map-layer:not(.full-screen){top:189px;height:397px}.map-layer:not(.full-screen) .native-map{height:397px}.map-layer.booking-picker-open:not(.full-screen){height:383px!important}.map-layer.booking-picker-open:not(.full-screen) .native-map{height:383px!important}
 /* #endif */
-.map-fallback{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(145deg,#e6edf0,#cbd8dc);color:#53636b;font-size:18px;font-weight:600;pointer-events:none}.route-preview{position:absolute;inset:0;width:430px;height:519px}.map-marker{position:absolute;display:flex;width:28px;height:28px;align-items:center;justify-content:center;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 7px rgba(0,0,0,.25);font-size:12px;font-weight:700;transform:translate(-50%,-50%)}.origin-marker{background:#04a13a;color:#fff}.destination-marker{background:#fecf62;color:#5b4300}.map-layer.full-screen .map-fallback,.map-layer.full-screen .route-preview{height:642px}
+.map-fallback{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(145deg,#e6edf0,#cbd8dc);color:#53636b;font-size:18px;font-weight:600;pointer-events:none}.route-preview{position:absolute;inset:0;width:430px;height:519px}.map-pin{position:absolute;z-index:1;width:18px;height:18px;box-sizing:border-box;border:4px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(40,67,88,.35);transform:translate(-50%,-50%)}.pickup-pin{background:#10a64a}.destination-pin{background:#ffc44f}.map-callout{position:absolute;z-index:2;display:flex;width:max-content;min-width:118px;max-width:220px;padding:8px 10px;box-sizing:border-box;flex-direction:column;border-radius:9px;background:#fff;box-shadow:0 3px 12px rgba(40,67,88,.24);color:#38434a;transform:translate(-50%,12px)}.map-callout::after{position:absolute;top:-7px;left:50%;width:0;height:0;border-top:0;border-right:7px solid transparent;border-bottom:8px solid #fff;border-left:7px solid transparent;content:'';transform:translateX(-50%)}.callout-title{font-size:11px;font-weight:500;line-height:16px}.callout-value{font-size:13px;font-weight:700;line-height:18px;text-align:center;white-space:normal;overflow-wrap:anywhere}.callout-summary{margin-top:2px;font-size:12px;font-weight:500;line-height:17px;text-align:center;white-space:normal}.destination-callout{transform:translate(-50%,12px)}.pickup-callout--center{left:50%;top:42%;transform:translate(-50%,12px)}.destination-callout::after{top:-7px;bottom:auto;border-top:0;border-right:7px solid transparent;border-bottom:8px solid #fff;border-left:7px solid transparent}.map-layer.full-screen .map-fallback,.map-layer.full-screen .route-preview{height:642px}
 </style>
