@@ -1,15 +1,17 @@
-import { createApp, ref, computed, onMounted } from 'vue'
+import { createApp, ref, computed, onMounted, watch } from 'vue'
 import './style.css'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 const token = ref(import.meta.env.DEV ? 'dev-bypass' : (localStorage.getItem('admin_token') || ''))
 const locale = ref(localStorage.getItem('admin_locale') || 'en')
 const view = ref('dashboard')
+const vehicleTab = ref('catalog')
 const loading = ref(false)
 let loadRequestId = 0
 const error = ref('')
 const dashboard = ref(null)
 const exchangeRate = ref(0.92)
+const pricingCurrency = ref('RMB')
 const severeWeatherEnabled = ref(false)
 const adminLogo = ref('')
 const users = ref([])
@@ -30,12 +32,13 @@ const categories = ref([])
 const vehicles = ref([])
 const extras = ref([])
 const distancePricing = ref([])
-const pricingCurrency = ref('RMB')
 const routeMinimumFares = ref([])
 const routeMinimumFareForm = ref(null)
 const membershipPlans = ref([])
 const promotions = ref([])
 const promotionForm = ref(null)
+const promotionFilterTab = ref('ALL')
+const promotionSearchQuery = ref('')
 const membershipForm = ref(null)
 const categoryForm = ref(null)
 const vehicleForm = ref(null)
@@ -54,6 +57,7 @@ const administratorForm = ref(null)
 const canWrite = computed(() => currentAdministrator.value?.role !== 'VIEWER')
 const isSuperAdministrator = computed(() => currentAdministrator.value?.role === 'SUPER_ADMIN')
 const sortByOrder = (items) => [...items].sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0))
+const currencyLabel = (currency) => currency === 'HKD' ? 'HKD$' : 'RMB¥'
 const timeOptions = Array.from({ length: 48 }, (_, index) => `${String(Math.floor(index / 2)).padStart(2, '0')}:${index % 2 ? '30' : '00'}`)
 
 const messages = {
@@ -120,6 +124,7 @@ async function load() {
   try {
     const settings = await api('/settings')
     exchangeRate.value = Number(settings.exchangeRate) || 0.92
+    pricingCurrency.value = settings.pricingCurrency === 'HKD' ? 'HKD' : 'RMB'
     severeWeatherEnabled.value = Boolean(settings.severeWeatherEnabled)
     adminLogo.value = settings.adminLogo || ''
     if (!token.value) return
@@ -161,7 +166,6 @@ async function load() {
       vehicles.value = sortByOrder(vehicleResult.data)
       extras.value = sortByOrder(extraResult.data)
       distancePricing.value = sortByOrder(pricingResult.data)
-      pricingCurrency.value = distancePricing.value[0]?.currency === 'HKD$' ? 'HKD' : 'RMB'
     }
     if (requestedView === 'route-pricing') { categories.value = (await api('/admin/vehicle-categories')).data; routeMinimumFares.value = (await api('/admin/route-minimum-fares')).data }
   }
@@ -217,7 +221,7 @@ function resetMembership() { membershipForm.value = { id: '', level: '', name: '
 async function saveMembership() { try { const form = { ...membershipForm.value, benefits: String(membershipForm.value.benefits).split('\n').map(v => v.trim()).filter(Boolean) }; await api('/admin/membership-plans', { method: 'POST', body: JSON.stringify(form) }); membershipForm.value = null; await load() } catch (e) { error.value = displayError(e.message) } }
 async function removeMembership(item) { if (confirm(`${t('remove')} ${item.name}?`)) { await api(`/admin/membership-plans/${item.id}`, { method: 'DELETE' }); await load() } }
 function formatBenefits(item) { return item.benefits.join(' · ') }
-function resetPromotion(kind = 'CAMPAIGN') { promotionForm.value = { id: '', name: '', kind, discountType: 'PERCENTAGE', stackingMode: 'NONE', discountValue: 10, currency: 'RMB¥', minimumSpend: 0, maximumDiscount: '', priority: 0, startsAt: '', endsAt: '', enabled: true, couponCode: '', usageLimit: '', membershipLevel: '', originRegion: '', originCity: '', destinationRegion: '', destinationCity: '', weekdays: [], timeStart: '', timeEnd: '' } }
+function resetPromotion(kind = 'CAMPAIGN') { promotionForm.value = { id: '', name: '', kind, discountType: 'PERCENTAGE', stackingMode: 'NONE', discountValue: 10, currency: pricingCurrency.value === 'HKD' ? 'HKD$' : 'RMB¥', minimumSpend: 0, maximumDiscount: '', priority: 0, startsAt: '', endsAt: '', enabled: true, couponCode: '', usageLimit: '', membershipLevel: '', originRegion: '', originCity: '', destinationRegion: '', destinationCity: '', weekdays: [], timeStart: '', timeEnd: '' } }
 function editPromotion(item) { promotionForm.value = { ...item, stackingMode: item.stackingMode || 'NONE', startsAt: dateTimeInput(item.startsAt), endsAt: dateTimeInput(item.endsAt), maximumDiscount: item.maximumDiscount ?? '', usageLimit: item.usageLimit ?? '', weekdays: item.weekdays || [] } }
 async function savePromotion() { try { await api('/admin/promotions', { method: 'POST', body: JSON.stringify(promotionForm.value) }); promotionForm.value = null; await load() } catch (e) { error.value = displayError(e.message) } }
 async function removePromotion(item) { if (!confirm(`刪除優惠「${item.name}」？`)) return; try { await api(`/admin/promotions/${item.id}`, { method: 'DELETE' }); await load() } catch (e) { error.value = displayError(e.message) } }
@@ -239,8 +243,124 @@ const promotionStackingHint = computed(() => {
   if (promotionForm.value.stackingMode === 'ALL') return '符合條件的優惠都可以一起套用，系統會依序計算。'
   return '只套用這一項優惠，不會與其他優惠疊加。'
 })
+const filteredPromotions = computed(() => {
+  let list = promotions.value
+  if (promotionFilterTab.value === 'CAMPAIGN') {
+    list = list.filter(item => item.kind === 'CAMPAIGN')
+  } else if (promotionFilterTab.value === 'COUPON') {
+    list = list.filter(item => item.kind === 'COUPON')
+  } else if (promotionFilterTab.value === 'MEMBER') {
+    list = list.filter(item => item.kind === 'MEMBER')
+  } else if (promotionFilterTab.value === 'ACTIVE') {
+    list = list.filter(item => item.enabled !== false)
+  }
+  if (promotionSearchQuery.value.trim()) {
+    const q = promotionSearchQuery.value.trim().toLowerCase()
+    list = list.filter(item =>
+      (item.name || '').toLowerCase().includes(q) ||
+      (item.couponCode || '').toLowerCase().includes(q) ||
+      (item.membershipLevel || '').toLowerCase().includes(q) ||
+      (item.originCity || '').toLowerCase().includes(q) ||
+      (item.destinationCity || '').toLowerCase().includes(q)
+    )
+  }
+  return list
+})
+
+function duplicatePromotion(item) {
+  const copy = JSON.parse(JSON.stringify(item))
+  copy.id = ''
+  copy.name = `[複製] ${copy.name}`
+  copy.startsAt = dateTimeInput(copy.startsAt)
+  copy.endsAt = dateTimeInput(copy.endsAt)
+  copy.maximumDiscount = copy.maximumDiscount ?? ''
+  copy.usageLimit = copy.usageLimit ?? ''
+  copy.weekdays = copy.weekdays || []
+  if (copy.kind === 'COUPON') {
+    copy.couponCode = generateRandomCouponCodeStr()
+  }
+  promotionForm.value = copy
+}
+
+async function togglePromotionEnabled(item) {
+  try {
+    const updated = { ...item, enabled: !item.enabled }
+    await api('/admin/promotions', { method: 'POST', body: JSON.stringify(updated) })
+    await load()
+  } catch (e) {
+    error.value = displayError(e.message)
+  }
+}
+
+function generateRandomCouponCodeStr() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  let code = ''
+  for (let i = 0; i < 6; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length))
+  }
+  return `PROMO${code}`
+}
+
+function generateRandomCouponCode() {
+  if (promotionForm.value) {
+    promotionForm.value.couponCode = generateRandomCouponCodeStr()
+  }
+}
+
+function toggleWeekday(day) {
+  if (!promotionForm.value) return
+  if (!Array.isArray(promotionForm.value.weekdays)) {
+    promotionForm.value.weekdays = []
+  }
+  const idx = promotionForm.value.weekdays.indexOf(day)
+  if (idx >= 0) {
+    promotionForm.value.weekdays.splice(idx, 1)
+  } else {
+    promotionForm.value.weekdays.push(day)
+    promotionForm.value.weekdays.sort((a, b) => a - b)
+  }
+}
+
+function isWeekdaySelected(day) {
+  return Array.isArray(promotionForm.value?.weekdays) && promotionForm.value.weekdays.includes(day)
+}
+
+function setWeekdaysPreset(preset) {
+  if (!promotionForm.value) return
+  if (preset === 'ALL') {
+    promotionForm.value.weekdays = [1, 2, 3, 4, 5, 6, 7]
+  } else if (preset === 'WORKDAYS') {
+    promotionForm.value.weekdays = [1, 2, 3, 4, 5]
+  } else if (preset === 'WEEKENDS') {
+    promotionForm.value.weekdays = [6, 7]
+  } else if (preset === 'CLEAR') {
+    promotionForm.value.weekdays = []
+  }
+}
+
+function formatWeekdaysText(weekdays) {
+  if (!Array.isArray(weekdays) || weekdays.length === 0) return '每天適用'
+  const daysMap = { 1: '週一', 2: '週二', 3: '週三', 4: '週四', 5: '週五', 6: '週六', 7: '週日' }
+  const sorted = [...weekdays].sort((a, b) => a - b)
+  if (sorted.length === 7) return '每天 (週一至週日)'
+  if (sorted.length === 5 && sorted.every((val, index) => val === index + 1)) return '工作日 (週一至週五)'
+  if (sorted.length === 2 && sorted[0] === 6 && sorted[1] === 7) return '週末 (週六至週日)'
+  return sorted.map(d => daysMap[d]).join('、')
+}
+
+function formatRouteText(item) {
+  const origin = [item.originRegion, item.originCity].filter(Boolean).join(' ') || '不限地點'
+  const dest = [item.destinationRegion, item.destinationCity].filter(Boolean).join(' ') || '不限地點'
+  if (origin === '不限地點' && dest === '不限地點') return '不限路線'
+  return `${origin} → ${dest}`
+}
+
+function formatTimeRangeText(item) {
+  if (!item.timeStart && !item.timeEnd) return ''
+  return `${item.timeStart || '00:00'} ~ ${item.timeEnd || '24:00'}`
+}
 function editExtra(item) { extraForm.value = { triggerType: item.triggerType || (item.requiredForImmediate ? 'IMMEDIATE' : 'NONE'), triggerEnabled: item.triggerEnabled !== false, nightStartTime: item.nightStartTime || '22:00', nightEndTime: item.nightEndTime || '06:00', ...item } }
-function resetExtra() { extraForm.value = { id: '', label: '', price: 0, currency: 'RMB¥', enabled: true, order: extras.value.length + 1, requiredForImmediate: false, requiredWithinMinutes: null, triggerType: 'NONE', triggerEnabled: true, nightStartTime: '22:00', nightEndTime: '06:00' } }
+function resetExtra() { extraForm.value = { id: '', label: '', price: 0, currency: pricingCurrency.value === 'HKD' ? 'HKD$' : 'RMB¥', enabled: true, order: extras.value.length + 1, requiredForImmediate: false, requiredWithinMinutes: null, triggerType: 'NONE', triggerEnabled: true, nightStartTime: '22:00', nightEndTime: '06:00' } }
 async function saveExtra() {
   const currentView = view.value
   try {
@@ -285,7 +405,7 @@ function syncPreviousTier(pricing, index) { if (index > 0) pricing.tiers[index -
 function syncNextTier(pricing, index) { const tier = pricing.tiers[index]; if (index < pricing.tiers.length - 1) pricing.tiers[index + 1].fromKm = tier.toKm }
 async function saveDistancePricing(pricing) { try { await api(`/admin/distance-pricing/${pricing.categoryId}`, { method: 'POST', body: JSON.stringify(pricing) }); await load() } catch (e) { error.value = displayError(e.message) } }
 async function switchPricingCurrency() { try { await api('/admin/distance-pricing/currency', { method: 'POST', body: JSON.stringify({ currency: pricingCurrency.value }) }); await load() } catch (e) { error.value = displayError(e.message) } }
-function resetRouteMinimumFare() { routeMinimumFareForm.value = { id: '', originRegion: '香港', originCity: '', destinationRegion: '大陸', destinationCity: '', categoryId: '', minimumFare: 800, currency: 'RMB¥', enabled: true } }
+function resetRouteMinimumFare() { routeMinimumFareForm.value = { id: '', originRegion: '香港', originCity: '', destinationRegion: '大陸', destinationCity: '', categoryId: '', minimumFare: 800, currency: pricingCurrency.value === 'HKD' ? 'HKD$' : 'RMB¥', enabled: true } }
 function editRouteMinimumFare(item) { routeMinimumFareForm.value = { ...item, originCity: item.originCity || '', destinationCity: item.destinationCity || '', categoryId: item.categoryId || '' } }
 async function saveRouteMinimumFare() { try { await api('/admin/route-minimum-fares', { method: 'POST', body: JSON.stringify(routeMinimumFareForm.value) }); routeMinimumFareForm.value = null; await load() } catch (e) { error.value = displayError(e.message) } }
 async function removeRouteMinimumFare(item) { if (!confirm(`${t('remove')} ${item.originRegion} → ${item.destinationRegion}?`)) return; try { await api(`/admin/route-minimum-fares/${item.id}`, { method: 'DELETE' }); await load() } catch (e) { error.value = displayError(e.message) } }
@@ -347,8 +467,340 @@ const filteredAddresses = computed(() => addresses.value.filter(item =>
   (!addressCityFilter.value || addressRegionFilter.value !== '大陸' ||
     (addressCityFilter.value === '__mainland__' ? !item.city : displayMainlandCity(item.city) === addressCityFilter.value))))
 
-const App = { setup() { onMounted(() => load()); return { token, locale, view, title, dashboard, exchangeRate, severeWeatherEnabled, adminLogo, users, selectedUser, walletTransactions, topUpWithdrawalHistory, trips, charterOrders, addresses, mainlandCities, mainlandCityForm, addressRegionFilter, addressCityFilter, filteredAddresses, addressSearchKeyword, addressSearchResults, addressSearching, categories, vehicles, extras, distancePricing, pricingCurrency, routeMinimumFares, routeMinimumFareForm, membershipPlans, promotions, promotionForm, membershipForm, addressForm, categoryForm, vehicleForm, extraForm, userForm, walletAdjustment, tripForm, charterForm, currentAdministrator, administrators, auditLogs, administratorForm, canWrite, isSuperAdministrator, loading, error, username, password, timeOptions, apiLogin, logout, load, resetAdministrator, editAdministrator, saveAdministrator, disableAdministrator, saveExchangeRate, uploadAdminLogo, removeAdminLogo, t, toggleLocale, translateRegion, translateStatus, formatDate, displayMainlandCity, updateCharterStatus, editUser, resetUser, selectUser, openWalletAdjustment, editTrip, editCharter, saveUser, saveWalletAdjustment, saveTrip, saveCharter, editAddress, resetAddress, searchAddressPlaces, selectAddressSearchResult, handleAddressRegionChange, handleAddressCityChange, saveAddress, removeAddress, resetMainlandCity, editMainlandCity, saveMainlandCity, removeMainlandCity, editCategory, editVehicle, resetCategory, saveCategory, toggleCategory, saveVehicle, toggleVehicle, removeCategory, removeVehicle, resetVehicle, editExtra, resetExtra, triggerLabel, triggerSummary, isTriggerActive, toggleSevereWeather, showOnlyExtra, addPricingTier, removePricingTier, syncPreviousTier, syncNextTier, saveDistancePricing, switchPricingCurrency, resetRouteMinimumFare, editRouteMinimumFare, saveRouteMinimumFare, removeRouteMinimumFare, editMembership, resetMembership, saveMembership, removeMembership, formatBenefits, resetPromotion, editPromotion, savePromotion, removePromotion, promotionKindLabel, promotionDiscountLabel, promotionDiscountHint, promotionStackingHint } }, template: `<div v-if="!token" class="login"><button class="login-language" @click="toggleLocale" :aria-label="t('languageLabel')">中 / EN</button><div class="login-orb login-orb-one"></div><div class="login-orb login-orb-two"></div><form @submit.prevent="apiLogin"><div class="brand"><img v-if="adminLogo" :src="adminLogo" width="180" height="56" alt="Admin logo"/><span v-else>{{t('brand')}}</span></div><h1>{{t('welcome')}}</h1><p>{{t('signInPrompt')}}</p><input v-model="username" :placeholder="t('adminUsername')" autocomplete="username" required/><input v-model="password" type="password" :placeholder="t('password')" autocomplete="current-password" required/><button>{{t('signIn')}}</button><small v-if="error">{{error}}</small></form></div><div v-else class="shell"><aside><div class="brand"><img v-if="adminLogo" :src="adminLogo" width="180" height="56" alt="Admin logo"/><span v-else>{{t('brand')}}</span></div><nav><button :class="{active:view==='dashboard'}" @click="view='dashboard';load()">▦ {{t('dashboard')}}</button><button :class="{active:view==='users'}" @click="view='users';load()">♙ {{t('users')}}</button><button :class="{active:view==='trips'}" @click="view='trips';load()">⇄ {{t('trips')}}</button><button :class="{active:view==='charters'}" @click="view='charters';load()">▣ {{t('charters')}}</button><button :class="{active:view==='addresses'}" @click="view='addresses';load()">⌖ {{t('addresses')}}</button><button :class="{active:view==='vehicles'}" @click="view='vehicles';load()">▤ 車型設定</button><button :class="{active:view==='route-pricing'}" @click="view='route-pricing';load()">¥ 路線最低價</button><button :class="{active:view==='membership'}" @click="view='membership';load()">♛ {{t('membership')}}</button><button :class="{active:view==='promotions'}" @click="view='promotions';load()">％ 優惠設定</button><button v-if="isSuperAdministrator" :class="{active:view==='administrators'}" @click="view='administrators';load()">⚿ {{t('administrators')}}</button><button v-if="isSuperAdministrator" :class="{active:view==='auditLogs'}" @click="view='auditLogs';load()">☷ {{t('auditLogs')}}</button></nav><div v-if="currentAdministrator" class="admin-identity"><b>{{currentAdministrator.displayName}}</b><span>{{currentAdministrator.role}}</span></div><button class="logout" @click="logout">{{t('signOut')}}</button>
-</aside><main :class="{readonly: !canWrite}"><header><div><span class="eyebrow">{{t('adminConsole')}}</span><h1>{{title}}</h1></div><div class="header-actions"><span v-if="!canWrite" class="readonly-badge">唯讀模式</span><label v-if="canWrite" class="rate-control">{{t('exchangeRate')}} <input v-model="exchangeRate" type="number" min="0.0001" step="0.0001"/><button @click="saveExchangeRate">{{t('saveRate')}}</button></label><button class="language-toggle" @click="toggleLocale" :aria-label="t('languageLabel')">中 / EN</button><button class="refresh" @click="load">↻ {{t('refresh')}}</button></div></header><div v-if="error" class="error">{{error}}</div><section v-if="view==='dashboard' && isSuperAdministrator" class="logo-settings panel"><div><span class="eyebrow">BRANDING</span><h2>Logo 設定</h2><p>上傳後會以保持比例置中裁切方式填滿固定 180 × 56 px 顯示框，檔案上限 1 MB。</p></div><div class="logo-settings-actions"><div class="logo-preview"><img v-if="adminLogo" :src="adminLogo" width="180" height="56" alt="Admin logo"/><span v-else>尚未設定 Logo</span></div><label class="logo-upload">更換 Logo<input type="file" accept="image/png,image/jpeg,image/webp" @change="uploadAdminLogo"/></label><button v-if="adminLogo" class="logo-remove" @click="removeAdminLogo">移除</button></div></section><section v-if="view==='dashboard' && dashboard" class="cards"><article><span>{{t('totalUsers')}}</span><strong>{{dashboard.users}}</strong></article><article><span>{{t('totalTrips')}}</span><strong>{{dashboard.trips}}</strong></article><article><span>{{t('pendingTrips')}}</span><strong>{{dashboard.pendingTrips}}</strong></article><article><span>{{t('completedTrips')}}</span><strong>{{dashboard.completedTrips}}</strong></article><article><span>{{t('charterOrders')}}</span><strong>{{dashboard.charterOrders}}</strong></article><article><span>{{t('activeAddresses')}}</span><strong>{{dashboard.recommendedAddresses}}</strong></article></section><section v-if="view==='users'" class="user-management"><div class="panel"><div class="admin-toolbar"><h2>User management</h2><button v-if="canWrite" @click="resetUser">Add user</button></div><form v-if="userForm" class="record-form user-form" @submit.prevent="saveUser"><input v-model="userForm.name" :placeholder="t('name')"/><select v-model="userForm.countryCode" aria-label="Country code"><option value="+852">+852 Hong Kong</option><option value="+86">+86 China</option><option value="+853">+853 Macau</option></select><input v-model="userForm.phoneNumber" inputmode="numeric" placeholder="Phone number" required/><button>{{userForm.id ? t('saveChanges') : 'Create user'}}</button><button type="button" class="secondary" @click="userForm=null">{{t('cancel')}}</button></form><table><thead><tr><th>{{t('name')}}</th><th>{{t('phone')}}</th><th>Cash wallet</th><th>Fare wallet</th><th>{{t('joined')}}</th><th>{{t('actions')}}</th></tr></thead><tbody><tr v-for="u in users" :key="u.id"><td>{{u.name || '—'}}</td><td>{{u.countryCode}} {{u.phoneNumber}}</td><td>{{u.cashBalance.toFixed(2)}}</td><td>{{u.fareBalance.toFixed(2)}}</td><td>{{formatDate(u.createdAt)}}</td><td class="row-actions"><button @click="selectUser(u)">Details</button><button v-if="canWrite" @click="editUser(u)">{{t('edit')}}</button></td></tr></tbody></table></div><section v-if="selectedUser" class="user-detail panel"><div class="admin-toolbar"><div><h2>{{selectedUser.name || selectedUser.phone}}</h2><span class="muted">{{selectedUser.id}}</span></div><button class="secondary" @click="selectedUser=null">{{t('close')}}</button></div><div class="wallet-cards"><article><span>{{t('cashWallet')}}</span><strong>{{selectedUser.cashBalance.toFixed(2)}}</strong><div v-if="canWrite" class="wallet-actions"><button @click="openWalletAdjustment('CASH')">{{t('adjustBalance')}}</button></div></article><article><span>{{t('fareWallet')}}</span><strong>{{selectedUser.fareBalance.toFixed(2)}}</strong><div v-if="canWrite" class="wallet-actions"><button @click="openWalletAdjustment('FARE')">{{t('adjustBalance')}}</button></div></article></div><form v-if="walletAdjustment" class="record-form wallet-form" @submit.prevent="saveWalletAdjustment"><b>{{walletAdjustment.wallet === 'CASH' ? t('cashWallet') : t('fareWallet')}}</b><select v-model="walletAdjustment.direction"><option value="INCREASE">{{t('increase')}}</option><option value="DECREASE">{{t('decrease')}}</option></select><input v-model.number="walletAdjustment.amount" type="number" min="0.01" step="0.01" :placeholder="t('amount')" required/><input v-model="walletAdjustment.reason" maxlength="500" :placeholder="t('reasonRequired')" required/><button>{{t('confirmAdjustment')}}</button><button type="button" class="secondary" @click="walletAdjustment=null">{{t('cancel')}}</button></form><div class="user-records"><div><h3>{{t('currentTrips')}}</h3><p v-if="!selectedUser.currentTrips.length" class="muted">{{t('noCurrentTrips')}}</p><table v-else><tbody><tr v-for="trip in selectedUser.currentTrips" :key="trip.id"><td><b>{{trip.origin}}</b> → {{trip.destination}}</td><td>{{translateStatus(trip.status)}}</td><td>{{formatDate(trip.scheduledAt, true)}}</td></tr></tbody></table></div><div><h3>{{t('currentCharterOrders')}}</h3><p v-if="!selectedUser.currentCharterOrders.length" class="muted">{{t('noCurrentCharterOrders')}}</p><table v-else><tbody><tr v-for="order in selectedUser.currentCharterOrders" :key="order.id"><td><b>{{order.origin}}</b> → {{order.destination}}</td><td>{{translateStatus(order.status)}}</td><td>{{formatDate(order.scheduledAt, true)}}</td></tr></tbody></table></div></div><div class="history-table"><h3>{{t('balanceHistory')}}</h3><p v-if="!walletTransactions.length" class="muted">{{t('noBalanceTransactions')}}</p><table v-else><thead><tr><th>Time</th><th>Wallet</th><th>Type</th><th>Amount</th><th>Balance after</th><th>Reason</th></tr></thead><tbody><tr v-for="transaction in walletTransactions" :key="transaction.id"><td>{{formatDate(transaction.createdAt, true)}}</td><td>{{transaction.wallet}}</td><td>{{transaction.type}}</td><td>{{transaction.amount.toFixed(2)}}</td><td>{{transaction.balanceAfter.toFixed(2)}}</td><td>{{transaction.reason}}</td></tr></tbody></table></div><div class="history-table"><h3>{{t('topUpHistory')}}</h3><p v-if="!topUpWithdrawalHistory.length" class="muted">{{t('noTopUps')}}</p><table v-else><thead><tr><th>Time</th><th>Wallet</th><th>Type</th><th>Amount</th><th>Reason</th></tr></thead><tbody><tr v-for="transaction in topUpWithdrawalHistory" :key="transaction.id"><td>{{formatDate(transaction.createdAt, true)}}</td><td>{{transaction.wallet}}</td><td>{{transaction.type}}</td><td>{{transaction.amount.toFixed(2)}}</td><td>{{transaction.reason}}</td></tr></tbody></table></div></section></section><section v-if="view==='trips'" class="editor-section"><form v-if="tripForm" class="record-form" @submit.prevent="saveTrip"><select v-model="tripForm.userId"><option v-for="user in users" :key="user.id" :value="user.id">{{user.name || user.phone || user.id}}</option></select><input v-model="tripForm.origin" :placeholder="t('origin')" required/><input v-model="tripForm.destination" :placeholder="t('destination')" required/><input v-model="tripForm.region" :placeholder="t('region')" required/><input v-model="tripForm.scheduledAt" type="datetime-local" required/><select v-model="tripForm.status"><option v-for="status in ['PENDING','CONFIRMED','COMPLETED','CANCELLED']" :value="status">{{translateStatus(status)}}</option></select><button>{{t('saveChanges')}}</button><button type="button" class="secondary" @click="tripForm=null">{{t('cancel')}}</button></form><div class="panel"><table><thead><tr><th>{{t('route')}}</th><th>{{t('region')}}</th><th>{{t('scheduled')}}</th><th>{{t('status')}}</th><th>{{t('actions')}}</th></tr></thead><tbody><tr v-for="trip in trips" :key="trip.id"><td><b>{{trip.origin}}</b><br/><span class="muted">→ {{trip.destination}}</span></td><td>{{translateRegion(trip.region)}}</td><td>{{formatDate(trip.scheduledAt, true)}}</td><td><span class="status" :class="trip.status.toLowerCase()">{{translateStatus(trip.status)}}</span></td><td class="row-actions"><button @click="editTrip(trip)">{{t('edit')}}</button></td></tr></tbody></table></div></section><section v-if="view==='charters'" class="editor-section"><form v-if="charterForm" class="record-form charter-editor" @submit.prevent="saveCharter"><select v-model="charterForm.userId"><option v-for="user in users" :key="user.id" :value="user.id">{{user.name || user.phone || user.id}}</option></select><select v-model="charterForm.originRegion"><option>香港</option><option>大陸</option><option>澳門</option></select><input v-model="charterForm.origin" :placeholder="t('origin')" required/><select v-model="charterForm.destinationRegion"><option>香港</option><option>大陸</option><option>澳門</option></select><input v-model="charterForm.destination" :placeholder="t('destination')" required/><input v-model="charterForm.scheduledAt" type="datetime-local" required/><input v-model.number="charterForm.durationHours" type="number" min="1" step="0.5" required/><select v-model="charterForm.status"><option v-for="status in ['PENDING','CONFIRMED','COMPLETED','CANCELLED']" :value="status">{{translateStatus(status)}}</option></select><button>{{t('saveChanges')}}</button><button type="button" class="secondary" @click="charterForm=null">{{t('cancel')}}</button></form><div class="panel"><table><thead><tr><th>{{t('route')}}</th><th>{{t('scheduled')}}</th><th>{{t('duration')}}</th><th>{{t('status')}}</th><th>{{t('actions')}}</th></tr></thead><tbody><tr v-for="order in charterOrders" :key="order.id"><td><b>{{order.originRegion}} · {{order.origin}}</b><br/><span class="muted">→ {{order.destinationRegion}} · {{order.destination}}</span></td><td>{{formatDate(order.scheduledAt, true)}}</td><td>{{order.durationHours}} {{t('hours')}}</td><td><select :value="order.status" @change="updateCharterStatus(order, $event.target.value)"><option v-for="status in ['PENDING','CONFIRMED','COMPLETED','CANCELLED']" :key="status" :value="status">{{translateStatus(status)}}</option></select></td><td class="row-actions"><button @click="editCharter(order)">{{t('edit')}}</button></td></tr></tbody></table></div></section><section v-if="view==='addresses'" class="panel mainland-city-management"><div class="admin-toolbar"><div><h2>大陸市級單位</h2><span class="muted">先新增市級單位，再獨立設定該市推薦地址；停用後市級入口會隱藏，但地址仍保留在大陸聚合入口</span></div><button v-if="canWrite" @click="resetMainlandCity">新增市級單位</button></div><form v-if="mainlandCityForm" class="record-form" @submit.prevent="saveMainlandCity"><input v-model="mainlandCityForm.name" placeholder="市級單位，例如深圳市" required/><input v-model.number="mainlandCityForm.order" type="number" min="0" step="1" placeholder="排序" required/><label><input v-model="mainlandCityForm.enabled" type="checkbox"/> 啟用</label><button type="submit">{{mainlandCityForm.id ? '保存修改' : '新增市級單位'}}</button><button type="button" class="secondary" @click="mainlandCityForm=null">取消</button></form><table><thead><tr><th>市級單位</th><th>排序</th><th>狀態</th><th>操作</th></tr></thead><tbody><tr v-for="city in mainlandCities" :key="city.id"><td>{{city.name}}</td><td>{{city.order}}</td><td>{{city.enabled ? '已啟用' : '已停用'}}</td><td class="row-actions"><button v-if="canWrite" @click="editMainlandCity(city)">編輯</button><button v-if="canWrite" class="danger" @click="removeMainlandCity(city)">刪除</button></td></tr></tbody></table></section><section v-if="view==='addresses'" class="address-layout"><div v-if="canWrite" class="address-search panel"><div class="address-search-controls"><select v-model="addressForm.region" @change="handleAddressRegionChange"><option>香港</option><option>大陸</option><option>澳門</option></select><select v-if="addressForm.region === '大陸'" v-model="addressForm.city" @change="handleAddressCityChange"><option value="">大陸總分類</option><option v-for="city in mainlandCities.filter(item => item.enabled)" :key="city.id" :value="city.name">{{city.name}}</option></select><input v-model="addressSearchKeyword" placeholder="搜索位置名称或关键字" @keyup.enter="searchAddressPlaces"/><button type="button" @click="searchAddressPlaces">{{addressSearching ? '搜索中…' : '搜索位置'}}</button></div><div v-if="addressSearchResults.length" class="address-search-results"><button v-for="item in addressSearchResults" :key="item.id" type="button" class="address-search-result" @click="selectAddressSearchResult(item)"><b>{{item.name}}</b><span>{{item.displayAddress || item.address}}</span></button></div><p v-else-if="addressSearchKeyword && !addressSearching" class="muted">暂无搜索结果</p></div><form v-if="canWrite" class="address-form" @submit.prevent="saveAddress"><select v-model="addressForm.region" @change="handleAddressRegionChange"><option>香港</option><option>大陸</option><option>澳門</option></select><select v-if="addressForm.region === '大陸'" v-model="addressForm.city" @change="handleAddressCityChange"><option value="">大陸總分類</option><option v-for="city in mainlandCities.filter(item => item.enabled)" :key="city.id" :value="city.name">{{city.name}}</option></select><input v-model="addressForm.name" :placeholder="t('addressName')" required/><input v-model="addressForm.address" :placeholder="t('detailedAddress')" required/><input v-model.number="addressForm.order" type="number" min="0" step="1" :placeholder="t('order')" required/><label><input v-model="addressForm.enabled" type="checkbox"/> {{t('enabled')}}</label><div><button type="submit">{{addressForm.id ? t('saveChanges') : t('save')}}</button><button v-if="addressForm.id" type="button" class="secondary" @click="resetAddress">{{t('cancel')}}</button></div></form><div class="panel"><div class="address-list-toolbar"><h2>推薦地址列表</h2><select v-model="addressRegionFilter" aria-label="篩選推薦地址地區"><option value="">全部地區</option><option value="香港">香港</option><option value="大陸">大陸總分類</option><option value="澳門">澳門</option></select><select v-if="addressRegionFilter === '大陸'" v-model="addressCityFilter" aria-label="篩選大陸城市"><option value="">全部內地城市</option><option value="__mainland__">大陸總分類</option><option v-for="city in mainlandCities" :key="city.id" :value="city.name">{{city.name}}</option></select></div><table><thead><tr><th>{{t('region')}}</th><th>歸屬</th><th>{{t('addressName')}}</th><th>{{t('detailedAddress')}}</th><th>{{t('order')}}</th><th>{{t('enabled')}}</th><th>{{t('actions')}}</th></tr></thead><tbody><tr v-for="item in filteredAddresses" :key="item.id"><td>{{item.region}}</td><td>{{item.region === '大陸' ? (item.city ? displayMainlandCity(item.city) : '大陸總分類') : item.region}}</td><td><b>{{item.name}}</b></td><td>{{item.displayAddress || item.address}}</td><td>{{item.order}}</td><td>{{item.enabled ? '✓' : '—'}}</td><td class="row-actions"><button v-if="canWrite" @click="editAddress(item)">{{t('edit')}}</button><button v-if="canWrite" class="danger" @click="removeAddress(item)">{{t('remove')}}</button></td></tr></tbody></table></div></section><section v-if="view==='promotions'" class="promotion-admin"><div class="promotion-summary"><article><span>折扣活動</span><strong>{{promotions.filter(item => item.kind === 'CAMPAIGN').length}}</strong></article><article><span>優惠碼</span><strong>{{promotions.filter(item => item.kind === 'COUPON').length}}</strong></article><article><span>會員專屬</span><strong>{{promotions.filter(item => item.kind === 'MEMBER').length}}</strong></article></div><div class="panel"><div class="admin-toolbar"><div><h2>優惠規則</h2><span class="muted">每次報價會依規則套用最優惠組合</span></div><div class="promotion-add-actions"><button @click="resetPromotion('CAMPAIGN')">新增活動</button><button @click="resetPromotion('COUPON')">新增優惠碼</button><button @click="resetPromotion('MEMBER')">新增會員優惠</button></div></div><form v-if="promotionForm" class="record-form promotion-form" @submit.prevent="savePromotion"><input v-model="promotionForm.name" placeholder="優惠名稱" required/><select v-model="promotionForm.kind"><option value="CAMPAIGN">折扣活動</option><option value="COUPON">優惠碼</option><option value="MEMBER">會員專屬</option></select><label class="promotion-field"><span>優惠方式</span><select v-model="promotionForm.discountType"><option value="PERCENTAGE">總金額打折（百分比）</option><option value="FIXED_AMOUNT">現金券（固定折抵金額）</option><option value="TOTAL_PRICE">折後固定總價</option></select><small class="promotion-help">{{promotionDiscountHint}}</small></label><label class="promotion-field"><span>優惠組合</span><select v-model="promotionForm.stackingMode"><option value="NONE">不可與其他優惠合併</option><option value="PERCENTAGE_AND_VOUCHER">百分比優惠＋現金券可合併</option><option value="ALL">可與所有優惠合併</option></select><small class="promotion-help">{{promotionStackingHint}}</small></label><label class="promotion-field"><span>優惠優先級</span><input v-model.number="promotionForm.priority" type="number" step="1" placeholder="數字越小越優先"/><small class="promotion-help">同時符合多項優惠時，數字越小越先計算。</small></label><label class="promotion-field"><span>{{promotionForm.discountType === 'PERCENTAGE' ? '折扣百分比（%）' : promotionForm.discountType === 'TOTAL_PRICE' ? '折後應付總價' : '現金券折抵金額'}}</span><input v-model.number="promotionForm.discountValue" type="number" min="0.01" :max="promotionForm.discountType === 'PERCENTAGE' ? 100 : undefined" step="0.01" :placeholder="promotionForm.discountType === 'PERCENTAGE' ? '例如 10 = 減免 10%' : promotionForm.discountType === 'TOTAL_PRICE' ? '例如 500 = 折後付 500' : '例如 50 = 折抵 50'" required/><small class="promotion-help">{{promotionDiscountHint}}</small></label><label class="promotion-field"><span>計價幣別</span><select v-model="promotionForm.currency" :disabled="promotionForm.discountType === 'PERCENTAGE'"><option value="RMB¥">人民幣 RMB¥</option><option value="HKD$">港幣 HKD$</option></select></label><input v-model.number="promotionForm.minimumSpend" type="number" min="0" step="0.01" placeholder="最低消費"/><input v-model="promotionForm.maximumDiscount" type="number" min="0.01" step="0.01" placeholder="最高折抵（選填）"/><input v-if="promotionForm.kind === 'COUPON'" v-model.trim="promotionForm.couponCode" class="promotion-code" placeholder="優惠碼，例如 SUMMER88" required/><input v-if="promotionForm.kind === 'COUPON'" v-model="promotionForm.usageLimit" type="number" min="1" step="1" placeholder="使用次數上限（選填）"/><select v-if="promotionForm.kind === 'MEMBER'" v-model="promotionForm.membershipLevel" required><option value="" disabled>選擇會員等級</option><option v-for="plan in membershipPlans" :key="plan.level" :value="plan.level">{{plan.name}}（{{plan.level}}）</option></select><select v-model="promotionForm.originRegion"><option value="">不限出發地區</option><option>香港</option><option>澳門</option><option>大陸</option></select><input v-model.trim="promotionForm.originCity" placeholder="出發城市（選填）"/><select v-model="promotionForm.destinationRegion"><option value="">不限目的地區</option><option>香港</option><option>澳門</option><option>大陸</option></select><input v-model.trim="promotionForm.destinationCity" placeholder="目的城市（選填）"/><input v-model="promotionForm.timeStart" type="time" title="每日開始時間"/><input v-model="promotionForm.timeEnd" type="time" title="每日結束時間"/><input v-model="promotionForm.weekdays" placeholder="星期，例如 1,2,5" @change="promotionForm.weekdays = String(promotionForm.weekdays).split(',').map(Number).filter(Boolean)"/><label>開始時間 <input v-model="promotionForm.startsAt" type="datetime-local"/></label><label>結束時間 <input v-model="promotionForm.endsAt" type="datetime-local"/></label><label class="checkbox-field"><input v-model="promotionForm.enabled" type="checkbox"/> 啟用</label><button>儲存優惠</button><button type="button" class="secondary" @click="promotionForm=null">取消</button></form><table><thead><tr><th>名稱／類型</th><th>折扣</th><th>使用條件</th><th>有效期間</th><th>狀態</th><th>操作</th></tr></thead><tbody><tr v-if="!promotions.length"><td colspan="6" class="muted promotion-empty">尚未建立優惠</td></tr><tr v-for="item in promotions" :key="item.id"><td><b>{{item.name}}</b><br/><span class="muted">{{promotionKindLabel(item.kind)}}<template v-if="item.couponCode"> · {{item.couponCode}}</template><template v-if="item.membershipLevel"> · {{item.membershipLevel}}</template></span></td><td><b>{{promotionDiscountLabel(item)}}</b><br/><span v-if="item.maximumDiscount" class="muted">最高 {{item.currency}}{{item.maximumDiscount}}</span></td><td>最低 {{item.currency}}{{item.minimumSpend}}<br/><span v-if="item.usageLimit" class="muted">已用 {{item.usageCount}} / {{item.usageLimit}}</span><span v-else class="muted">不限次數</span></td><td><span class="muted">{{item.startsAt ? formatDate(item.startsAt,true) : '立即開始'}}<br/>至 {{item.endsAt ? formatDate(item.endsAt,true) : '長期有效'}}</span></td><td><span class="status" :class="item.enabled ? 'completed' : 'cancelled'">{{item.enabled ? '已啟用' : '已停用'}}</span></td><td class="row-actions"><button @click="editPromotion(item)">編輯</button><button class="danger" @click="removePromotion(item)">刪除</button></td></tr></tbody></table></div></section><section v-if="view==='route-pricing'" class="editor-section"><div class="panel"><div class="admin-toolbar"><div><h2>路線最低價</h2><p class="muted">在原有距離計價結果上設定出發地到目的地的最低車資。</p></div><button v-if="canWrite" @click="resetRouteMinimumFare">新增規則</button></div><form v-if="routeMinimumFareForm" class="record-form" @submit.prevent="saveRouteMinimumFare"><select v-model="routeMinimumFareForm.originRegion" required><option>香港</option><option>澳門</option><option>大陸</option></select><input v-model="routeMinimumFareForm.originCity" placeholder="出發城市（留空代表全部）"/><select v-model="routeMinimumFareForm.destinationRegion" required><option>香港</option><option>澳門</option><option>大陸</option></select><input v-model="routeMinimumFareForm.destinationCity" placeholder="目的城市（留空代表全部）"/><select v-model="routeMinimumFareForm.categoryId"><option value="">所有車種</option><option v-for="category in categories" :key="category.id" :value="category.id">{{category.name}}</option></select><input v-model.number="routeMinimumFareForm.minimumFare" type="number" min="0" step="0.01" placeholder="最低金額" required/><select v-model="routeMinimumFareForm.currency"><option value="RMB¥">RMB¥</option><option value="HKD$">HKD$</option></select><label><input v-model="routeMinimumFareForm.enabled" type="checkbox"/> 啟用</label><button>{{routeMinimumFareForm.id ? '保存修改' : '新增規則'}}</button><button type="button" class="secondary" @click="routeMinimumFareForm=null">取消</button></form><table><thead><tr><th>路線</th><th>車種</th><th>最低金額</th><th>狀態</th><th>操作</th></tr></thead><tbody><tr v-for="item in routeMinimumFares" :key="item.id"><td>{{item.originRegion}}{{item.originCity ? ' · '+item.originCity : ''}} → {{item.destinationRegion}}{{item.destinationCity ? ' · '+item.destinationCity : ''}}</td><td>{{categories.find(category => category.id === item.categoryId)?.name || '所有車種'}}</td><td>{{item.currency}}{{item.minimumFare.toFixed(2)}}</td><td>{{item.enabled ? '啟用' : '停用'}}</td><td class="row-actions"><button v-if="canWrite" @click="editRouteMinimumFare(item)">編輯</button><button v-if="canWrite" @click="removeRouteMinimumFare(item)">刪除</button></td></tr></tbody></table></div></section><section v-if="view==='membership'" class="editor-section"><div class="panel"><div class="admin-toolbar"><h2>會員方案</h2><button @click="resetMembership">新增方案</button></div><form v-if="membershipForm" class="record-form" @submit.prevent="saveMembership"><input v-model="membershipForm.id" placeholder="方案 ID" required/><input v-model="membershipForm.level" placeholder="等級" required/><input v-model="membershipForm.name" placeholder="方案名稱" required/><input v-model.number="membershipForm.monthly" type="number" min="0" placeholder="月付"/><input v-model.number="membershipForm.yearly" type="number" min="0" placeholder="年付"/><input v-model.number="membershipForm.order" type="number" min="1" placeholder="排序"/><textarea v-model="membershipForm.benefits" placeholder="權益（每行一項）"></textarea><label><input v-model="membershipForm.recommended" type="checkbox"/> 推薦</label><label><input v-model="membershipForm.enabled" type="checkbox"/> 啟用</label><button>儲存</button><button type="button" class="secondary" @click="membershipForm=null">取消</button></form><table><thead><tr><th>ID</th><th>方案</th><th>月付</th><th>年付</th><th>權益</th><th>操作</th></tr></thead><tbody><tr v-for="item in membershipPlans" :key="item.id"><td>{{item.id}}</td><td><b>{{item.name}}</b><br/><span class="muted">{{item.level}}</span></td><td>HKD {{item.monthly}}</td><td>HKD {{item.yearly}}</td><td>{{formatBenefits(item)}}</td><td class="row-actions"><button @click="editMembership(item)">編輯</button><button class="danger" @click="removeMembership(item)">刪除</button></td></tr></tbody></table></div></section><section v-if="view==='vehicles'" class="vehicle-admin"><div class="panel currency-switcher"><div><h2>所有車型收費幣別</h2><span class="muted">依系統匯率 {{exchangeRate}} RMB / HKD 同步換算所有車型收費</span></div><div class="currency-switcher-actions"><select v-model="pricingCurrency"><option value="RMB">人民幣 RMB¥</option><option value="HKD">港幣 HKD$</option></select><button @click="switchPricingCurrency">統一切換及換算</button></div></div><div v-for="pricing in distancePricing" :key="pricing.categoryId" class="panel"><div class="admin-toolbar"><h2>{{pricing.category.name}}（{{pricing.category.tabLabel}}）· 按距離收費</h2><button @click="addPricingTier(pricing)">新增價格區間</button></div><form class="pricing-form" @submit.prevent="saveDistancePricing(pricing)"><div class="pricing-settings"><label>最低收費 <input v-model.number="pricing.minimumFare" type="number" min="0" step="0.01" required/></label><label>幣別 <input v-model="pricing.currency" required/></label></div><table><thead><tr><th>起始公里</th><th>結束公里</th><th>每公里收費</th><th>操作</th></tr></thead><tbody><tr v-for="(tier,index) in pricing.tiers" :key="tier.id"><td><input v-model.number="tier.fromKm" type="number" min="0" step="0.01" required @change="syncPreviousTier(pricing,index)"/></td><td><input v-if="index < pricing.tiers.length-1" v-model.number="tier.toKm" type="number" :min="tier.fromKm" step="0.01" required @change="syncNextTier(pricing,index)"/><span v-else>以上（無上限）</span></td><td><input v-model.number="tier.pricePerKm" type="number" min="0" step="0.01" required/></td><td class="row-actions"><button v-if="pricing.tiers.length>1" type="button" class="danger" @click="removePricingTier(pricing,index)">刪除</button></td></tr></tbody></table><div class="pricing-actions"><button type="submit">儲存此車型收費</button><span class="muted">價格按區間累進計算，最終金額不低於最低收費。</span></div></form></div><div class="panel"><div class="admin-toolbar"><h2>車型類別</h2><button @click="resetCategory">新增類別</button></div><form v-if="categoryForm" class="record-form" @submit.prevent="saveCategory"><input v-model="categoryForm.id" placeholder="類別 ID" required/><input v-model="categoryForm.name" placeholder="卡片標題" required/><input v-model="categoryForm.tabLabel" placeholder="分頁標籤" required/><input v-model.number="categoryForm.order" type="number" min="1" placeholder="排序"/><label><input v-model="categoryForm.enabled" type="checkbox"/> 開啟</label><button>儲存</button><button type="button" class="secondary" @click="categoryForm=null">取消</button></form><table><thead><tr><th>ID</th><th>卡片標題</th><th>分頁標籤</th><th>排序</th><th>狀態</th><th>操作</th></tr></thead><tbody><tr v-for="item in categories" :key="item.id"><td>{{item.id}}</td><td>{{item.name}}</td><td>{{item.tabLabel}}</td><td>{{item.order}}</td><td><span class="status" :class="item.enabled ? 'completed' : 'cancelled'">{{item.enabled ? '已開啟' : '已關閉'}}</span></td><td class="row-actions"><button @click="editCategory(item)">編輯</button><button class="secondary" @click="toggleCategory(item)">{{item.enabled ? '關閉' : '開啟'}}</button><button class="danger" @click="removeCategory(item)">刪除</button></td></tr></tbody></table></div><div class="panel"><div class="admin-toolbar"><h2>車型資料</h2><button @click="resetVehicle">新增車型</button></div><form v-if="vehicleForm" class="record-form vehicle-record-form" @submit.prevent="saveVehicle"><input v-model="vehicleForm.id" placeholder="車型 ID" required/><select v-model="vehicleForm.categoryId"><option :value="null">未分類</option><option v-for="item in categories" :value="item.id">{{item.name}}{{item.enabled ? '' : '（已關閉）'}}</option></select><input v-model="vehicleForm.brand" placeholder="品牌文字"/><input v-model="vehicleForm.model" placeholder="車型文字" required/><input v-model="vehicleForm.series" placeholder="系列標籤"/><input v-model.number="vehicleForm.seats" type="number" min="1" placeholder="座位"/><input v-model="vehicleForm.image" placeholder="圖片 URL" required/><input v-model="vehicleForm.colorLabel" placeholder="顏色標籤"/><input v-model="vehicleForm.modelChoiceLabel" placeholder="車款標籤"/><button>儲存</button><button type="button" class="secondary" @click="vehicleForm=null">取消</button></form><table><thead><tr><th>車型</th><th>圖片</th><th>座位</th><th>狀態</th><th>操作</th></tr></thead><tbody><tr v-for="item in vehicles" :key="item.id"><td><b>{{item.brand}} {{item.model}} {{item.series}}</b><br/><span class="muted">{{item.colorLabel}} · {{item.modelChoiceLabel}}</span></td><td><img class="vehicle-thumb" :src="item.image" alt=""/></td><td>{{item.seats}}</td><td><span class="status" :class="item.enabled ? 'completed' : 'cancelled'">{{item.enabled ? '已開啟' : '已關閉'}}</span></td><td class="row-actions"><button @click="editVehicle(item)">編輯</button><button class="secondary" @click="toggleVehicle(item)">{{item.enabled ? '關閉' : '開啟'}}</button><button class="danger" @click="removeVehicle(item)">刪除</button></td></tr></tbody></table></div><div class="panel extra-settings"><div class="admin-toolbar"><div><span class="eyebrow">EXTRA OPTIONS</span><h2>額外選擇與觸發條件</h2><p class="muted">先選擇分類，再設定費用與觸發條件；符合條件時會自動加入報價。</p></div><button @click="resetExtra">新增額外選擇</button></div><div class="trigger-cards"><article v-for="type in ['IMMEDIATE','NIGHT','WEATHER']" :key="type" class="trigger-card" :class="{active: isTriggerActive(type)}"><div class="trigger-card-head"><div><span class="trigger-kicker">{{type==='IMMEDIATE' ? 'TIME WINDOW' : type==='NIGHT' ? 'NIGHT SURCHARGE' : 'WEATHER CONTROL'}}</span><h3>{{type==='IMMEDIATE' ? '即時訂單' : type==='NIGHT' ? '深夜加班費' : '惡劣天氣'}}</h3></div><span class="status" :class="{completed: isTriggerActive(type), cancelled: !isTriggerActive(type)}">{{isTriggerActive(type) ? '已啟用' : '未啟用'}}</span></div><p>{{type==='IMMEDIATE' ? '出發前指定時間內自動列為必選。' : type==='NIGHT' ? '依香港時間的出發時間自動加收。' : '由管理員手動開關，暫不依賴外部天氣 API。'}}</p><button class="card-action" @click="editExtra(extras.find(item => (item.triggerType || (item.requiredForImmediate ? 'IMMEDIATE' : 'NONE')) === type) || {id:type==='IMMEDIATE'?'instant-order':type==='NIGHT'?'night-surcharge':'severe-weather',label:type==='IMMEDIATE'?'即時訂單':type==='NIGHT'?'深夜加班費':'惡劣天氣費',price:0,currency:'RMB¥',triggerType:type,triggerEnabled:true,requiredWithinMinutes:60,nightStartTime:'22:00',nightEndTime:'06:00'})">設定條件</button></article></div><div v-if="extraForm" class="extra-editor"><div class="editor-heading"><div><h3>{{triggerLabel(extraForm)}}</h3><span class="muted">設定費用、顯示名稱與觸發方式</span></div><button type="button" class="secondary" @click="extraForm=null">取消</button></div><form class="record-form" @submit.prevent="saveExtra"><label>選項 ID<input v-model="extraForm.id" placeholder="例如 instant-order" required/></label><label>顯示文字<input v-model="extraForm.label" placeholder="顯示文字" required/></label><label>費用<input v-model.number="extraForm.price" type="number" min="0" step="0.01" required/></label><label>幣別<input v-model="extraForm.currency" placeholder="RMB¥" required/></label><label>觸發分類<select v-model="extraForm.triggerType"><option value="NONE">一般額外選擇</option><option value="IMMEDIATE">即時訂單</option><option value="NIGHT">深夜加班費</option><option value="WEATHER">惡劣天氣</option></select></label><label class="check-field"><input v-model="extraForm.enabled" type="checkbox"/> 顯示於用戶端</label><label class="check-field"><input v-model="extraForm.triggerEnabled" type="checkbox"/> 啟用此條件</label><label v-if="extraForm.triggerType==='IMMEDIATE'">出發前分鐘數<input v-model.number="extraForm.requiredWithinMinutes" type="number" min="1" max="1440" required/></label><template v-if="extraForm.triggerType==='NIGHT'"><label>開始時間<select v-model="extraForm.nightStartTime" required><option v-for="time in timeOptions" :key="'start-' + time" :value="time">{{time}}</option></select></label><label>結束時間<select v-model="extraForm.nightEndTime" required><option v-for="time in timeOptions" :key="'end-' + time" :value="time">{{time}}</option></select></label></template><label v-if="extraForm.triggerType==='WEATHER'" class="check-field"><input v-model="severeWeatherEnabled" type="checkbox"/> 全站啟用惡劣天氣費</label><button type="submit">儲存設定</button></form></div><div class="extra-table"><div class="table-heading"><h3>所有額外選項</h3><span class="muted">{{extras.length}} 個選項</span></div><table><thead><tr><th>選項</th><th>費用</th><th>分類</th><th>條件</th><th>狀態</th><th>操作</th></tr></thead><tbody><tr v-for="item in extras" :key="item.id"><td><b>{{item.label}}</b><span class="table-subtitle">{{item.id}}</span></td><td>{{item.currency}}{{item.price}}</td><td><span class="rule-chip">{{triggerLabel(item)}}</span></td><td>{{triggerSummary(item)}}</td><td><span class="status" :class="item.triggerEnabled === false ? 'cancelled' : 'completed'">{{item.triggerEnabled === false ? '停用' : '啟用'}}</span></td><td class="row-actions"><button @click="editExtra(item)">編輯</button><button v-if="item.enabled !== false" @click="showOnlyExtra(item)">只顯示此項</button><button class="danger" @click="removeExtra(item)">刪除</button></td></tr></tbody></table></div></div></section><section v-if="view==='administrators'" class="editor-section"><div class="panel"><div class="admin-toolbar"><h2>{{t('administrators')}}</h2><button @click="resetAdministrator">新增管理員</button></div><form v-if="administratorForm" class="record-form" @submit.prevent="saveAdministrator"><input v-model="administratorForm.username" placeholder="登入帳號" required/><input v-model="administratorForm.displayName" placeholder="顯示名稱" required/><select v-model="administratorForm.role"><option value="SUPER_ADMIN">超級管理員</option><option value="OPERATOR">營運管理員</option><option value="VIEWER">唯讀使用者</option></select><input v-model="administratorForm.password" type="password" :required="!administratorForm.id" :placeholder="administratorForm.id ? '留空即不修改密碼' : '密碼至少 8 字元'"/><label><input v-model="administratorForm.enabled" type="checkbox"/> 啟用</label><button>儲存</button><button type="button" class="secondary" @click="administratorForm=null">取消</button></form><table><thead><tr><th>帳號</th><th>名稱</th><th>角色</th><th>狀態</th><th>最後登入</th><th>操作</th></tr></thead><tbody><tr v-for="item in administrators" :key="item.id"><td>{{item.username}}</td><td>{{item.displayName}}</td><td>{{item.role}}</td><td><span class="status" :class="item.enabled ? 'completed' : 'cancelled'">{{item.enabled ? '已啟用' : '已停用'}}</span></td><td>{{item.lastLoginAt ? formatDate(item.lastLoginAt,true) : '—'}}</td><td class="row-actions"><button @click="editAdministrator(item)">編輯</button><button v-if="item.enabled && item.id !== currentAdministrator.id" class="danger" @click="disableAdministrator(item)">停用</button></td></tr></tbody></table></div></section><section v-if="view==='auditLogs'" class="panel"><table><thead><tr><th>時間</th><th>管理員</th><th>操作</th><th>結果</th><th>IP</th></tr></thead><tbody><tr v-for="item in auditLogs" :key="item.id"><td>{{formatDate(item.createdAt,true)}}</td><td>{{item.username}}</td><td><b>{{item.action}}</b><br/><span class="muted">{{item.resource}}</span></td><td><span class="status" :class="item.status === 'SUCCESS' ? 'completed' : 'cancelled'">{{item.status}}</span></td><td>{{item.ip || '—'}}</td></tr></tbody></table></section><div v-if="loading" class="loading">{{t('loading')}}</div></main></div>` }
+const App = { setup() { onMounted(() => load()); return { token, locale, view, vehicleTab, title, dashboard, exchangeRate, severeWeatherEnabled, adminLogo, users, selectedUser, walletTransactions, topUpWithdrawalHistory, trips, charterOrders, addresses, mainlandCities, mainlandCityForm, addressRegionFilter, addressCityFilter, filteredAddresses, addressSearchKeyword, addressSearchResults, addressSearching, categories, vehicles, extras, distancePricing, pricingCurrency, routeMinimumFares, routeMinimumFareForm, membershipPlans, promotions, promotionForm, membershipForm, addressForm, categoryForm, vehicleForm, extraForm, userForm, walletAdjustment, tripForm, charterForm, currentAdministrator, administrators, auditLogs, administratorForm, canWrite, isSuperAdministrator, loading, error, username, password, timeOptions, apiLogin, logout, load, resetAdministrator, editAdministrator, saveAdministrator, disableAdministrator, saveExchangeRate, uploadAdminLogo, removeAdminLogo, t, toggleLocale, translateRegion, translateStatus, formatDate, displayMainlandCity, updateCharterStatus, editUser, resetUser, selectUser, openWalletAdjustment, editTrip, editCharter, saveUser, saveWalletAdjustment, saveTrip, saveCharter, editAddress, resetAddress, searchAddressPlaces, selectAddressSearchResult, handleAddressRegionChange, handleAddressCityChange, saveAddress, removeAddress, resetMainlandCity, editMainlandCity, saveMainlandCity, removeMainlandCity, editCategory, editVehicle, resetCategory, saveCategory, toggleCategory, saveVehicle, toggleVehicle, removeCategory, removeVehicle, resetVehicle, editExtra, resetExtra, triggerLabel, triggerSummary, isTriggerActive, toggleSevereWeather, showOnlyExtra, addPricingTier, removePricingTier, syncPreviousTier, syncNextTier, saveDistancePricing, switchPricingCurrency, resetRouteMinimumFare, editRouteMinimumFare, saveRouteMinimumFare, removeRouteMinimumFare, editMembership, resetMembership, saveMembership, removeMembership, formatBenefits, resetPromotion, editPromotion, savePromotion, removePromotion, promotionKindLabel, promotionDiscountLabel, promotionDiscountHint, promotionStackingHint, promotionFilterTab, promotionSearchQuery, filteredPromotions, duplicatePromotion, togglePromotionEnabled, generateRandomCouponCode, toggleWeekday, isWeekdaySelected, setWeekdaysPreset, formatWeekdaysText, formatRouteText, formatTimeRangeText } }, template: `<div v-if="!token" class="login"><button class="login-language" @click="toggleLocale" :aria-label="t('languageLabel')">中 / EN</button><div class="login-orb login-orb-one"></div><div class="login-orb login-orb-two"></div><form @submit.prevent="apiLogin"><div class="brand"><img v-if="adminLogo" :src="adminLogo" width="180" height="56" alt="Admin logo"/><span v-else>{{t('brand')}}</span></div><h1>{{t('welcome')}}</h1><p>{{t('signInPrompt')}}</p><input v-model="username" :placeholder="t('adminUsername')" autocomplete="username" required/><input v-model="password" type="password" :placeholder="t('password')" autocomplete="current-password" required/><button>{{t('signIn')}}</button><small v-if="error">{{error}}</small></form></div><div v-else class="shell"><aside><div class="brand"><img v-if="adminLogo" :src="adminLogo" width="180" height="56" alt="Admin logo"/><span v-else>{{t('brand')}}</span></div><nav><button :class="{active:view==='dashboard'}" @click="view='dashboard';load()">▦ {{t('dashboard')}}</button><button :class="{active:view==='users'}" @click="view='users';load()">♙ {{t('users')}}</button><button :class="{active:view==='trips'}" @click="view='trips';load()">⇄ {{t('trips')}}</button><button :class="{active:view==='charters'}" @click="view='charters';load()">▣ {{t('charters')}}</button><button :class="{active:view==='addresses'}" @click="view='addresses';load()">⌖ {{t('addresses')}}</button><button :class="{active:view==='vehicles'}" @click="view='vehicles';load()">▤ 車型設定</button><button :class="{active:view==='route-pricing'}" @click="view='route-pricing';load()">¥ 路線最低價</button><button :class="{active:view==='membership'}" @click="view='membership';load()">♛ {{t('membership')}}</button><button :class="{active:view==='promotions'}" @click="view='promotions';load()">％ 優惠設定</button><button v-if="isSuperAdministrator" :class="{active:view==='administrators'}" @click="view='administrators';load()">⚿ {{t('administrators')}}</button><button v-if="isSuperAdministrator" :class="{active:view==='auditLogs'}" @click="view='auditLogs';load()">☷ {{t('auditLogs')}}</button></nav><div v-if="currentAdministrator" class="admin-identity"><b>{{currentAdministrator.displayName}}</b><span>{{currentAdministrator.role}}</span></div><button class="logout" @click="logout">{{t('signOut')}}</button>
+</aside><main :class="{readonly: !canWrite}"><header><div><span class="eyebrow">{{t('adminConsole')}}</span><h1>{{title}}</h1></div><div class="header-actions"><span v-if="!canWrite" class="readonly-badge">唯讀模式</span><label v-if="canWrite" class="rate-control">{{t('exchangeRate')}} <input v-model="exchangeRate" type="number" min="0.0001" step="0.0001"/><button @click="saveExchangeRate">{{t('saveRate')}}</button></label><button class="language-toggle" @click="toggleLocale" :aria-label="t('languageLabel')">中 / EN</button><button class="refresh" @click="load">↻ {{t('refresh')}}</button></div></header><div v-if="error" class="error">{{error}}</div><section v-if="view==='dashboard' && isSuperAdministrator" class="logo-settings panel"><div><span class="eyebrow">BRANDING</span><h2>Logo 設定</h2><p>上傳後會以保持比例置中裁切方式填滿固定 180 × 56 px 顯示框，檔案上限 1 MB。</p></div><div class="logo-settings-actions"><div class="logo-preview"><img v-if="adminLogo" :src="adminLogo" width="180" height="56" alt="Admin logo"/><span v-else>尚未設定 Logo</span></div><label class="logo-upload">更換 Logo<input type="file" accept="image/png,image/jpeg,image/webp" @change="uploadAdminLogo"/></label><button v-if="adminLogo" class="logo-remove" @click="removeAdminLogo">移除</button></div></section><section v-if="view==='dashboard' && dashboard" class="cards"><article><span>{{t('totalUsers')}}</span><strong>{{dashboard.users}}</strong></article><article><span>{{t('totalTrips')}}</span><strong>{{dashboard.trips}}</strong></article><article><span>{{t('pendingTrips')}}</span><strong>{{dashboard.pendingTrips}}</strong></article><article><span>{{t('completedTrips')}}</span><strong>{{dashboard.completedTrips}}</strong></article><article><span>{{t('charterOrders')}}</span><strong>{{dashboard.charterOrders}}</strong></article><article><span>{{t('activeAddresses')}}</span><strong>{{dashboard.recommendedAddresses}}</strong></article></section><section v-if="view==='users'" class="user-management"><div class="panel"><div class="admin-toolbar"><h2>User management</h2><button v-if="canWrite" @click="resetUser">Add user</button></div><form v-if="userForm" class="record-form user-form" @submit.prevent="saveUser"><input v-model="userForm.name" :placeholder="t('name')"/><select v-model="userForm.countryCode" aria-label="Country code"><option value="+852">+852 Hong Kong</option><option value="+86">+86 China</option><option value="+853">+853 Macau</option></select><input v-model="userForm.phoneNumber" inputmode="numeric" placeholder="Phone number" required/><button>{{userForm.id ? t('saveChanges') : 'Create user'}}</button><button type="button" class="secondary" @click="userForm=null">{{t('cancel')}}</button></form><table><thead><tr><th>{{t('name')}}</th><th>{{t('phone')}}</th><th>Cash wallet</th><th>Fare wallet</th><th>{{t('joined')}}</th><th>{{t('actions')}}</th></tr></thead><tbody><tr v-for="u in users" :key="u.id"><td>{{u.name || '—'}}</td><td>{{u.countryCode}} {{u.phoneNumber}}</td><td>{{u.cashBalance.toFixed(2)}}</td><td>{{u.fareBalance.toFixed(2)}}</td><td>{{formatDate(u.createdAt)}}</td><td class="row-actions"><button @click="selectUser(u)">Details</button><button v-if="canWrite" @click="editUser(u)">{{t('edit')}}</button></td></tr></tbody></table></div><section v-if="selectedUser" class="user-detail panel"><div class="admin-toolbar"><div><h2>{{selectedUser.name || selectedUser.phone}}</h2><span class="muted">{{selectedUser.id}}</span></div><button class="secondary" @click="selectedUser=null">{{t('close')}}</button></div><div class="wallet-cards"><article><span>{{t('cashWallet')}}</span><strong>{{selectedUser.cashBalance.toFixed(2)}}</strong><div v-if="canWrite" class="wallet-actions"><button @click="openWalletAdjustment('CASH')">{{t('adjustBalance')}}</button></div></article><article><span>{{t('fareWallet')}}</span><strong>{{selectedUser.fareBalance.toFixed(2)}}</strong><div v-if="canWrite" class="wallet-actions"><button @click="openWalletAdjustment('FARE')">{{t('adjustBalance')}}</button></div></article></div><form v-if="walletAdjustment" class="record-form wallet-form" @submit.prevent="saveWalletAdjustment"><b>{{walletAdjustment.wallet === 'CASH' ? t('cashWallet') : t('fareWallet')}}</b><select v-model="walletAdjustment.direction"><option value="INCREASE">{{t('increase')}}</option><option value="DECREASE">{{t('decrease')}}</option></select><input v-model.number="walletAdjustment.amount" type="number" min="0.01" step="0.01" :placeholder="t('amount')" required/><input v-model="walletAdjustment.reason" maxlength="500" :placeholder="t('reasonRequired')" required/><button>{{t('confirmAdjustment')}}</button><button type="button" class="secondary" @click="walletAdjustment=null">{{t('cancel')}}</button></form><div class="user-records"><div><h3>{{t('currentTrips')}}</h3><p v-if="!selectedUser.currentTrips.length" class="muted">{{t('noCurrentTrips')}}</p><table v-else><tbody><tr v-for="trip in selectedUser.currentTrips" :key="trip.id"><td><b>{{trip.origin}}</b> → {{trip.destination}}</td><td>{{translateStatus(trip.status)}}</td><td>{{formatDate(trip.scheduledAt, true)}}</td></tr></tbody></table></div><div><h3>{{t('currentCharterOrders')}}</h3><p v-if="!selectedUser.currentCharterOrders.length" class="muted">{{t('noCurrentCharterOrders')}}</p><table v-else><tbody><tr v-for="order in selectedUser.currentCharterOrders" :key="order.id"><td><b>{{order.origin}}</b> → {{order.destination}}</td><td>{{translateStatus(order.status)}}</td><td>{{formatDate(order.scheduledAt, true)}}</td></tr></tbody></table></div></div><div class="history-table"><h3>{{t('balanceHistory')}}</h3><p v-if="!walletTransactions.length" class="muted">{{t('noBalanceTransactions')}}</p><table v-else><thead><tr><th>Time</th><th>Wallet</th><th>Type</th><th>Amount</th><th>Balance after</th><th>Reason</th></tr></thead><tbody><tr v-for="transaction in walletTransactions" :key="transaction.id"><td>{{formatDate(transaction.createdAt, true)}}</td><td>{{transaction.wallet}}</td><td>{{transaction.type}}</td><td>{{transaction.amount.toFixed(2)}}</td><td>{{transaction.balanceAfter.toFixed(2)}}</td><td>{{transaction.reason}}</td></tr></tbody></table></div><div class="history-table"><h3>{{t('topUpHistory')}}</h3><p v-if="!topUpWithdrawalHistory.length" class="muted">{{t('noTopUps')}}</p><table v-else><thead><tr><th>Time</th><th>Wallet</th><th>Type</th><th>Amount</th><th>Reason</th></tr></thead><tbody><tr v-for="transaction in topUpWithdrawalHistory" :key="transaction.id"><td>{{formatDate(transaction.createdAt, true)}}</td><td>{{transaction.wallet}}</td><td>{{transaction.type}}</td><td>{{transaction.amount.toFixed(2)}}</td><td>{{transaction.reason}}</td></tr></tbody></table></div></section></section><section v-if="view==='trips'" class="editor-section"><form v-if="tripForm" class="record-form" @submit.prevent="saveTrip"><select v-model="tripForm.userId"><option v-for="user in users" :key="user.id" :value="user.id">{{user.name || user.phone || user.id}}</option></select><input v-model="tripForm.origin" :placeholder="t('origin')" required/><input v-model="tripForm.destination" :placeholder="t('destination')" required/><input v-model="tripForm.region" :placeholder="t('region')" required/><input v-model="tripForm.scheduledAt" type="datetime-local" required/><select v-model="tripForm.status"><option v-for="status in ['PENDING','CONFIRMED','COMPLETED','CANCELLED']" :value="status">{{translateStatus(status)}}</option></select><button>{{t('saveChanges')}}</button><button type="button" class="secondary" @click="tripForm=null">{{t('cancel')}}</button></form><div class="panel"><table><thead><tr><th>{{t('route')}}</th><th>{{t('region')}}</th><th>{{t('scheduled')}}</th><th>{{t('status')}}</th><th>{{t('actions')}}</th></tr></thead><tbody><tr v-for="trip in trips" :key="trip.id"><td><b>{{trip.origin}}</b><br/><span class="muted">→ {{trip.destination}}</span></td><td>{{translateRegion(trip.region)}}</td><td>{{formatDate(trip.scheduledAt, true)}}</td><td><span class="status" :class="trip.status.toLowerCase()">{{translateStatus(trip.status)}}</span></td><td class="row-actions"><button @click="editTrip(trip)">{{t('edit')}}</button></td></tr></tbody></table></div></section><section v-if="view==='charters'" class="editor-section"><form v-if="charterForm" class="record-form charter-editor" @submit.prevent="saveCharter"><select v-model="charterForm.userId"><option v-for="user in users" :key="user.id" :value="user.id">{{user.name || user.phone || user.id}}</option></select><select v-model="charterForm.originRegion"><option>香港</option><option>大陸</option><option>澳門</option></select><input v-model="charterForm.origin" :placeholder="t('origin')" required/><select v-model="charterForm.destinationRegion"><option>香港</option><option>大陸</option><option>澳門</option></select><input v-model="charterForm.destination" :placeholder="t('destination')" required/><input v-model="charterForm.scheduledAt" type="datetime-local" required/><input v-model.number="charterForm.durationHours" type="number" min="1" step="0.5" required/><select v-model="charterForm.status"><option v-for="status in ['PENDING','CONFIRMED','COMPLETED','CANCELLED']" :value="status">{{translateStatus(status)}}</option></select><button>{{t('saveChanges')}}</button><button type="button" class="secondary" @click="charterForm=null">{{t('cancel')}}</button></form><div class="panel"><table><thead><tr><th>{{t('route')}}</th><th>{{t('scheduled')}}</th><th>{{t('duration')}}</th><th>{{t('status')}}</th><th>{{t('actions')}}</th></tr></thead><tbody><tr v-for="order in charterOrders" :key="order.id"><td><b>{{order.originRegion}} · {{order.origin}}</b><br/><span class="muted">→ {{order.destinationRegion}} · {{order.destination}}</span></td><td>{{formatDate(order.scheduledAt, true)}}</td><td>{{order.durationHours}} {{t('hours')}}</td><td><select :value="order.status" @change="updateCharterStatus(order, $event.target.value)"><option v-for="status in ['PENDING','CONFIRMED','COMPLETED','CANCELLED']" :key="status" :value="status">{{translateStatus(status)}}</option></select></td><td class="row-actions"><button @click="editCharter(order)">{{t('edit')}}</button></td></tr></tbody></table></div></section><section v-if="view==='addresses'" class="panel mainland-city-management"><div class="admin-toolbar"><div><h2>大陸市級單位</h2><span class="muted">先新增市級單位，再獨立設定該市推薦地址；停用後市級入口會隱藏，但地址仍保留在大陸聚合入口</span></div><button v-if="canWrite" @click="resetMainlandCity">新增市級單位</button></div><form v-if="mainlandCityForm" class="record-form" @submit.prevent="saveMainlandCity"><input v-model="mainlandCityForm.name" placeholder="市級單位，例如深圳市" required/><input v-model.number="mainlandCityForm.order" type="number" min="0" step="1" placeholder="排序" required/><label><input v-model="mainlandCityForm.enabled" type="checkbox"/> 啟用</label><button type="submit">{{mainlandCityForm.id ? '保存修改' : '新增市級單位'}}</button><button type="button" class="secondary" @click="mainlandCityForm=null">取消</button></form><table><thead><tr><th>市級單位</th><th>排序</th><th>狀態</th><th>操作</th></tr></thead><tbody><tr v-for="city in mainlandCities" :key="city.id"><td>{{city.name}}</td><td>{{city.order}}</td><td>{{city.enabled ? '已啟用' : '已停用'}}</td><td class="row-actions"><button v-if="canWrite" @click="editMainlandCity(city)">編輯</button><button v-if="canWrite" class="danger" @click="removeMainlandCity(city)">刪除</button></td></tr></tbody></table></section><section v-if="view==='addresses'" class="address-layout"><div v-if="canWrite" class="address-search panel"><div class="address-search-controls"><select v-model="addressForm.region" @change="handleAddressRegionChange"><option>香港</option><option>大陸</option><option>澳門</option></select><select v-if="addressForm.region === '大陸'" v-model="addressForm.city" @change="handleAddressCityChange"><option value="">大陸總分類</option><option v-for="city in mainlandCities.filter(item => item.enabled)" :key="city.id" :value="city.name">{{city.name}}</option></select><input v-model="addressSearchKeyword" placeholder="搜索位置名称或关键字" @keyup.enter="searchAddressPlaces"/><button type="button" @click="searchAddressPlaces">{{addressSearching ? '搜索中…' : '搜索位置'}}</button></div><div v-if="addressSearchResults.length" class="address-search-results"><button v-for="item in addressSearchResults" :key="item.id" type="button" class="address-search-result" @click="selectAddressSearchResult(item)"><b>{{item.name}}</b><span>{{item.displayAddress || item.address}}</span></button></div><p v-else-if="addressSearchKeyword && !addressSearching" class="muted">暂无搜索结果</p></div><form v-if="canWrite" class="address-form" @submit.prevent="saveAddress"><select v-model="addressForm.region" @change="handleAddressRegionChange"><option>香港</option><option>大陸</option><option>澳門</option></select><select v-if="addressForm.region === '大陸'" v-model="addressForm.city" @change="handleAddressCityChange"><option value="">大陸總分類</option><option v-for="city in mainlandCities.filter(item => item.enabled)" :key="city.id" :value="city.name">{{city.name}}</option></select><input v-model="addressForm.name" :placeholder="t('addressName')" required/><input v-model="addressForm.address" :placeholder="t('detailedAddress')" required/><input v-model.number="addressForm.order" type="number" min="0" step="1" :placeholder="t('order')" required/><label><input v-model="addressForm.enabled" type="checkbox"/> {{t('enabled')}}</label><div><button type="submit">{{addressForm.id ? t('saveChanges') : t('save')}}</button><button v-if="addressForm.id" type="button" class="secondary" @click="resetAddress">{{t('cancel')}}</button></div></form><div class="panel"><div class="address-list-toolbar"><h2>推薦地址列表</h2><select v-model="addressRegionFilter" aria-label="篩選推薦地址地區"><option value="">全部地區</option><option value="香港">香港</option><option value="大陸">大陸總分類</option><option value="澳門">澳門</option></select><select v-if="addressRegionFilter === '大陸'" v-model="addressCityFilter" aria-label="篩選大陸城市"><option value="">全部內地城市</option><option value="__mainland__">大陸總分類</option><option v-for="city in mainlandCities" :key="city.id" :value="city.name">{{city.name}}</option></select></div><table><thead><tr><th>{{t('region')}}</th><th>歸屬</th><th>{{t('addressName')}}</th><th>{{t('detailedAddress')}}</th><th>{{t('order')}}</th><th>{{t('enabled')}}</th><th>{{t('actions')}}</th></tr></thead><tbody><tr v-for="item in filteredAddresses" :key="item.id"><td>{{item.region}}</td><td>{{item.region === '大陸' ? (item.city ? displayMainlandCity(item.city) : '大陸總分類') : item.region}}</td><td><b>{{item.name}}</b></td><td>{{item.displayAddress || item.address}}</td><td>{{item.order}}</td><td>{{item.enabled ? '✓' : '—'}}</td><td class="row-actions"><button v-if="canWrite" @click="editAddress(item)">{{t('edit')}}</button><button v-if="canWrite" class="danger" @click="removeAddress(item)">{{t('remove')}}</button></td></tr></tbody></table></div></section><section v-if="view==='promotions'" class="promotion-admin">
+  <div class="promotion-summary">
+    <article class="summary-card" :class="{ active: promotionFilterTab === 'CAMPAIGN' }" @click="promotionFilterTab = (promotionFilterTab === 'CAMPAIGN' ? 'ALL' : 'CAMPAIGN')">
+      <div class="summary-icon">🏷️</div>
+      <div>
+        <span>折扣活動</span>
+        <strong>{{promotions.filter(item => item.kind === 'CAMPAIGN').length}}</strong>
+      </div>
+    </article>
+    <article class="summary-card" :class="{ active: promotionFilterTab === 'COUPON' }" @click="promotionFilterTab = (promotionFilterTab === 'COUPON' ? 'ALL' : 'COUPON')">
+      <div class="summary-icon">🎟️</div>
+      <div>
+        <span>優惠碼</span>
+        <strong>{{promotions.filter(item => item.kind === 'COUPON').length}}</strong>
+      </div>
+    </article>
+    <article class="summary-card" :class="{ active: promotionFilterTab === 'MEMBER' }" @click="promotionFilterTab = (promotionFilterTab === 'MEMBER' ? 'ALL' : 'MEMBER')">
+      <div class="summary-icon">👑</div>
+      <div>
+        <span>會員專屬</span>
+        <strong>{{promotions.filter(item => item.kind === 'MEMBER').length}}</strong>
+      </div>
+    </article>
+  </div>
+
+  <div class="panel">
+    <div class="admin-toolbar promo-toolbar">
+      <div>
+        <h2>優惠功能設定</h2>
+        <span class="muted">簡化設定流程，輕鬆管理折扣活動、優惠碼與會員專屬優惠</span>
+      </div>
+      <div class="promotion-add-actions">
+        <button class="add-btn campaign-btn" @click="resetPromotion('CAMPAIGN')">＋ 新增活動</button>
+        <button class="add-btn coupon-btn" @click="resetPromotion('COUPON')">＋ 新增優惠碼</button>
+        <button class="add-btn member-btn" @click="resetPromotion('MEMBER')">＋ 新增會員優惠</button>
+      </div>
+    </div>
+
+    <div class="promo-filter-bar">
+      <div class="promo-tabs">
+        <button :class="{ active: promotionFilterTab === 'ALL' }" @click="promotionFilterTab = 'ALL'">全部 ({{promotions.length}})</button>
+        <button :class="{ active: promotionFilterTab === 'CAMPAIGN' }" @click="promotionFilterTab = 'CAMPAIGN'">折扣活動 ({{promotions.filter(i => i.kind === 'CAMPAIGN').length}})</button>
+        <button :class="{ active: promotionFilterTab === 'COUPON' }" @click="promotionFilterTab = 'COUPON'">優惠碼 ({{promotions.filter(i => i.kind === 'COUPON').length}})</button>
+        <button :class="{ active: promotionFilterTab === 'MEMBER' }" @click="promotionFilterTab = 'MEMBER'">會員專屬 ({{promotions.filter(i => i.kind === 'MEMBER').length}})</button>
+        <button :class="{ active: promotionFilterTab === 'ACTIVE' }" @click="promotionFilterTab = 'ACTIVE'">已啟用 ({{promotions.filter(i => i.enabled !== false).length}})</button>
+      </div>
+      <div class="promo-search">
+        <input v-model="promotionSearchQuery" placeholder="🔍 搜尋名稱 / 優惠碼 / 城市..." />
+      </div>
+    </div>
+
+    <div v-if="promotionForm" class="promo-form-container">
+      <div class="promo-form-card">
+        <div class="promo-form-header">
+          <div class="modal-title-group">
+            <h3>{{ promotionForm.id ? '編輯優惠設定' : '建立新優惠' }}</h3>
+            <span class="promo-kind-badge" :class="promotionForm.kind.toLowerCase()">{{ promotionKindLabel(promotionForm.kind) }}</span>
+          </div>
+          <button type="button" class="close-btn" @click="promotionForm = null">✕</button>
+        </div>
+
+        <form class="promo-modal-form" @submit.prevent="savePromotion">
+          <div class="form-section">
+            <div class="section-title">📌 基本設定</div>
+            <div class="form-grid">
+              <label class="form-group col-span-2">
+                <span class="label-text">優惠名稱 <span class="required">*</span></span>
+                <input v-model="promotionForm.name" placeholder="例如：春季出行88折優惠" required />
+              </label>
+
+              <label class="form-group">
+                <span class="label-text">優惠類型</span>
+                <select v-model="promotionForm.kind">
+                  <option value="CAMPAIGN">折扣活動</option>
+                  <option value="COUPON">優惠碼</option>
+                  <option value="MEMBER">會員專屬</option>
+                </select>
+              </label>
+
+              <label class="form-group switch-group">
+                <span class="label-text">啟用狀態</span>
+                <div class="toggle-wrapper">
+                  <input id="promo-enabled-toggle" v-model="promotionForm.enabled" type="checkbox" class="toggle-checkbox" />
+                  <label for="promo-enabled-toggle" class="toggle-label"></label>
+                  <span class="toggle-text">{{ promotionForm.enabled ? '已啟用' : '已停用' }}</span>
+                </div>
+              </label>
+
+              <template v-if="promotionForm.kind === 'COUPON'">
+                <label class="form-group col-span-2">
+                  <span class="label-text">優惠碼 (Coupon Code) <span class="required">*</span></span>
+                  <div class="code-input-group">
+                    <input v-model.trim="promotionForm.couponCode" class="promotion-code-input" placeholder="例如：SUMMER88" required />
+                    <button type="button" class="btn-gen-code" @click="generateRandomCouponCode">⚡ 隨機生成</button>
+                  </div>
+                </label>
+                <label class="form-group">
+                  <span class="label-text">使用次數上限</span>
+                  <input v-model="promotionForm.usageLimit" type="number" min="1" step="1" placeholder="不限次數（選填）" />
+                </label>
+              </template>
+
+              <template v-if="promotionForm.kind === 'MEMBER'">
+                <label class="form-group col-span-2">
+                  <span class="label-text">適用會員等級 <span class="required">*</span></span>
+                  <select v-model="promotionForm.membershipLevel" required>
+                    <option value="" disabled>請選擇會員等級</option>
+                    <option v-for="plan in membershipPlans" :key="plan.level" :value="plan.level">{{plan.name}}（{{plan.level}}）</option>
+                  </select>
+                </label>
+              </template>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <div class="section-title">💰 折扣與計價規則</div>
+            <div class="form-grid">
+              <label class="form-group">
+                <span class="label-text">優惠方式</span>
+                <select v-model="promotionForm.discountType">
+                  <option value="PERCENTAGE">總金額打折（百分比）</option>
+                  <option value="FIXED_AMOUNT">現金券（固定折抵金額）</option>
+                  <option value="TOTAL_PRICE">折後固定總價</option>
+                </select>
+              </label>
+
+              <label class="form-group">
+                <span class="label-text">
+                  {{promotionForm.discountType === 'PERCENTAGE' ? '折扣百分比（%）' : promotionForm.discountType === 'TOTAL_PRICE' ? '折後應付總價' : '現金券折抵金額'}} <span class="required">*</span>
+                </span>
+                <input v-model.number="promotionForm.discountValue" type="number" min="0.01" :max="promotionForm.discountType === 'PERCENTAGE' ? 100 : undefined" step="0.01" :placeholder="promotionForm.discountType === 'PERCENTAGE' ? '例如 10 代表減 10%' : '例如 50 代表折抵 50'" required />
+              </label>
+
+              <label class="form-group">
+                <span class="label-text">計價幣別</span>
+                <input :value="pricingCurrency === 'HKD' ? 'HKD$（系統定價貨幣）' : 'RMB¥（系統定價貨幣）'" readonly />
+              </label>
+
+              <label class="form-group">
+                <span class="label-text">優惠組合（疊加模式）</span>
+                <select v-model="promotionForm.stackingMode">
+                  <option value="NONE">不可與其他優惠合併</option>
+                  <option value="PERCENTAGE_AND_VOUCHER">百分比優惠＋現金券可合併</option>
+                  <option value="ALL">可與所有優惠合併</option>
+                </select>
+              </label>
+
+              <label class="form-group">
+                <span class="label-text">優先級 (數字越小越優先)</span>
+                <input v-model.number="promotionForm.priority" type="number" step="1" placeholder="預設 0" />
+              </label>
+
+              <div class="form-group col-span-full help-banner">
+                💡 <b>規則說明：</b> {{promotionDiscountHint}} {{promotionStackingHint}}
+              </div>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <div class="section-title">🎯 使用門檻與限制</div>
+            <div class="form-grid">
+              <label class="form-group">
+                <span class="label-text">最低消費門檻</span>
+                <input v-model.number="promotionForm.minimumSpend" type="number" min="0" step="0.01" placeholder="0 代表無門檻" />
+              </label>
+
+              <label class="form-group">
+                <span class="label-text">最高折抵上限</span>
+                <input v-model="promotionForm.maximumDiscount" type="number" min="0.01" step="0.01" placeholder="不限上限（選填）" />
+              </label>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <div class="section-title">🗺️ 適用路線與地區</div>
+            <div class="form-grid">
+              <label class="form-group">
+                <span class="label-text">出發地區</span>
+                <select v-model="promotionForm.originRegion">
+                  <option value="">不限出發地區</option>
+                  <option>香港</option>
+                  <option>澳門</option>
+                  <option>大陸</option>
+                </select>
+              </label>
+
+              <label class="form-group">
+                <span class="label-text">出發城市</span>
+                <input v-model.trim="promotionForm.originCity" placeholder="指定城市（例如：深圳市）" />
+              </label>
+
+              <label class="form-group">
+                <span class="label-text">目的地區</span>
+                <select v-model="promotionForm.destinationRegion">
+                  <option value="">不限目的地區</option>
+                  <option>香港</option>
+                  <option>澳門</option>
+                  <option>大陸</option>
+                </select>
+              </label>
+
+              <label class="form-group">
+                <span class="label-text">目的城市</span>
+                <input v-model.trim="promotionForm.destinationCity" placeholder="指定城市（例如：廣州市）" />
+              </label>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <div class="section-title">⏰ 適用時間與週期</div>
+            <div class="form-grid">
+              <div class="form-group col-span-full">
+                <span class="label-text">適用星期</span>
+                <div class="weekday-selector">
+                  <div class="weekday-presets">
+                    <button type="button" class="preset-chip" @click="setWeekdaysPreset('ALL')">全選</button>
+                    <button type="button" class="preset-chip" @click="setWeekdaysPreset('WORKDAYS')">工作日 (一~五)</button>
+                    <button type="button" class="preset-chip" @click="setWeekdaysPreset('WEEKENDS')">週末 (六~日)</button>
+                    <button type="button" class="preset-chip secondary" @click="setWeekdaysPreset('CLEAR')">清空</button>
+                  </div>
+                  <div class="weekday-chips">
+                    <button type="button" v-for="day in [1,2,3,4,5,6,7]" :key="day"
+                      class="day-chip" :class="{ selected: isWeekdaySelected(day) }"
+                      @click="toggleWeekday(day)">
+                      {{ ['週一','週二','週三','週四','週五','週六','週日'][day-1] }}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <label class="form-group">
+                <span class="label-text">每日開始時間</span>
+                <input v-model="promotionForm.timeStart" type="time" />
+              </label>
+
+              <label class="form-group">
+                <span class="label-text">每日結束時間</span>
+                <input v-model="promotionForm.timeEnd" type="time" />
+              </label>
+
+              <label class="form-group">
+                <span class="label-text">活動開始日期時間</span>
+                <input v-model="promotionForm.startsAt" type="datetime-local" />
+              </label>
+
+              <label class="form-group">
+                <span class="label-text">活動結束日期時間</span>
+                <input v-model="promotionForm.endsAt" type="datetime-local" />
+              </label>
+            </div>
+          </div>
+
+          <div class="promo-modal-actions">
+            <button type="button" class="btn-cancel" @click="promotionForm = null">取消</button>
+            <button type="submit" class="btn-save">💾 儲存優惠設定</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="promo-table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>優惠名稱 / 類型</th>
+            <th>折扣內容</th>
+            <th>使用條件 & 路線</th>
+            <th>適用時間與週期</th>
+            <th>啟用狀態</th>
+            <th style="text-align: right;">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-if="!filteredPromotions.length">
+            <td colspan="6" class="muted promotion-empty">
+              {{ promotionSearchQuery ? '查無符合條件的優惠' : '尚未建立優惠' }}
+            </td>
+          </tr>
+          <tr v-for="item in filteredPromotions" :key="item.id" :class="{ disabled: !item.enabled }">
+            <td>
+              <div class="promo-name-cell">
+                <strong class="promo-title">{{item.name}}</strong>
+                <div class="promo-tags">
+                  <span class="kind-tag" :class="item.kind.toLowerCase()">{{promotionKindLabel(item.kind)}}</span>
+                  <span v-if="item.couponCode" class="code-tag">🎟️ {{item.couponCode}}</span>
+                  <span v-if="item.membershipLevel" class="member-tag">👑 {{item.membershipLevel}}</span>
+                  <span v-if="item.priority" class="priority-tag">優先級: {{item.priority}}</span>
+                </div>
+              </div>
+            </td>
+            <td>
+              <div class="discount-cell">
+                <strong class="discount-val">{{promotionDiscountLabel(item)}}</strong>
+                <span v-if="item.maximumDiscount" class="muted-info">最高折抵 {{item.currency}}{{item.maximumDiscount}}</span>
+                <span v-if="item.stackingMode !== 'NONE'" class="stacking-badge">可疊加</span>
+              </div>
+            </td>
+            <td>
+              <div class="condition-cell">
+                <div><span>最低門檻:</span> <strong>{{ item.minimumSpend > 0 ? (item.currency + item.minimumSpend) : '無門檻' }}</strong></div>
+                <div class="muted-info">
+                  <span v-if="item.usageLimit">使用數: {{item.usageCount || 0}} / {{item.usageLimit}} 次</span>
+                  <span v-else>使用數: {{item.usageCount || 0}} 次 (不限次)</span>
+                </div>
+                <div class="route-tag">📍 {{ formatRouteText(item) }}</div>
+              </div>
+            </td>
+            <td>
+              <div class="validity-cell">
+                <div class="weekday-summary">🗓️ {{ formatWeekdaysText(item.weekdays) }}</div>
+                <div v-if="formatTimeRangeText(item)" class="time-summary">⏰ {{ formatTimeRangeText(item) }}</div>
+                <div class="date-range muted-info">
+                  {{item.startsAt ? formatDate(item.startsAt, true) : '即日起'}} ~ {{item.endsAt ? formatDate(item.endsAt, true) : '長期'}}
+                </div>
+              </div>
+            </td>
+            <td>
+              <button type="button" class="status-toggle-btn" :class="item.enabled ? 'is-active' : 'is-inactive'" @click="togglePromotionEnabled(item)" title="點擊快速切換狀態">
+                <span class="status-dot"></span>
+                {{item.enabled ? '已啟用' : '已停用'}}
+              </button>
+            </td>
+            <td class="row-actions" style="text-align: right;">
+              <button type="button" class="action-btn edit-btn" @click="editPromotion(item)">編輯</button>
+              <button type="button" class="action-btn clone-btn" @click="duplicatePromotion(item)">複製</button>
+              <button type="button" class="action-btn danger-btn" @click="removePromotion(item)">刪除</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section><section v-if="view==='route-pricing'" class="editor-section"><div class="panel"><div class="admin-toolbar"><div><h2>路線最低價</h2><p class="muted">在原有距離計價結果上設定出發地到目的地的最低車資（使用目前定價貨幣）。</p></div><button v-if="canWrite" @click="resetRouteMinimumFare">新增規則</button></div><form v-if="routeMinimumFareForm" class="record-form" @submit.prevent="saveRouteMinimumFare"><select v-model="routeMinimumFareForm.originRegion" required><option>香港</option><option>澳門</option><option>大陸</option></select><input v-model="routeMinimumFareForm.originCity" placeholder="出發城市（留空代表全部）"/><select v-model="routeMinimumFareForm.destinationRegion" required><option>香港</option><option>澳門</option><option>大陸</option></select><input v-model="routeMinimumFareForm.destinationCity" placeholder="目的城市（留空代表全部）"/><select v-model="routeMinimumFareForm.categoryId"><option value="">所有車種</option><option v-for="category in categories" :key="category.id" :value="category.id">{{category.name}}</option></select><input v-model.number="routeMinimumFareForm.minimumFare" type="number" min="0" step="0.01" placeholder="最低金額" required/><input :value="pricingCurrency === 'HKD' ? 'HKD$（系統定價貨幣）' : 'RMB¥（系統定價貨幣）'" readonly/><label><input v-model="routeMinimumFareForm.enabled" type="checkbox"/> 啟用</label><button>{{routeMinimumFareForm.id ? '保存修改' : '新增規則'}}</button><button type="button" class="secondary" @click="routeMinimumFareForm=null">取消</button></form><table><thead><tr><th>路線</th><th>車種</th><th>最低金額</th><th>狀態</th><th>操作</th></tr></thead><tbody><tr v-for="item in routeMinimumFares" :key="item.id"><td>{{item.originRegion}}{{item.originCity ? ' · '+item.originCity : ''}} → {{item.destinationRegion}}{{item.destinationCity ? ' · '+item.destinationCity : ''}}</td><td>{{categories.find(category => category.id === item.categoryId)?.name || '所有車種'}}</td><td>{{item.currency}}{{item.minimumFare.toFixed(2)}}</td><td>{{item.enabled ? '啟用' : '停用'}}</td><td class="row-actions"><button v-if="canWrite" @click="editRouteMinimumFare(item)">編輯</button><button v-if="canWrite" @click="removeRouteMinimumFare(item)">刪除</button></td></tr></tbody></table></div></section><section v-if="view==='membership'" class="editor-section"><div class="panel"><div class="admin-toolbar"><h2>會員方案</h2><button @click="resetMembership">新增方案</button></div><form v-if="membershipForm" class="record-form" @submit.prevent="saveMembership"><input v-model="membershipForm.id" placeholder="方案 ID" required/><input v-model="membershipForm.level" placeholder="等級" required/><input v-model="membershipForm.name" placeholder="方案名稱" required/><input v-model.number="membershipForm.monthly" type="number" min="0" placeholder="月付"/><input v-model.number="membershipForm.yearly" type="number" min="0" placeholder="年付"/><input v-model.number="membershipForm.order" type="number" min="1" placeholder="排序"/><textarea v-model="membershipForm.benefits" placeholder="權益（每行一項）"></textarea><label><input v-model="membershipForm.recommended" type="checkbox"/> 推薦</label><label><input v-model="membershipForm.enabled" type="checkbox"/> 啟用</label><button>儲存</button><button type="button" class="secondary" @click="membershipForm=null">取消</button></form><table><thead><tr><th>ID</th><th>方案</th><th>月付</th><th>年付</th><th>權益</th><th>操作</th></tr></thead><tbody><tr v-for="item in membershipPlans" :key="item.id"><td>{{item.id}}</td><td><b>{{item.name}}</b><br/><span class="muted">{{item.level}}</span></td><td>HKD {{item.monthly}}</td><td>HKD {{item.yearly}}</td><td>{{formatBenefits(item)}}</td><td class="row-actions"><button @click="editMembership(item)">編輯</button><button class="danger" @click="removeMembership(item)">刪除</button></td></tr></tbody></table></div></section><section v-if="view==='vehicles'" class="vehicle-admin"><nav class="vehicle-tabs" aria-label="車型設定分類"><button type="button" :class="{active: vehicleTab==='catalog'}" @click="vehicleTab='catalog'">車型資料</button><button type="button" :class="{active: vehicleTab==='pricing'}" @click="vehicleTab='pricing'">距離定價</button><button type="button" :class="{active: vehicleTab==='extras'}" @click="vehicleTab='extras'">額外選擇</button></nav><div v-show="vehicleTab==='pricing'" class="panel currency-switcher"><div><h2>指定定價貨幣</h2><span class="muted">所有價格設定使用此貨幣定義；結算貨幣仍由結算流程獨立處理，匯率不會改寫價格</span></div><div class="currency-switcher-actions"><select v-model="pricingCurrency"><option value="RMB">人民幣 RMB¥</option><option value="HKD">港幣 HKD$</option></select><button @click="switchPricingCurrency">套用定價貨幣</button></div></div><div v-for="pricing in distancePricing" :key="pricing.categoryId" class="panel"><div class="admin-toolbar"><h2>{{pricing.category.name}}（{{pricing.category.tabLabel}}）· 按距離收費</h2><button @click="addPricingTier(pricing)">新增價格區間</button></div><form class="pricing-form" @submit.prevent="saveDistancePricing(pricing)"><div class="pricing-settings"><label>最低收費 <input v-model.number="pricing.minimumFare" type="number" min="0" step="0.01" required/></label><label>幣別 <input :value="pricingCurrency === 'HKD' ? 'HKD$（系統統一）' : 'RMB¥（系統統一）'" readonly/></label></div><table><thead><tr><th>起始公里</th><th>結束公里</th><th>每公里收費</th><th>操作</th></tr></thead><tbody><tr v-for="(tier,index) in pricing.tiers" :key="tier.id"><td><input v-model.number="tier.fromKm" type="number" min="0" step="0.01" required @change="syncPreviousTier(pricing,index)"/></td><td><input v-if="index < pricing.tiers.length-1" v-model.number="tier.toKm" type="number" :min="tier.fromKm" step="0.01" required @change="syncNextTier(pricing,index)"/><span v-else>以上（無上限）</span></td><td><input v-model.number="tier.pricePerKm" type="number" min="0" step="0.01" required/></td><td class="row-actions"><button v-if="pricing.tiers.length>1" type="button" class="danger" @click="removePricingTier(pricing,index)">刪除</button></td></tr></tbody></table><div class="pricing-actions"><button type="submit">儲存此車型收費</button><span class="muted">價格按區間累進計算，最終金額不低於最低收費。</span></div></form></div><div class="panel"><div class="admin-toolbar"><h2>車型類別</h2><button @click="resetCategory">新增類別</button></div><form v-if="categoryForm" class="record-form" @submit.prevent="saveCategory"><input v-model="categoryForm.id" placeholder="類別 ID" required/><input v-model="categoryForm.name" placeholder="卡片標題" required/><input v-model="categoryForm.tabLabel" placeholder="分頁標籤" required/><input v-model.number="categoryForm.order" type="number" min="1" placeholder="排序"/><label><input v-model="categoryForm.enabled" type="checkbox"/> 開啟</label><button>儲存</button><button type="button" class="secondary" @click="categoryForm=null">取消</button></form><table><thead><tr><th>ID</th><th>卡片標題</th><th>分頁標籤</th><th>排序</th><th>狀態</th><th>操作</th></tr></thead><tbody><tr v-for="item in categories" :key="item.id"><td>{{item.id}}</td><td>{{item.name}}</td><td>{{item.tabLabel}}</td><td>{{item.order}}</td><td><span class="status" :class="item.enabled ? 'completed' : 'cancelled'">{{item.enabled ? '已開啟' : '已關閉'}}</span></td><td class="row-actions"><button @click="editCategory(item)">編輯</button><button class="secondary" @click="toggleCategory(item)">{{item.enabled ? '關閉' : '開啟'}}</button><button class="danger" @click="removeCategory(item)">刪除</button></td></tr></tbody></table></div><div class="panel"><div class="admin-toolbar"><h2>車型資料</h2><button @click="resetVehicle">新增車型</button></div><form v-if="vehicleForm" class="record-form vehicle-record-form" @submit.prevent="saveVehicle"><input v-model="vehicleForm.id" placeholder="車型 ID" required/><select v-model="vehicleForm.categoryId"><option :value="null">未分類</option><option v-for="item in categories" :value="item.id">{{item.name}}{{item.enabled ? '' : '（已關閉）'}}</option></select><input v-model="vehicleForm.brand" placeholder="品牌文字"/><input v-model="vehicleForm.model" placeholder="車型文字" required/><input v-model="vehicleForm.series" placeholder="系列標籤"/><input v-model.number="vehicleForm.seats" type="number" min="1" placeholder="座位"/><input v-model="vehicleForm.image" placeholder="圖片 URL" required/><input v-model="vehicleForm.colorLabel" placeholder="顏色標籤"/><input v-model="vehicleForm.modelChoiceLabel" placeholder="車款標籤"/><button>儲存</button><button type="button" class="secondary" @click="vehicleForm=null">取消</button></form><table><thead><tr><th>車型</th><th>圖片</th><th>座位</th><th>狀態</th><th>操作</th></tr></thead><tbody><tr v-for="item in vehicles" :key="item.id"><td><b>{{item.brand}} {{item.model}} {{item.series}}</b><br/><span class="muted">{{item.colorLabel}} · {{item.modelChoiceLabel}}</span></td><td><img class="vehicle-thumb" :src="item.image" alt=""/></td><td>{{item.seats}}</td><td><span class="status" :class="item.enabled ? 'completed' : 'cancelled'">{{item.enabled ? '已開啟' : '已關閉'}}</span></td><td class="row-actions"><button @click="editVehicle(item)">編輯</button><button class="secondary" @click="toggleVehicle(item)">{{item.enabled ? '關閉' : '開啟'}}</button><button class="danger" @click="removeVehicle(item)">刪除</button></td></tr></tbody></table></div><div class="panel extra-settings"><div class="admin-toolbar"><div><span class="eyebrow">EXTRA OPTIONS</span><h2>額外選擇與觸發條件</h2><p class="muted">先選擇分類，再設定費用與觸發條件；符合條件時會自動加入報價。</p></div><button @click="resetExtra">新增額外選擇</button></div><div class="trigger-cards"><article v-for="type in ['IMMEDIATE','NIGHT','WEATHER']" :key="type" class="trigger-card" :class="{active: isTriggerActive(type)}"><div class="trigger-card-head"><div><span class="trigger-kicker">{{type==='IMMEDIATE' ? 'TIME WINDOW' : type==='NIGHT' ? 'NIGHT SURCHARGE' : 'WEATHER CONTROL'}}</span><h3>{{type==='IMMEDIATE' ? '即時訂單' : type==='NIGHT' ? '深夜加班費' : '惡劣天氣'}}</h3></div><span class="status" :class="{completed: isTriggerActive(type), cancelled: !isTriggerActive(type)}">{{isTriggerActive(type) ? '已啟用' : '未啟用'}}</span></div><p>{{type==='IMMEDIATE' ? '出發前指定時間內自動列為必選。' : type==='NIGHT' ? '依香港時間的出發時間自動加收。' : '由管理員手動開關，暫不依賴外部天氣 API。'}}</p><button class="card-action" @click="editExtra(extras.find(item => (item.triggerType || (item.requiredForImmediate ? 'IMMEDIATE' : 'NONE')) === type) || {id:type==='IMMEDIATE'?'instant-order':type==='NIGHT'?'night-surcharge':'severe-weather',label:type==='IMMEDIATE'?'即時訂單':type==='NIGHT'?'深夜加班費':'惡劣天氣費',price:0,currency:'RMB¥',triggerType:type,triggerEnabled:true,requiredWithinMinutes:60,nightStartTime:'22:00',nightEndTime:'06:00'})">設定條件</button></article></div><div v-if="extraForm" class="extra-editor"><div class="editor-heading"><div><h3>{{triggerLabel(extraForm)}}</h3><span class="muted">設定費用、顯示名稱與觸發方式</span></div><button type="button" class="secondary" @click="extraForm=null">取消</button></div><form class="record-form" @submit.prevent="saveExtra"><label>選項 ID<input v-model="extraForm.id" placeholder="例如 instant-order" required/></label><label>顯示文字<input v-model="extraForm.label" placeholder="顯示文字" required/></label><label>費用<input v-model.number="extraForm.price" type="number" min="0" step="0.01" required/></label><label>幣別<input v-model="extraForm.currency" placeholder="RMB¥" required/></label><label>觸發分類<select v-model="extraForm.triggerType"><option value="NONE">一般額外選擇</option><option value="IMMEDIATE">即時訂單</option><option value="NIGHT">深夜加班費</option><option value="WEATHER">惡劣天氣</option></select></label><label class="check-field"><input v-model="extraForm.enabled" type="checkbox"/> 顯示於用戶端</label><label class="check-field"><input v-model="extraForm.triggerEnabled" type="checkbox"/> 啟用此條件</label><label v-if="extraForm.triggerType==='IMMEDIATE'">出發前分鐘數<input v-model.number="extraForm.requiredWithinMinutes" type="number" min="1" max="1440" required/></label><template v-if="extraForm.triggerType==='NIGHT'"><label>開始時間<select v-model="extraForm.nightStartTime" required><option v-for="time in timeOptions" :key="'start-' + time" :value="time">{{time}}</option></select></label><label>結束時間<select v-model="extraForm.nightEndTime" required><option v-for="time in timeOptions" :key="'end-' + time" :value="time">{{time}}</option></select></label></template><label v-if="extraForm.triggerType==='WEATHER'" class="check-field"><input v-model="severeWeatherEnabled" type="checkbox"/> 全站啟用惡劣天氣費</label><button type="submit">儲存設定</button></form></div><div class="extra-table"><div class="table-heading"><h3>所有額外選項</h3><span class="muted">{{extras.length}} 個選項</span></div><table><thead><tr><th>選項</th><th>費用</th><th>分類</th><th>條件</th><th>狀態</th><th>操作</th></tr></thead><tbody><tr v-for="item in extras" :key="item.id"><td><b>{{item.label}}</b><span class="table-subtitle">{{item.id}}</span></td><td>{{item.currency}}{{item.price}}</td><td><span class="rule-chip">{{triggerLabel(item)}}</span></td><td>{{triggerSummary(item)}}</td><td><span class="status" :class="item.triggerEnabled === false ? 'cancelled' : 'completed'">{{item.triggerEnabled === false ? '停用' : '啟用'}}</span></td><td class="row-actions"><button @click="editExtra(item)">編輯</button><button v-if="item.enabled !== false" @click="showOnlyExtra(item)">只顯示此項</button><button class="danger" @click="removeExtra(item)">刪除</button></td></tr></tbody></table></div></div></section><section v-if="view==='administrators'" class="editor-section"><div class="panel"><div class="admin-toolbar"><h2>{{t('administrators')}}</h2><button @click="resetAdministrator">新增管理員</button></div><form v-if="administratorForm" class="record-form" @submit.prevent="saveAdministrator"><input v-model="administratorForm.username" placeholder="登入帳號" required/><input v-model="administratorForm.displayName" placeholder="顯示名稱" required/><select v-model="administratorForm.role"><option value="SUPER_ADMIN">超級管理員</option><option value="OPERATOR">營運管理員</option><option value="VIEWER">唯讀使用者</option></select><input v-model="administratorForm.password" type="password" :required="!administratorForm.id" :placeholder="administratorForm.id ? '留空即不修改密碼' : '密碼至少 8 字元'"/><label><input v-model="administratorForm.enabled" type="checkbox"/> 啟用</label><button>儲存</button><button type="button" class="secondary" @click="administratorForm=null">取消</button></form><table><thead><tr><th>帳號</th><th>名稱</th><th>角色</th><th>狀態</th><th>最後登入</th><th>操作</th></tr></thead><tbody><tr v-for="item in administrators" :key="item.id"><td>{{item.username}}</td><td>{{item.displayName}}</td><td>{{item.role}}</td><td><span class="status" :class="item.enabled ? 'completed' : 'cancelled'">{{item.enabled ? '已啟用' : '已停用'}}</span></td><td>{{item.lastLoginAt ? formatDate(item.lastLoginAt,true) : '—'}}</td><td class="row-actions"><button @click="editAdministrator(item)">編輯</button><button v-if="item.enabled && item.id !== currentAdministrator.id" class="danger" @click="disableAdministrator(item)">停用</button></td></tr></tbody></table></div></section><section v-if="view==='auditLogs'" class="panel"><table><thead><tr><th>時間</th><th>管理員</th><th>操作</th><th>結果</th><th>IP</th></tr></thead><tbody><tr v-for="item in auditLogs" :key="item.id"><td>{{formatDate(item.createdAt,true)}}</td><td>{{item.username}}</td><td><b>{{item.action}}</b><br/><span class="muted">{{item.resource}}</span></td><td><span class="status" :class="item.status === 'SUCCESS' ? 'completed' : 'cancelled'">{{item.status}}</span></td><td>{{item.ip || '—'}}</td></tr></tbody></table></section><div v-if="loading" class="loading">{{t('loading')}}</div></main></div>` }
 const mountExtraSortControls = () => {
   const appRoot = document.querySelector('#app')
   if (!appRoot) return
@@ -392,7 +844,76 @@ const mountExtraSortControls = () => {
   new MutationObserver(render).observe(appRoot, { childList: true, subtree: true })
   render()
 }
+const mountVehicleTabPanels = () => {
+  const appRoot = document.querySelector('#app')
+  if (!appRoot) return
+  const sync = () => {
+    const section = [...appRoot.querySelectorAll('.vehicle-admin')].find(item => item.querySelector('.vehicle-tabs'))
+    if (!section) return
+    const panels = [...section.querySelectorAll(':scope > .panel')]
+    panels.forEach(panel => {
+      const text = panel.textContent || ''
+      const group = panel.classList.contains('currency-switcher') || text.includes('按距離收費')
+        ? 'pricing'
+        : text.includes('額外選擇與觸發條件') || text.includes('EXTRA OPTIONS')
+          ? 'extras'
+          : 'catalog'
+      panel.hidden = group !== vehicleTab.value
+    })
+  }
+  watch(vehicleTab, sync)
+  new MutationObserver(sync).observe(appRoot, { childList: true, subtree: true })
+  sync()
+}
+const mountVehicleSidebar = () => {
+  const nav = document.querySelector('nav')
+  if (!nav || nav.querySelector('[data-vehicle-sidebar]')) return
+  const vehicleButton = [...nav.querySelectorAll('button')].find(button => button.textContent?.includes('車型設定'))
+  const routePricingButton = [...nav.querySelectorAll('button')].find(button => button.textContent?.includes('路線最低價'))
+  if (!vehicleButton || !routePricingButton) return
+
+  const group = document.createElement('div')
+  group.dataset.vehicleSidebar = 'true'
+  group.className = 'nav-group'
+  group.innerHTML = '<button type="button" class="nav-group-toggle" aria-expanded="true">▤ 車型與定價 <span>⌄</span></button><div class="nav-group-items"><button type="button" data-vehicle-tab="catalog">車型資料</button><button type="button" data-vehicle-tab="pricing">車型定價</button><button type="button" data-vehicle-tab="extras">額外服務</button><button type="button" data-vehicle-tab="route-pricing">路線最低價</button></div>'
+  vehicleButton.hidden = true
+  routePricingButton.hidden = true
+  nav.insertBefore(group, vehicleButton)
+
+  const toggle = group.querySelector('.nav-group-toggle')
+  const items = group.querySelector('.nav-group-items')
+  toggle?.addEventListener('click', () => {
+    const expanded = group.dataset.expanded !== 'false'
+    group.dataset.expanded = String(!expanded)
+    if (toggle) toggle.setAttribute('aria-expanded', String(!expanded))
+    if (items) items.hidden = expanded
+  })
+  group.querySelectorAll('[data-vehicle-tab]').forEach(button => {
+    button.addEventListener('click', () => {
+      const tab = button.dataset.vehicleTab
+      if (tab === 'route-pricing') {
+        view.value = 'route-pricing'
+      } else {
+        view.value = 'vehicles'
+        vehicleTab.value = tab
+      }
+      load()
+    })
+  })
+
+  const sync = () => {
+    const active = view.value === 'route-pricing' ? 'route-pricing' : view.value === 'vehicles' ? vehicleTab.value : ''
+    group.querySelectorAll('[data-vehicle-tab]').forEach(button => {
+      button.classList.toggle('active', button.dataset.vehicleTab === active)
+    })
+    toggle?.classList.toggle('active', Boolean(active))
+  }
+  watch([view, vehicleTab], sync)
+  sync()
+}
 const app = createApp(App)
 app.config.globalProperties.saveExtra = saveExtra
 app.mount('#app')
 mountExtraSortControls()
+mountVehicleTabPanels()
+mountVehicleSidebar()

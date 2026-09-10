@@ -41,8 +41,9 @@ interface QuoteExtraSelection { id: string; quantity: number }
 interface PromotionInput { id?: unknown; name?: unknown; kind?: unknown; discountType?: unknown; stackingMode?: unknown; discountValue?: unknown; currency?: unknown; minimumSpend?: unknown; maximumDiscount?: unknown; priority?: unknown; startsAt?: unknown; endsAt?: unknown; enabled?: unknown; couponCode?: unknown; usageLimit?: unknown; membershipLevel?: unknown; originRegion?: unknown; originCity?: unknown; destinationRegion?: unknown; destinationCity?: unknown; weekdays?: unknown; timeStart?: unknown; timeEnd?: unknown }
 interface MembershipPlan { id: string; level: string; name: string; monthly: number; yearly: number; recommended: boolean; benefits: string[]; enabled: boolean; order: number }
 const prisma = new PrismaClient()
-const appSettingsDefaults = { id: 'default', language: '繁體中文', region: '香港', currency: 'HKD', exchangeRate: 0.92, adminLogo: null as string | null, severeWeatherEnabled: false }
+const appSettingsDefaults = { id: 'default', language: '繁體中文', region: '香港', currency: 'HKD', pricingCurrency: 'RMB', exchangeRate: 0.92, adminLogo: null as string | null, severeWeatherEnabled: false }
 const currencyLabels = { RMB: 'RMB¥', HKD: 'HKD$' } as const
+const configuredCurrencyLabel = (settings: { pricingCurrency: string }) => currencyLabels[settings.pricingCurrency as keyof typeof currencyLabels] || currencyLabels.RMB
 const roundMoney = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100
 const normalizeRuleText = (value: unknown) => typeof value === 'string' ? value.trim() : ''
 const normalizeWeekdays = (value: unknown) => Array.isArray(value) ? value.map(Number).filter(day => Number.isInteger(day) && day >= 1 && day <= 7) : []
@@ -175,9 +176,10 @@ async function ensurePricingDefaults() {
       create: appSettingsDefaults,
       update: {}
     })
+    const appSettings = await tx.appSetting.findUniqueOrThrow({ where: { id: appSettingsDefaults.id } })
     for (const category of vehicleCategoryDefaults) {
       await tx.vehicleCategory.upsert({ where: { id: category.id }, create: category, update: {} })
-      const pricing = defaultDistancePricing(category.id)
+      const pricing = { ...defaultDistancePricing(category.id), currency: configuredCurrencyLabel(appSettings) }
       await tx.categoryDistancePricing.upsert({
         where: { categoryId: category.id },
         create: {
@@ -210,7 +212,7 @@ async function ensurePricingDefaults() {
   })
 }
 function appSettingsResponse(settings: typeof appSettingsDefaults) {
-  return { language: settings.language, region: settings.region, currency: settings.currency, exchangeRate: settings.exchangeRate, adminLogo: settings.adminLogo, severeWeatherEnabled: settings.severeWeatherEnabled }
+  return { language: settings.language, region: settings.region, currency: settings.currency, pricingCurrency: settings.pricingCurrency, exchangeRate: settings.exchangeRate, adminLogo: settings.adminLogo, severeWeatherEnabled: settings.severeWeatherEnabled }
 }
 function validateAdminLogo(value: string) {
   const match = /^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/.exec(value)
@@ -651,7 +653,8 @@ class AdminController {
     const startsAt = body.startsAt ? new Date(String(body.startsAt)) : null
     const endsAt = body.endsAt ? new Date(String(body.endsAt)) : null
     if (!name || !kind || !discountType || !Number.isFinite(discountValue) || discountValue <= 0 || (discountType === 'PERCENTAGE' && discountValue > 100) || !Number.isFinite(minimumSpend) || minimumSpend < 0 || !Number.isInteger(priority) || (maximumDiscount !== null && (!Number.isFinite(maximumDiscount) || maximumDiscount <= 0)) || (usageLimit !== null && (!Number.isInteger(usageLimit) || usageLimit <= 0)) || (startsAt && Number.isNaN(startsAt.valueOf())) || (endsAt && Number.isNaN(endsAt.valueOf())) || (startsAt && endsAt && startsAt >= endsAt) || (timeStart && timeToMinutes(timeStart) === null) || (timeEnd && timeToMinutes(timeEnd) === null) || (kind === 'COUPON' && !couponCode) || (kind === 'MEMBER' && !membershipLevel)) throw new HttpException('Promotion fields are invalid', HttpStatus.BAD_REQUEST)
-    const data = { name, kind: kind as PromotionKind, discountType: discountType as DiscountType, stackingMode: stackingMode as PromotionStackingMode, discountValue, currency: typeof body.currency === 'string' && currencyCode(body.currency) ? currencyLabels[currencyCode(body.currency)!] : 'RMB¥', minimumSpend, maximumDiscount, priority, startsAt, endsAt, enabled: body.enabled !== false, couponCode: kind === 'COUPON' ? couponCode : null, usageLimit, membershipLevel: kind === 'MEMBER' ? membershipLevel : null, originRegion, originCity, destinationRegion, destinationCity, weekdays: weekdays.length ? weekdays : Prisma.JsonNull, timeStart, timeEnd }
+    const settings = await prisma.appSetting.findUniqueOrThrow({ where: { id: appSettingsDefaults.id } })
+    const data = { name, kind: kind as PromotionKind, discountType: discountType as DiscountType, stackingMode: stackingMode as PromotionStackingMode, discountValue, currency: configuredCurrencyLabel(settings), minimumSpend, maximumDiscount, priority, startsAt, endsAt, enabled: body.enabled !== false, couponCode: kind === 'COUPON' ? couponCode : null, usageLimit, membershipLevel: kind === 'MEMBER' ? membershipLevel : null, originRegion, originCity, destinationRegion, destinationCity, weekdays: weekdays.length ? weekdays : Prisma.JsonNull, timeStart, timeEnd }
     if (id) { const existing = await prisma.promotion.findUnique({ where: { id } }); if (!existing) throw new HttpException('Promotion not found', HttpStatus.NOT_FOUND); return prisma.promotion.update({ where: { id }, data }) }
     return prisma.promotion.create({ data })
   }
@@ -779,7 +782,8 @@ class AdminController {
     const nightStartTime = body.nightStartTime === null || body.nightStartTime === '' ? null : String(body.nightStartTime)
     const nightEndTime = body.nightEndTime === null || body.nightEndTime === '' ? null : String(body.nightEndTime)
     if (triggerType === 'NIGHT' && (timeToMinutes(nightStartTime) === null || timeToMinutes(nightEndTime) === null)) throw new HttpException('Night trigger requires valid start and end times', HttpStatus.BAD_REQUEST)
-    const values = { name: body.name?.trim() || body.id, label: body.label.trim(), price, currency: body.currency?.trim() || 'RMB¥', enabled: body.enabled ?? true, order: Number(body.order) || existing?.order || await prisma.vehicleExtra.count() + 1, requiredForImmediate: triggerType === 'IMMEDIATE', requiredWithinMinutes: triggerType === 'IMMEDIATE' ? requiredWithinMinutes : null, triggerType, triggerEnabled: body.triggerEnabled ?? true, nightStartTime: triggerType === 'NIGHT' ? nightStartTime : null, nightEndTime: triggerType === 'NIGHT' ? nightEndTime : null }
+    const settings = await prisma.appSetting.findUniqueOrThrow({ where: { id: appSettingsDefaults.id } })
+    const values = { name: body.name?.trim() || body.id, label: body.label.trim(), price, currency: configuredCurrencyLabel(settings), enabled: body.enabled ?? true, order: Number(body.order) || existing?.order || await prisma.vehicleExtra.count() + 1, requiredForImmediate: triggerType === 'IMMEDIATE', requiredWithinMinutes: triggerType === 'IMMEDIATE' ? requiredWithinMinutes : null, triggerType, triggerEnabled: body.triggerEnabled ?? true, nightStartTime: triggerType === 'NIGHT' ? nightStartTime : null, nightEndTime: triggerType === 'NIGHT' ? nightEndTime : null }
     return vehicleExtraResponse(existing ? await prisma.vehicleExtra.update({ where: { id: existing.id }, data: values }) : await prisma.vehicleExtra.create({ data: { id: body.id, ...values } }))
   }
   @Delete('vehicle-extras/:id') async deleteVehicleExtra(@Req() req: RequestLike, @Param('id') id: string) { requireAuth(req); const item = await prisma.vehicleExtra.findUnique({ where: { id } }); if (!item) throw new HttpException('Extra option not found', HttpStatus.NOT_FOUND); await prisma.vehicleExtra.update({ where: { id }, data: { enabled: false } }); return { ok: true } }
@@ -790,27 +794,24 @@ class AdminController {
   }
   @Post('distance-pricing/currency') async switchDistancePricingCurrency(@Req() req: RequestLike, @Body() body: { currency?: string }) {
     requireAuth(req)
-    const currency = body.currency
-    if (currency !== 'RMB' && currency !== 'HKD') throw new HttpException('Currency must be RMB or HKD', HttpStatus.BAD_REQUEST)
-    const targetLabel = currencyLabels[currency]
+    if (body.currency !== 'RMB' && body.currency !== 'HKD') throw new HttpException('Currency must be RMB or HKD', HttpStatus.BAD_REQUEST)
+    const targetLabel = currencyLabels[body.currency]
     const settings = await prisma.appSetting.findUniqueOrThrow({ where: { id: appSettingsDefaults.id } })
-    const exchangeRate = settings.exchangeRate
-    const pricingTables = await prisma.categoryDistancePricing.findMany({ include: { tiers: true } })
-    await prisma.$transaction(pricingTables.flatMap(pricing => {
-      if (pricing.currency === targetLabel) return []
-      const multiplier = currency === 'HKD' ? 1 / exchangeRate : exchangeRate
-      return [
-        prisma.categoryDistancePricing.update({ where: { id: pricing.id }, data: { minimumFare: roundMoney(pricing.minimumFare * multiplier), currency: targetLabel } }),
-        ...pricing.tiers.map(tier => prisma.distancePricingTier.update({ where: { id: tier.id }, data: { pricePerKm: roundMoney(tier.pricePerKm * multiplier) } }))
-      ]
-    }))
+    await prisma.$transaction([
+      prisma.appSetting.update({ where: { id: settings.id }, data: { pricingCurrency: body.currency } }),
+      prisma.categoryDistancePricing.updateMany({ data: { currency: targetLabel } }),
+      prisma.vehicleExtra.updateMany({ data: { currency: targetLabel } }),
+      prisma.routeMinimumFare.updateMany({ data: { currency: targetLabel } }),
+      prisma.promotion.updateMany({ data: { currency: targetLabel } })
+    ])
     const data = await prisma.categoryDistancePricing.findMany({ orderBy: { category: { order: 'asc' } }, include: { tiers: { orderBy: { order: 'asc' } } } })
-    return { currency: targetLabel, exchangeRate, data: data.map(pricingResponse) }
+    return { currency: targetLabel, data: data.map(pricingResponse) }
   }
   @Post('distance-pricing/:categoryId') async saveDistancePricing(@Req() req: RequestLike, @Param('categoryId') categoryId: string, @Body() body: Partial<DistancePricingSettings>) {
     requireAuth(req)
     if (!await prisma.vehicleCategory.findUnique({ where: { id: categoryId } })) throw new HttpException('Vehicle category not found', HttpStatus.NOT_FOUND)
-    const settings = parseDistancePricing(categoryId, body)
+    const appSettings = await prisma.appSetting.findUniqueOrThrow({ where: { id: appSettingsDefaults.id } })
+    const settings = { ...parseDistancePricing(categoryId, body), currency: configuredCurrencyLabel(appSettings) }
     const pricing = await prisma.categoryDistancePricing.upsert({
       where: { categoryId },
       create: { categoryId, minimumFare: settings.minimumFare, currency: settings.currency, tiers: { create: settings.tiers } },
@@ -834,7 +835,8 @@ class AdminController {
   }
   @Post('route-minimum-fares') async saveRouteMinimumFare(@Req() req: RequestLike, @Body() body: Partial<RouteMinimumFareSettings>) {
     requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
-    const values = parseRouteMinimumFare(body)
+    const appSettings = await prisma.appSetting.findUniqueOrThrow({ where: { id: appSettingsDefaults.id } })
+    const values = { ...parseRouteMinimumFare(body), currency: configuredCurrencyLabel(appSettings) }
     if (values.categoryId && !await prisma.vehicleCategory.findUnique({ where: { id: values.categoryId } })) {
       throw new HttpException('Vehicle category not found', HttpStatus.NOT_FOUND)
     }
@@ -1334,20 +1336,32 @@ class RecommendedAddressesController {
 @Controller('settings')
 class SettingsController {
   @Get() async get() { return appSettingsResponse(await prisma.appSetting.findUniqueOrThrow({ where: { id: appSettingsDefaults.id } })) }
-  @Post() async update(@Req() req: RequestLike, @Body() body: { language?: string; region?: string; currency?: string; exchangeRate?: number; adminLogo?: string | null; severeWeatherEnabled?: boolean }) {
+  @Post() async update(@Req() req: RequestLike, @Body() body: { language?: string; region?: string; currency?: string; pricingCurrency?: string; exchangeRate?: number; adminLogo?: string | null; severeWeatherEnabled?: boolean }) {
     const session = requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
     if (body.adminLogo !== undefined && session.role !== 'SUPER_ADMIN') throw new ForbiddenException('Only super administrators may update the logo')
     const settings = await prisma.appSetting.findUniqueOrThrow({ where: { id: appSettingsDefaults.id } })
-    const updated = await prisma.appSetting.update({
-      where: { id: settings.id },
-      data: {
+    const pricingCurrency = body.pricingCurrency && ['HKD', 'RMB'].includes(body.pricingCurrency) ? body.pricingCurrency : settings.pricingCurrency
+    const data = {
         language: body.language || settings.language,
         region: body.region || settings.region,
         currency: body.currency && ['HKD', 'RMB'].includes(body.currency) ? body.currency : settings.currency,
+        pricingCurrency,
         exchangeRate: body.exchangeRate !== undefined && Number.isFinite(Number(body.exchangeRate)) && Number(body.exchangeRate) > 0 ? Number(body.exchangeRate) : settings.exchangeRate,
         adminLogo: body.adminLogo === undefined ? settings.adminLogo : body.adminLogo === null ? null : validateAdminLogo(body.adminLogo),
         severeWeatherEnabled: body.severeWeatherEnabled ?? settings.severeWeatherEnabled
       }
+    const updated = await prisma.$transaction(async tx => {
+      const result = await tx.appSetting.update({ where: { id: settings.id }, data })
+      if (pricingCurrency !== settings.pricingCurrency) {
+        const label = configuredCurrencyLabel({ pricingCurrency })
+        await Promise.all([
+          tx.categoryDistancePricing.updateMany({ data: { currency: label } }),
+          tx.vehicleExtra.updateMany({ data: { currency: label } }),
+          tx.routeMinimumFare.updateMany({ data: { currency: label } }),
+          tx.promotion.updateMany({ data: { currency: label } })
+        ])
+      }
+      return result
     })
     addAudit(req, 'SUCCESS')
     return appSettingsResponse(updated)

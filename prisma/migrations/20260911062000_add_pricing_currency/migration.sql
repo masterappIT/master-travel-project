@@ -1,0 +1,1 @@
+ALTER TABLE "AppSetting" ADD COLUMN "pricingCurrency" TEXT NOT NULL DEFAULT 'RMB';
