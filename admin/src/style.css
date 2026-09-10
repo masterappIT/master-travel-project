@@ -39,10 +39,15 @@ aside::after, .login::before {
 }
 .brand { position: relative; z-index: 1; min-height: 56px; font-size: 18px; font-weight: 750; letter-spacing: -.03em; }
 .brand img { display: block; width: 180px; height: 56px; max-width: none; object-fit: cover; background: transparent; }
-.logo-controls { position: relative; z-index: 1; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-.logo-controls label, .logo-controls button { border: 1px solid rgba(255,255,255,.22); border-radius: 8px; padding: 6px 8px; color: #fff; background: rgba(255,255,255,.09); font-size: 11px; cursor: pointer; }
-.logo-controls input { display: none; }
-.logo-controls small { width: 100%; margin: 0; color: #b9c8da; font-size: 10px; }
+.logo-settings { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 18px; padding: 20px 24px; }
+.logo-settings h2 { margin: 5px 0 6px; color: #12243b; font-size: 18px; }
+.logo-settings p { margin: 0; max-width: 520px; color: #647892; font-size: 12px; line-height: 1.5; }
+.logo-settings-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+.logo-preview { display: flex; align-items: center; justify-content: center; width: 180px; height: 56px; overflow: hidden; border: 1px dashed #c7d5e6; border-radius: 8px; color: #7c8ca1; background: #f8fafd; font-size: 11px; }
+.logo-preview img { display: block; width: 180px; height: 56px; object-fit: cover; }
+.logo-upload, .logo-remove { border: 0; border-radius: 9px; padding: 10px 12px; color: #fff; background: #1769e0; font-size: 12px; font-weight: 700; cursor: pointer; }
+.logo-upload input { display: none; }
+.logo-remove { background: #d74b4b; }
 nav { position: relative; z-index: 1; display: grid; gap: 8px; margin-top: 62px; }
 nav button, .logout {
   width: 100%;
@@ -113,8 +118,10 @@ tr:last-child td { border-bottom: 0; }
   aside::after { display: none; }
   .brand { min-height: 56px; font-size: 15px; }
   .brand img { width: 180px; height: 56px; object-fit: cover; }
-  .logo-controls { position: static; margin-top: 8px; }
-  .logo-controls small { display: none; }
+  .logo-settings { align-items: stretch; flex-direction: column; gap: 14px; padding: 16px; }
+  .logo-settings-actions { justify-content: flex-start; }
+  .logo-settings p { max-width: none; }
+  .logo-preview { width: 180px; flex: 0 0 180px; }
   nav { display: flex; gap: 7px; margin-top: 10px; overflow-x: auto; scrollbar-width: none; scroll-snap-type: x proximity; }
   nav::-webkit-scrollbar { display: none; }
   nav button { flex: 0 0 auto; width: auto; min-height: 38px; padding: 9px 12px; border-radius: 10px; white-space: nowrap; text-align: center; scroll-snap-align: start; }

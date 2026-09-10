@@ -66,6 +66,12 @@ export const useTripStore = defineStore('trip', () => {
     activeDraft.value.estimatedFare = chosenVehicle.value ? fareQuotes.value[chosenVehicle.value.id]?.total : undefined
   }
 
+  function setFareQuote(quote: FareQuote) {
+    if (!quote.vehicle) return
+    fareQuotes.value = { ...fareQuotes.value, [quote.vehicle.id]: quote }
+    if (chosenVehicle.value?.id === quote.vehicle.id) activeDraft.value.estimatedFare = quote.total
+  }
+
   function clearRouteDistance() {
     activeDraft.value.distanceMeters = undefined
     activeDraft.value.distanceKm = undefined
@@ -117,6 +123,7 @@ export const useTripStore = defineStore('trip', () => {
     setDepartureTime,
     setChosenVehicle,
     setFareQuotes,
+    setFareQuote,
     clearRouteDistance,
     updateActiveDraft,
     resetDraft,
