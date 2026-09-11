@@ -39,7 +39,7 @@ import { setAuthenticated } from '../../utils/auth'
 import { verifyPhoneVerificationCode } from '../../services/api'
 
 const { responsiveStyle } = useResponsiveCanvas()
-const phone = ref('+852-67890000')
+const phone = ref('+852-66996688')
 const challengeId = ref('')
 const developmentCode = ref('')
 const codes = ref(['', '', '', '', ''])

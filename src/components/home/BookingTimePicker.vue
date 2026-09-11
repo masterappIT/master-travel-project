@@ -68,4 +68,7 @@ const confirm = () => {
 
 <style scoped>
 .booking-mask{position:absolute;inset:0;z-index:40;background:rgba(20,28,42,.42);display:flex;align-items:flex-end}.booking-sheet{width:430px;height:360px;padding:18px 20px 10px;box-sizing:border-box;border-radius:25px 25px 0 0;background:#fff;color:#38434a;box-shadow:0 -8px 24px rgba(40,53,76,.18);display:flex;flex-direction:column}.sheet-head{display:flex;align-items:center;justify-content:space-between;flex:none}.sheet-title{font-size:20px;font-weight:600}.sheet-close{font-size:28px;line-height:20px;color:#8995a8}.picker-labels{display:flex;margin-top:14px;color:#8995a8;font-size:12px;font-weight:600;line-height:18px}.picker-label{width:50%;text-align:center}.booking-picker{width:390px;height:176px;margin-top:2px;flex:none}.picker-item{display:flex;height:44px;align-items:center;justify-content:center;color:#647184;font-size:16px;line-height:44px;text-align:center;transition:color .15s,font-size .15s}.picker-item-selected{color:#285cfc;font-size:17px;font-weight:700}.time-item{font-variant-numeric:tabular-nums;letter-spacing:.3px}.booking-hint{display:block;margin-top:6px;color:#8995a8;font-size:12px;text-align:center;flex:none}.confirm-button{width:181px;height:48px;margin:10px auto 0;border:0;border-radius:12px;background:#285cfc;color:#fff;font-size:16px;line-height:48px;text-align:center;flex:none}.confirm-button::after{border:0}
+/* #ifdef H5 */
+.booking-mask{position:fixed;justify-content:center}.booking-sheet{width:min(430px,100vw)}.booking-picker{width:100%}
+/* #endif */
 </style>

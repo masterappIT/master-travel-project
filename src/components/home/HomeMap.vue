@@ -8,8 +8,7 @@
       :longitude="longitude"
       :scale="nativeScale"
       :markers="nativeMarkers"
-      :polyline="polyline"
-      :include-points="includePoints"
+      :polyline="nativePolyline"
       :style="nativeMapStyle"
       show-location
       :enable-zoom="!bookingPickerOpen"
@@ -33,7 +32,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, getCurrentInstance, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, getCurrentInstance, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 
 type MapMarker = { id: number; latitude: number; longitude: number; title?: string; iconPath?: string; width?: number; height?: number; callout?: { content: string; display?: 'ALWAYS' | 'BYCLICK'; color?: string; fontSize?: number; borderRadius?: number; bgColor?: string; padding?: number; textAlign?: 'left' | 'center' } }
 type MapPoint = { latitude: number; longitude: number }
@@ -45,8 +44,6 @@ const props = withDefaults(defineProps<{
   scale?: number
   markers?: MapMarker[]
   polyline?: MapPolyline[]
-  includePoints?: MapPoint[]
-  fitTrigger?: number
   centerTrigger?: number
   fullScreen?: boolean
   bookingPickerOpen?: boolean
@@ -62,16 +59,29 @@ const props = withDefaults(defineProps<{
   mapId: 'home-route-map'
 })
 
-const nativeMarkers = computed<MapMarker[]>(() => (props.markers || []).map(marker => {
+const nativeMarkers = computed<MapMarker[]>(() => (props.markers || [])
+  .filter(marker => Number.isFinite(marker?.latitude) && Number.isFinite(marker?.longitude))
+  .map(marker => {
   const content = marker.id === 1
     ? `【上車位置】\n${props.pickupLabel || '目前定位'}`
     : marker.id === 2 && props.routeSummary
       ? `【目的地 · 行程資訊】\n${props.destinationLabel || marker.title || '目的地'}\n${props.routeSummary}`
       : ''
+  const sizedMarker = {
+    ...marker,
+    width: marker.width || (marker.id === 2 ? 24 : 20),
+    height: marker.height || 36
+  }
   return content
-    ? { ...marker, callout: { content, display: 'ALWAYS', color: '#263238', fontSize: 14, borderRadius: 8, bgColor: '#FFFFFF', padding: 10, textAlign: 'center' } }
-    : marker
+    ? { ...sizedMarker, callout: { content, display: 'ALWAYS', color: '#263238', fontSize: 14, borderRadius: 8, bgColor: '#FFFFFF', padding: 10, textAlign: 'center' } }
+    : sizedMarker
 }))
+const nativePolyline = computed<MapPolyline[]>(() => (props.polyline || [])
+  .map(line => ({
+    ...line,
+    points: (line.points || []).filter(point => Number.isFinite(point?.latitude) && Number.isFinite(point?.longitude))
+  }))
+  .filter(line => line.points.length > 1))
 const nativeMapStyle = computed(() => props.nativeHeight ? { height: `${props.nativeHeight}px` } : undefined)
 const mapLayerStyle = computed(() => ({
   ...(props.nativeHeight ? { height: `${props.nativeHeight}px` } : {}),
@@ -79,8 +89,8 @@ const mapLayerStyle = computed(() => ({
 }))
 
 const routeBounds = computed(() => {
-  const points = props.polyline?.[0]?.points
-  if (!points || points.length < 2) return null
+  const points = (props.polyline?.[0]?.points || []).filter(point => Number.isFinite(point?.latitude) && Number.isFinite(point?.longitude))
+  if (points.length < 2) return null
   const longitudes = points.map(point => point.longitude)
   const latitudes = points.map(point => point.latitude)
   const minLongitude = Math.min(...longitudes)
@@ -97,8 +107,8 @@ const routeBounds = computed(() => {
 })
 
 const projectedRoute = computed(() => {
-  const points = props.polyline?.[0]?.points
-  if (!points || !routeBounds.value) return ''
+  const points = (props.polyline?.[0]?.points || []).filter(point => Number.isFinite(point?.latitude) && Number.isFinite(point?.longitude))
+  if (points.length < 2 || !routeBounds.value) return ''
   return points.map(point => {
     const projected = routeBounds.value!.project(point)
     return `${projected.x},${projected.y}`
@@ -110,24 +120,10 @@ const markerStyle = (point: { x: number; y: number }) => ({ left: `${Math.min(32
 
 const instance = getCurrentInstance()
 const nativeScale = ref(props.scale)
-let fitTimer: ReturnType<typeof setTimeout> | undefined
 let centerTimer: ReturnType<typeof setTimeout> | undefined
-let mapReady = false
-
-const routeBoundaryPoints = (points: MapPoint[]) => {
-  const minLatitude = Math.min(...points.map(point => point.latitude))
-  const maxLatitude = Math.max(...points.map(point => point.latitude))
-  const minLongitude = Math.min(...points.map(point => point.longitude))
-  const maxLongitude = Math.max(...points.map(point => point.longitude))
-  return [
-    { latitude: minLatitude, longitude: minLongitude },
-    { latitude: maxLatitude, longitude: maxLongitude }
-  ]
-}
 
 const centerMap = async () => {
   // #ifdef APP-PLUS || MP-WEIXIN || MP-TOUTIAO
-  if (!mapReady) return
   nativeScale.value = props.scale
   await nextTick()
   const moveToCenter = () => {
@@ -142,28 +138,7 @@ const centerMap = async () => {
   // #endif
 }
 
-const fitRoute = (points: MapPoint[]) => {
-  // #ifdef APP-PLUS || MP-WEIXIN || MP-TOUTIAO
-  if (!mapReady) return
-  let padding = props.fitPadding || [96, 32, 190, 32]
-  // #ifdef APP-PLUS
-  if (!props.fitPadding) padding = [24, 24, 54, 24]
-  // #endif
-  uni.createMapContext(props.mapId, instance?.proxy).includePoints({
-    points: routeBoundaryPoints(points),
-    padding
-  })
-  // #endif
-}
-
-onMounted(() => {
-  mapReady = true
-  if (props.includePoints && props.includePoints.length > 1) fitRoute(props.includePoints)
-})
-
 onBeforeUnmount(() => {
-  mapReady = false
-  if (fitTimer) clearTimeout(fitTimer)
   if (centerTimer) clearTimeout(centerTimer)
 })
 
@@ -180,28 +155,6 @@ watch(
   }
 )
 
-watch(
-  () => props.fitTrigger,
-  () => {
-    const points = props.includePoints
-    if (!points || points.length < 2) return
-    if (fitTimer) clearTimeout(fitTimer)
-    fitRoute(points)
-    fitTimer = setTimeout(() => fitRoute(points), 350)
-  }
-)
-
-watch(
-  () => props.includePoints,
-  async (points) => {
-    if (!points || points.length < 2) return
-    await nextTick()
-    if (fitTimer) clearTimeout(fitTimer)
-    fitRoute(points)
-    fitTimer = setTimeout(() => fitRoute(points), 350)
-  },
-  { deep: true, flush: 'post' }
-)
 </script>
 
 <style scoped>

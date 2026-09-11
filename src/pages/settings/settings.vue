@@ -16,7 +16,7 @@
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { onMounted, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
-import { getSettings, updateSettings } from '../../services/api'
+import { getSettings, updateSettings, logoutClient } from '../../services/api'
 import { closeCachedPage } from '../../utils/navigation'
 import { useCurrency, type Currency } from '../../composables/useCurrency'
 import { clearAuthentication, isAuthenticated } from '../../utils/auth'
@@ -53,10 +53,15 @@ onMounted(async () => {
 onShow(() => {
   authenticated.value = isAuthenticated()
 })
-const handleAuthAction = () => {
+const handleAuthAction = async () => {
   if (!authenticated.value) {
     uni.reLaunch({ url: '/pages/login/login', animationType: 'none', animationDuration: 0 })
     return
+  }
+  try {
+    await logoutClient()
+  } catch {
+    // Clear local credentials even when the server is unavailable.
   }
   clearAuthentication()
   authenticated.value = false

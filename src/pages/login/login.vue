@@ -18,7 +18,7 @@
         <view class="phone-divider">
           <image src="/static/login/phone-divider.svg" mode="scaleToFill" />
         </view>
-        <input v-model="phone" class="phone-input" type="number" maxlength="8" />
+        <input v-model="phone" class="phone-input" type="number" :maxlength="phoneMaxLength" />
       </view>
 
       <view class="agreement">
@@ -31,7 +31,7 @@
         <text class="agreement-link">使用條款</text>
       </view>
 
-      <button class="login-button" type="button" @tap="handleLogin" @click="handleLogin">
+      <button class="login-button" type="button" :disabled="loginSubmitting" @tap="handleLogin">
         <text>登入</text>
       </button>
 
@@ -58,25 +58,32 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { goHome } from '../../utils/navigation'
 import { authenticateThirdParty, requestPhoneVerificationCode, verifyPhoneVerificationCode } from '../../services/api'
 import { setAuthenticated } from '../../utils/auth'
 
 const { responsiveStyle } = useResponsiveCanvas()
-const developmentLoginEnabled = import.meta.env.VITE_ENABLE_DEV_LOGIN !== 'false'
-const phone = ref(developmentLoginEnabled ? '67890000' : '')
-const agreed = ref(false)
-const countryOptions = ['香港 +852', '澳門 +852', '內地 +86']
-const countryCodes = ['+852', '+852', '+86']
-const countryIndex = ref(0)
+const countryOptions = ['香港 +852', '澳門 +853', '內地 +86']
+const countryCodes = ['+852', '+853', '+86']
+const countryPhoneLengths = [8, 8, 11]
+const developmentLoginEnabled = import.meta.env.DEV && import.meta.env.VITE_ENABLE_DEV_LOGIN === 'true'
+const developmentCountryCode = import.meta.env.VITE_DEV_LOGIN_COUNTRY_CODE || '+852'
+const developmentPhone = import.meta.env.VITE_DEV_LOGIN_PHONE || '66996688'
+const developmentCountryIndex = countryCodes.indexOf(developmentCountryCode)
+const countryIndex = ref(developmentLoginEnabled && developmentCountryIndex >= 0 ? developmentCountryIndex : 0)
 const countryCode = ref(countryCodes[countryIndex.value])
+const phone = ref(developmentLoginEnabled ? developmentPhone : '')
+const agreed = ref(false)
+const loginSubmitting = ref(false)
+const phoneMaxLength = computed(() => countryPhoneLengths[countryIndex.value])
 
 const handleCountryChange = (event: { detail: { value: string | number } }) => {
   const index = Number(event.detail.value)
   countryIndex.value = index
   countryCode.value = countryCodes[index]
+  phone.value = phone.value.slice(0, countryPhoneLengths[index])
 }
 
 const handleBack = () => {
@@ -84,13 +91,20 @@ const handleBack = () => {
 }
 
 const handleLogin = async () => {
+  if (loginSubmitting.value) return
   if (!agreed.value && !developmentLoginEnabled) {
     uni.showToast({ title: '請先同意私隱協議及使用條款', icon: 'none' })
     return
   }
+  if (!developmentLoginEnabled && !new RegExp(`^\\d{${phoneMaxLength.value}}$`).test(phone.value)) {
+    uni.showToast({ title: `請輸入${phoneMaxLength.value}位手機號碼`, icon: 'none' })
+    return
+  }
+  loginSubmitting.value = true
   try {
-    const loginPhone = developmentLoginEnabled ? '67890000' : phone.value
-    const challenge = await requestPhoneVerificationCode(countryCode.value, loginPhone)
+    const loginCountryCode = developmentLoginEnabled ? developmentCountryCode : countryCode.value
+    const loginPhone = developmentLoginEnabled ? developmentPhone : phone.value
+    const challenge = await requestPhoneVerificationCode(loginCountryCode, loginPhone)
     if (developmentLoginEnabled) {
       const result = await verifyPhoneVerificationCode(challenge.challengeId, '', challenge.developmentCode)
       setAuthenticated(result.token, result.user)
@@ -101,8 +115,14 @@ const handleLogin = async () => {
     uni.navigateTo({ url: `/pages/login/verify?${query}`, animationType: 'none', animationDuration: 0 })
   } catch (error) {
     uni.showToast({ title: error instanceof Error ? error.message : '驗證碼發送失敗', icon: 'none' })
+  } finally {
+    loginSubmitting.value = false
   }
 }
+
+onMounted(() => {
+  if (developmentLoginEnabled) void handleLogin()
+})
 
 const handleThirdPartyLogin = async (provider: 'wechat' | 'apple') => {
   try {

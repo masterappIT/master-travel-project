@@ -59,6 +59,8 @@ H5 與管理後台使用固定連接埠；若連接埠已被其他程序占用�
 | --- | --- |
 | `DATABASE_URL` | PostgreSQL 連線字串 |
 | `PORT` | API 監聽埠 |
+| `VITE_ENABLE_DEV_LOGIN` | 僅在 Vite 開發模式啟用固定測試用戶自動登入 |
+| `VITE_DEV_LOGIN_COUNTRY_CODE`、`VITE_DEV_LOGIN_PHONE` | 開發自動登入所使用的資料庫用戶手機號碼 |
 | `ADMIN_USERNAME`、`ADMIN_PASSWORD` | 管理後台登入資料 |
 | `ADMIN_SESSION_SECRET` | 管理 session 簽章密鑰 |
 | `ADMIN_CORS_ORIGIN` | 管理後台允許來源 |

@@ -68,6 +68,11 @@ export async function authenticateThirdParty(provider: 'wechat' | 'apple', provi
   return response.data as AuthResult
 }
 
+export async function logoutClient(): Promise<void> {
+  const response = await uni.request({ url: `${API_BASE_URL}/auth/logout`, method: 'POST', header: authHeaders() })
+  if (response.statusCode >= 400) throw apiError(response, '登出失敗')
+}
+
 export async function getHealth(): Promise<{ status: string }> {
   const response = await uni.request({ url: `${API_BASE_URL}/health` })
   return response.data as { status: string }

@@ -2,7 +2,7 @@
   <view v-show="activePagePath === '/pages/index/index'" class="page" :style="responsiveStyle">
     <view v-if="rideMode === 'cross-border'" class="page-content">
       <view class="canvas">
-        <HomeMap v-if="mapVisible && activePagePath === '/pages/index/index'" :key="mapMountKey" map-id="home-main-map" :latitude="mapLatitude" :longitude="mapLongitude" :scale="mapScale" :markers="mapMarkers" :polyline="mapPolyline" :include-points="mapIncludePoints" :fit-trigger="mapFitTrigger" :center-trigger="mapCenterTrigger" :booking-picker-open="bookingTimePicker" :pickup-label="origin" :destination-label="destination" :route-summary="routeSummary" />
+        <HomeMap v-if="activePagePath === '/pages/index/index'" map-id="home-main-map" :latitude="mapLatitude" :longitude="mapLongitude" :scale="mapScale" :markers="mapMarkers" :polyline="mapPolyline" :center-trigger="mapCenterTrigger" :booking-picker-open="bookingTimePicker" :pickup-label="origin" :destination-label="destination" :route-summary="routeSummary" />
         <HomeHeader :location-label="locationLabel" />
         <HomeTravelModeSwitch :mode="rideMode" @update:mode="switchRideMode" />
         <HomeMapActions @location="handleMapLocation" />
@@ -30,7 +30,14 @@
           @locate="locateCurrentAddress"
           @use-current="useCurrentLocation(true)"
         />
+        <!-- #ifdef H5 -->
+        <Teleport to="body">
+          <BookingTimePicker v-if="bookingTimePicker" @close="bookingTimePicker = false" @confirm="confirmDepartureTime" />
+        </Teleport>
+        <!-- #endif -->
+        <!-- #ifndef H5 -->
         <BookingTimePicker v-if="bookingTimePicker" @close="bookingTimePicker = false" @confirm="confirmDepartureTime" />
+        <!-- #endif -->
       </view>
     </view>
     <template v-else>
@@ -58,7 +65,14 @@
         @locate="locateCurrentAddress"
         @use-current="useCurrentLocation(true)"
       />
+      <!-- #ifdef H5 -->
+      <Teleport to="body">
+        <BookingTimePicker v-if="bookingTimePicker" @close="bookingTimePicker = false" @confirm="confirmDepartureTime" />
+      </Teleport>
+      <!-- #endif -->
+      <!-- #ifndef H5 -->
       <BookingTimePicker v-if="bookingTimePicker" @close="bookingTimePicker = false" @confirm="confirmDepartureTime" />
+      <!-- #endif -->
     </template>
     <view class="nav-layer">
       <HomeBottomNav @services="openSupport" @trips="openTrips" />
@@ -105,7 +119,7 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, ref } from 'vue'
+import { ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useTripStore } from '../../stores/trip'
 import HomeHeader from '../../components/home/HomeHeader.vue'
@@ -185,7 +199,6 @@ const selectedCoordinates = ref<{ origin?: Coordinate; destination?: Coordinate 
 type MapMarker = Coordinate & { id: number; title?: string; iconPath?: string; width?: number; height?: number }
 const mapMarkers = ref<MapMarker[]>([])
 const mapPolyline = ref<Array<{ points: Coordinate[]; color: string; width: number; arrowLine: boolean }>>([])
-const mapIncludePoints = ref<Coordinate[]>([])
 const routeSummary = ref('')
 const businessOrigin = ref<BusinessLocation>({ region: '香港', place: '香港國際機場' })
 const businessDestination = ref<BusinessLocation>({ region: '大陸', place: '' })
@@ -196,10 +209,7 @@ const flightNumber = ref('')
 const mapLatitude = ref(22.3046)
 const mapLongitude = ref(114.1619)
 const mapScale = ref(13)
-const mapFitTrigger = ref(0)
 const mapCenterTrigger = ref(0)
-const mapMountKey = ref(0)
-const mapVisible = ref(true)
 const locationLabel = ref('香港 · 油尖旺區')
 const detailedAddress = ref('香港九龍站附近')
 const bookingTimePicker = ref(false)
@@ -221,7 +231,6 @@ const switchRideMode = (mode: RideMode) => {
     selectedCoordinates.value.destination = undefined
     mapMarkers.value = []
     mapPolyline.value = []
-    mapIncludePoints.value = []
     routeSummary.value = ''
     departureTime.value = ''
     flightNumber.value = ''
@@ -321,8 +330,7 @@ const updateRoute = async () => {
       { id: 2, ...destinationCoordinate, title: '目的地', iconPath: '/static/home/route/destination.svg', width: 24, height: 36 }
     ]
     mapPolyline.value = [{ points: route.points, color: '#285CFC', width: 6, arrowLine: true }]
-    mapIncludePoints.value = route.points.length > 1 ? route.points : [originCoordinate, destinationCoordinate]
-    const distanceKm = route.distance / 1000
+      const distanceKm = route.distance / 1000
     const durationMinutes = Math.max(1, Math.round(route.duration / 60))
     routeSummary.value = `共 ${distanceKm < 10 ? distanceKm.toFixed(1) : Math.round(distanceKm)} 公里 · 約 ${durationMinutes >= 60 ? `${Math.floor(durationMinutes / 60)} 小時${durationMinutes % 60 ? ` ${durationMinutes % 60} 分鐘` : ''}` : `${durationMinutes} 分鐘`}`
     tripStore.setRoute(origin.value, destination.value, {
@@ -428,13 +436,6 @@ const handleMapLocation = () => {
   useCurrentLocation()
 }
 
-const remountMapAtCurrentLocation = async () => {
-  mapVisible.value = false
-  await nextTick()
-  mapMountKey.value += 1
-  mapVisible.value = true
-}
-
 const useCurrentLocation = (closePicker = false, setAsOrigin = false, forceCenter = false) => {
   const getLocation = () => uni.getLocation({
     type: 'gcj02',
@@ -443,9 +444,7 @@ const useCurrentLocation = (closePicker = false, setAsOrigin = false, forceCente
       mapLongitude.value = longitude
       if (forceCenter || mapPolyline.value.length === 0) {
         mapScale.value = 17
-        mapIncludePoints.value = []
         mapCenterTrigger.value += 1
-        void remountMapAtCurrentLocation()
       }
       if (addressPicker.value) selectedCoordinates.value[addressPicker.value] = { latitude, longitude }
       const localRegion = findLocalRegion(latitude, longitude)

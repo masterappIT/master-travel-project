@@ -24,7 +24,7 @@ type SupportSession = { conversationId: string; riderId: string; exp: number }
 type ClientSession = { sub: string; exp: number; jti: string }
 type PhoneChallenge = { countryCode: string; phoneNumber: string; code: string; exp: number }
 
-interface User { id: string; countryCode: string; phoneNumber: string; name: string | null; cashBalance: number; fareBalance: number; createdAt: string }
+type User = { id: string; countryCode: string; phoneNumber: string; name: string | null; cashBalance: number; fareBalance: number; createdAt: string; lastLoginAt: string | null; lastLogoutAt: string | null }
 interface Trip { id: string; userId: string; origin: string; destination: string; region: string; scheduledAt: string; status: string; createdAt: string }
 type AddressRegion = '大陸' | '香港' | '澳門'
 interface RecommendedAddress { id: string; region: AddressRegion; city: string | null; name: string; address: string; latitude: number | null; longitude: number | null; enabled: boolean; order: number }
@@ -139,8 +139,8 @@ const membershipPlans: MembershipPlan[] = [
   { id: 'diamond', level: 'DIAMOND', name: '鑽石會員', monthly: 228, yearly: 2288, recommended: false, benefits: ['專屬車型升級', '機場快速接送', '全年專屬客服'], enabled: true, order: 3 },
 ]
 const users: User[] = [
-  { id: 'usr_demo_001', countryCode: '+852', phoneNumber: '55550101', name: 'Demo Rider', cashBalance: 120, fareBalance: 80, createdAt: '2026-08-22T09:30:00.000Z' },
-  { id: 'usr_demo_002', countryCode: '+86', phoneNumber: '13800000202', name: 'Alex Chen', cashBalance: 0, fareBalance: 200, createdAt: '2026-08-27T14:10:00.000Z' },
+  { id: 'usr_demo_001', countryCode: '+852', phoneNumber: '55550101', name: 'Demo Rider', cashBalance: 120, fareBalance: 80, createdAt: '2026-08-22T09:30:00.000Z', lastLoginAt: null, lastLogoutAt: null },
+  { id: 'usr_demo_002', countryCode: '+86', phoneNumber: '13800000202', name: 'Alex Chen', cashBalance: 0, fareBalance: 200, createdAt: '2026-08-27T14:10:00.000Z', lastLoginAt: null, lastLogoutAt: null },
 ]
 const phoneChallenges = new Map<string, PhoneChallenge>()
 const trips: Trip[] = [
@@ -309,7 +309,7 @@ function parseRouteMinimumFare(body: Partial<RouteMinimumFareSettings>) {
   return { originRegion, originCity, destinationRegion, destinationCity, categoryId: body.categoryId?.trim() || null, minimumFare, currency, enabled: body.enabled ?? true }
 }
 function validVehicleCategory(body: Partial<VehicleCategory>) { return body.id && body.name?.trim() && body.tabLabel?.trim() }
-type ManagedUser = { id: string; countryCode: string; phoneNumber: string; name: string | null; cashBalance: number; fareBalance: number; membershipLevel: string | null; createdAt: Date }
+type ManagedUser = { id: string; countryCode: string; phoneNumber: string; name: string | null; cashBalance: number; fareBalance: number; membershipLevel: string | null; createdAt: Date; lastLoginAt: Date | null; lastLogoutAt: Date | null }
 function userResponse(user: ManagedUser) {
   return {
     id: user.id,
@@ -320,7 +320,9 @@ function userResponse(user: ManagedUser) {
     cashBalance: user.cashBalance,
     fareBalance: user.fareBalance,
     membershipLevel: user.membershipLevel,
-    createdAt: user.createdAt.toISOString()
+    createdAt: user.createdAt.toISOString(),
+    lastLoginAt: user.lastLoginAt?.toISOString() || null,
+    lastLogoutAt: user.lastLogoutAt?.toISOString() || null
   }
 }
 function parsePhoneIdentity(body: { countryCode?: string; phoneNumber?: string }) {
@@ -759,7 +761,8 @@ class ClientAuthController {
     phoneChallenges.delete(challengeId)
     const existing = await prisma.user.findUnique({ where: { countryCode_phoneNumber: { countryCode: challenge.countryCode, phoneNumber: challenge.phoneNumber } } })
     const user = existing || await prisma.user.create({ data: { countryCode: challenge.countryCode, phoneNumber: challenge.phoneNumber } })
-    return clientAuthResponse(user)
+    const loggedInUser = await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } })
+    return clientAuthResponse(loggedInUser)
   }
 
   @Post('third-party')
@@ -774,11 +777,21 @@ class ClientAuthController {
       where: { provider_providerId: { provider, providerId: providerToken } },
       include: { user: true }
     })
-    if (identity) return clientAuthResponse(identity.user)
+    if (identity) {
+      const loggedInUser = await prisma.user.update({ where: { id: identity.user.id }, data: { lastLoginAt: new Date() } })
+      return clientAuthResponse(loggedInUser)
+    }
 
     const phoneNumber = `${Date.now()}${randomBytes(2).toString('hex')}`.replace(/\D/g, '').slice(-15)
-    const user = await prisma.user.create({ data: { countryCode: '+852', phoneNumber, name: provider === 'wechat' ? 'WeChat User' : 'Apple User', authIdentities: { create: { provider, providerId: providerToken } } } })
+    const user = await prisma.user.create({ data: { countryCode: '+852', phoneNumber, name: provider === 'wechat' ? 'WeChat User' : 'Apple User', lastLoginAt: new Date(), authIdentities: { create: { provider, providerId: providerToken } } } })
     return clientAuthResponse(user)
+  }
+
+  @Post('logout')
+  async logout(@Req() req: RequestLike) {
+    const session = clientSessionFrom(req)
+    const user = await prisma.user.update({ where: { id: session.sub }, data: { lastLogoutAt: new Date() }, select: { id: true } })
+    return { ok: Boolean(user.id) }
   }
 }
 

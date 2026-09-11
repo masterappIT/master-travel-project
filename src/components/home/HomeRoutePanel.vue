@@ -26,7 +26,7 @@
       </view>
       <view class="route-field time-field" @tap="$emit('departure-time')">
         <image class="time-icon" src="/static/home/route/time.svg" mode="scaleToFill" />
-        <text>{{ departureTime || '預約時間' }}</text>
+        <text>{{ formattedDepartureTime }}</text>
       </view>
     </view>
 
@@ -45,7 +45,7 @@
       </view>
       <view class="route-field airport-time-field" @tap="$emit('departure-time')">
         <image class="time-icon" src="/static/home/route/airport-time.svg" mode="scaleToFill" />
-        <text>{{ departureTime || '預約時間' }}</text>
+        <text>{{ formattedDepartureTime }}</text>
       </view>
     </view>
 
@@ -53,9 +53,11 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
+
 type TravelMode = 'cross-border' | 'airport'
 
-withDefaults(defineProps<{
+const props = withDefaults(defineProps<{
   mode?: TravelMode
   origin?: string
   destination?: string
@@ -76,6 +78,13 @@ const emit = defineEmits<{
   'departure-time': []
   'update:flight-number': [value: string]
 }>()
+
+const formattedDepartureTime = computed(() => {
+  if (!props.departureTime) return '預約時間'
+  const date = new Date(props.departureTime)
+  if (Number.isNaN(date.valueOf())) return props.departureTime
+  return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日 ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+})
 
 const formatRouteValue = (value: string | undefined, placeholder: string) => {
   const maxLength = 18
