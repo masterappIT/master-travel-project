@@ -2,7 +2,6 @@
   <view class="map-layer" :class="{ 'full-screen': fullScreen, 'booking-picker-open': bookingPickerOpen }" :style="mapLayerStyle" aria-label="地圖區域">
     <!-- #ifdef APP-PLUS || MP-WEIXIN || MP-TOUTIAO -->
     <map
-      :key="mapRenderKey"
       :id="mapId"
       class="native-map"
       :latitude="latitude"
@@ -111,7 +110,6 @@ const markerStyle = (point: { x: number; y: number }) => ({ left: `${Math.min(32
 
 const instance = getCurrentInstance()
 const nativeScale = ref(props.scale)
-const mapRenderKey = ref(0)
 let fitTimer: ReturnType<typeof setTimeout> | undefined
 let centerTimer: ReturnType<typeof setTimeout> | undefined
 let mapReady = false
@@ -131,7 +129,6 @@ const centerMap = async () => {
   // #ifdef APP-PLUS || MP-WEIXIN || MP-TOUTIAO
   if (!mapReady) return
   nativeScale.value = props.scale
-  mapRenderKey.value += 1
   await nextTick()
   const moveToCenter = () => {
     uni.createMapContext(props.mapId, instance?.proxy).moveToLocation({
