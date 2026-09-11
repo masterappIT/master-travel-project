@@ -76,7 +76,7 @@ const formatOrderDate = (value?: string) => {
   const date = new Date(value)
   return Number.isNaN(date.valueOf()) ? value : `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`
 }
-const formatAmount = (amount = 0, currency = 'HKD') => `${currency === 'HKD' ? 'HK$' : currency === 'RMB' ? 'RMB¥' : currency} ${amount.toFixed(2)}`
+const formatAmount = (amount = 0, currency = 'HKD') => `${currency.includes('HKD') ? 'HK$' : currency.includes('RMB') ? 'RMB¥' : currency} ${amount.toFixed(2)}`
 const openOrder = (order: Order) => {
   if (order.status === '已完成' || order.status === '取消' || order.status === '待確認' || order.status === '待出行') {
     setOrderReturnTarget('orders')

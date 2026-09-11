@@ -454,6 +454,25 @@ type PersistedQuote = {
     modelChoiceLabel: string
   } | null
   lines: Array<{ type: string; sourceId: string | null; label: string; quantity: number; unitAmount: number; totalAmount: number; currency: string; order: number }>
+  promotionUsages?: Array<{
+   id: string
+   promotionId: string
+    status: string
+    createdAt: Date
+    usedAt: Date | null
+    releasedAt: Date | null
+    promotion: {
+      id: string
+      name: string
+      kind: string
+      discountType: string
+      discountValue: number
+      currency: string
+      minimumSpend: number
+      maximumDiscount: number | null
+      couponCode: string | null
+    }
+  }>
 }
 function quoteResponse(quote: PersistedQuote) {
   const discountLines = quote.lines.filter(line => line.type === 'DISCOUNT' && line.totalAmount < 0)
@@ -493,6 +512,23 @@ function quoteResponse(quote: PersistedQuote) {
           currency: discountLines[0].currency
         }
       : null,
+    promotions: (quote.promotionUsages || []).map(usage => ({
+      id: usage.promotion.id,
+      usageId: usage.id,
+      name: usage.promotion.name,
+      kind: usage.promotion.kind,
+      discountType: usage.promotion.discountType,
+      discountValue: usage.promotion.discountValue,
+      currency: usage.promotion.currency,
+      minimumSpend: usage.promotion.minimumSpend,
+      maximumDiscount: usage.promotion.maximumDiscount,
+      couponCode: usage.promotion.couponCode,
+      status: usage.status,
+      createdAt: usage.createdAt.toISOString(),
+      usedAt: usage.usedAt?.toISOString() || null,
+      releasedAt: usage.releasedAt?.toISOString() || null,
+      discount: roundMoney(discountLines.filter(line => line.sourceId === usage.promotionId).reduce((sum, line) => sum + Math.abs(line.totalAmount), 0))
+    })),
     lines: quote.lines.map(line => ({ type: line.type, sourceId: line.sourceId, label: line.label, quantity: line.quantity, unitAmount: line.unitAmount, totalAmount: line.totalAmount, currency: line.currency, order: line.order }))
   }
 }
@@ -502,6 +538,20 @@ function tripResponse(trip: {
   updatedAt: Date
   user: Parameters<typeof userResponse>[0]
   quote?: PersistedQuote | null
+  payment?: {
+    id: string
+    total: number
+    currency: string
+    fareAmount: number
+    cashAmount: number
+    externalAmount: number
+    externalPaymentMethod: string | null
+    externalReference: string | null
+    status: string
+    refundedAt: Date | null
+    createdAt: Date
+    updatedAt: Date
+  } | null
   [key: string]: unknown
 }) {
   const { quote, ...data } = trip
@@ -511,6 +561,20 @@ function tripResponse(trip: {
     createdAt: trip.createdAt.toISOString(),
     updatedAt: trip.updatedAt.toISOString(),
     user: userResponse(trip.user),
+    payment: trip.payment ? {
+      id: trip.payment.id,
+      total: trip.payment.total,
+      currency: trip.payment.currency,
+      fareAmount: trip.payment.fareAmount,
+      cashAmount: trip.payment.cashAmount,
+      externalAmount: trip.payment.externalAmount,
+      externalPaymentMethod: trip.payment.externalPaymentMethod,
+      externalReference: trip.payment.externalReference,
+      status: trip.payment.status,
+      refundedAt: trip.payment.refundedAt?.toISOString() || null,
+      createdAt: trip.payment.createdAt.toISOString(),
+      updatedAt: trip.payment.updatedAt.toISOString()
+    } : null,
     quote: quote ? quoteResponse(quote) : null
   }
 }
@@ -885,9 +949,11 @@ class AdminController {
          include: {
            pricing: { include: { tiers: { orderBy: { order: 'asc' } } } },
            vehicle: true,
+           promotionUsages: { include: { promotion: true } },
            lines: { orderBy: { order: 'asc' } }
          }
-       }
+       },
+       payment: true,
      },
      orderBy: { scheduledAt: 'asc' }
    })
@@ -916,7 +982,22 @@ class AdminController {
    const allowedStatuses = ['PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED'] as const
    if (!origin || !destination || !body.region?.trim() || Number.isNaN(scheduledAt.getTime()) || !body.status || !allowedStatuses.includes(body.status as typeof allowedStatuses[number])) throw new HttpException('Valid trip fields are required', HttpStatus.BAD_REQUEST)
    if (body.userId && !await prisma.user.findUnique({ where: { id: body.userId }, select: { id: true } })) throw new HttpException('User not found', HttpStatus.BAD_REQUEST)
-   const trip = await prisma.trip.update({ where: { id }, data: { userId: body.userId || existing.userId, origin, destination, region: body.region.trim() as any, scheduledAt, status: body.status as any }, include: { user: true } })
+   if (body.status === 'CANCELLED' && existing.status === 'COMPLETED') throw new HttpException('Completed trips cannot be cancelled', HttpStatus.CONFLICT)
+   const region = body.region.trim()
+   const trip = await prisma.$transaction(async tx => {
+     const currentTrip = await tx.trip.findUniqueOrThrow({ where: { id }, select: { status: true, userId: true } })
+     const payment = await tx.payment.findUnique({ where: { tripId: id } })
+     if (body.status === 'CANCELLED' && currentTrip.status !== 'CANCELLED' && payment?.status === 'PAID') {
+       const user = await tx.user.findUniqueOrThrow({ where: { id: currentTrip.userId } })
+       const fareBalance = roundMoney(user.fareBalance + payment.fareAmount)
+       const cashBalance = roundMoney(user.cashBalance + payment.cashAmount)
+       await tx.user.update({ where: { id: user.id }, data: { fareBalance, cashBalance } })
+       await tx.payment.update({ where: { id: payment.id }, data: { status: 'REFUNDED', refundedAt: new Date() } })
+       if (payment.fareAmount > 0) await tx.walletTransaction.create({ data: { userId: user.id, wallet: 'FARE', type: 'REFUND', amount: payment.fareAmount, balanceAfter: fareBalance, reason: `訂單退款 - 車費餘額 (訂單: ${id.slice(-8)})`, paymentId: payment.id } })
+       if (payment.cashAmount > 0) await tx.walletTransaction.create({ data: { userId: user.id, wallet: 'CASH', type: 'REFUND', amount: payment.cashAmount, balanceAfter: cashBalance, reason: `訂單退款 - 現金餘額 (訂單: ${id.slice(-8)})`, paymentId: payment.id } })
+     }
+     return tx.trip.update({ where: { id }, data: { userId: body.userId || existing.userId, origin, destination, region: region as any, scheduledAt, status: body.status as any }, include: { user: true } })
+   })
    return { ...trip, scheduledAt: trip.scheduledAt.toISOString(), createdAt: trip.createdAt.toISOString(), updatedAt: trip.updatedAt.toISOString(), user: userResponse(trip.user) }
   }
   @Get('charter-orders') async listCharterOrders(@Req() req: RequestLike) { requireAuth(req); const usersById = new Map((await prisma.user.findMany()).map(user => [user.id, userResponse(user)])); return { data: charterOrders.map(order => ({ ...order, user: usersById.get(order.userId) || null })), total: charterOrders.length } }
@@ -1803,8 +1884,22 @@ class PaymentsController {
     if (!quoteId) throw new HttpException('quoteId is required', HttpStatus.BAD_REQUEST)
 
     const settings = await prisma.appSetting.findUniqueOrThrow({ where: { id: appSettingsDefaults.id } })
-    const session = clientSessionFrom(req)
-    if (body.userId && body.userId !== session.sub) throw new ForbiddenException('Cannot pay for another user')
+    let session: ClientSession
+    try {
+      session = clientSessionFrom(req)
+    } catch {
+      const adminSession = requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
+      if (!body.userId) throw new HttpException('userId is required for administrator payments', HttpStatus.BAD_REQUEST)
+      session = { sub: body.userId, exp: adminSession.exp, jti: adminSession.jti }
+    }
+    if (body.userId && body.userId !== session.sub) {
+      try {
+        const adminSession = requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
+        session = { sub: body.userId, exp: adminSession.exp, jti: adminSession.jti }
+      } catch {
+        throw new ForbiddenException('Cannot pay for another user')
+      }
+    }
     const userTarget = await prisma.user.findUnique({ where: { id: session.sub } })
     if (!userTarget) throw new HttpException('User not found', HttpStatus.NOT_FOUND)
 
@@ -1852,9 +1947,7 @@ class PaymentsController {
       }
       const externalPaid = roundMoney(totalAmount - farePaid - cashPaid)
 
-      if (externalPaid > 0 && !body.externalPaymentMethod) {
-        throw new HttpException('External payment method required for remaining balance', HttpStatus.BAD_REQUEST)
-      }
+      const internalPaymentMethod = externalPaid > 0 ? 'internal' : null
 
       let currentFare = user.fareBalance
       let currentCash = user.cashBalance
@@ -1919,7 +2012,7 @@ class PaymentsController {
           fareBalancePaid: farePaid,
           cashBalancePaid: cashPaid,
           externalPaid,
-          externalPaymentMethod: externalPaid > 0 ? body.externalPaymentMethod : null
+          externalPaymentMethod: internalPaymentMethod
         }
       })
       const payment = await tx.payment.create({
@@ -1932,8 +2025,8 @@ class PaymentsController {
           fareAmount: farePaid,
           cashAmount: cashPaid,
           externalAmount: externalPaid,
-          externalPaymentMethod: externalPaid > 0 ? body.externalPaymentMethod : null,
-          externalReference: externalPaid > 0 ? `sandbox-${randomBytes(8).toString('hex')}` : null
+          externalPaymentMethod: internalPaymentMethod,
+          externalReference: externalPaid > 0 ? `internal-${randomBytes(8).toString('hex')}` : null
         }
       })
       await tx.walletTransaction.updateMany({
@@ -1951,7 +2044,7 @@ class PaymentsController {
           fareBalance: farePaid,
           cashBalance: cashPaid,
           external: externalPaid,
-          externalMethod: externalPaid > 0 ? body.externalPaymentMethod : null
+          externalMethod: internalPaymentMethod
         },
         user: {
           id: user.id,

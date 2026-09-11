@@ -6,7 +6,7 @@
       <view class="filter" @tap="openFilter"><text>{{ filterTitle }}</text><image src="/static/transactions/caret-down.svg" mode="aspectFit" /></view>
     </view>
     <view class="month current-month"><text>本月</text><image src="/static/transactions/section-mark.svg" mode="aspectFit" /></view>
-    <view class="summary current-summary"><text>支出 HKD$ 0.00</text><view class="summary-divider" /><text>收入 HKD$0.00</text></view>
+    <view class="summary current-summary"><text>支出 {{ expenseSummary }}</text><view class="summary-divider" /><text>收入 {{ incomeSummary }}</text></view>
     <view class="records-card">
       <view class="table-head"><text>類型</text><text>詳細</text><text>金額</text></view>
       <view
@@ -23,8 +23,6 @@
         <text v-if="record.order" class="record-order">{{ record.order }}</text>
       </view>
     </view>
-    <view class="month previous-month" :style="previousMonthStyle"><text class="month-number">3</text><text>/2024</text><image src="/static/transactions/section-mark.svg" mode="aspectFit" /></view>
-    <view class="summary previous-summary" :style="previousSummaryStyle"><text>支出 HKD$ 0.00</text><view class="summary-divider" /><text>收入 HKD$0.00</text></view>
     <view v-if="filterOpen" class="filter-layer" @tap="closeFilter">
       <image class="filter-mask" src="/static/transactions/filter-overlay.svg" mode="scaleToFill" />
       <view class="filter-sheet" @tap.stop>
@@ -64,17 +62,28 @@ const pendingTransactionType = ref(transactionType.value)
 type RecordItem = { id: string; tripId: string; type: 'travel-order' | 'cancel-order'; kind: string; detail: string; time: string; amount: string; amountTone: 'positive' | 'negative'; transactionStatus: 'success' }
 const records = ref<RecordItem[]>([])
 const currencyAmount = (amount: number, currency: string) => `${currency === 'HKD' ? 'HKD$' : 'RMB¥'}${amount.toFixed(2)}`
+const summarizePayments = (payments: ClientPayment[], status: ClientPayment['status']) => {
+  const totals = payments
+    .filter(payment => payment.status === status)
+    .reduce<Record<string, number>>((result, payment) => {
+      result[payment.currency] = (result[payment.currency] || 0) + payment.total
+      return result
+    }, {})
+  const summary = Object.entries(totals).map(([currency, total]) => currencyAmount(total, currency)).join('、')
+  return summary || 'RMB¥0.00'
+}
+const payments = ref<ClientPayment[]>([])
 const loadRecords = async () => {
   try {
-    const payments = await listClientTransactions()
-    records.value = payments.map((payment: ClientPayment) => {
+    payments.value = await listClientTransactions()
+    records.value = payments.value.map((payment: ClientPayment) => {
       const refunded = payment.status === 'REFUNDED'
       return {
         id: payment.id,
         tripId: payment.tripId,
         type: refunded ? 'cancel-order' : 'travel-order',
         kind: refunded ? '退款' : '支出',
-        detail: refunded ? '跨境出行 取消訂單' : '跨境出行 餘額支付',
+        detail: refunded ? '跨境出行 取消訂單' : `跨境出行 ${payment.externalPaymentMethod === 'internal' ? '內部測試付款' : '錢包支付'}`,
         time: new Date(refunded ? payment.refundedAt || payment.createdAt : payment.createdAt).toLocaleString('zh-HK', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }),
         amount: `${refunded ? '+' : '-'}${currencyAmount(payment.total, payment.currency)}`,
         amountTone: refunded ? 'positive' : 'negative',
@@ -128,14 +137,8 @@ const filterTitle = computed(() => {
   return incomeType.value === 'income' ? '收入紀錄' : '支出紀錄'
 })
 const visibleRecords = computed(() => records.value.filter((record) => isRecordVisible(record.type)))
-const previousMonthTop = computed(() => {
-  const rowHeights = [60, 60, 60, 60, 60]
-  const cardHeight = 40 + (visibleRecords.value.length ? 12 : 0)
-    + visibleRecords.value.reduce((height, _, index) => height + (rowHeights[index] ?? 60), 0)
-  return `${243 + cardHeight + 20}px`
-})
-const previousMonthStyle = computed(() => ({ top: previousMonthTop.value }))
-const previousSummaryStyle = computed(() => ({ top: `${Number.parseFloat(previousMonthTop.value) + 34}px` }))
+const expenseSummary = computed(() => summarizePayments(payments.value, 'PAID'))
+const incomeSummary = computed(() => summarizePayments(payments.value, 'REFUNDED'))
 const goBack = () => openCachedPage('/pages/wallet/wallet')
 const openTopUpDetail = () => openCachedPage('/pages/top-up/detail/detail')
 const openFailureDetail = (amount: string, payment: 'card' | 'alipay' | 'wechat') => openCachedPage(`/pages/top-up/detail/detail?status=failed&amount=${encodeURIComponent(amount.replace(/[^\d.]/g, ''))}&payment=${payment}`)
@@ -154,7 +157,8 @@ const openFilter = () => {
   filterOpen.value = true
 }
 const transactionIncomeType = (type: typeof pendingTransactionType.value) => {
-  if (type === 'travel-order' || type === 'cancel-order') return 'expense'
+  if (type === 'travel-order') return 'expense'
+  if (type === 'cancel-order') return 'income'
   if (type === 'withdraw' || type === 'alipay-withdraw' || type === 'topup') return 'income'
   return 'all'
 }
@@ -179,7 +183,8 @@ const applyFilter = () => {
 const isRecordVisible = (type: RecordItem['type']) => {
   const incomeMatches = incomeType.value === 'all'
     || (incomeType.value === 'income' && (type === 'topup' || type === 'withdraw' || type === 'alipay-withdraw'))
-    || (incomeType.value === 'expense' && (type === 'cancel-order' || type === 'travel-order'))
+    || (incomeType.value === 'expense' && type === 'travel-order')
+    || (incomeType.value === 'income' && type === 'cancel-order')
   const transactionMatches = transactionType.value === 'all'
     || (transactionType.value === 'withdraw' && (type === 'withdraw' || type === 'alipay-withdraw'))
     || transactionType.value === type

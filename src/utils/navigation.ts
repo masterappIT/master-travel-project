@@ -93,14 +93,14 @@ export const closeCachedPage = (fallbackUrl: string) => {
       return
     }
 
-    if (fallbackPath !== HOME_PATH) {
-      return openCachedPage(fallbackUrl)
-    }
-
     if (cachedPageStack.value.length > 1) {
       cachedPageStack.value = cachedPageStack.value.slice(0, -1)
       cachedPageUrl.value = cachedPageStack.value[cachedPageStack.value.length - 1]
       return
+    }
+
+    if (fallbackPath !== HOME_PATH) {
+      return openCachedPage(fallbackUrl)
     }
   }
   // #endif
@@ -122,11 +122,6 @@ export const closeCachedPage = (fallbackUrl: string) => {
 export const swipeBack = () => {
   // #ifdef MP-WEIXIN || MP-TOUTIAO
   if (embeddedHostActive) {
-    if (cachedPageStack.value.length > 1) {
-      cachedPageStack.value = cachedPageStack.value.slice(0, -1)
-      cachedPageUrl.value = cachedPageStack.value[cachedPageStack.value.length - 1]
-      return
-    }
   }
   // #endif
 

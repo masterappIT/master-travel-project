@@ -42,7 +42,7 @@
         <view v-if="!isCompleted" class="pay-tag">待付款</view>
         <view v-else class="paid-tag">已付款</view>
       </view>
-      <view class="detail"><text class="detail-title">訂單詳細</text><text class="detail-date">2024/03/15</text><view class="line"/><view class="row"><text>{{ selectedVehicle.title }}（{{ selectedVehicle.seats }}座）</text><text>¥ {{ selectedVehicle.price }}</text></view><view class="row"><text>加急附加費</text><text>¥ 100</text></view><view class="row"><text>優惠券抵扣</text><text>-¥ 100</text></view><view v-if="isCompleted" class="completed-payment"><view class="payment-record wallet-record"><image src="/static/vehicles/payment/payment-wallet-fare.svg" mode="aspectFit" /><text>車費餘額</text><text class="record-amount">-¥ 0.00</text></view><view class="payment-record wechat-record"><image src="/static/vehicles/payment/payment-wechat.svg" mode="aspectFit" /><text>微信支付</text><text class="record-amount">-¥ 800.00</text></view><view class="record-link" @tap="showPaymentRecords">相關支付紀錄 <text>›</text></view></view><view class="total">Total： ¥ {{ selectedVehicle.price }}</view><button v-if="!isCompleted" class="cancel" @tap="cancelOrder">取消</button></view>
+      <view class="detail"><text class="detail-title">訂單詳細</text><text class="detail-date">{{ bookingTime }}</text><view class="line"/><view class="row"><text>{{ selectedVehicle.title }}（{{ selectedVehicle.seats }}座）</text><text>{{ currencyLabel }} {{ paymentTotal.toFixed(2) }}</text></view><view class="row"><text>加急附加費</text><text>—</text></view><view class="row"><text>優惠券抵扣</text><text>—</text></view><view v-if="isCompleted && storedOrder?.payment" class="completed-payment"><view v-if="storedOrder.payment.fareAmount > 0" class="payment-record wallet-record"><image src="/static/vehicles/payment/payment-wallet-fare.svg" mode="aspectFit" /><text>車費餘額</text><text class="record-amount">-{{ currencyLabel }} {{ storedOrder.payment.fareAmount.toFixed(2) }}</text></view><view v-if="storedOrder.payment.cashAmount > 0" class="payment-record wallet-record"><image src="/static/vehicles/payment/payment-wallet-cash.svg" mode="aspectFit" /><text>現金餘額</text><text class="record-amount">-{{ currencyLabel }} {{ storedOrder.payment.cashAmount.toFixed(2) }}</text></view><view v-if="storedOrder.payment.externalAmount > 0" class="payment-record wechat-record"><image src="/static/vehicles/payment/payment-wechat.svg" mode="aspectFit" /><text>{{ paymentMethodLabel }}</text><text class="record-amount">-{{ currencyLabel }} {{ storedOrder.payment.externalAmount.toFixed(2) }}</text></view><view class="record-link" @tap="showPaymentRecords">相關支付紀錄 <text>›</text></view></view><view class="total">Total： {{ currencyLabel }} {{ paymentTotal.toFixed(2) }}</view><button v-if="!isCompleted" class="cancel" @tap="cancelOrder">取消</button></view>
       </view>
     </template>
   </view>
@@ -53,6 +53,7 @@ import { onLoad, onShow } from '@dcloudio/uni-app'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { useTripStore } from '../../stores/trip'
 import { closeCachedPage, cachedPageUrl, cachedPageStack, openCachedPage } from '../../utils/navigation'
+import OrdersBackButton from '../../components/orders/OrdersBackButton.vue'
 const isCompleted = ref(false)
 import { cancelClientTrip, getClientTrip, type ClientTrip } from '../../services/api'
 const tripStore = useTripStore()
@@ -87,9 +88,18 @@ onShow(() => {
 const cityLabel = (value: string | undefined, fallback: string) => value?.split('·')[0]?.trim() || fallback
 const originLabel = computed(() => cityLabel(storedOrder.value?.origin || tripStore.activeTrip?.origin, '香港國際機場'))
 const destinationLabel = computed(() => cityLabel(storedOrder.value?.destination || tripStore.activeTrip?.destination, '深圳灣口岸'))
-const bookingTime = computed(() => storedOrder.value?.scheduledAt || tripStore.departureTime || '2024年3月15日 14:00')
+const formatDateTime = (value?: string) => {
+  const date = value ? new Date(value) : null
+  return date && !Number.isNaN(date.valueOf())
+    ? `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日 ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+    : '—'
+}
+const bookingTime = computed(() => formatDateTime(storedOrder.value?.scheduledAt || tripStore.departureTime))
 const selectedVehicle = computed(() => tripStore.chosenVehicle || { title: '高級跨境商務車', seats: 7, price: storedOrder.value?.payment?.total || 0 })
 const amountLabel = computed(() => `${storedOrder.value?.payment?.currency === 'HKD' ? 'HK$' : 'RMB¥'}${(storedOrder.value?.payment?.total || selectedVehicle.value.price).toFixed(2)}`)
+const paymentTotal = computed(() => storedOrder.value?.payment?.total || selectedVehicle.value.price)
+const currencyLabel = computed(() => storedOrder.value?.payment?.currency?.includes('HKD') ? 'HK$' : 'RMB¥')
+const paymentMethodLabel = computed(() => storedOrder.value?.payment?.externalPaymentMethod === 'internal' ? '內部測試付款' : storedOrder.value?.payment?.externalPaymentMethod || '外部付款')
 const getCurrentPageSource = () => {
   const candidates: string[] = []
   if (cachedPageUrl.value) candidates.push(cachedPageUrl.value)

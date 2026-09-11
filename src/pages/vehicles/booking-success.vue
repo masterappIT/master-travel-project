@@ -1,6 +1,6 @@
 <template>
   <view class="page" :style="responsiveStyle">
-    <HomeMap map-id="booking-success-map" :latitude="22.3080" :longitude="114.1719" full-screen />
+    <HomeMap map-id="booking-success-map" :latitude="22.3080" :longitude="114.1719" :pickup-label="originLabel" :destination-label="destinationLabel" full-screen />
     <view class="back" @tap="goBack"><image class="page-back" src="/static/vehicles/confirm-back.svg" mode="aspectFit" /></view>
     <view class="status-panel">
       <view class="route-card">
@@ -86,11 +86,9 @@ const showBookingDetail = () => openCachedPage(`/pages/orders/detail?status=trav
   white-space: nowrap;
 }
 
-.confirmation-time text {
-  .page {
-    height: var(--mobile-height, 100dvh);
-    transform: scale(var(--mobile-scale, 1));
-  }
+.page {
+  height: var(--mobile-height, 100dvh);
+  transform: scale(var(--mobile-scale, 1));
 }
 
 .cancel-action text,

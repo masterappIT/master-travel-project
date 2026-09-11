@@ -1,11 +1,15 @@
 import type { CrossBorderTrip } from '../../../shared/types/trip'
-import { getAuthToken } from '../utils/auth'
+import { clearAuthentication, getAuthToken } from '../utils/auth'
 
 let API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:3010'
 // #ifdef H5
 API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api'
 // #endif
 const apiError = (response: UniApp.RequestSuccessCallbackResult, fallback: string) => {
+  if (response.statusCode === 401) {
+    clearAuthentication()
+    uni.reLaunch({ url: '/pages/login/login' })
+  }
   const message = typeof response.data === 'object' && response.data !== null && 'message' in response.data
     ? String((response.data as { message?: unknown }).message || '')
     : ''
@@ -349,7 +353,7 @@ export type TripPayRequest = {
   quoteId: string
   useFareBalance?: boolean
   useCashBalance?: boolean
-  externalPaymentMethod?: 'wechat' | 'alipay' | 'bank_card'
+  externalPaymentMethod?: 'internal'
   origin?: string
   destination?: string
   scheduledAt?: string
@@ -419,6 +423,7 @@ export async function listClientTrips(): Promise<ClientTrip[]> {
 
 export async function getClientTrip(id: string): Promise<ClientTrip> {
   const response = await uni.request({ url: `${API_BASE_URL}/client/trips/${encodeURIComponent(id)}`, header: authHeaders() })
+  if (response.statusCode === 404) throw new Error('訂單不存在或無權查看')
   if (response.statusCode >= 400) throw apiError(response, '無法載入訂單')
   return response.data as ClientTrip
 }

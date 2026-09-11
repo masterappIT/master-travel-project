@@ -126,7 +126,7 @@ const detailPriceOpen = ref(false)
 const paymentOpen = ref(false)
 const paymentSuccessOpen = ref(false)
 const paidTripId = ref('')
-const selectedPayment = ref('wechat')
+const selectedPayment = ref<'wechat' | 'alipay' | 'bank'>('wechat')
 const countdownSeconds = ref(300)
 let countdownTimer: ReturnType<typeof setInterval> | null = null
 
@@ -368,14 +368,13 @@ const saveTripChanges = async (origin: string, destination: string, departureTim
     uni.showToast({ title: error instanceof Error ? error.message : '路線規劃失敗，請稍後再試', icon: 'none' })
   }
 }
-const goBack = () => openCachedPage('/pages/index/index')
+const goBack = () => closeCachedPage('/pages/vehicles/selected')
 const openCoupons = () => openCachedPage('/pages/coupons/coupons')
 const payNow = () => {
   if (!selectedFareQuote.value) {
     uni.showToast({ title: '報價暫時無法取得', icon: 'none' })
     return
   }
-  // Auto pick available external payment channel if wechat is disabled
   if (paymentSettings.value.wechatPayEnabled !== false) {
     selectedPayment.value = 'wechat'
   } else if (paymentSettings.value.alipayPayEnabled !== false) {
@@ -400,10 +399,13 @@ const confirmPayment = async () => {
     uni.showToast({ title: '請選擇外部付款方式', icon: 'none' })
     return
   }
-
   uni.showLoading({ title: '支付處理中...' })
   try {
-    const extChannel = externalAllocation.value > 0 ? (selectedPayment.value === 'bank' ? 'bank_card' : selectedPayment.value as 'wechat' | 'alipay' | 'bank_card') : undefined
+    // External channels remain selectable in the original UI; internal payment is
+    // the temporary processing route until the real gateways are connected.
+    const extChannel = externalAllocation.value > 0
+      ? (selectedPayment.value === 'bank' ? 'internal' : selectedPayment.value === 'alipay' ? 'internal' : 'internal')
+      : undefined
     const res = await payTrip({
       quoteId: selectedFareQuote.value.id,
       origin: tripStore.activeDraft.route.origin || originLabel.value,

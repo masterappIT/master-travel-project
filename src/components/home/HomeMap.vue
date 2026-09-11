@@ -26,7 +26,7 @@
       <view v-if="routeBounds" class="map-callout pickup-callout" :style="markerStyle(routeBounds.origin)"><text class="callout-title">上車位置</text><text class="callout-value">{{ props.pickupLabel || '目前定位' }}</text></view>
       <view v-else-if="nativeMarkers.length" class="map-callout pickup-callout pickup-callout--center"><text class="callout-title">上車位置</text><text class="callout-value">{{ props.pickupLabel || '目前定位' }}</text></view>
       <view v-if="routeBounds && props.routeSummary" class="map-callout destination-callout" :style="markerStyle(routeBounds.destination)"><text class="callout-title">目的地 · 行程資訊</text><text class="callout-value">{{ props.destinationLabel || '目的地' }}</text><text class="callout-summary">{{ props.routeSummary }}</text></view>
-      <text v-if="!projectedRoute">香港 · 九龍站</text>
+      <text v-if="!projectedRoute">{{ props.pickupLabel || '目前定位' }}</text>
     </view>
     <!-- #endif -->
   </view>

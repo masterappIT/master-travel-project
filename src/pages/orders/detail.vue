@@ -1,5 +1,7 @@
 <template>
   <view class="page" :style="responsiveStyle">
+    <view v-if="loadError" class="load-error">訂單不存在或無權查看</view>
+    <template v-else>
     <view class="header">
       <OrdersBackButton icon-src="/static/orders/traveling-back.svg" @tap="goBack" />
       <text v-if="isTraveling" class="traveling-title">待出行</text>
@@ -44,8 +46,9 @@
         <view v-if="!isCompleted" class="pay-tag">待付款</view>
         <view v-else class="paid-tag">已付款</view>
       </view>
-      <view class="detail"><text class="detail-title">訂單詳細</text><text class="detail-date">2024/03/15</text><view class="line"/><view class="row"><text>{{ selectedVehicle.title }}（{{ selectedVehicle.seats }}座）</text><text>¥ {{ selectedVehicle.price }}</text></view><view class="row"><text>加急附加費</text><text>¥ 100</text></view><view class="row"><text>優惠券抵扣</text><text>-¥ 100</text></view><view v-if="isCompleted" class="completed-payment"><view class="payment-record wallet-record"><image src="/static/vehicles/payment/payment-wallet-fare.svg" mode="aspectFit" /><text>車費餘額</text><text class="record-amount">-¥ 0.00</text></view><view class="payment-record wechat-record"><image src="/static/vehicles/payment/payment-wechat.svg" mode="aspectFit" /><text>微信支付</text><text class="record-amount">-¥ 800.00</text></view><view class="payment-divider" /><view class="record-link" @tap="showPaymentRecords">相關支付紀錄 <text>›</text></view></view><view :class="['total', { 'completed-total': isCompleted }]">Total： ¥ {{ selectedVehicle.price }}</view><button v-if="!isCompleted" class="cancel" @tap="cancelOrder">取消</button></view>
+      <view class="detail"><text class="detail-title">訂單詳細</text><text class="detail-date">{{ bookingTime }}</text><view class="line"/><view class="row"><text>{{ selectedVehicle.title }}（{{ selectedVehicle.seats }}座）</text><text>{{ currencyLabel }} {{ paymentTotal.toFixed(2) }}</text></view><view class="row"><text>加急附加費</text><text>—</text></view><view class="row"><text>優惠券抵扣</text><text>—</text></view><view v-if="isCompleted && storedOrder?.payment" class="completed-payment"><view v-if="storedOrder.payment.fareAmount > 0" class="payment-record wallet-record"><image src="/static/vehicles/payment/payment-wallet-fare.svg" mode="aspectFit" /><text>車費餘額</text><text class="record-amount">-{{ currencyLabel }} {{ storedOrder.payment.fareAmount.toFixed(2) }}</text></view><view v-if="storedOrder.payment.cashAmount > 0" class="payment-record wallet-record"><image src="/static/vehicles/payment/payment-wallet-cash.svg" mode="aspectFit" /><text>現金餘額</text><text class="record-amount">-{{ currencyLabel }} {{ storedOrder.payment.cashAmount.toFixed(2) }}</text></view><view v-if="storedOrder.payment.externalAmount > 0" class="payment-record wechat-record"><image src="/static/vehicles/payment/payment-wechat.svg" mode="aspectFit" /><text>{{ paymentMethodLabel }}</text><text class="record-amount">-{{ currencyLabel }} {{ storedOrder.payment.externalAmount.toFixed(2) }}</text></view><view class="payment-divider" /><view class="record-link" @tap="showPaymentRecords">相關支付紀錄 <text>›</text></view></view><view :class="['total', { 'completed-total': isCompleted }]">Total： {{ currencyLabel }} {{ paymentTotal.toFixed(2) }}</view><button v-if="!isCompleted" class="cancel" @tap="cancelOrder">取消</button></view>
       </view>
+    </template>
     </template>
   </view>
 </template>
@@ -55,12 +58,14 @@ import { onLoad, onShow } from '@dcloudio/uni-app'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { useTripStore } from '../../stores/trip'
 import { closeCachedPage, cachedPageUrl, openCachedPage, getOrderReturnTarget } from '../../utils/navigation'
-import { getClientTrip, type ClientTrip } from '../../services/api'
+import { cancelClientTrip, getClientTrip, type ClientTrip } from '../../services/api'
+import OrdersBackButton from '../../components/orders/OrdersBackButton.vue'
 const tripStore = useTripStore()
 const { responsiveStyle } = useResponsiveCanvas()
 const isCompleted = ref(false)
 const isTraveling = ref(false)
 const storedOrder = ref<ClientTrip | undefined>()
+const loadError = ref(false)
 const orderNumber = computed(() => storedOrder.value?.id || '—')
 const returnTarget = ref<'profile' | 'orders'>(getOrderReturnTarget() || 'orders')
 const parseQueryParams = (url = '') => {
@@ -74,9 +79,12 @@ const parseQueryParams = (url = '') => {
 const loadOrder = async (url = '') => {
   const id = parseQueryParams(url).id
   if (!id) return
+  loadError.value = false
   try {
     storedOrder.value = await getClientTrip(id)
   } catch (error) {
+    storedOrder.value = undefined
+    loadError.value = true
     uni.showToast({ title: error instanceof Error ? error.message : '訂單載入失敗', icon: 'none' })
   }
 }
@@ -125,7 +133,13 @@ const statusLabel = computed(() => isCompleted.value ? '已完成' : '待確認'
 const cityLabel = (value: string | undefined, fallback: string) => value?.split('·')[0]?.trim() || fallback
 const originLabel = computed(() => cityLabel(storedOrder.value?.origin || tripStore.activeTrip?.origin, '香港國際機場'))
 const destinationLabel = computed(() => cityLabel(storedOrder.value?.destination || tripStore.activeTrip?.destination, '深圳灣口岸'))
-const bookingTime = computed(() => storedOrder.value?.scheduledAt || tripStore.departureTime || '2024年3月15日 14:00')
+const formatDateTime = (value?: string) => {
+  const date = value ? new Date(value) : null
+  return date && !Number.isNaN(date.valueOf())
+    ? `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日 ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+    : '—'
+}
+const bookingTime = computed(() => formatDateTime(storedOrder.value?.scheduledAt || tripStore.departureTime))
 const selectedVehicle = computed(() => tripStore.chosenVehicle || {
   title: '高級跨境商務車',
   seats: 7,
@@ -133,11 +147,22 @@ const selectedVehicle = computed(() => tripStore.chosenVehicle || {
 })
 const vehicleLabel = computed(() => `${selectedVehicle.value.title}（${selectedVehicle.value.seats}座）`)
 const amountLabel = computed(() => `${storedOrder.value?.payment?.currency === 'HKD' ? 'HK$' : 'RMB¥'}${(storedOrder.value?.payment?.total || selectedVehicle.value.price).toFixed(2)}`)
+const paymentTotal = computed(() => storedOrder.value?.payment?.total || selectedVehicle.value.price)
+const currencyLabel = computed(() => storedOrder.value?.payment?.currency?.includes('HKD') ? 'HK$' : 'RMB¥')
+const paymentMethodLabel = computed(() => storedOrder.value?.payment?.externalPaymentMethod === 'internal' ? '內部測試付款' : storedOrder.value?.payment?.externalPaymentMethod || '外部付款')
 const goBack = () => {
   if (returnTarget.value === 'profile') return openCachedPage('/pages/trips/trips')
   return closeCachedPage('/pages/orders/orders')
 }
-const cancelOrder = () => uni.showToast({ title: '訂單取消功能開發中', icon: 'none' })
+const cancelOrder = async () => {
+  if (!storedOrder.value) return uni.showToast({ title: '找不到訂單', icon: 'none' })
+  try {
+    await cancelClientTrip(storedOrder.value.id)
+    openCachedPage(`/pages/orders/cancelled-detail?id=${encodeURIComponent(storedOrder.value.id)}`)
+  } catch (error) {
+    uni.showToast({ title: error instanceof Error ? error.message : '訂單取消失敗', icon: 'none' })
+  }
+}
 const showPaymentRecords = () => openCachedPage(`/pages/transactions/expense-detail?tripId=${encodeURIComponent(storedOrder.value?.id || '')}`)
 </script>
 <style scoped>
