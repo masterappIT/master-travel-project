@@ -3,10 +3,10 @@
     <view class="header">
       <OrdersBackButton icon-src="/static/orders/traveling-back.svg" @tap="goBack" />
       <text v-if="isTraveling" class="traveling-title">待出行</text>
-      <text v-else class="number">訂單編號：282678634</text>
+      <text v-else class="number">訂單編號：{{ orderNumber }}</text>
     </view>
     <template v-if="isTraveling">
-      <text class="traveling-order-number">訂單編號：282678634</text>
+      <text class="traveling-order-number">訂單編號：{{ orderNumber }}</text>
       <view class="traveling-card">
         <view class="traveling-status-row">
           <view class="traveling-waiting"><view class="waiting-mark"><image src="/static/orders/traveling-wait-ring.svg" mode="aspectFit" /><image class="waiting-dot" src="/static/orders/traveling-wait-dot.svg" mode="aspectFit" /></view><text>等待中</text></view>
@@ -20,8 +20,8 @@
         <view class="traveling-info">
           <image class="traveling-tesla" src="/static/orders/traveling-tesla.svg" mode="aspectFit" />
           <text class="traveling-pickup">上車時間 ：{{ bookingTime }}</text>
-          <view class="traveling-locations"><view><image src="/static/orders/traveling-origin.svg" mode="aspectFit" /><text>香港國際機場</text></view><view><image src="/static/orders/traveling-destination.svg" mode="aspectFit" /><text>深圳灣口岸</text></view></view>
-          <text class="traveling-vehicle">高級跨境商務車（7座）</text>
+          <view class="traveling-locations"><view><image src="/static/orders/traveling-origin.svg" mode="aspectFit" /><text>{{ originLabel }}</text></view><view><image src="/static/orders/traveling-destination.svg" mode="aspectFit" /><text>{{ destinationLabel }}</text></view></view>
+          <text class="traveling-vehicle">{{ vehicleLabel }}</text>
           <view class="traveling-passenger"><text>乘客及聯絡資料：</text><view><image src="/static/orders/traveling-passenger.svg" mode="aspectFit" /><text>李XX（先生）</text></view><view><image src="/static/orders/traveling-phone.svg" mode="aspectFit" /><text>852 - 53**8469</text></view></view>
           <view class="traveling-divider"><image src="/static/orders/traveling-divider.svg" mode="aspectFit" /></view>
           <view class="traveling-divider second"><image src="/static/orders/traveling-divider.svg" mode="aspectFit" /></view>
@@ -40,7 +40,7 @@
       <view class="passenger-title">乘客及聯絡資料：</view><view class="passenger"><view><image src="/static/orders/passenger.svg" mode="aspectFit" /><text>李XX（先生）</text></view><view><image src="/static/orders/phone.svg" mode="aspectFit" /><text>852 - 53**8469</text></view></view>
       <view :class="['payment', { completed: isCompleted, pending: !isCompleted }]">
         <text v-if="!isCompleted">交易時間剩餘：05:00</text>
-        <text class="amount">RMB¥{{ selectedVehicle.price.toFixed(2) }}</text>
+        <text class="amount">{{ amountLabel }}</text>
         <view v-if="!isCompleted" class="pay-tag">待付款</view>
         <view v-else class="paid-tag">已付款</view>
       </view>
@@ -55,12 +55,23 @@ import { onLoad, onShow } from '@dcloudio/uni-app'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { useTripStore } from '../../stores/trip'
 import { closeCachedPage, cachedPageUrl, openCachedPage, getOrderReturnTarget } from '../../utils/navigation'
-import OrdersBackButton from '../../components/orders/OrdersBackButton.vue'
+import { getStoredOrder, type StoredTripOrder } from '../../utils/orderStore'
 const tripStore = useTripStore()
 const { responsiveStyle } = useResponsiveCanvas()
 const isCompleted = ref(false)
 const isTraveling = ref(false)
+const storedOrder = ref<StoredTripOrder | undefined>()
+const orderNumber = computed(() => storedOrder.value?.id || '—')
 const returnTarget = ref<'profile' | 'orders'>(getOrderReturnTarget() || 'orders')
+const parseQueryParams = (url = '') => {
+  const query = url.split('?')[1] || ''
+  return query.split('&').reduce<Record<string, string>>((result, pair) => {
+    const [key, ...value] = pair.split('=')
+    if (key) result[decodeURIComponent(key)] = decodeURIComponent(value.join('=') || '')
+    return result
+  }, {})
+}
+const loadOrder = (url = '') => { storedOrder.value = getStoredOrder(parseQueryParams(url).id) }
 const applyStatus = (url?: string) => {
   const status = url?.match(/[?&]status=([^&#]+)/)?.[1]
   const source = url?.match(/[?&](?:from|returnTo)=([^&#]+)/)?.[1]
@@ -69,9 +80,10 @@ const applyStatus = (url?: string) => {
   const storedTarget = getOrderReturnTarget()
   if (storedTarget) returnTarget.value = storedTarget
   else if (source === 'profile' || source === 'orders') returnTarget.value = source
+  loadOrder(url)
 }
 onLoad((options) => {
-  const query = options ? `?status=${options.status || ''}&from=${options.from || options.returnTo || ''}` : undefined
+  const query = options ? `?status=${options.status || ''}&from=${options.from || options.returnTo || ''}&id=${options.id || ''}` : undefined
   applyStatus(query)
 })
 const handleHashChange = () => {
@@ -103,14 +115,16 @@ watch(cachedPageUrl, (url) => applyStatus(url), { immediate: true })
 const statusIcon = computed(() => isCompleted.value ? '/static/orders/status-blue.svg' : '/static/orders/status-pending.svg')
 const statusLabel = computed(() => isCompleted.value ? '已完成' : '待確認')
 const cityLabel = (value: string | undefined, fallback: string) => value?.split('·')[0]?.trim() || fallback
-const originLabel = computed(() => cityLabel(tripStore.activeTrip?.origin, '香港國際機場'))
-const destinationLabel = computed(() => cityLabel(tripStore.activeTrip?.destination, '深圳灣口岸'))
-const bookingTime = computed(() => tripStore.departureTime || '2024年3月15日 14:00')
+const originLabel = computed(() => cityLabel(storedOrder.value?.origin || tripStore.activeTrip?.origin, '香港國際機場'))
+const destinationLabel = computed(() => cityLabel(storedOrder.value?.destination || tripStore.activeTrip?.destination, '深圳灣口岸'))
+const bookingTime = computed(() => storedOrder.value?.scheduledAt || tripStore.departureTime || '2024年3月15日 14:00')
 const selectedVehicle = computed(() => tripStore.chosenVehicle || {
-  title: '高級跨境商務車',
-  seats: 7,
-  price: 800
+  title: storedOrder.value?.vehicleTitle || '高級跨境商務車',
+  seats: storedOrder.value?.seats || 7,
+  price: storedOrder.value?.total || 800
 })
+const vehicleLabel = computed(() => `${selectedVehicle.value.title}（${selectedVehicle.value.seats}座）`)
+const amountLabel = computed(() => `${storedOrder.value?.currency === 'HKD' ? 'HK$' : 'RMB¥'}${(storedOrder.value?.total || selectedVehicle.value.price).toFixed(2)}`)
 const goBack = () => {
   if (returnTarget.value === 'profile') return openCachedPage('/pages/trips/trips')
   return closeCachedPage('/pages/orders/orders')

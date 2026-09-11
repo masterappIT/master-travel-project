@@ -31,6 +31,14 @@ const readOrders = (): StoredTripOrder[] => {
 
 export const listStoredOrders = () => readOrders()
 
+export const getStoredOrder = (id?: string) => id ? readOrders().find(order => order.id === id || order.tripId === id) : undefined
+
+export const updateStoredOrderStatus = (id: string, status: StoredTripOrderStatus, payment?: StoredTripOrder['payment']) => {
+  const orders = readOrders().map(order => order.id === id || order.tripId === id ? { ...order, status, payment: payment || order.payment } : order)
+  try { uni.setStorageSync(STORAGE_KEY, orders) } catch {}
+  return orders.find(order => order.id === id || order.tripId === id)
+}
+
 export const savePaidOrder = (input: {
   tripId?: string
   origin: string

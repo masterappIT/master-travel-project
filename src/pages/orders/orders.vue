@@ -59,10 +59,10 @@ const formatAmount = (amount = 0, currency = 'HKD') => `${currency === 'HKD' ? '
 const openOrder = (order: Order) => {
   if (order.status === '已完成' || order.status === '取消' || order.status === '待確認' || order.status === '待出行') {
     setOrderReturnTarget('orders')
-    if (order.status === '取消') return openCachedPage('/pages/orders/cancelled-detail')
-    if (order.status === '待確認') return openCachedPage('/pages/orders/pending-detail')
+    if (order.status === '取消') return openCachedPage(`/pages/orders/cancelled-detail?id=${encodeURIComponent(String(order.id))}`)
+    if (order.status === '待確認') return openCachedPage(`/pages/orders/pending-detail?id=${encodeURIComponent(String(order.id))}`)
     const detailStatus = order.status === '已完成' ? 'completed' : 'traveling'
-    openCachedPage(`/pages/orders/detail?status=${detailStatus}&from=orders`)
+    openCachedPage(`/pages/orders/detail?status=${detailStatus}&from=orders&id=${encodeURIComponent(String(order.id))}`)
   }
 }
 const goBack = () => openCachedPage('/pages/trips/trips')

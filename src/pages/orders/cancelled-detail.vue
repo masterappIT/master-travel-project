@@ -3,7 +3,7 @@
     <view class="header">
       <OrdersBackButton icon-src="/static/orders/traveling-back.svg" @tap="goBack" />
       <text v-if="isTraveling" class="traveling-title">待出行</text>
-      <text v-else class="number">訂單編號：282678634</text>
+      <text v-else class="number">訂單編號：{{ orderNumber }}</text>
     </view>
     <template v-if="isTraveling">
       <text class="traveling-order-number">訂單編號：282678634</text>
@@ -38,7 +38,7 @@
       <view class="passenger-title">乘客及聯絡資料：</view><view class="passenger"><view><image src="/static/orders/passenger.svg" mode="aspectFit" /><text>李XX（先生）</text></view><view><image src="/static/orders/phone.svg" mode="aspectFit" /><text>852 - 53**8469</text></view></view>
       <view :class="['payment', { completed: isCompleted, cancelled: isCancelled, pending: !isCompleted && !isCancelled }]">
         <text v-if="!isCompleted && !isCancelled">交易時間剩餘：05:00</text>
-        <text class="amount">RMB¥{{ selectedVehicle.price.toFixed(2) }}</text>
+        <text class="amount">{{ amountLabel }}</text>
         <view v-if="!isCompleted && !isCancelled" class="pay-tag">待付款</view>
         <view v-else-if="isCancelled" class="cancelled-tag">已退款</view>
         <view v-else class="paid-tag">已付款</view>
@@ -54,13 +54,18 @@ import { onLoad, onShow } from '@dcloudio/uni-app'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { useTripStore } from '../../stores/trip'
 import { closeCachedPage, cachedPageUrl, cachedPageStack, openCachedPage } from '../../utils/navigation'
-import OrdersBackButton from '../../components/orders/OrdersBackButton.vue'
+import { getStoredOrder, type StoredTripOrder } from '../../utils/orderStore'
 const tripStore = useTripStore()
 const { responsiveStyle } = useResponsiveCanvas()
 const isCompleted = ref(false)
 const isCancelled = ref(true)
 const isTraveling = ref(false)
+const storedOrder = ref<StoredTripOrder | undefined>()
+const orderNumber = computed(() => storedOrder.value?.id || '—')
+const parseQueryParams = (url = '') => Object.fromEntries((url.split('?')[1] || '').split('&').filter(Boolean).map(pair => { const [key, ...value] = pair.split('='); return [decodeURIComponent(key), decodeURIComponent(value.join('=') || '')] }))
+const loadOrder = (url = '') => { storedOrder.value = getStoredOrder(parseQueryParams(url).id) }
 const applyStatus = () => {
+  loadOrder(cachedPageUrl.value || (typeof window !== 'undefined' ? window.location.hash : ''))
   isCompleted.value = false
   isCancelled.value = true
   isTraveling.value = false
@@ -81,27 +86,11 @@ watch(cachedPageUrl, () => applyStatus(), { immediate: true })
 // #endif
 const statusIcon = computed(() => isCompleted.value ? '/static/orders/status-blue.svg' : isCancelled.value ? '/static/orders/status-gray.svg' : '/static/orders/status-pending.svg')
 const cityLabel = (value: string | undefined, fallback: string) => value?.split('·')[0]?.trim() || fallback
-const originLabel = computed(() => cityLabel(tripStore.activeTrip?.origin, '香港國際機場'))
-const destinationLabel = computed(() => cityLabel(tripStore.activeTrip?.destination, '深圳灣口岸'))
-const bookingTime = computed(() => tripStore.departureTime || '2024年3月15日 14:00')
-const selectedVehicle = computed(() => tripStore.chosenVehicle || {
-  title: '高級跨境商務車',
-  seats: 7,
-  price: 800
-})
-const parseQueryParams = (url = '') => {
-  const search = (url || '').split('?')[1] || ''
-  const params: Record<string, string> = {}
-  const pairs = search.split('&')
-  for (const pair of pairs) {
-    if (!pair) continue
-    const [key, ...rest] = pair.split('=')
-    if (!key) continue
-    params[decodeURIComponent(key)] = decodeURIComponent(rest.join('=') || '')
-  }
-  return params
-}
-
+const originLabel = computed(() => cityLabel(storedOrder.value?.origin || tripStore.activeTrip?.origin, '香港國際機場'))
+const destinationLabel = computed(() => cityLabel(storedOrder.value?.destination || tripStore.activeTrip?.destination, '深圳灣口岸'))
+const bookingTime = computed(() => storedOrder.value?.scheduledAt || tripStore.departureTime || '2024年3月15日 14:00')
+const selectedVehicle = computed(() => tripStore.chosenVehicle || { title: storedOrder.value?.vehicleTitle || '高級跨境商務車', seats: storedOrder.value?.seats || 7, price: storedOrder.value?.total || 800 })
+const amountLabel = computed(() => `${storedOrder.value?.currency === 'HKD' ? 'HK$' : 'RMB¥'}${(storedOrder.value?.total || selectedVehicle.value.price).toFixed(2)}`)
 const getCurrentPageSource = () => {
   const candidates: string[] = []
   if (cachedPageUrl.value) candidates.push(cachedPageUrl.value)

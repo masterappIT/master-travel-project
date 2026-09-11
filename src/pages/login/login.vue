@@ -55,11 +55,11 @@
 import { ref } from 'vue'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { goHome } from '../../utils/navigation'
-import { authenticateThirdParty, requestPhoneVerificationCode } from '../../services/api'
+import { authenticateThirdParty, requestPhoneVerificationCode, verifyPhoneVerificationCode } from '../../services/api'
 import { setAuthenticated } from '../../utils/auth'
 
 const { responsiveStyle } = useResponsiveCanvas()
-const phone = ref('6078')
+const phone = ref('')
 const agreed = ref(false)
 const countryOptions = ['香港 +852', '澳門 +852', '內地 +86']
 const countryCodes = ['+852', '+852', '+86']
@@ -82,8 +82,15 @@ const handleLogin = async () => {
     return
   }
   try {
-    const challenge = await requestPhoneVerificationCode(countryCode.value, phone.value)
-    const query = `challengeId=${encodeURIComponent(challenge.challengeId)}&phone=${encodeURIComponent(`${countryCode.value}-${phone.value}`)}${challenge.developmentCode ? `&developmentCode=${encodeURIComponent(challenge.developmentCode)}` : ''}`
+    const loginPhone = import.meta.env.DEV && !phone.value ? '67890000' : phone.value
+    const challenge = await requestPhoneVerificationCode(countryCode.value, loginPhone)
+    if (import.meta.env.DEV) {
+      const result = await verifyPhoneVerificationCode(challenge.challengeId, '', challenge.developmentCode)
+      setAuthenticated(result.token, result.user)
+      goHome()
+      return
+    }
+    const query = `challengeId=${encodeURIComponent(challenge.challengeId)}&phone=${encodeURIComponent(`${countryCode.value}-${phone.value}`)}`
     uni.navigateTo({ url: `/pages/login/verify?${query}`, animationType: 'none', animationDuration: 0 })
   } catch (error) {
     uni.showToast({ title: error instanceof Error ? error.message : '驗證碼發送失敗', icon: 'none' })

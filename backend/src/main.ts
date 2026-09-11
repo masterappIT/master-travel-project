@@ -770,7 +770,17 @@ class AdminController {
 
   @Post('users/:id/membership') async updateMembership(@Req() req: RequestLike, @Param('id') id: string, @Body() body: { membershipLevel?: string | null }) { requireRole(req, ['SUPER_ADMIN', 'OPERATOR']); const user = await prisma.user.update({ where: { id }, data: { membershipLevel: body.membershipLevel?.trim() || null } }); return userResponse(user) }
 
-  @Get('dashboard') async dashboard(@Req() req: RequestLike) { requireAuth(req); return { users: await prisma.user.count(), trips: trips.length, pendingTrips: trips.filter(t => t.status === 'PENDING').length, completedTrips: trips.filter(t => t.status === 'COMPLETED').length, charterOrders: charterOrders.length, pendingCharters: charterOrders.filter(order => order.status === 'PENDING').length, recommendedAddresses: await prisma.recommendedAddress.count({ where: { enabled: true } }) } }
+  @Get('dashboard') async dashboard(@Req() req: RequestLike) {
+    requireAuth(req)
+    const [users, tripsCount, pendingTrips, completedTrips, recommendedAddresses] = await Promise.all([
+      prisma.user.count(),
+      prisma.trip.count(),
+      prisma.trip.count({ where: { status: 'PENDING' } }),
+      prisma.trip.count({ where: { status: 'COMPLETED' } }),
+      prisma.recommendedAddress.count({ where: { enabled: true } })
+    ])
+    return { users, trips: tripsCount, pendingTrips, completedTrips, charterOrders: charterOrders.length, pendingCharters: charterOrders.filter(order => order.status === 'PENDING').length, recommendedAddresses }
+  }
   @Get('users') async listUsers(@Req() req: RequestLike) {
     requireAuth(req)
     const [data, total] = await prisma.$transaction([prisma.user.findMany({ orderBy: { createdAt: 'desc' } }), prisma.user.count()])
@@ -787,9 +797,11 @@ class AdminController {
     requireAuth(req)
     const user = await prisma.user.findUnique({ where: { id }, include: { walletTransactions: { orderBy: { createdAt: 'desc' }, take: 20 } } })
     if (!user) throw new HttpException('User not found', HttpStatus.NOT_FOUND)
-    const currentTrips = trips.filter(trip => trip.userId === id && ['PENDING', 'CONFIRMED'].includes(trip.status))
-    const currentCharterOrders = charterOrders.filter(order => order.userId === id && ['PENDING', 'CONFIRMED'].includes(order.status))
-    return { ...userResponse(user), currentTrips, currentCharterOrders, walletTransactions: user.walletTransactions }
+    const [currentTrips, currentCharterOrders] = await Promise.all([
+      prisma.trip.findMany({ where: { userId: id, status: { in: ['PENDING', 'CONFIRMED'] } }, orderBy: { scheduledAt: 'asc' } }),
+      Promise.resolve(charterOrders.filter(order => order.userId === id && ['PENDING', 'CONFIRMED'].includes(order.status)))
+    ])
+    return { ...userResponse(user), currentTrips: currentTrips.map(trip => ({ ...trip, scheduledAt: trip.scheduledAt.toISOString(), createdAt: trip.createdAt.toISOString(), updatedAt: trip.updatedAt.toISOString() })), currentCharterOrders, walletTransactions: user.walletTransactions }
   }
   @Post('users/:id') async updateUser(@Req() req: RequestLike, @Param('id') id: string, @Body() body: { countryCode?: string; phoneNumber?: string; name?: string }) {
     requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
@@ -833,11 +845,23 @@ class AdminController {
     return { data: await prisma.walletTransaction.findMany({ where: { userId: id, type: { in: ['TOP_UP', 'WITHDRAWAL'] } }, orderBy: { createdAt: 'desc' } }) }
   }
   @Get('trips') async listTrips(@Req() req: RequestLike) {
-    requireAuth(req)
-    const usersById = new Map((await prisma.user.findMany()).map(user => [user.id, userResponse(user)]))
-    return { data: trips.map(t => ({ ...t, user: usersById.get(t.userId) || null })), total: trips.length }
+   requireAuth(req)
+   const data = await prisma.trip.findMany({ include: { user: true }, orderBy: { scheduledAt: 'asc' } })
+   return { data: data.map(trip => ({ ...trip, scheduledAt: trip.scheduledAt.toISOString(), createdAt: trip.createdAt.toISOString(), updatedAt: trip.updatedAt.toISOString(), user: userResponse(trip.user) })), total: data.length }
   }
-  @Post('trips/:id') async updateTrip(@Req() req: RequestLike, @Param('id') id: string, @Body() body: Partial<Trip>) { requireRole(req, ['SUPER_ADMIN', 'OPERATOR']); const trip = trips.find(item => item.id === id); if (!trip) throw new HttpException('Trip not found', HttpStatus.NOT_FOUND); const origin = body.origin?.trim(); const destination = body.destination?.trim(); const scheduledAt = new Date(body.scheduledAt || trip.scheduledAt); const allowedStatuses = ['PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED']; if (!origin || !destination || !body.region?.trim() || Number.isNaN(scheduledAt.getTime()) || !body.status || !allowedStatuses.includes(body.status)) throw new HttpException('Valid trip fields are required', HttpStatus.BAD_REQUEST); if (body.userId && !await prisma.user.findUnique({ where: { id: body.userId }, select: { id: true } })) throw new HttpException('User not found', HttpStatus.BAD_REQUEST); Object.assign(trip, { userId: body.userId || trip.userId, origin, destination, region: body.region.trim(), scheduledAt: scheduledAt.toISOString(), status: body.status }); return trip }
+  @Post('trips/:id') async updateTrip(@Req() req: RequestLike, @Param('id') id: string, @Body() body: Partial<Trip>) {
+   requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
+   const existing = await prisma.trip.findUnique({ where: { id } })
+   if (!existing) throw new HttpException('Trip not found', HttpStatus.NOT_FOUND)
+   const origin = body.origin?.trim()
+   const destination = body.destination?.trim()
+   const scheduledAt = new Date(body.scheduledAt || existing.scheduledAt)
+   const allowedStatuses = ['PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED'] as const
+   if (!origin || !destination || !body.region?.trim() || Number.isNaN(scheduledAt.getTime()) || !body.status || !allowedStatuses.includes(body.status as typeof allowedStatuses[number])) throw new HttpException('Valid trip fields are required', HttpStatus.BAD_REQUEST)
+   if (body.userId && !await prisma.user.findUnique({ where: { id: body.userId }, select: { id: true } })) throw new HttpException('User not found', HttpStatus.BAD_REQUEST)
+   const trip = await prisma.trip.update({ where: { id }, data: { userId: body.userId || existing.userId, origin, destination, region: body.region.trim() as any, scheduledAt, status: body.status as any }, include: { user: true } })
+   return { ...trip, scheduledAt: trip.scheduledAt.toISOString(), createdAt: trip.createdAt.toISOString(), updatedAt: trip.updatedAt.toISOString(), user: userResponse(trip.user) }
+  }
   @Get('charter-orders') async listCharterOrders(@Req() req: RequestLike) { requireAuth(req); const usersById = new Map((await prisma.user.findMany()).map(user => [user.id, userResponse(user)])); return { data: charterOrders.map(order => ({ ...order, user: usersById.get(order.userId) || null })), total: charterOrders.length } }
   @Post('charter-orders/:id') async updateCharterOrder(@Req() req: RequestLike, @Param('id') id: string, @Body() body: Partial<CharterOrder>) { requireRole(req, ['SUPER_ADMIN', 'OPERATOR']); const order = charterOrders.find(item => item.id === id); if (!order) throw new HttpException('Charter order not found', HttpStatus.NOT_FOUND); const origin = body.origin?.trim(); const destination = body.destination?.trim(); const scheduledAt = new Date(body.scheduledAt || order.scheduledAt); const durationHours = Number(body.durationHours); const statuses = ['PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED']; const regions = ['大陸', '香港', '澳門']; if (!origin || !destination || !body.originRegion || !regions.includes(body.originRegion) || !body.destinationRegion || !regions.includes(body.destinationRegion) || Number.isNaN(scheduledAt.getTime()) || !Number.isFinite(durationHours) || durationHours <= 0 || !body.status || !statuses.includes(body.status)) throw new HttpException('Valid charter order fields are required', HttpStatus.BAD_REQUEST); if (body.userId && !await prisma.user.findUnique({ where: { id: body.userId }, select: { id: true } })) throw new HttpException('User not found', HttpStatus.BAD_REQUEST); Object.assign(order, { userId: body.userId || order.userId, originRegion: body.originRegion, origin, destinationRegion: body.destinationRegion, destination, scheduledAt: scheduledAt.toISOString(), durationHours, status: body.status }); return order }
   @Post('charter-orders/:id/status') updateCharterStatus(@Req() req: RequestLike, @Param('id') id: string, @Body() body: { status?: string }) { requireAuth(req); const order = charterOrders.find(item => item.id === id); if (!order) throw new HttpException('Charter order not found', HttpStatus.NOT_FOUND); const allowed = ['PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED']; if (!body.status || !allowed.includes(body.status)) throw new HttpException('Valid status is required', HttpStatus.BAD_REQUEST); order.status = body.status; return order }

@@ -3,7 +3,7 @@
     <view class="header">
       <OrdersBackButton icon-src="/static/orders/traveling-back.svg" @tap="goBack" />
       <text v-if="isTraveling" class="traveling-title">待出行</text>
-      <text v-else class="number">訂單編號：282678634</text>
+      <text v-else class="number">訂單編號：{{ orderNumber }}</text>
     </view>
     <template v-if="isTraveling">
       <text class="traveling-order-number">訂單編號：282678634</text>
@@ -38,7 +38,7 @@
       <view class="passenger-title">乘客及聯絡資料：</view><view class="passenger"><view><image src="/static/orders/passenger.svg" mode="aspectFit" /><text>李XX（先生）</text></view><view><image src="/static/orders/phone.svg" mode="aspectFit" /><text>852 - 53**8469</text></view></view>
       <view :class="['payment', { completed: isCompleted, pending: !isCompleted }]">
         <text v-if="!isCompleted">交易時間剩餘：10:00</text>
-        <text class="amount">RMB¥{{ selectedVehicle.price.toFixed(2) }}</text>
+        <text class="amount">{{ amountLabel }}</text>
         <view v-if="!isCompleted" class="pay-tag">待付款</view>
         <view v-else class="paid-tag">已付款</view>
       </view>
@@ -53,14 +53,18 @@ import { onLoad, onShow } from '@dcloudio/uni-app'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { useTripStore } from '../../stores/trip'
 import { closeCachedPage, cachedPageUrl, cachedPageStack, openCachedPage } from '../../utils/navigation'
-import { usePendingOrderStatus } from '../../utils/pendingOrderStatus'
-import OrdersBackButton from '../../components/orders/OrdersBackButton.vue'
+const isCompleted = ref(false)
+import { getStoredOrder, updateStoredOrderStatus, type StoredTripOrder } from '../../utils/orderStore'
 const tripStore = useTripStore()
 const { responsiveStyle } = useResponsiveCanvas()
-const { setStatus } = usePendingOrderStatus()
-const isCompleted = ref(false)
+const storedOrder = ref<StoredTripOrder | undefined>()
+const orderNumber = computed(() => storedOrder.value?.id || '—')
+const parseQueryParams = (url = '') => Object.fromEntries((url.split('?')[1] || '').split('&').filter(Boolean).map(pair => { const [key, ...value] = pair.split('='); return [decodeURIComponent(key), decodeURIComponent(value.join('=') || '')] }))
+const loadOrder = (url = '') => { storedOrder.value = getStoredOrder(parseQueryParams(url).id) }
 const isTraveling = ref(false)
-onLoad(() => {
+onLoad((options) => {
+  const query = options ? `?id=${options.id || ''}` : ''
+  loadOrder(query)
   isCompleted.value = false
   isTraveling.value = false
 })
@@ -73,27 +77,11 @@ onShow(() => {
   isTraveling.value = false
 })
 const cityLabel = (value: string | undefined, fallback: string) => value?.split('·')[0]?.trim() || fallback
-const originLabel = computed(() => cityLabel(tripStore.activeTrip?.origin, '香港國際機場'))
-const destinationLabel = computed(() => cityLabel(tripStore.activeTrip?.destination, '深圳灣口岸'))
-const bookingTime = computed(() => tripStore.departureTime || '2024年3月15日 14:00')
-const selectedVehicle = computed(() => tripStore.chosenVehicle || {
-  title: '高級跨境商務車',
-  seats: 7,
-  price: 800
-})
-const parseQueryParams = (url = '') => {
-  const search = (url || '').split('?')[1] || ''
-  const params: Record<string, string> = {}
-  const pairs = search.split('&')
-  for (const pair of pairs) {
-    if (!pair) continue
-    const [key, ...rest] = pair.split('=')
-    if (!key) continue
-    params[decodeURIComponent(key)] = decodeURIComponent(rest.join('=') || '')
-  }
-  return params
-}
-
+const originLabel = computed(() => cityLabel(storedOrder.value?.origin || tripStore.activeTrip?.origin, '香港國際機場'))
+const destinationLabel = computed(() => cityLabel(storedOrder.value?.destination || tripStore.activeTrip?.destination, '深圳灣口岸'))
+const bookingTime = computed(() => storedOrder.value?.scheduledAt || tripStore.departureTime || '2024年3月15日 14:00')
+const selectedVehicle = computed(() => tripStore.chosenVehicle || { title: storedOrder.value?.vehicleTitle || '高級跨境商務車', seats: storedOrder.value?.seats || 7, price: storedOrder.value?.total || 800 })
+const amountLabel = computed(() => `${storedOrder.value?.currency === 'HKD' ? 'HK$' : 'RMB¥'}${(storedOrder.value?.total || selectedVehicle.value.price).toFixed(2)}`)
 const getCurrentPageSource = () => {
   const candidates: string[] = []
   if (cachedPageUrl.value) candidates.push(cachedPageUrl.value)
@@ -136,13 +124,9 @@ const goBack = () => {
   return closeCachedPage('/pages/orders/orders')
 }
 const cancelOrder = () => {
-  setStatus('取消')
-  // Replace the pending page so its cached route cannot be revealed as the
-  // cancelled detail page when the native history contains an older entry.
-  // #ifndef MP-WEIXIN || MP-TOUTIAO
-  return uni.redirectTo({ url: '/pages/orders/cancelled-detail', animationType: 'none', animationDuration: 0 })
-  // #endif
-  openCachedPage('/pages/orders/cancelled-detail')
+  if (!storedOrder.value) return uni.showToast({ title: '找不到訂單', icon: 'none' })
+  updateStoredOrderStatus(storedOrder.value.id, '取消', '已退款')
+  openCachedPage(`/pages/orders/cancelled-detail?id=${encodeURIComponent(storedOrder.value.id)}`)
 }
 const showPaymentRecords = () => openCachedPage('/pages/transactions/expense-detail')
 </script>
