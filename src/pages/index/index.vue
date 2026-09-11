@@ -418,8 +418,11 @@ const confirmDepartureTime = (value: string) => {
 }
 
 const handleMapLocation = () => {
-  if (mapPolyline.value.length > 0 && mapIncludePoints.value.length > 1) {
-    mapFitTrigger.value += 1
+  const destinationCoordinate = selectedCoordinates.value.destination
+  if (mapPolyline.value.length > 0 && destinationCoordinate) {
+    mapLatitude.value = destinationCoordinate.latitude
+    mapLongitude.value = destinationCoordinate.longitude
+    mapCenterTrigger.value += 1
     return
   }
   useCurrentLocation()
