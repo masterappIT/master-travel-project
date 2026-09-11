@@ -403,9 +403,7 @@ const confirmPayment = async () => {
   try {
     // External channels remain selectable in the original UI; internal payment is
     // the temporary processing route until the real gateways are connected.
-    const extChannel = externalAllocation.value > 0
-      ? (selectedPayment.value === 'bank' ? 'internal' : selectedPayment.value === 'alipay' ? 'internal' : 'internal')
-      : undefined
+    const extChannel = externalAllocation.value > 0 ? 'internal' : undefined
     const res = await payTrip({
       quoteId: selectedFareQuote.value.id,
       origin: tripStore.activeDraft.route.origin || originLabel.value,

@@ -1,4 +1,4 @@
-import type { CrossBorderTrip } from '../../../shared/types/trip'
+import type { CrossBorderTrip } from '../../shared/types/trip'
 import { clearAuthentication, getAuthToken } from '../utils/auth'
 
 let API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:3010'
@@ -290,7 +290,7 @@ async function supportRequest<T>(path: string, options: { method?: 'GET' | 'POST
   const response = await uni.request({
     url: `${API_BASE_URL}/support${path}`,
     method: options.method || 'GET',
-    data: options.data,
+    data: options.data as string | AnyObject | ArrayBuffer | undefined,
     header: supportToken ? { Authorization: `Bearer ${supportToken}` } : {}
   })
   if (response.statusCode >= 400) throw new Error((response.data as { message?: string })?.message || '客服服務暫時無法使用')

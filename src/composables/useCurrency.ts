@@ -14,8 +14,8 @@ export function useCurrency() {
   const label = computed(() => currency.value === 'HKD' ? '港幣' : '人民幣')
   const convert = (rmbAmount: number) => currency.value === 'RMB' ? rmbAmount : rmbAmount / exchangeRate.value
   const format = (rmbAmount: number, decimals = 0) => `${symbol.value}${convert(rmbAmount).toFixed(decimals)}`
-  const setCurrency = (value: Currency) => { const normalized = normalizeCurrency(value); if (!normalized) return; currency.value = normalized; uni.setStorageSync('display-currency', normalized) }
-  const setExchangeRate = (value: number) => { if (Number.isFinite(value) && value > 0) { exchangeRate.value = value; uni.setStorageSync('exchange-rate', value) } }
+  const setCurrency = (value: Currency | null) => { const normalized = normalizeCurrency(value); if (!normalized) return; currency.value = normalized; uni.setStorageSync('display-currency', normalized) }
+  const setExchangeRate = (value: number | undefined) => { if (typeof value === 'number' && Number.isFinite(value) && value > 0) { exchangeRate.value = value; uni.setStorageSync('exchange-rate', value) } }
   const loadSettings = async () => {
     if (loaded) return
     loaded = true
@@ -27,7 +27,7 @@ export function useCurrency() {
       const settings = await getSettings()
       const savedCurrency = normalizeCurrency(settings.currency)
       if (savedCurrency) setCurrency(savedCurrency)
-      if (Number.isFinite(settings.exchangeRate)) setExchangeRate(settings.exchangeRate)
+      if (settings.exchangeRate) setExchangeRate(settings.exchangeRate)
     } catch { /* use cached defaults */ }
   }
   return { currency, exchangeRate, symbol, label, convert, format, setCurrency, setExchangeRate, loadSettings }
