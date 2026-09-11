@@ -91,7 +91,7 @@ import { computed, onMounted, ref, nextTick } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { useTripStore } from '../../stores/trip'
-import { consumeFareQuote, createFareQuote, planDrivingRoute, getSettings, getWalletMe, payTrip, type AppSettings } from '../../services/api'
+import { createFareQuote, planDrivingRoute, getSettings, getWalletMe, payTrip, type AppSettings } from '../../services/api'
 import type { Coordinate } from '../../services/api'
 import type { AddressSelection } from '../../components/home/AddressPicker.vue'
 import { cachedPagePath, closeCachedPage, openCachedPage } from '../../utils/navigation'
@@ -100,7 +100,6 @@ import VehicleCard from '../../components/vehicles/VehicleCard.vue'
 import HomeMap from '../../components/home/HomeMap.vue'
 import { useCurrency } from '../../composables/useCurrency'
 import { reactive } from 'vue'
-import { savePaidOrder } from '../../utils/orderStore'
 import { persistWallet, readWallet, type WalletState } from '../../utils/wallet'
 const { responsiveStyle } = useResponsiveCanvas()
 const { currency, format } = useCurrency()
@@ -126,6 +125,7 @@ const rideForOtherOpen = ref(false)
 const detailPriceOpen = ref(false)
 const paymentOpen = ref(false)
 const paymentSuccessOpen = ref(false)
+const paidTripId = ref('')
 const selectedPayment = ref('wechat')
 const countdownSeconds = ref(300)
 let countdownTimer: ReturnType<typeof setInterval> | null = null
@@ -432,19 +432,7 @@ const confirmPayment = async () => {
       persistWallet(wallet)
     }
 
-    savePaidOrder({
-      tripId: res.tripId,
-      origin: tripStore.activeDraft.route.origin || originLabel.value,
-      destination: tripStore.activeDraft.route.destination || destinationLabel.value,
-      scheduledAt: tripStore.departureTime,
-      quote: selectedFareQuote.value,
-      urgent: false
-    })
-
-    try {
-      await consumeFareQuote(selectedFareQuote.value.id)
-    } catch (_) {}
-
+    paidTripId.value = res.tripId
     uni.hideLoading()
     paymentOpen.value = false
     paymentSuccessOpen.value = true
@@ -455,7 +443,7 @@ const confirmPayment = async () => {
 }
 const closePaymentSuccess = () => {
   paymentSuccessOpen.value = false
-  openCachedPage('/pages/vehicles/booking-success')
+  openCachedPage(`/pages/vehicles/booking-success?id=${encodeURIComponent(paidTripId.value)}`)
 }
 </script>
 

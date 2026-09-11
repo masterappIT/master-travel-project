@@ -342,6 +342,20 @@ function clientTokenFor(userId: string) {
   const payload = Buffer.from(JSON.stringify(session)).toString('base64url')
   return `${payload}.${createHmac('sha256', clientSecret()).update(payload).digest('base64url')}`
 }
+function clientSessionFrom(req: RequestLike): ClientSession {
+  const value = req.headers.authorization?.replace(/^Bearer\s+/i, '')
+  const [payload, signature] = value?.split('.') || []
+  if (!payload || !signature) throw new UnauthorizedException('Valid client session required')
+  const expected = createHmac('sha256', clientSecret()).update(payload).digest('base64url')
+  try {
+    if (!timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) throw new Error('signature mismatch')
+    const session = JSON.parse(Buffer.from(payload, 'base64url').toString()) as ClientSession
+    if (!session.sub || session.exp <= Date.now()) throw new Error('expired session')
+    return session
+  } catch {
+    throw new UnauthorizedException('Valid client session required')
+  }
+}
 function clientAuthResponse(user: ManagedUser) {
   const exp = Date.now() + 30 * 24 * 60 * 60 * 1000
   return { token: clientTokenFor(user.id), expiresAt: new Date(exp).toISOString(), user: userResponse(user) }
@@ -480,6 +494,24 @@ function quoteResponse(quote: PersistedQuote) {
         }
       : null,
     lines: quote.lines.map(line => ({ type: line.type, sourceId: line.sourceId, label: line.label, quantity: line.quantity, unitAmount: line.unitAmount, totalAmount: line.totalAmount, currency: line.currency, order: line.order }))
+  }
+}
+function tripResponse(trip: {
+  scheduledAt: Date
+  createdAt: Date
+  updatedAt: Date
+  user: Parameters<typeof userResponse>[0]
+  quote?: PersistedQuote | null
+  [key: string]: unknown
+}) {
+  const { quote, ...data } = trip
+  return {
+    ...data,
+    scheduledAt: trip.scheduledAt.toISOString(),
+    createdAt: trip.createdAt.toISOString(),
+    updatedAt: trip.updatedAt.toISOString(),
+    user: userResponse(trip.user),
+    quote: quote ? quoteResponse(quote) : null
   }
 }
 function parseDistancePricing(categoryId: string, body: Partial<DistancePricingSettings>): DistancePricingSettings {
@@ -846,8 +878,20 @@ class AdminController {
   }
   @Get('trips') async listTrips(@Req() req: RequestLike) {
    requireAuth(req)
-   const data = await prisma.trip.findMany({ include: { user: true }, orderBy: { scheduledAt: 'asc' } })
-   return { data: data.map(trip => ({ ...trip, scheduledAt: trip.scheduledAt.toISOString(), createdAt: trip.createdAt.toISOString(), updatedAt: trip.updatedAt.toISOString(), user: userResponse(trip.user) })), total: data.length }
+   const data = await prisma.trip.findMany({
+     include: {
+       user: true,
+       quote: {
+         include: {
+           pricing: { include: { tiers: { orderBy: { order: 'asc' } } } },
+           vehicle: true,
+           lines: { orderBy: { order: 'asc' } }
+         }
+       }
+     },
+     orderBy: { scheduledAt: 'asc' }
+   })
+   return { data: data.map(tripResponse), total: data.length }
   }
   @Post('trips') async createTrip(@Req() req: RequestLike, @Body() body: Partial<Trip>) {
    requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
@@ -1690,17 +1734,11 @@ class PaymentCardsController {
 class WalletController {
   @Get('me')
   async getMe(@Req() req: RequestLike) {
-    const phone = req.query?.phoneNumber || req.headers?.authorization?.replace('Bearer ', '') || '55550101'
-    let user = await prisma.user.findFirst({
-      where: { OR: [{ phoneNumber: phone }, { id: phone }] },
+    const session = clientSessionFrom(req)
+    const user = await prisma.user.findUnique({
+      where: { id: session.sub },
       include: { walletTransactions: { orderBy: { createdAt: 'desc' }, take: 50 } }
     })
-    if (!user) {
-      user = await prisma.user.findFirst({
-        orderBy: { createdAt: 'asc' },
-        include: { walletTransactions: { orderBy: { createdAt: 'desc' }, take: 50 } }
-      })
-    }
     if (!user) throw new HttpException('User not found', HttpStatus.NOT_FOUND)
     return {
       id: user.id,
@@ -1751,7 +1789,7 @@ class WalletController {
 @Controller('payments')
 class PaymentsController {
   @Post('trip-pay')
-  async tripPay(@Body() body: {
+  async tripPay(@Req() req: RequestLike, @Body() body: {
     quoteId?: string
     userId?: string
     useFareBalance?: boolean
@@ -1765,12 +1803,22 @@ class PaymentsController {
     if (!quoteId) throw new HttpException('quoteId is required', HttpStatus.BAD_REQUEST)
 
     const settings = await prisma.appSetting.findUniqueOrThrow({ where: { id: appSettingsDefaults.id } })
-    const userTarget = body.userId
-      ? await prisma.user.findUnique({ where: { id: body.userId } })
-      : await prisma.user.findFirst({ orderBy: { createdAt: 'asc' } })
+    const session = clientSessionFrom(req)
+    if (body.userId && body.userId !== session.sub) throw new ForbiddenException('Cannot pay for another user')
+    const userTarget = await prisma.user.findUnique({ where: { id: session.sub } })
     if (!userTarget) throw new HttpException('User not found', HttpStatus.NOT_FOUND)
 
     return prisma.$transaction(async tx => {
+      const existingPayment = await tx.payment.findUnique({ where: { quoteId } })
+      if (existingPayment) {
+        if (existingPayment.userId !== userTarget.id) throw new ForbiddenException('Quote belongs to another user')
+        const existingUser = await tx.user.findUniqueOrThrow({ where: { id: existingPayment.userId } })
+        return {
+          ok: true, tripId: existingPayment.tripId, quoteId: existingPayment.quoteId, total: existingPayment.total, currency: existingPayment.currency,
+          paidSummary: { fareBalance: existingPayment.fareAmount, cashBalance: existingPayment.cashAmount, external: existingPayment.externalAmount, externalMethod: existingPayment.externalPaymentMethod },
+          user: { id: existingUser.id, fareBalance: existingUser.fareBalance, cashBalance: existingUser.cashBalance }
+        }
+      }
       const quote = await tx.fareQuote.findUnique({
         where: { id: quoteId },
         include: {
@@ -1821,10 +1869,10 @@ class PaymentsController {
           data: {
             userId: user.id,
             wallet: 'FARE',
-            type: 'ADMIN_DECREASE',
+            type: 'TRIP_PAYMENT',
             amount: farePaid,
             balanceAfter: currentFare,
-            reason: `出行支付 - 車費餘額抵扣 (訂單: ${quote.id.slice(-8)})`
+            reason: `出行支付 - 車費餘額抵扣 (報價: ${quote.id.slice(-8)})`
           }
         })
       }
@@ -1839,10 +1887,10 @@ class PaymentsController {
           data: {
             userId: user.id,
             wallet: 'CASH',
-            type: 'ADMIN_DECREASE',
+            type: 'TRIP_PAYMENT',
             amount: cashPaid,
             balanceAfter: currentCash,
-            reason: `出行支付 - 現金餘額抵扣 (訂單: ${quote.id.slice(-8)})`
+            reason: `出行支付 - 現金餘額抵扣 (報價: ${quote.id.slice(-8)})`
           }
         })
       }
@@ -1862,12 +1910,35 @@ class PaymentsController {
       const trip = await tx.trip.create({
         data: {
           userId: user.id,
+          quoteId: quote.id,
           origin,
           destination,
           region: 'GUANGDONG',
           scheduledAt: Number.isNaN(scheduledAt.getTime()) ? new Date() : scheduledAt,
-          status: 'CONFIRMED'
+          status: 'CONFIRMED',
+          fareBalancePaid: farePaid,
+          cashBalancePaid: cashPaid,
+          externalPaid,
+          externalPaymentMethod: externalPaid > 0 ? body.externalPaymentMethod : null
         }
+      })
+      const payment = await tx.payment.create({
+        data: {
+          tripId: trip.id,
+          quoteId: quote.id,
+          userId: user.id,
+          total: totalAmount,
+          currency: quote.currency,
+          fareAmount: farePaid,
+          cashAmount: cashPaid,
+          externalAmount: externalPaid,
+          externalPaymentMethod: externalPaid > 0 ? body.externalPaymentMethod : null,
+          externalReference: externalPaid > 0 ? `sandbox-${randomBytes(8).toString('hex')}` : null
+        }
+      })
+      await tx.walletTransaction.updateMany({
+        where: { userId: user.id, paymentId: null, reason: { contains: quote.id.slice(-8) } },
+        data: { paymentId: payment.id }
       })
 
       return {
@@ -1888,12 +1959,107 @@ class PaymentsController {
           cashBalance: currentCash
         }
       }
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
+  }
+}
+
+function clientTripResponse(trip: Prisma.TripGetPayload<{ include: { payment: true } }>) {
+  return {
+    id: trip.id,
+    origin: trip.origin,
+    destination: trip.destination,
+    region: trip.region,
+    scheduledAt: trip.scheduledAt.toISOString(),
+    status: trip.status,
+    createdAt: trip.createdAt.toISOString(),
+    payment: trip.payment ? {
+      id: trip.payment.id,
+      total: trip.payment.total,
+      currency: trip.payment.currency,
+      status: trip.payment.status,
+      fareAmount: trip.payment.fareAmount,
+      cashAmount: trip.payment.cashAmount,
+      externalAmount: trip.payment.externalAmount,
+      externalPaymentMethod: trip.payment.externalPaymentMethod,
+      createdAt: trip.payment.createdAt.toISOString()
+    } : null
+  }
+}
+
+@Controller('client')
+class ClientOrdersController {
+  @Get('trips')
+  async listTrips(@Req() req: RequestLike) {
+    const session = clientSessionFrom(req)
+    const trips = await prisma.trip.findMany({
+      where: { userId: session.sub },
+      include: { payment: true },
+      orderBy: { createdAt: 'desc' }
     })
+    return { data: trips.map(clientTripResponse) }
+  }
+
+  @Get('trips/:id')
+  async getTrip(@Req() req: RequestLike, @Param('id') id: string) {
+    const session = clientSessionFrom(req)
+    const trip = await prisma.trip.findFirst({ where: { id, userId: session.sub }, include: { payment: true } })
+    if (!trip) throw new HttpException('Trip not found', HttpStatus.NOT_FOUND)
+    return clientTripResponse(trip)
+  }
+
+  @Post('trips/:id/cancel')
+  async cancelTrip(@Req() req: RequestLike, @Param('id') id: string) {
+    const session = clientSessionFrom(req)
+    return prisma.$transaction(async tx => {
+      const trip = await tx.trip.findFirst({ where: { id, userId: session.sub }, include: { payment: true } })
+      if (!trip) throw new HttpException('Trip not found', HttpStatus.NOT_FOUND)
+      if (trip.status === 'CANCELLED') return clientTripResponse(trip)
+      if (trip.status === 'COMPLETED') throw new HttpException('Completed trips cannot be cancelled', HttpStatus.CONFLICT)
+
+      const payment = trip.payment
+      if (payment && payment.status === 'PAID') {
+        const user = await tx.user.findUniqueOrThrow({ where: { id: session.sub } })
+        const fareBalance = roundMoney(user.fareBalance + payment.fareAmount)
+        const cashBalance = roundMoney(user.cashBalance + payment.cashAmount)
+        await tx.user.update({ where: { id: user.id }, data: { fareBalance, cashBalance } })
+        await tx.payment.update({ where: { id: payment.id }, data: { status: 'REFUNDED', refundedAt: new Date() } })
+        if (payment.fareAmount > 0) await tx.walletTransaction.create({ data: { userId: user.id, wallet: 'FARE', type: 'REFUND', amount: payment.fareAmount, balanceAfter: fareBalance, reason: `訂單退款 - 車費餘額 (訂單: ${trip.id.slice(-8)})`, paymentId: payment.id } })
+        if (payment.cashAmount > 0) await tx.walletTransaction.create({ data: { userId: user.id, wallet: 'CASH', type: 'REFUND', amount: payment.cashAmount, balanceAfter: cashBalance, reason: `訂單退款 - 現金餘額 (訂單: ${trip.id.slice(-8)})`, paymentId: payment.id } })
+      }
+      const updated = await tx.trip.update({ where: { id: trip.id }, data: { status: 'CANCELLED' }, include: { payment: true } })
+      return clientTripResponse(updated)
+    })
+  }
+
+  @Get('transactions')
+  async listTransactions(@Req() req: RequestLike) {
+    const session = clientSessionFrom(req)
+    const data = await prisma.payment.findMany({
+      where: { userId: session.sub },
+      orderBy: { createdAt: 'desc' },
+      include: { trip: true }
+    })
+    return {
+      data: data.map(payment => ({
+        id: payment.id,
+        tripId: payment.tripId,
+        total: payment.total,
+        currency: payment.currency,
+        status: payment.status,
+        fareAmount: payment.fareAmount,
+        cashAmount: payment.cashAmount,
+        externalAmount: payment.externalAmount,
+        externalPaymentMethod: payment.externalPaymentMethod,
+        createdAt: payment.createdAt.toISOString(),
+        refundedAt: payment.refundedAt?.toISOString() || null,
+        trip: { origin: payment.trip.origin, destination: payment.trip.destination, status: payment.trip.status }
+      }))
+    }
   }
 }
 
 @Controller('health') class HealthController { @Get() check() { return { status: 'ok', service: 'master-travel-project-api' } } }
-@Module({ controllers: [HealthController, LocationController, SettingsController, RecommendedAddressesController, PublicVehiclesController, PublicQuotesController, PublicMembershipPlansController, PublicPromotionsController, PaymentCardsController, WalletController, PaymentsController, ClientAuthController, AdminAuthController, AdminController, SupportController], providers: [{ provide: APP_INTERCEPTOR, useClass: AdminAccessInterceptor }] }) class AppModule {}
+@Module({ controllers: [HealthController, LocationController, SettingsController, RecommendedAddressesController, PublicVehiclesController, PublicQuotesController, PublicMembershipPlansController, PublicPromotionsController, PaymentCardsController, WalletController, PaymentsController, ClientOrdersController, ClientAuthController, AdminAuthController, AdminController, SupportController], providers: [{ provide: APP_INTERCEPTOR, useClass: AdminAccessInterceptor }] }) class AppModule {}
 async function bootstrap() {
   await prisma.$connect()
   await ensurePricingDefaults()

@@ -5,7 +5,7 @@
     </view>
     <image class="success-icon" src="/static/transactions/expense/success.svg" mode="aspectFit" />
     <text class="title">支出 - 跨境出行 餘額支付</text>
-    <view class="amount"><text class="currency">RMB</text><text class="yen">¥</text><text class="number">{{ expenseAmount.toFixed(2) }}</text></view>
+    <view class="amount"><text class="currency">{{ currencyLabel }}</text><text class="yen">¥</text><text class="number">{{ expenseAmount.toFixed(2) }}</text></view>
     <view class="status"><image src="/static/transactions/expense/status-check.svg" mode="aspectFit" /><text>成功</text></view>
     <view class="details">
       <text class="section-title">付款方式</text>
@@ -17,29 +17,39 @@
         <view class="payment-copy"><image class="wallet-icon" src="/static/transactions/expense/wallet.svg" mode="aspectFit" /><text>我的錢包 餘額</text></view>
         <image class="selected" src="/static/transactions/expense/selected.svg" mode="aspectFit" />
       </view>
-      <view class="order-total"><text>訂單總金額</text><text>RMB ¥800</text></view>
-      <view class="allocation cash"><image src="/static/transactions/expense/mastercard-small.svg" mode="aspectFit" /><text>銀行帳戶</text><text>-RMB ¥700</text></view>
-      <view class="allocation fare"><image src="/static/transactions/expense/wallet-small.svg" mode="aspectFit" /><text>我的錢包 餘額</text><text>-RMB ¥100</text></view>
+      <view class="order-total"><text>訂單總金額</text><text>{{ currencyLabel }} ¥{{ expenseAmount.toFixed(2) }}</text></view>
+      <view class="allocation cash"><image src="/static/transactions/expense/mastercard-small.svg" mode="aspectFit" /><text>銀行帳戶</text><text>-{{ currencyLabel }} ¥{{ payment?.cashAmount.toFixed(2) || '0.00' }}</text></view>
+      <view class="allocation fare"><image src="/static/transactions/expense/wallet-small.svg" mode="aspectFit" /><text>我的錢包 餘額</text><text>-{{ currencyLabel }} ¥{{ payment?.fareAmount.toFixed(2) || '0.00' }}</text></view>
       <view class="order-link" @tap="openOrder"><text>相關訂單紀錄</text><image src="/static/transactions/expense/arrow.svg" mode="aspectFit" /></view>
-      <view class="success-time"><text>支付成功時間</text><text>01/01/2024 12:00:00</text></view>
+      <view class="success-time"><text>支付成功時間</text><text>{{ paymentTime }}</text></view>
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
+import { onLoad } from '@dcloudio/uni-app'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { closeCachedPage, openCachedPage } from '../../utils/navigation'
-import { readWallet } from '../../utils/wallet'
+import { listClientTransactions, type ClientPayment } from '../../services/api'
 
 const { responsiveStyle } = useResponsiveCanvas()
-const wallet = readWallet()
-const expenseAmount = computed(() => {
-  const record = wallet.records.find((item) => item.type === '出行支付' && item.amount < 0)
-  return Math.abs(record?.amount || 101)
+const payment = ref<ClientPayment | null>(null)
+const tripId = ref('')
+const expenseAmount = computed(() => payment.value?.total || 0)
+const currencyLabel = computed(() => payment.value?.currency === 'HKD' ? 'HKD' : 'RMB')
+const paymentTime = computed(() => payment.value ? new Date(payment.value.createdAt).toLocaleString('zh-HK') : '—')
+onLoad(async (options) => {
+  tripId.value = options?.tripId || ''
+  try {
+    const payments = await listClientTransactions()
+    payment.value = payments.find((item) => item.tripId === tripId.value) || payments[0] || null
+  } catch (error) {
+    uni.showToast({ title: error instanceof Error ? error.message : '交易紀錄載入失敗', icon: 'none' })
+  }
 })
 const goBack = () => closeCachedPage('/pages/transactions/transactions')
-const openOrder = () => openCachedPage('/pages/orders/detail?status=completed')
+const openOrder = () => payment.value && openCachedPage(`/pages/orders/detail?status=traveling&id=${encodeURIComponent(payment.value.tripId)}`)
 </script>
 
 <style scoped>

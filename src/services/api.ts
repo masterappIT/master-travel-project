@@ -324,7 +324,7 @@ export async function getWalletMe(userIdOrPhone?: string): Promise<WalletInfo> {
   const url = userIdOrPhone
     ? `${API_BASE_URL}/wallet/me?userId=${encodeURIComponent(userIdOrPhone)}`
     : `${API_BASE_URL}/wallet/me`
-  const response = await uni.request({ url })
+  const response = await uni.request({ url, header: authHeaders() })
   if (response.statusCode >= 400) throw apiError(response, '無法獲取錢包餘額')
   return response.data as WalletInfo
 }
@@ -378,10 +378,61 @@ export async function payTrip(params: TripPayRequest): Promise<TripPayResult> {
   const response = await uni.request({
     url: `${API_BASE_URL}/payments/trip-pay`,
     method: 'POST',
-    data: params
+    data: params,
+    header: authHeaders()
   })
   if (response.statusCode >= 400) throw apiError(response, '支付失敗')
   return response.data as TripPayResult
+}
+
+export type ClientPayment = {
+  id: string
+  tripId: string
+  total: number
+  currency: string
+  status: 'PAID' | 'REFUNDED'
+  fareAmount: number
+  cashAmount: number
+  externalAmount: number
+  externalPaymentMethod: string | null
+  createdAt: string
+  refundedAt: string | null
+  trip: { origin: string; destination: string; status: 'PENDING' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED' }
+}
+
+export type ClientTrip = {
+  id: string
+  origin: string
+  destination: string
+  region: string
+  scheduledAt: string
+  status: 'PENDING' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED'
+  createdAt: string
+  payment: Omit<ClientPayment, 'tripId' | 'refundedAt' | 'trip'> & { refundedAt?: string | null } | null
+}
+
+export async function listClientTrips(): Promise<ClientTrip[]> {
+  const response = await uni.request({ url: `${API_BASE_URL}/client/trips`, header: authHeaders() })
+  if (response.statusCode >= 400) throw apiError(response, '無法載入訂單')
+  return (response.data as { data: ClientTrip[] }).data
+}
+
+export async function getClientTrip(id: string): Promise<ClientTrip> {
+  const response = await uni.request({ url: `${API_BASE_URL}/client/trips/${encodeURIComponent(id)}`, header: authHeaders() })
+  if (response.statusCode >= 400) throw apiError(response, '無法載入訂單')
+  return response.data as ClientTrip
+}
+
+export async function cancelClientTrip(id: string): Promise<ClientTrip> {
+  const response = await uni.request({ url: `${API_BASE_URL}/client/trips/${encodeURIComponent(id)}/cancel`, method: 'POST', header: authHeaders() })
+  if (response.statusCode >= 400) throw apiError(response, '訂單取消失敗')
+  return response.data as ClientTrip
+}
+
+export async function listClientTransactions(): Promise<ClientPayment[]> {
+  const response = await uni.request({ url: `${API_BASE_URL}/client/transactions`, header: authHeaders() })
+  if (response.statusCode >= 400) throw apiError(response, '無法載入交易紀錄')
+  return (response.data as { data: ClientPayment[] }).data
 }
 
 export type { CrossBorderTrip }

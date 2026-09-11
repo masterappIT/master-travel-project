@@ -53,6 +53,7 @@ import { computed, ref, watch, onMounted } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { cachedPageUrl, closeCachedPage, openCachedPage } from '../../utils/navigation'
+import { listClientTransactions, type ClientPayment } from '../../services/api'
 
 const { responsiveStyle } = useResponsiveCanvas()
 const filterOpen = ref(false)
@@ -60,16 +61,30 @@ const incomeType = ref<'all' | 'income' | 'expense'>('all')
 const pendingIncomeType = ref(incomeType.value)
 const transactionType = ref<'all' | 'travel-order' | 'withdraw' | 'topup' | 'cancel-order'>('all')
 const pendingTransactionType = ref(transactionType.value)
-const records = [
-  { id: 'topup-success', type: 'topup' as const, kind: '收入', detail: '餘額增值', time: '01/01 12:00:00', amount: '+HKD$1000', amountTone: 'positive' as const, transactionStatus: 'success' as const },
-  { id: 'topup-card-failed', type: 'topup' as const, kind: '收入', detail: '餘額增值（信用卡）', time: '01/01 12:00:00', amount: '+HKD$101', amountTone: 'positive' as const, status: '失敗', transactionStatus: 'failed' as const, payment: 'card' as const },
-  { id: 'topup-alipay-failed', type: 'topup' as const, kind: '收入', detail: '餘額增值（支付寶）', time: '01/01 12:00:00', amount: '+HKD$101', amountTone: 'positive' as const, status: '失敗', transactionStatus: 'failed' as const, payment: 'alipay' as const },
-  { id: 'topup-wechat-failed', type: 'topup' as const, kind: '收入', detail: '餘額增值（微信支付）', time: '01/01 12:00:00', amount: '+HKD$101', amountTone: 'positive' as const, status: '失敗', transactionStatus: 'failed' as const, payment: 'wechat' as const },
-  { id: 'cancel-order-success', type: 'cancel-order' as const, kind: '退款', detail: '跨境出行 取消訂單', time: '01/01 12:00:00', amount: '-HKD$1000', amountTone: 'negative' as const, transactionStatus: 'success' as const },
-  { id: 'withdraw-success', type: 'withdraw' as const, kind: '提現', detail: '餘額提現', time: '01/01 12:00:00', amount: '+HKD$1000', amountTone: 'positive' as const, status: '已到帳', transactionStatus: 'success' as const },
-  { id: 'travel-order-success', type: 'travel-order' as const, kind: '支出', detail: '跨境出行 餘額支付', time: '01/01 12:00:00', amount: '-HKD$1000', amountTone: 'negative' as const, order: '訂單編號：282678634', transactionStatus: 'success' as const },
-  { id: 'alipay-withdraw-success', type: 'alipay-withdraw' as const, kind: '提現', detail: '支付寶提現', time: '01/01 12:00:00', amount: '+HKD$1000', amountTone: 'positive' as const, status: '已到帳', transactionStatus: 'success' as const }
-]
+type RecordItem = { id: string; tripId: string; type: 'travel-order' | 'cancel-order'; kind: string; detail: string; time: string; amount: string; amountTone: 'positive' | 'negative'; transactionStatus: 'success' }
+const records = ref<RecordItem[]>([])
+const currencyAmount = (amount: number, currency: string) => `${currency === 'HKD' ? 'HKD$' : 'RMB¥'}${amount.toFixed(2)}`
+const loadRecords = async () => {
+  try {
+    const payments = await listClientTransactions()
+    records.value = payments.map((payment: ClientPayment) => {
+      const refunded = payment.status === 'REFUNDED'
+      return {
+        id: payment.id,
+        tripId: payment.tripId,
+        type: refunded ? 'cancel-order' : 'travel-order',
+        kind: refunded ? '退款' : '支出',
+        detail: refunded ? '跨境出行 取消訂單' : '跨境出行 餘額支付',
+        time: new Date(refunded ? payment.refundedAt || payment.createdAt : payment.createdAt).toLocaleString('zh-HK', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }),
+        amount: `${refunded ? '+' : '-'}${currencyAmount(payment.total, payment.currency)}`,
+        amountTone: refunded ? 'positive' : 'negative',
+        transactionStatus: 'success'
+      }
+    })
+  } catch (error) {
+    uni.showToast({ title: error instanceof Error ? error.message : '交易紀錄載入失敗', icon: 'none' })
+  }
+}
 const readRequestedTransactionType = (url?: string) => {
   const value = url?.match(/[?&]transactionType=([^&#]+)/)?.[1]
   return value === 'travel-order' || value === 'withdraw' || value === 'topup' || value === 'cancel-order'
@@ -89,11 +104,13 @@ onLoad((options) => {
   applyRequestedTransactionType(nextUrl)
 })
 onMounted(() => {
+  void loadRecords()
   if (typeof window !== 'undefined' && !cachedPageUrl.value.includes('/pages/transactions/transactions')) {
     applyRequestedTransactionType(window.location.hash)
   }
 })
 onShow(() => {
+  void loadRecords()
   if (typeof window !== 'undefined' && !cachedPageUrl.value.includes('/pages/transactions/transactions')) {
     applyRequestedTransactionType(window.location.hash)
   }
@@ -110,7 +127,7 @@ const filterTitle = computed(() => {
   }
   return incomeType.value === 'income' ? '收入紀錄' : '支出紀錄'
 })
-const visibleRecords = computed(() => records.filter((record) => isRecordVisible(record.type)))
+const visibleRecords = computed(() => records.value.filter((record) => isRecordVisible(record.type)))
 const previousMonthTop = computed(() => {
   const rowHeights = [60, 60, 60, 60, 60]
   const cardHeight = 40 + (visibleRecords.value.length ? 12 : 0)
@@ -126,17 +143,10 @@ const openWithdrawDetail = () => openCachedPage('/pages/withdraw/detail')
 const openAlipayDetail = () => openCachedPage('/pages/withdraw/alipay-detail')
 const openRefundDetail = () => openCachedPage('/pages/refund/detail')
 const openExpenseDetail = () => openCachedPage('/pages/transactions/expense-detail')
-const openRecord = (record: typeof records[number]) => {
-  if (record.transactionStatus === 'failed') {
-    openFailureDetail(record.amount, record.payment)
-    return
-  }
+const openRecord = (record: RecordItem) => {
   const { type } = record
-  if (type === 'topup') openTopUpDetail()
-  else if (type === 'cancel-order') openRefundDetail()
-  else if (type === 'withdraw') openWithdrawDetail()
-  else if (type === 'alipay-withdraw') openAlipayDetail()
-  else openExpenseDetail()
+  if (type === 'cancel-order') openRefundDetail()
+  else openCachedPage(`/pages/transactions/expense-detail?tripId=${encodeURIComponent(record.tripId)}`)
 }
 const openFilter = () => {
   pendingIncomeType.value = incomeType.value
@@ -166,7 +176,7 @@ const applyFilter = () => {
   transactionType.value = pendingTransactionType.value
   filterOpen.value = false
 }
-const isRecordVisible = (type: typeof records[number]['type']) => {
+const isRecordVisible = (type: RecordItem['type']) => {
   const incomeMatches = incomeType.value === 'all'
     || (incomeType.value === 'income' && (type === 'topup' || type === 'withdraw' || type === 'alipay-withdraw'))
     || (incomeType.value === 'expense' && (type === 'cancel-order' || type === 'travel-order'))

@@ -23,17 +23,34 @@
 
 <script setup lang="ts">
 import HomeMap from '../../components/home/HomeMap.vue'
+import { computed, ref } from 'vue'
+import { onLoad } from '@dcloudio/uni-app'
+import { getClientTrip, type ClientTrip } from '../../services/api'
 import { openCachedPage } from '../../utils/navigation'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 
 const { responsiveStyle } = useResponsiveCanvas()
-const originLabel = '香港'
-const destinationLabel = '深圳'
-const bookingTime = 'March 15 2024 14:00'
+const trip = ref<ClientTrip | null>(null)
+const tripId = ref('')
+const originLabel = computed(() => trip.value?.origin || '香港')
+const destinationLabel = computed(() => trip.value?.destination || '深圳')
+const bookingTime = computed(() => {
+  const date = trip.value ? new Date(trip.value.scheduledAt) : null
+  return date && !Number.isNaN(date.valueOf()) ? `${date.getMonth() + 1}月${date.getDate()}日 ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}` : '—'
+})
+onLoad(async (options) => {
+  tripId.value = options?.id || ''
+  if (!tripId.value) return
+  try {
+    trip.value = await getClientTrip(tripId.value)
+  } catch (error) {
+    uni.showToast({ title: error instanceof Error ? error.message : '訂單載入失敗', icon: 'none' })
+  }
+})
 
 const goBack = () => openCachedPage('/pages/index/index')
-const cancelBooking = () => uni.showToast({ title: '取消用車功能開發中', icon: 'none' })
-const showBookingDetail = () => openCachedPage('/pages/trips/detail?from=booking-success')
+const cancelBooking = () => openCachedPage(`/pages/orders/pending-detail?id=${encodeURIComponent(tripId.value)}`)
+const showBookingDetail = () => openCachedPage(`/pages/orders/detail?status=traveling&from=orders&id=${encodeURIComponent(tripId.value)}`)
 </script>
 
 <style scoped>

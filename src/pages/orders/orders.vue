@@ -31,17 +31,38 @@ import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { openCachedPage, setOrderReturnTarget } from '../../utils/navigation'
-import { listStoredOrders } from '../../utils/orderStore'
+import { listClientTrips, type ClientTrip } from '../../services/api'
 import OrdersBackButton from '../../components/orders/OrdersBackButton.vue'
 type Tab = 'all' | 'completed' | 'cancelled'
 type OrderStatus = '已完成' | '待確認' | '待出行' | '取消' | '進行中'
-interface Order { id: string | number; status: OrderStatus; kind: '加急訂單' | '預約訂單'; countdown?: string; payment?: '待付款' | '已付款' | '已退款'; origin?: string; destination?: string; scheduledAt?: string; createdAt?: string; vehicleTitle?: string; seats?: number; total?: number; currency?: string }
+interface Order { id: string; status: OrderStatus; kind: '加急訂單' | '預約訂單'; payment?: '已付款' | '已退款'; origin: string; destination: string; scheduledAt: string; createdAt: string; vehicleTitle: string; seats: number; total: number; currency: string }
 const { responsiveStyle } = useResponsiveCanvas()
-const storedOrders = ref(listStoredOrders())
-onShow(() => { storedOrders.value = listStoredOrders() })
+const orders = ref<Order[]>([])
+const statusText = (status: ClientTrip['status']): OrderStatus => ({ PENDING: '待確認', CONFIRMED: '待出行', COMPLETED: '已完成', CANCELLED: '取消' })[status]
+const loadOrders = async () => {
+  try {
+    const trips = await listClientTrips()
+    orders.value = trips.map((trip) => ({
+      id: trip.id,
+      status: statusText(trip.status),
+      kind: '預約訂單',
+      payment: trip.payment?.status === 'REFUNDED' ? '已退款' : trip.payment ? '已付款' : undefined,
+      origin: trip.origin,
+      destination: trip.destination,
+      scheduledAt: trip.scheduledAt,
+      createdAt: trip.createdAt,
+      vehicleTitle: '高級跨境商務車',
+      seats: 7,
+      total: trip.payment?.total || 0,
+      currency: trip.payment?.currency || 'RMB¥'
+    }))
+  } catch (error) {
+    uni.showToast({ title: error instanceof Error ? error.message : '訂單載入失敗', icon: 'none' })
+  }
+}
+onShow(() => { void loadOrders() })
 const activeTab = ref<Tab>('all')
 const tabs: Array<{ label: string; value: Tab }> = [{ label: '全部', value: 'all' }, { label: '已完成', value: 'completed' }, { label: '取消', value: 'cancelled' }]
-const orders = computed<Order[]>(() => storedOrders.value)
 const visibleOrders = computed(() => activeTab.value === 'completed' ? orders.value.filter((order) => order.status === '已完成') : activeTab.value === 'cancelled' ? orders.value.filter((order) => order.status === '取消') : orders.value)
 const statusIcon = (status: OrderStatus) => status === '進行中' ? '/static/orders/status-green.svg' : status === '已完成' || status === '待出行' ? '/static/orders/status-blue.svg' : status === '待確認' ? '/static/orders/status-pending.svg' : '/static/orders/status-gray.svg'
 const formatDateTime = (value?: string) => {
