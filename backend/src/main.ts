@@ -849,7 +849,20 @@ class AdminController {
    const data = await prisma.trip.findMany({ include: { user: true }, orderBy: { scheduledAt: 'asc' } })
    return { data: data.map(trip => ({ ...trip, scheduledAt: trip.scheduledAt.toISOString(), createdAt: trip.createdAt.toISOString(), updatedAt: trip.updatedAt.toISOString(), user: userResponse(trip.user) })), total: data.length }
   }
-  @Post('trips/:id') async updateTrip(@Req() req: RequestLike, @Param('id') id: string, @Body() body: Partial<Trip>) {
+  @Post('trips') async createTrip(@Req() req: RequestLike, @Body() body: Partial<Trip>) {
+   requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
+   const userId = body.userId?.trim()
+   const origin = body.origin?.trim()
+   const destination = body.destination?.trim()
+   const scheduledAt = new Date(body.scheduledAt || '')
+   const allowedStatuses = ['PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED'] as const
+   const allowedRegions = ['HK', 'MACAU', 'GUANGDONG'] as const
+   if (!userId || !origin || !destination || !body.region || !allowedRegions.includes(body.region as typeof allowedRegions[number]) || Number.isNaN(scheduledAt.getTime()) || !body.status || !allowedStatuses.includes(body.status as typeof allowedStatuses[number])) throw new HttpException('Valid trip fields are required', HttpStatus.BAD_REQUEST)
+   if (!await prisma.user.findUnique({ where: { id: userId }, select: { id: true } })) throw new HttpException('User not found', HttpStatus.BAD_REQUEST)
+   const trip = await prisma.trip.create({ data: { userId, origin, destination, region: body.region as any, scheduledAt, status: body.status as any }, include: { user: true } })
+   return { ...trip, scheduledAt: trip.scheduledAt.toISOString(), createdAt: trip.createdAt.toISOString(), updatedAt: trip.updatedAt.toISOString(), user: userResponse(trip.user) }
+  }
+   @Post('trips/:id') async updateTrip(@Req() req: RequestLike, @Param('id') id: string, @Body() body: Partial<Trip>) {
    requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
    const existing = await prisma.trip.findUnique({ where: { id } })
    if (!existing) throw new HttpException('Trip not found', HttpStatus.NOT_FOUND)

@@ -46,7 +46,7 @@ const displayName = ref('John')
 const walletBalance = ref(0)
 const authenticated = ref(false)
 
-onShow(() => {
+const refreshProfile = () => {
   authenticated.value = isAuthenticated()
   const profile = uni.getStorageSync('account-profile')
   avatarUrl.value = profile?.avatarUrl || ''
@@ -56,6 +56,12 @@ onShow(() => {
   unreadCount.value = Math.max(0, totalMessages - readCount)
   const wallet = uni.getStorageSync('wallet-state')
   walletBalance.value = Number(wallet?.withdrawable) || 0
+}
+
+refreshProfile()
+
+onShow(() => {
+  refreshProfile()
 })
 
 const goHome = () => openCachedPage('/pages/index/index')

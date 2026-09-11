@@ -105,16 +105,57 @@ tr:last-child td { border-bottom: 0; }
 .muted { color: #7c8ca1; font-size: 12px; }
 .status { display: inline-block; border-radius: 999px; padding: 6px 10px; font-size: 11px; font-weight: 750; }
 .pending { color: #8b6200; background: #fff3cc; }.confirmed { color: #125dbb; background: #e2efff; }.completed { color: #137044; background: #def6e9; }.cancelled { color: #a52b2b; background: #ffe4e4; }
-.trip-orders-panel { overflow: hidden; }
-.trip-orders-panel .admin-toolbar { align-items: flex-start; padding: 22px 24px 12px; }
+.trip-detail-panel { padding-bottom: 22px; }
+.trip-detail-panel .admin-toolbar { padding: 20px 24px 12px; }
+.trip-detail-panel .admin-toolbar h2 { margin: 5px 0 4px; font-size: 20px; }
+.trip-detail-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; padding: 0 24px 20px; }
+.trip-detail-card { display: grid; gap: 7px; min-height: 102px; padding: 16px; border: 1px solid #e1e8f2; border-radius: 14px; background: #f8fafd; }
+.trip-detail-card span:first-child { color: #667a94; font-size: 11px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+.trip-detail-card strong { color: #12243b; font-size: 16px; }
+.trip-detail-card small { color: #7c8ca1; }
+.trip-route-card { gap: 5px; }
+.trip-route-card small { font-size: 12px; }
+.trip-status-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 0 24px; }
+.trip-status-actions > span { margin-right: 4px; color: #647892; font-size: 12px; font-weight: 700; }
+.trip-status-actions button { border: 1px solid #d4dfed; border-radius: 9px; padding: 8px 12px; color: #425974; background: #fff; font-size: 12px; font-weight: 700; cursor: pointer; }
+.trip-status-actions button.active { border-color: #1769e0; color: #fff; background: #1769e0; }
+
 .trip-orders-panel .admin-toolbar h2 { margin: 5px 0 0; }
 .trip-orders-panel .toolbar-actions { flex-wrap: wrap; justify-content: flex-end; }
 .trip-orders-panel .toolbar-actions input { min-width: 180px; border: 1px solid #ccd8e7; border-radius: 10px; padding: 10px 12px; color: #425974; background: #f8fafd; }
-.trip-orders-panel > .muted { margin: 0; padding: 0 24px 14px; }
+.trip-orders-panel > .muted { margin: 0; padding: 0 24px 14px; display: flex; align-items: center; justify-content: flex-start; gap: 14px; flex-wrap: wrap; }
+.trip-add-order-btn { display: inline-flex; align-items: center; gap: 7px; min-height: 40px; margin-left: 0; border: 0; border-radius: 11px; padding: 10px 17px; color: #fff; background: linear-gradient(135deg, #155dcc, #2684f5); box-shadow: 0 7px 16px rgba(23, 105, 224, .25); font-size: 13px; font-weight: 800; letter-spacing: .01em; cursor: pointer; transition: transform .16s ease, box-shadow .16s ease, filter .16s ease; }
+.trip-add-order-btn span { font-size: 19px; line-height: 1; font-weight: 500; }
+.trip-add-order-btn:hover { filter: brightness(1.06); box-shadow: 0 9px 20px rgba(23, 105, 224, .34); transform: translateY(-1px); }
+.trip-add-order-btn:focus-visible { outline: 3px solid rgba(38, 132, 245, .28); outline-offset: 2px; }
 .trip-orders-panel table { min-width: 920px; }
 .trip-orders-panel th, .trip-orders-panel td { padding-top: 15px; padding-bottom: 15px; }
 .trip-orders-panel td:first-child { width: 180px; }
-.trip-orders-panel td:nth-child(2) { min-width: 220px; }
+.trip-booking-form { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 14px; margin: 18px 24px 24px; padding: 20px; border: 1px solid #cfe0f6; border-radius: 18px; background: linear-gradient(145deg, #f8fbff, #f1f7ff); }
+.trip-booking-form > select:first-child { grid-column: span 4; }
+.trip-booking-form > select:nth-child(2) { grid-column: span 3; }
+.trip-booking-form > .location-field { grid-column: span 6; }
+.trip-booking-form > input[type="datetime-local"] { grid-column: span 3; }
+.trip-booking-form input, .trip-booking-form select { min-width: 0; border: 1px solid #cbd9e9; border-radius: 10px; padding: 11px 12px; color: #29425f; background: #fff; }
+.trip-booking-form input:focus, .trip-booking-form select:focus { outline: none; border-color: #4a8df0; box-shadow: 0 0 0 3px rgba(74,141,240,.13); }
+.location-field { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 8px; align-items: center; }
+.location-field input[readonly] { color: #12243b; background: #edf5ff; }
+.location-field button { border: 0; border-radius: 9px; padding: 10px 12px; color: #1769e0; background: #dcecff; font-size: 12px; font-weight: 750; }
+.location-results { position: absolute; z-index: 4; top: calc(100% + 6px); left: 0; right: 0; display: grid; gap: 5px; max-height: 220px; overflow: auto; padding: 8px; border: 1px solid #cfe0f6; border-radius: 12px; background: #fff; box-shadow: 0 12px 28px rgba(39,72,111,.16); }
+.location-results button { width: 100%; border: 0; border-radius: 8px; padding: 9px 10px; color: #29425f; background: #f7faff; text-align: left; font-size: 12px; }
+.location-results button:hover { color: #1769e0; background: #eaf3ff; }
+.booking-actions { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding-top: 4px; border-top: 1px solid #dbe7f5; }
+.booking-actions select { min-width: 210px; }
+.booking-actions span { color: #526985; font-size: 12px; font-weight: 700; }
+.trip-extras { grid-column: 1 / -1; display: flex; gap: 8px; flex-wrap: wrap; padding: 10px 12px; border: 1px solid #dbe7f5; border-radius: 10px; background: #fff; }
+.trip-extras label { display: inline-flex; align-items: center; gap: 6px; padding: 7px 9px; border-radius: 8px; color: #526985; background: #f4f8fd; font-size: 12px; }
+.trip-extras input { accent-color: #1769e0; }
+.quote-summary { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 14px; border: 1px solid #b9d5fb; border-radius: 12px; background: #eaf3ff; }
+.quote-summary strong { margin-right: auto; color: #125dbb; font-size: 18px; }
+.quote-summary label { color: #425974; font-size: 12px; font-weight: 700; }
+.quote-summary select { min-width: 130px; }
+.quote-summary button { border: 0; border-radius: 9px; padding: 10px 14px; color: #fff; background: #1769e0; font-weight: 750; }
+.trip-booking-form > button:last-child, .trip-booking-form > button:nth-last-child(2) { min-width: 90px; }
 
 .extra-settings { overflow: hidden; padding: 24px; }.extra-settings .admin-toolbar { align-items: flex-start; }.extra-settings h2 { margin: 5px 0 6px; }.extra-settings .admin-toolbar p { margin: 0; }.trigger-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; padding: 0 24px 24px; }.trigger-card { display: flex; min-height: 208px; flex-direction: column; padding: 18px; border: 1px solid #e1e8f2; border-radius: 16px; background: #f8fafd; }.trigger-card.active { border-color: #8bb9fa; background: linear-gradient(145deg, #f5f9ff, #edf6ff); }.trigger-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }.trigger-card h3 { margin: 5px 0 0; color: #12243b; font-size: 18px; }.trigger-card p { min-height: 38px; margin: 16px 0; color: #647892; font-size: 12px; line-height: 1.6; }.trigger-kicker { color: #6c85a5; font-size: 10px; font-weight: 800; letter-spacing: .12em; }.card-action { align-self: flex-start; margin-top: auto; border: 0; border-radius: 9px; padding: 9px 12px; color: #1769e0; background: #dcecff; font-size: 12px; font-weight: 750; }.extra-editor { margin: 0 24px 24px; padding: 20px; border: 1px solid #cfe0f6; border-radius: 16px; background: #f7fbff; }.editor-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }.editor-heading h3 { margin: 0 0 4px; }.extra-editor .record-form { grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 0; border: 0; background: transparent; }.extra-editor label { display: grid; gap: 6px; color: #526985; font-size: 11px; font-weight: 700; }.extra-editor .check-field { display: flex; align-items: center; align-self: end; gap: 8px; min-height: 42px; }.extra-editor .check-field input { width: auto; }.extra-table { border-top: 1px solid #edf1f6; }.table-heading { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px 4px; }.table-heading h3 { margin: 0; }.table-subtitle { display: block; margin-top: 3px; color: #8a9ab0; font-size: 11px; }.rule-chip { display: inline-block; border-radius: 999px; padding: 5px 9px; color: #1769e0; background: #e4f0ff; font-size: 11px; font-weight: 750; }
 .extra-sort-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 14px; padding: 14px 16px; border: 1px solid #dbe7f5; border-radius: 14px; background: linear-gradient(135deg, #f5f9ff, #eef6ff); }
@@ -368,6 +409,9 @@ tr.disabled td { opacity: 0.65; background: #f8fafc; }
   main { padding: 36px 28px; }
   .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .record-form, .vehicle-record-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .trip-booking-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .trip-booking-form > select:first-child, .trip-booking-form > select:nth-child(2), .trip-booking-form > .location-field, .trip-booking-form > input[type="datetime-local"] { grid-column: span 1; }
+  .trip-booking-form > .location-field { grid-column: 1 / -1; }
   .charter-editor { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .address-form { grid-template-columns: 130px minmax(180px, 1fr) 2fr; }
   .address-search-controls { grid-template-columns: 130px 1fr; }.address-search-controls button { grid-column: 1 / -1; }
@@ -414,7 +458,17 @@ tr.disabled td { opacity: 0.65; background: #f8fafc; }
   .extra-settings { padding: 0; }.extra-settings > .admin-toolbar { padding: 16px; }.trigger-cards { grid-template-columns: 1fr; padding: 0 14px 14px; }.extra-editor { margin: 0 14px 14px; padding: 14px; }.extra-editor .record-form { grid-template-columns: 1fr; }.table-heading { padding: 16px 14px 4px; }.extra-sort-toolbar { align-items: stretch; flex-direction: column; margin-top: 12px; }.extra-sort-actions { display: grid; grid-template-columns: 1fr 1fr; }.extra-sort-actions select { grid-column: 1 / -1; width: 100%; }.extra-sort-actions button { width: 100%; }
   .currency-switcher-actions { display: grid; grid-template-columns: 1fr auto; width: 100%; }
   .currency-switcher select, .currency-switcher button { min-height: 42px; }
-  .record-form, .vehicle-record-form, .charter-editor, .address-form { grid-template-columns: 1fr; padding: 14px; border-radius: 14px; }
+  .trip-detail-grid { grid-template-columns: 1fr; padding: 0 14px 16px; }.trip-detail-panel .admin-toolbar { padding: 16px 14px 10px; }.trip-status-actions { padding: 0 14px; }.trip-status-actions button { flex: 1; min-width: 110px; }.trip-orders-panel .admin-toolbar { padding: 16px 14px 10px; }  .trip-orders-panel > .muted { padding-right: 14px; padding-left: 14px; }.trip-add-order-btn { width: 100%; justify-content: center; margin-left: 0; min-height: 44px; }.trip-orders-panel .toolbar-actions input { min-width: 0; width: 100%; }  .trip-booking-form { grid-template-columns: 1fr 1fr; margin: 14px; padding: 14px; gap: 10px; }
+  .trip-booking-form > select:first-child, .trip-booking-form > select:nth-child(2), .trip-booking-form > .location-field, .trip-booking-form > input[type="datetime-local"] { grid-column: 1 / -1; }
+  .location-field { grid-template-columns: 1fr auto; }
+  .location-field input[readonly] { grid-column: 1 / -1; }
+  .booking-actions { align-items: stretch; flex-direction: column; }
+  .booking-actions select, .booking-actions button { width: 100%; }
+  .quote-summary { align-items: stretch; flex-direction: column; }
+  .quote-summary strong { margin-right: 0; }
+  .quote-summary select, .quote-summary button { width: 100%; }
+  .trip-extras { display: grid; grid-template-columns: 1fr; }
+  .trip-booking-form > button:last-child, .trip-booking-form > button:nth-last-child(2) { width: 100%; }
   .address-search-controls { grid-template-columns: 1fr; }.address-search-controls button { grid-column: auto; }
   .record-form input, .record-form select, .record-form button, .address-form input, .address-form select, .address-form button { min-height: 44px; }
   .pricing-form { padding: 14px 15px 16px; }

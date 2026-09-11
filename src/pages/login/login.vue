@@ -38,13 +38,19 @@
       <text class="third-party-label">第三方登入</text>
       <!-- #ifdef MP-WEIXIN -->
       <view class="third-party-options third-party-options-single">
-        <image class="wechat-icon" src="/static/login/wechat.svg" mode="scaleToFill" @tap="handleThirdPartyLogin('wechat')" />
+        <image class="wechat-icon" src="/static/login/apple.svg" mode="scaleToFill" @tap="handleThirdPartyLogin('wechat')" />
       </view>
       <!-- #endif -->
-      <!-- #ifndef MP-WEIXIN -->
+      <!-- #ifdef H5 -->
       <view class="third-party-options">
-        <image class="wechat-icon" src="/static/login/wechat.svg" mode="scaleToFill" @tap="handleThirdPartyLogin('wechat')" />
-        <image class="apple-icon" src="/static/login/apple.svg" mode="scaleToFill" @tap="handleThirdPartyLogin('apple')" />
+        <image class="wechat-icon" src="/static/login/apple.svg" mode="scaleToFill" @tap="handleThirdPartyLogin('wechat')" />
+        <image class="apple-icon" src="/static/login/wechat.svg" mode="scaleToFill" @tap="handleThirdPartyLogin('apple')" />
+      </view>
+      <!-- #endif -->
+      <!-- #ifdef APP-PLUS -->
+      <view class="third-party-options">
+        <image class="wechat-icon" src="/static/login/apple.svg" mode="scaleToFill" @tap="handleThirdPartyLogin('wechat')" />
+        <image class="apple-icon" src="/static/login/wechat.svg" mode="scaleToFill" @tap="handleThirdPartyLogin('apple')" />
       </view>
       <!-- #endif -->
     </view>
@@ -59,7 +65,8 @@ import { authenticateThirdParty, requestPhoneVerificationCode, verifyPhoneVerifi
 import { setAuthenticated } from '../../utils/auth'
 
 const { responsiveStyle } = useResponsiveCanvas()
-const phone = ref('')
+const developmentLoginEnabled = import.meta.env.VITE_ENABLE_DEV_LOGIN !== 'false'
+const phone = ref(developmentLoginEnabled ? '67890000' : '')
 const agreed = ref(false)
 const countryOptions = ['香港 +852', '澳門 +852', '內地 +86']
 const countryCodes = ['+852', '+852', '+86']
@@ -77,14 +84,14 @@ const handleBack = () => {
 }
 
 const handleLogin = async () => {
-  if (!agreed.value && !import.meta.env.DEV) {
+  if (!agreed.value && !developmentLoginEnabled) {
     uni.showToast({ title: '請先同意私隱協議及使用條款', icon: 'none' })
     return
   }
   try {
-    const loginPhone = import.meta.env.DEV && !phone.value ? '67890000' : phone.value
+    const loginPhone = developmentLoginEnabled ? '67890000' : phone.value
     const challenge = await requestPhoneVerificationCode(countryCode.value, loginPhone)
-    if (import.meta.env.DEV) {
+    if (developmentLoginEnabled) {
       const result = await verifyPhoneVerificationCode(challenge.challengeId, '', challenge.developmentCode)
       setAuthenticated(result.token, result.user)
       goHome()
