@@ -135,8 +135,11 @@ const couponDiscountAmount = computed(() => {
   return sourceCurrency === 'RMB' ? promotion.discountValue / exchangeRate.value : promotion.discountValue * exchangeRate.value
 })
 const displayedPromotionAmount = computed(() => {
-  if (promoApplied.value && tripStore.selectedFareQuote?.appliedPromotion) {
-    return tripStore.selectedFareQuote.appliedPromotion.discount
+  if (promoApplied.value && cashCoupon.value) {
+    const appliedCouponDiscount = tripStore.selectedFareQuote?.lines
+      .filter(line => line.type === 'DISCOUNT' && line.sourceId === cashCoupon.value?.id)
+      .reduce((sum, line) => sum + Math.abs(Math.min(0, line.totalAmount)), 0)
+    if (appliedCouponDiscount !== undefined && appliedCouponDiscount > 0) return appliedCouponDiscount
   }
   return couponDiscountAmount.value
 })

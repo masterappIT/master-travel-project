@@ -2,7 +2,7 @@
   <view v-show="activePagePath === '/pages/index/index'" class="page" :style="responsiveStyle">
     <view v-if="rideMode === 'cross-border'" class="page-content">
       <view class="canvas">
-        <HomeMap v-if="mapVisible" :key="mapMountKey" :latitude="mapLatitude" :longitude="mapLongitude" :scale="mapScale" :markers="mapMarkers" :polyline="mapPolyline" :include-points="mapIncludePoints" :fit-trigger="mapFitTrigger" :center-trigger="mapCenterTrigger" :booking-picker-open="bookingTimePicker" :pickup-label="origin" :destination-label="destination" :route-summary="routeSummary" />
+        <HomeMap v-if="mapVisible && activePagePath === '/pages/index/index'" :key="mapMountKey" map-id="home-main-map" :latitude="mapLatitude" :longitude="mapLongitude" :scale="mapScale" :markers="mapMarkers" :polyline="mapPolyline" :include-points="mapIncludePoints" :fit-trigger="mapFitTrigger" :center-trigger="mapCenterTrigger" :booking-picker-open="bookingTimePicker" :pickup-label="origin" :destination-label="destination" :route-summary="routeSummary" />
         <HomeHeader :location-label="locationLabel" />
         <HomeTravelModeSwitch :mode="rideMode" @update:mode="switchRideMode" />
         <HomeMapActions @location="handleMapLocation" />
@@ -432,13 +432,13 @@ const remountMapAtCurrentLocation = async () => {
   mapVisible.value = true
 }
 
-const useCurrentLocation = (closePicker = false, setAsOrigin = false) => {
+const useCurrentLocation = (closePicker = false, setAsOrigin = false, forceCenter = false) => {
   const getLocation = () => uni.getLocation({
     type: 'gcj02',
     success: ({ latitude, longitude }) => {
       mapLatitude.value = latitude
       mapLongitude.value = longitude
-      if (mapPolyline.value.length === 0) {
+      if (forceCenter || mapPolyline.value.length === 0) {
         mapScale.value = 17
         mapIncludePoints.value = []
         mapCenterTrigger.value += 1

@@ -1,9 +1,9 @@
 <template>
-  <view class="map-layer" :class="{ 'full-screen': fullScreen, 'booking-picker-open': bookingPickerOpen }" aria-label="地圖區域">
+  <view class="map-layer" :class="{ 'full-screen': fullScreen, 'booking-picker-open': bookingPickerOpen }" :style="mapLayerStyle" aria-label="地圖區域">
     <!-- #ifdef APP-PLUS || MP-WEIXIN || MP-TOUTIAO -->
     <map
       :key="mapRenderKey"
-      id="home-route-map"
+      :id="mapId"
       class="native-map"
       :latitude="latitude"
       :longitude="longitude"
@@ -11,6 +11,7 @@
       :markers="nativeMarkers"
       :polyline="polyline"
       :include-points="includePoints"
+      :style="nativeMapStyle"
       show-location
       :enable-zoom="!bookingPickerOpen"
       :enable-scroll="!bookingPickerOpen"
@@ -53,8 +54,13 @@ const props = withDefaults(defineProps<{
   pickupLabel?: string
   destinationLabel?: string
   routeSummary?: string
+  nativeHeight?: number
+  mapTop?: number
+  mapId?: string
+  fitPadding?: [number, number, number, number]
 }>(), {
-  scale: 13
+  scale: 13,
+  mapId: 'home-route-map'
 })
 
 const nativeMarkers = computed<MapMarker[]>(() => (props.markers || []).map(marker => {
@@ -66,6 +72,11 @@ const nativeMarkers = computed<MapMarker[]>(() => (props.markers || []).map(mark
   return content
     ? { ...marker, callout: { content, display: 'ALWAYS', color: '#263238', fontSize: 14, borderRadius: 8, bgColor: '#FFFFFF', padding: 10, textAlign: 'center' } }
     : marker
+}))
+const nativeMapStyle = computed(() => props.nativeHeight ? { height: `${props.nativeHeight}px` } : undefined)
+const mapLayerStyle = computed(() => ({
+  ...(props.nativeHeight ? { height: `${props.nativeHeight}px` } : {}),
+  ...(props.mapTop !== undefined ? { top: `${props.mapTop}px` } : {})
 }))
 
 const routeBounds = computed(() => {
@@ -123,7 +134,7 @@ const centerMap = async () => {
   mapRenderKey.value += 1
   await nextTick()
   const moveToCenter = () => {
-    uni.createMapContext('home-route-map', instance?.proxy).moveToLocation({
+    uni.createMapContext(props.mapId, instance?.proxy).moveToLocation({
       latitude: props.latitude,
       longitude: props.longitude
     })
@@ -137,11 +148,11 @@ const centerMap = async () => {
 const fitRoute = (points: MapPoint[]) => {
   // #ifdef APP-PLUS || MP-WEIXIN || MP-TOUTIAO
   if (!mapReady) return
-  let padding = [96, 32, 190, 32]
+  let padding = props.fitPadding || [96, 32, 190, 32]
   // #ifdef APP-PLUS
-  padding = [24, 24, 54, 24]
+  if (!props.fitPadding) padding = [24, 24, 54, 24]
   // #endif
-  uni.createMapContext('home-route-map', instance?.proxy).includePoints({
+  uni.createMapContext(props.mapId, instance?.proxy).includePoints({
     points: routeBoundaryPoints(points),
     padding
   })

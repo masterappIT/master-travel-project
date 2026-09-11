@@ -1,6 +1,6 @@
 <template>
   <view class="page" :style="responsiveStyle">
-    <HomeMap :latitude="22.3080" :longitude="114.1719" full-screen />
+    <HomeMap map-id="booking-success-map" :latitude="22.3080" :longitude="114.1719" full-screen />
     <view class="back" @tap="goBack"><image class="page-back" src="/static/vehicles/confirm-back.svg" mode="aspectFit" /></view>
     <view class="status-panel">
       <view class="route-card">
