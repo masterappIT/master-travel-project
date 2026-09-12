@@ -15,7 +15,6 @@
           <image src="/static/orders/traveling-status.svg" mode="aspectFit" />
           <text>正在為您安排司機</text>
           <view class="traveling-confirm"><image src="/static/orders/traveling-clock.svg" mode="aspectFit" /><text>三小時內確認</text></view>
-          <image class="traveling-car" src="/static/orders/traveling-car.svg" mode="aspectFit" />
         </view>
         <view class="traveling-info">
           <image class="traveling-tesla" src="/static/orders/traveling-tesla.svg" mode="aspectFit" />

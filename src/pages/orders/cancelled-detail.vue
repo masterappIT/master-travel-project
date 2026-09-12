@@ -18,7 +18,6 @@
           <image src="/static/orders/traveling-status.svg" mode="aspectFit" />
           <text>正在為您安排司機</text>
           <view class="traveling-confirm"><image src="/static/orders/traveling-clock.svg" mode="aspectFit" /><text>三小時內確認</text></view>
-          <image class="traveling-car" src="/static/orders/traveling-car.svg" mode="aspectFit" />
         </view>
         <view class="traveling-info">
           <image class="traveling-tesla" src="/static/orders/traveling-tesla.svg" mode="aspectFit" />
@@ -68,6 +67,7 @@ const isCancelled = ref(true)
 const isTraveling = ref(false)
 const storedOrder = ref<ClientTrip | undefined>()
 const loadError = ref(false)
+const routeUrl = ref('')
 const orderNumber = computed(() => {
   const digits = String(storedOrder.value?.id || '').replace(/\D/g, '')
   return digits ? `A${digits.slice(-8).padStart(8, '0')}` : '—'
@@ -86,26 +86,30 @@ const loadOrder = async (url = '') => {
     uni.showToast({ title: error instanceof Error ? error.message : '訂單載入失敗', icon: 'none' })
   }
 }
-const applyStatus = () => {
-  const currentUrl = typeof window !== 'undefined' && window.location.hash ? window.location.hash : cachedPageUrl.value
+const applyStatus = (url?: string) => {
+  const currentUrl = url || routeUrl.value || (typeof window !== 'undefined' && window.location.hash ? window.location.hash : cachedPageUrl.value)
+  if (parseQueryParams(currentUrl).id) routeUrl.value = currentUrl
   void loadOrder(currentUrl)
   isCompleted.value = false
   isCancelled.value = true
   isTraveling.value = false
 }
-onLoad(() => { applyStatus() })
+onLoad((options) => {
+  const query = options?.id ? `?id=${encodeURIComponent(options.id)}` : ''
+  applyStatus(query)
+})
 onMounted(() => {
   // #ifndef MP-WEIXIN || MP-TOUTIAO
-  if (typeof window !== 'undefined') applyStatus()
+  if (typeof window !== 'undefined' && !routeUrl.value) applyStatus()
   // #endif
 })
 onShow(() => {
   // #ifndef MP-WEIXIN || MP-TOUTIAO
-  if (typeof window !== 'undefined') applyStatus()
+  if (routeUrl.value) void loadOrder(routeUrl.value)
   // #endif
 })
 // #ifdef MP-WEIXIN || MP-TOUTIAO
-watch(cachedPageUrl, () => applyStatus(), { immediate: true })
+watch(cachedPageUrl, (url) => applyStatus(url), { immediate: true })
 // #endif
 const statusIcon = computed(() => isCompleted.value ? '/static/orders/status-blue.svg' : isCancelled.value ? '/static/orders/status-gray.svg' : '/static/orders/status-pending.svg')
 const addressLabel = (value: string | undefined, fallback: string) => formatOrderDetailAddress(value, fallback)

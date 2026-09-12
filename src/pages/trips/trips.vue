@@ -38,6 +38,7 @@ import WalletCard from '../../components/profile/WalletCard.vue'
 import OrdersCard from '../../components/profile/OrdersCard.vue'
 import CommonActions from '../../components/profile/CommonActions.vue'
 import ProfileBottomNav from '../../components/profile/ProfileBottomNav.vue'
+import { getClientProfile, listClientTrips } from '../../services/api'
 
 const totalMessages = 4
 const unreadCount = ref(totalMessages)
@@ -78,14 +79,24 @@ const openSettings = () => openCachedPage('/pages/settings/settings')
 const openAccount = () => openCachedPage('/pages/account/account')
 const openLogin = () => uni.reLaunch({ url: '/pages/login/login', animationType: 'none', animationDuration: 0 })
 const openMembership = () => openCachedPage('/pages/membership/membership')
-const handleOrderAction = (name: string) => {
+const handleOrderAction = async (name: string) => {
   if (name === '全部訂單') {
     setOrderReturnTarget('orders')
     return openCachedPage('/pages/orders/orders')
   }
   if (name === '待出行') {
     setOrderReturnTarget('profile')
-    return openCachedPage('/pages/orders/detail?status=traveling&from=profile')
+    try {
+      const trips = await listClientTrips()
+      const upcomingTrips = trips
+        .filter(trip => trip.status === 'CONFIRMED')
+        .sort((a, b) => new Date(a.scheduledAt).valueOf() - new Date(b.scheduledAt).valueOf())
+      const latestTrip = upcomingTrips[0]
+      if (!latestTrip) return uni.showToast({ title: '目前沒有待出行訂單', icon: 'none' })
+      return openCachedPage(`/pages/orders/pending-detail?from=profile&id=${encodeURIComponent(latestTrip.id)}`)
+    } catch (error) {
+      return uni.showToast({ title: error instanceof Error ? error.message : '無法載入待出行訂單', icon: 'none' })
+    }
   }
   comingSoon(name)
 }
