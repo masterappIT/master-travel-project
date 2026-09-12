@@ -762,7 +762,7 @@ class ClientAuthController {
     const challengeId = randomBytes(18).toString('hex')
     const code = process.env.NODE_ENV === 'production' && process.env.AUTH_OTP_CODE
       ? process.env.AUTH_OTP_CODE
-      : String(Math.floor(10000 + Math.random() * 90000))
+      : '0000'
     const exp = now + PHONE_CODE_TTL_MS
     phoneChallenges.set(challengeId, { ...identity, code, exp, attempts: 0 })
     for (const [id, challenge] of phoneChallenges) {
