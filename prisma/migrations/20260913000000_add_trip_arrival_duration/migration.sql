@@ -1,0 +1,2 @@
+ALTER TABLE "Trip" ADD COLUMN "estimatedArrivalAt" TIMESTAMP(3);
+ALTER TABLE "FareQuote" ADD COLUMN "durationSeconds" DOUBLE PRECISION;

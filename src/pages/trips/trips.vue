@@ -46,11 +46,18 @@ const displayName = ref('John')
 const walletBalance = ref(0)
 const authenticated = ref(false)
 
-const refreshProfile = () => {
+const refreshProfile = async () => {
   authenticated.value = isAuthenticated()
   const profile = uni.getStorageSync('account-profile')
   avatarUrl.value = profile?.avatarUrl || ''
   displayName.value = profile?.displayName || 'John'
+  if (authenticated.value) {
+    try {
+      const remote = await getClientProfile()
+      displayName.value = remote.name || displayName.value
+      uni.setStorageSync('client-auth-user', remote)
+    } catch { /* keep cached profile when offline */ }
+  }
   const saved = uni.getStorageSync('read-message-types')
   const readCount = Array.isArray(saved) ? new Set(saved).size : 0
   unreadCount.value = Math.max(0, totalMessages - readCount)
@@ -58,10 +65,10 @@ const refreshProfile = () => {
   walletBalance.value = Number(wallet?.withdrawable) || 0
 }
 
-refreshProfile()
+void refreshProfile()
 
 onShow(() => {
-  refreshProfile()
+  void refreshProfile()
 })
 
 const goHome = () => openCachedPage('/pages/index/index')
@@ -102,7 +109,7 @@ const comingSoon = (name: string) => uni.showToast({ title: `${name}功能開發
 <style scoped>
 :global(html),:global(body),:global(#app){width:100%;min-width:0;height:100%;margin:0;overflow:hidden;overscroll-behavior:none;touch-action:pan-y}
 
-.page{position:fixed;top:50%;left:50%;width:430px;height:932px;min-height:0;margin:0;overflow:hidden;background:#F0F2F5;border-radius:35px;box-sizing:border-box;color:#38434A;font-family:'Noto Sans TC',sans-serif;transform:translate(-50%,-50%) scale(min(1,calc(100vw / 430px),calc(100dvh / 932px)));transform-origin:center center}.profile-content{position:absolute;inset:0;width:430px;height:932px}.profile-canvas{position:relative;width:430px;height:932px}.upgrade-position,.wallet-position,.orders-position,.common-position{position:absolute;left:15px;width:400px}.upgrade-position{top:217px}.wallet-position{top:292px}.orders-position{top:calc(50% - 38.5px)}.common-position{top:546px}
+.page{position:fixed;top:0;left:0;width:430px;height:var(--mobile-height, 932px);min-height:0;margin:0;overflow:hidden;background:#F0F2F5;border-radius:35px;box-sizing:border-box;color:#38434A;font-family:'Noto Sans TC',sans-serif;transform:scale(var(--mobile-scale, 1));transform-origin:top left center}.profile-content{position:absolute;inset:0;width:430px;height:932px}.profile-canvas{position:relative;width:430px;height:932px}.upgrade-position,.wallet-position,.orders-position,.common-position{position:absolute;left:15px;width:400px}.upgrade-position{top:217px}.wallet-position{top:292px}.orders-position{top:calc(50% - 38.5px)}.common-position{top:546px}
 
 @media (max-width:599px){.page{top:0;left:0;height:var(--mobile-height,100dvh);border-radius:0;transform:scale(var(--mobile-scale, 1));transform-origin:top left}.profile-content{bottom:102px;height:auto}.profile-canvas{height:max(830px,calc(var(--mobile-height,932px) - 102px))}.orders-position{top:427.5px}.common-position{top:auto;bottom:19px}}
 </style>

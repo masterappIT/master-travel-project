@@ -12,6 +12,8 @@
     { "path": "pages/messages/detail", "style": { "navigationStyle": "custom", "navigationBarTitleText": "" } },
     { "path": "pages/orders/orders", "style": { "navigationStyle": "custom", "navigationBarTitleText": "" } },
     { "path": "pages/orders/detail", "style": { "navigationStyle": "custom", "navigationBarTitleText": "" } },
+    { "path": "pages/orders/completed-detail", "style": { "navigationStyle": "custom", "navigationBarTitleText": "" } },
+    { "path": "pages/orders/traveling-detail", "style": { "navigationStyle": "custom", "navigationBarTitleText": "" } },
     { "path": "pages/orders/pending-detail", "style": { "navigationStyle": "custom", "navigationBarTitleText": "" } },
     { "path": "pages/orders/cancelled-detail", "style": { "navigationStyle": "custom", "navigationBarTitleText": "" } },
     { "path": "pages/vehicles/select", "style": { "navigationStyle": "custom", "navigationBarTitleText": "" } },

@@ -12,18 +12,39 @@ model User {
   countryCode        String              @default("+852")
   phoneNumber        String
   name               String?
+  displayName        String?
+  email              String?
+  passwordHash       String?
+  gender             String?
+  region             String?
+  birthday           DateTime?
   cashBalance        Float               @default(0)
   fareBalance        Float               @default(0)
   membershipLevel    String?
   lastLoginAt        DateTime?
   lastLogoutAt       DateTime?
   createdAt          DateTime            @default(now())
+  enabled            Boolean             @default(true)
   trips              Trip[]
   walletTransactions WalletTransaction[]
   payments           Payment[]
   authIdentities     AuthIdentity[]
+  clientSessions     ClientSession[]
 
   @@unique([countryCode, phoneNumber])
+}
+
+model ClientSession {
+  id        String   @id @default(cuid())
+  jti       String   @unique
+  userId    String
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+  @@index([expiresAt])
 }
 
 model AuthIdentity {
@@ -80,7 +101,17 @@ model Trip {
   destination           String
   region                Region
   scheduledAt           DateTime
+  estimatedArrivalAt    DateTime?
   status                TripStatus @default(PENDING)
+  executionPhase        TripExecutionPhase?
+  driverName            String?
+  driverPhone           String?
+  vehiclePlate          String?
+  assignedAt            DateTime?
+  acceptedAt            DateTime?
+  arrivedAt             DateTime?
+  startedAt             DateTime?
+  completedAt           DateTime?
   fareBalancePaid       Float      @default(0)
   cashBalancePaid       Float      @default(0)
   externalPaid          Float      @default(0)
@@ -135,6 +166,12 @@ enum TripStatus {
   CONFIRMED
   COMPLETED
   CANCELLED
+}
+
+enum TripExecutionPhase {
+  WAITING_DRIVER
+  DRIVER_ASSIGNED
+  IN_PROGRESS
 }
 
 model AppSetting {
@@ -287,6 +324,7 @@ model FareQuote {
   currency        String
   subtotal        Float
   total           Float
+  durationSeconds Float?
   expiresAt       DateTime?
   createdAt       DateTime                  @default(now())
   pricing         FareQuotePricingSnapshot?
@@ -376,7 +414,7 @@ model Promotion {
   discountType      DiscountType
   stackingMode      PromotionStackingMode @default(NONE)
   discountValue     Float
-  currency          String                @default("RMB¥")
+  currency          String                @default("RMB")
   minimumSpend      Float                 @default(0)
   maximumDiscount   Float?
   priority          Int                   @default(0)

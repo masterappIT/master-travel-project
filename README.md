@@ -61,6 +61,8 @@ H5 與管理後台使用固定連接埠；若連接埠已被其他程序占用�
 | `PORT` | API 監聽埠 |
 | `VITE_ENABLE_DEV_LOGIN` | 僅在 Vite 開發模式啟用固定測試用戶自動登入 |
 | `VITE_DEV_LOGIN_COUNTRY_CODE`、`VITE_DEV_LOGIN_PHONE` | 開發自動登入所使用的資料庫用戶手機號碼 |
+
+> **開發者固定登入備註（受保護設定）**：本地開發模式必須保留 `VITE_ENABLE_DEV_LOGIN=true`，固定帳戶 `+852 66996688` 會自動取得 development code 並跳過驗證碼輸入。未經使用者明確指令，不得移除、停用或改回手動驗證流程。此設定僅允許在非 production 模式生效。
 | `ADMIN_USERNAME`、`ADMIN_PASSWORD` | 管理後台登入資料 |
 | `ADMIN_SESSION_SECRET` | 管理 session 簽章密鑰 |
 | `ADMIN_CORS_ORIGIN` | 管理後台允許來源 |

@@ -1,5 +1,5 @@
 <template>
-  <view v-show="activePagePath === '/pages/index/index'" class="page" :style="responsiveStyle">
+  <view v-show="activePagePath === '/pages/index/index'" class="page">
     <view v-if="rideMode === 'cross-border'" class="page-content">
       <view class="canvas">
         <HomeMap v-if="activePagePath === '/pages/index/index'" map-id="home-main-map" :latitude="mapLatitude" :longitude="mapLongitude" :scale="mapScale" :markers="mapMarkers" :polyline="mapPolyline" :center-trigger="mapCenterTrigger" :booking-picker-open="bookingTimePicker" :pickup-label="origin" :destination-label="destination" :route-summary="routeSummary" />
@@ -87,6 +87,8 @@
   <MessageDetailPage v-if="visitedPages.has('/pages/messages/detail')" v-show="activePagePath === '/pages/messages/detail'" />
   <OrdersPage v-if="visitedPages.has('/pages/orders/orders')" v-show="activePagePath === '/pages/orders/orders'" />
   <OrderDetailPage v-if="visitedPages.has('/pages/orders/detail')" :key="cachedPageUrl" v-show="activePagePath === '/pages/orders/detail'" />
+  <CompletedOrderDetailPage v-if="visitedPages.has('/pages/orders/completed-detail')" :key="cachedPageUrl" v-show="activePagePath === '/pages/orders/completed-detail'" />
+   <TravelingOrderDetailPage v-if="visitedPages.has('/pages/orders/traveling-detail')" :key="cachedPageUrl" v-show="activePagePath === '/pages/orders/traveling-detail'" />
   <PendingOrderDetailPage v-if="visitedPages.has('/pages/orders/pending-detail')" :key="cachedPageUrl" v-show="activePagePath === '/pages/orders/pending-detail'" />
   <CancelledOrderDetailPage v-if="visitedPages.has('/pages/orders/cancelled-detail')" :key="cachedPageUrl" v-show="activePagePath === '/pages/orders/cancelled-detail'" />
   <TripsDetailPage v-if="visitedPages.has('/pages/trips/detail')" :key="cachedPageUrl" v-show="activePagePath === '/pages/trips/detail'" />
@@ -131,12 +133,10 @@ import BusinessCharterPanel from '../../components/home/BusinessCharterPanel.vue
 import HomeBottomNav from '../../components/home/HomeBottomNav.vue'
 import AddressPicker from '../../components/home/AddressPicker.vue'
 import BookingTimePicker from '../../components/home/BookingTimePicker.vue'
-import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { activateEmbeddedPageHost, cachedPagePath, visitedPages, openCachedPage } from '../../utils/navigation'
 import { planDrivingRoute, reverseGeocode, type Coordinate } from '../../services/api'
 import { findLocalRegion } from '../../utils/localRegions'
 
-const { responsiveStyle } = useResponsiveCanvas()
 // #ifdef MP-WEIXIN || MP-TOUTIAO
 import TripsPage from '../trips/trips.vue'
 import MembershipPage from '../membership/membership.vue'
@@ -146,6 +146,8 @@ import MessagesPage from '../messages/messages.vue'
 import MessageDetailPage from '../messages/detail.vue'
 import OrdersPage from '../orders/orders.vue'
 import OrderDetailPage from '../orders/detail.vue'
+import CompletedOrderDetailPage from '../orders/completed-detail.vue'
+import TravelingOrderDetailPage from '../orders/traveling-detail.vue'
 import PendingOrderDetailPage from '../orders/pending-detail.vue'
 import CancelledOrderDetailPage from '../orders/cancelled-detail.vue'
 import TripsDetailPage from '../trips/detail.vue'
@@ -546,6 +548,6 @@ const showComingSoon = (name: string) => uni.showToast({ title: `${name}功能�
 </script>
 
 <style scoped>
-:global(html),:global(body),:global(#app){width:100%;min-width:0;height:100%;margin:0;overflow:hidden;overscroll-behavior:none}.page{position:fixed;top:50%;left:50%;width:430px;height:932px;min-height:0;margin:0;overflow:hidden;background:#fff;border-radius:35px;box-sizing:border-box;color:#38434a;font-family:'Noto Sans TC',sans-serif;transform:translate(-50%,-50%) scale(min(1,calc(100vw / 430px),calc(100dvh / 932px)));transform-origin:center center}.page-content{position:absolute;inset:0;width:430px;height:932px}.canvas{position:relative;width:430px;height:932px;min-height:932px}.nav-layer{position:absolute;inset:0;z-index:10;pointer-events:none}.nav-layer :deep(.bottom-nav){pointer-events:auto}.accessible-values{position:absolute;width:1px;height:1px;overflow:hidden;opacity:0}
+:global(html),:global(body),:global(#app){width:100%;min-width:0;height:100%;margin:0;overflow:hidden;overscroll-behavior:none}.page{position:fixed;top:0;left:0;width:430px;height:var(--mobile-height, 932px);min-height:0;margin:0;overflow:hidden;background:#fff;border-radius:35px;box-sizing:border-box;color:#38434a;font-family:'Noto Sans TC',sans-serif;transform:scale(var(--mobile-scale, 1));transform-origin:top left center}.page-content{position:absolute;inset:0;width:430px;height:932px}.canvas{position:relative;width:430px;height:932px;min-height:932px}.nav-layer{position:absolute;inset:0;z-index:10;pointer-events:none}.nav-layer :deep(.bottom-nav){pointer-events:auto}.accessible-values{position:absolute;width:1px;height:1px;overflow:hidden;opacity:0}
 @media (max-width:599px){.page{top:0;left:0;height:var(--mobile-height,100dvh);border-radius:0;transform:scale(var(--mobile-scale, 1));transform-origin:top left}.page-content{bottom:102px;height:auto;overflow:hidden}.canvas{height:100%;min-height:0}.canvas :deep(.map-layer){bottom:205px;height:auto}.canvas :deep(.map-tool){top:auto;bottom:245px}.canvas :deep(.route-panel){top:auto;bottom:-87px;width:430px;height:331px}.canvas :deep(.panel-surface){top:0;bottom:auto;width:430px;height:331px}.business-scroll{height:auto;bottom:102px}.nav-layer :deep(.bottom-nav){bottom:0}}
 </style>

@@ -15,21 +15,16 @@
 import { computed } from 'vue'
 import type { FareQuote } from '../../services/api'
 import type { Vehicle } from '../../types/vehicle'
-import { useCurrency } from '../../composables/useCurrency'
+import { formatCurrencyAmount, normalizeCurrency, useCurrency } from '../../composables/useCurrency'
 
 const props = defineProps<{ vehicle: Vehicle; quote?: FareQuote | null; selectable?: boolean; selected?: boolean }>()
-const { format } = useCurrency()
 const emit = defineEmits<{ select: [] }>()
 const payableFare = computed(() => props.quote?.total ?? props.vehicle.price)
 const payableFareCurrency = computed(() => props.quote?.currency)
 const discountAmount = computed(() => Math.abs(props.quote?.lines
   .filter(line => line.type === 'DISCOUNT')
   .reduce((sum, line) => sum + Math.min(0, line.totalAmount), 0) || 0))
-const formatPayableFare = (amount: number, currency?: string) => {
-  if (currency === 'HKD' || currency === 'HKD$') return `HK$${amount.toFixed(0)}`
-  if (currency === 'RMB' || currency === 'RMB¥') return `¥${amount.toFixed(0)}`
-  return format(amount)
-}
+const formatPayableFare = (amount: number, currency?: string) => formatCurrencyAmount(amount, normalizeCurrency(currency) || 'RMB', 0)
 </script>
 <style scoped>
 .vehicle-card{position:relative;width:380px;height:180px;margin:0 auto 10px;overflow:hidden;border-radius:25px;background:#fff;color:#25292f}.vehicle-name{position:absolute;z-index:2;top:43px;left:27px;width:95px;font-size:8px;font-weight:900;line-height:12px}.vehicle-name .brand{font-weight:100}.vehicle-name .series{display:block;margin-left:7px;font-size:12px;line-height:17px}.radio{position:absolute;z-index:2;top:24px;left:43px;width:20px;height:20px}.vehicle-image-frame{position:absolute;top:0;left:150px;width:230px;height:153px;overflow:hidden}.vehicle-image{display:block;width:230px;height:153px}.spec{position:absolute;z-index:2;top:141px;height:20px;display:flex;align-items:center;justify-content:center;box-sizing:border-box;border-radius:25px;background:#d9d9d9;color:#000;font-size:10px;line-height:14px}.seat{left:27px;width:54px}.seat image{width:16px;height:16px;margin-right:6px}.color{left:85px;width:54px;font-weight:350}.model-choice{left:145px;width:54px;background:#fff;font-weight:700}.price{position:absolute;z-index:2;top:141px;left:255px;width:98px;height:20px;border-radius:25px;background:#1effaa;font-size:14px;font-weight:700;line-height:20px;text-align:center}.discount{position:absolute;z-index:2;top:162px;left:255px;width:98px;color:#f95c5c;font-family:'Noto Sans TC',sans-serif;font-size:12px;font-weight:500;line-height:12px;text-align:center;white-space:nowrap}.quote-price{font-size:12px}

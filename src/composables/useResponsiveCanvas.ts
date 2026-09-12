@@ -28,7 +28,9 @@ export const useResponsiveCanvas = () => {
       window.visualViewport?.addEventListener('resize', updateViewport)
       return
     }
-    uni.onWindowResize(updateViewport)
+    if (typeof uni.onWindowResize === 'function') {
+      uni.onWindowResize(updateViewport)
+    }
   })
 
   onUnmounted(() => {
@@ -37,7 +39,9 @@ export const useResponsiveCanvas = () => {
       window.visualViewport?.removeEventListener('resize', updateViewport)
       return
     }
-    uni.offWindowResize(updateViewport)
+    if (typeof uni.offWindowResize === 'function') {
+      uni.offWindowResize(updateViewport)
+    }
   })
 
   const responsiveStyle = computed(() => {

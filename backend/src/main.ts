@@ -22,7 +22,7 @@ type MasterBoxConversation = { id: string; messages?: MasterBoxMessage[] }
 type MasterBoxMessage = { id: string; direction: string; content: unknown; createdAt: string }
 type SupportSession = { conversationId: string; riderId: string; exp: number }
 type ClientSession = { sub: string; exp: number; jti: string }
-type PhoneChallenge = { countryCode: string; phoneNumber: string; code: string; exp: number }
+type PhoneChallenge = { countryCode: string; phoneNumber: string; code: string; exp: number; attempts: number }
 
 type User = { id: string; countryCode: string; phoneNumber: string; name: string | null; cashBalance: number; fareBalance: number; createdAt: string; lastLoginAt: string | null; lastLogoutAt: string | null }
 interface Trip { id: string; userId: string; origin: string; destination: string; region: string; scheduledAt: string; status: string; createdAt: string }
@@ -38,7 +38,7 @@ interface DistancePricingTier { id: string; fromKm: number; toKm: number | null;
 interface DistancePricingSettings { categoryId: string; minimumFare: number; currency: string; tiers: DistancePricingTier[] }
 interface RouteMinimumFareSettings { id: string; originRegion: string; originCity: string | null; destinationRegion: string; destinationCity: string | null; categoryId: string | null; minimumFare: number; currency: string; enabled: boolean }
 interface QuoteExtraRequest { id?: unknown; quantity?: unknown }
-interface CreateQuoteRequest { categoryId?: unknown; vehicleId?: unknown; distanceMeters?: unknown; extraIds?: unknown; extras?: unknown; displayCurrency?: unknown; currency?: unknown; couponCode?: unknown; userId?: unknown; membershipLevel?: unknown; originRegion?: unknown; originCity?: unknown; destinationRegion?: unknown; destinationCity?: unknown; scheduledAt?: unknown }
+interface CreateQuoteRequest { categoryId?: unknown; vehicleId?: unknown; distanceMeters?: unknown; durationSeconds?: unknown; extraIds?: unknown; extras?: unknown; displayCurrency?: unknown; currency?: unknown; couponCode?: unknown; userId?: unknown; membershipLevel?: unknown; originRegion?: unknown; originCity?: unknown; destinationRegion?: unknown; destinationCity?: unknown; scheduledAt?: unknown }
 interface QuoteExtraSelection { id: string; quantity: number }
 interface PromotionInput { id?: unknown; name?: unknown; kind?: unknown; discountType?: unknown; stackingMode?: unknown; discountValue?: unknown; currency?: unknown; minimumSpend?: unknown; maximumDiscount?: unknown; priority?: unknown; startsAt?: unknown; endsAt?: unknown; enabled?: unknown; couponCode?: unknown; usageLimit?: unknown; membershipLevel?: unknown; originRegion?: unknown; originCity?: unknown; destinationRegion?: unknown; destinationCity?: unknown; weekdays?: unknown; timeStart?: unknown; timeEnd?: unknown }
 interface MembershipPlan { id: string; level: string; name: string; monthly: number; yearly: number; recommended: boolean; benefits: string[]; enabled: boolean; order: number }
@@ -59,7 +59,7 @@ const appSettingsDefaults = {
   bankCardPayEnabled: true,
   sandboxMode: false
 }
-const currencyLabels = { RMB: 'RMB¥', HKD: 'HKD$' } as const
+const currencyLabels = { RMB: 'RMB', HKD: 'HKD' } as const
 const configuredCurrencyLabel = (settings: { pricingCurrency: string }) => currencyLabels[settings.pricingCurrency as keyof typeof currencyLabels] || currencyLabels.RMB
 const roundMoney = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100
 const normalizeRuleText = (value: unknown) => typeof value === 'string' ? value.trim() : ''
@@ -143,6 +143,11 @@ const users: User[] = [
   { id: 'usr_demo_002', countryCode: '+86', phoneNumber: '13800000202', name: 'Alex Chen', cashBalance: 0, fareBalance: 200, createdAt: '2026-08-27T14:10:00.000Z', lastLoginAt: null, lastLogoutAt: null },
 ]
 const phoneChallenges = new Map<string, PhoneChallenge>()
+const phoneChallengeRequests = new Map<string, { count: number; windowStartedAt: number }>()
+const PHONE_CODE_TTL_MS = 5 * 60 * 1000
+const PHONE_CODE_MAX_ATTEMPTS = 5
+const PHONE_CODE_REQUEST_WINDOW_MS = 15 * 60 * 1000
+const PHONE_CODE_MAX_REQUESTS = 3
 const trips: Trip[] = [
   { id: 'trip_demo_001', userId: 'usr_demo_001', origin: 'Hong Kong Airport', destination: 'Shenzhen Bay Port', region: 'GUANGDONG', scheduledAt: '2026-09-02T10:00:00.000Z', status: 'CONFIRMED', createdAt: '2026-09-01T08:00:00.000Z' },
   { id: 'trip_demo_002', userId: 'usr_demo_002', origin: 'Macau Ferry Terminal', destination: 'Zhuhai Gongbei', region: 'MACAU', scheduledAt: '2026-09-03T03:30:00.000Z', status: 'PENDING', createdAt: '2026-09-01T11:00:00.000Z' },
@@ -157,16 +162,16 @@ const vehicleCategoryDefaults: VehicleCategory[] = [
   { id: 'premium-car', name: '頂級跨境轎車', tabLabel: '頂級轎車', order: 4, enabled: true },
 ]
 const vehicleExtraDefaults: VehicleExtraOption[] = [
-  { id: 'instant-order', name: 'instant-order', label: '即時訂單', price: 0, currency: 'RMB¥', enabled: true, order: 0, requiredForImmediate: true, requiredWithinMinutes: 60, triggerType: 'IMMEDIATE', triggerEnabled: true, nightStartTime: null, nightEndTime: null },
-  { id: 'night-surcharge', name: 'night-surcharge', label: '深夜加班費', price: 100, currency: 'RMB¥', enabled: true, order: 1, requiredForImmediate: false, requiredWithinMinutes: null, triggerType: 'NIGHT', triggerEnabled: true, nightStartTime: '22:00', nightEndTime: '06:00' },
-  { id: 'severe-weather', name: 'severe-weather', label: '惡劣天氣費', price: 100, currency: 'RMB¥', enabled: true, order: 2, requiredForImmediate: false, requiredWithinMinutes: null, triggerType: 'WEATHER', triggerEnabled: true, nightStartTime: null, nightEndTime: null },
-  { id: 'child-seat', name: 'child-seat', label: '兒童安全座椅', price: 50, currency: 'RMB¥', enabled: true, order: 3, requiredForImmediate: false, requiredWithinMinutes: null, triggerType: 'NONE', triggerEnabled: true, nightStartTime: null, nightEndTime: null },
-  { id: 'additional-stop', name: 'additional-stop', label: '額外停靠點', price: 100, currency: 'RMB¥', enabled: true, order: 4, requiredForImmediate: false, requiredWithinMinutes: null, triggerType: 'NONE', triggerEnabled: true, nightStartTime: null, nightEndTime: null },
+  { id: 'instant-order', name: 'instant-order', label: '即時訂單', price: 0, currency: 'RMB', enabled: true, order: 0, requiredForImmediate: true, requiredWithinMinutes: 60, triggerType: 'IMMEDIATE', triggerEnabled: true, nightStartTime: null, nightEndTime: null },
+  { id: 'night-surcharge', name: 'night-surcharge', label: '深夜加班費', price: 100, currency: 'RMB', enabled: true, order: 1, requiredForImmediate: false, requiredWithinMinutes: null, triggerType: 'NIGHT', triggerEnabled: true, nightStartTime: '22:00', nightEndTime: '06:00' },
+  { id: 'severe-weather', name: 'severe-weather', label: '惡劣天氣費', price: 100, currency: 'RMB', enabled: true, order: 2, requiredForImmediate: false, requiredWithinMinutes: null, triggerType: 'WEATHER', triggerEnabled: true, nightStartTime: null, nightEndTime: null },
+  { id: 'child-seat', name: 'child-seat', label: '兒童安全座椅', price: 50, currency: 'RMB', enabled: true, order: 3, requiredForImmediate: false, requiredWithinMinutes: null, triggerType: 'NONE', triggerEnabled: true, nightStartTime: null, nightEndTime: null },
+  { id: 'additional-stop', name: 'additional-stop', label: '額外停靠點', price: 100, currency: 'RMB', enabled: true, order: 4, requiredForImmediate: false, requiredWithinMinutes: null, triggerType: 'NONE', triggerEnabled: true, nightStartTime: null, nightEndTime: null },
 ]
 const defaultDistancePricing = (categoryId: string): DistancePricingSettings => ({
   categoryId,
   minimumFare: 800,
-  currency: 'RMB¥',
+  currency: 'RMB',
   tiers: [
     { id: `${categoryId}-tier-0-20`, fromKm: 0, toKm: 20, pricePerKm: 40, order: 1 },
     { id: `${categoryId}-tier-20-120`, fromKm: 20, toKm: 120, pricePerKm: 15, order: 2 },
@@ -309,7 +314,7 @@ function parseRouteMinimumFare(body: Partial<RouteMinimumFareSettings>) {
   return { originRegion, originCity, destinationRegion, destinationCity, categoryId: body.categoryId?.trim() || null, minimumFare, currency, enabled: body.enabled ?? true }
 }
 function validVehicleCategory(body: Partial<VehicleCategory>) { return body.id && body.name?.trim() && body.tabLabel?.trim() }
-type ManagedUser = { id: string; countryCode: string; phoneNumber: string; name: string | null; cashBalance: number; fareBalance: number; membershipLevel: string | null; createdAt: Date; lastLoginAt: Date | null; lastLogoutAt: Date | null }
+type ManagedUser = { id: string; countryCode: string; phoneNumber: string; name: string | null; displayName: string | null; email: string | null; passwordHash: string | null; gender: string | null; region: string | null; birthday: Date | null; cashBalance: number; fareBalance: number; membershipLevel: string | null; enabled: boolean; createdAt: Date; lastLoginAt: Date | null; lastLogoutAt: Date | null }
 function userResponse(user: ManagedUser) {
   return {
     id: user.id,
@@ -317,13 +322,22 @@ function userResponse(user: ManagedUser) {
     phoneNumber: user.phoneNumber,
     phone: `${user.countryCode} ${user.phoneNumber}`,
     name: user.name,
+    displayName: user.displayName,
+    email: user.email,
+    gender: user.gender,
+    region: user.region,
+    birthday: user.birthday?.toISOString().slice(0, 10) || null,
     cashBalance: user.cashBalance,
     fareBalance: user.fareBalance,
     membershipLevel: user.membershipLevel,
+    enabled: user.enabled,
     createdAt: user.createdAt.toISOString(),
     lastLoginAt: user.lastLoginAt?.toISOString() || null,
     lastLogoutAt: user.lastLogoutAt?.toISOString() || null
   }
+}
+function clientSecurityResponse(user: ManagedUser & { authIdentities?: Array<{ provider: string }> }) {
+  return { countryCode: user.countryCode, phoneNumber: user.phoneNumber, email: user.email, linkedProviders: (user.authIdentities || []).map(identity => identity.provider).filter((provider): provider is 'apple' | 'wechat' => provider === 'apple' || provider === 'wechat') }
 }
 function parsePhoneIdentity(body: { countryCode?: string; phoneNumber?: string }) {
   const countryCode = body.countryCode?.trim() || ''
@@ -339,12 +353,17 @@ function clientSecret() {
   if (process.env.NODE_ENV !== 'production') return 'development-client-secret'
   throw new HttpException('Client session secret is not configured', HttpStatus.SERVICE_UNAVAILABLE)
 }
-function clientTokenFor(userId: string) {
-  const session: ClientSession = { sub: userId, exp: Date.now() + 30 * 24 * 60 * 60 * 1000, jti: randomBytes(16).toString('hex') }
+function clientTokenFor(session: ClientSession) {
   const payload = Buffer.from(JSON.stringify(session)).toString('base64url')
   return `${payload}.${createHmac('sha256', clientSecret()).update(payload).digest('base64url')}`
 }
-function clientSessionFrom(req: RequestLike): ClientSession {
+async function clientAuthResponse(user: ManagedUser) {
+  const exp = Date.now() + 30 * 24 * 60 * 60 * 1000
+  const session: ClientSession = { sub: user.id, exp, jti: randomBytes(16).toString('hex') }
+  await prisma.clientSession.create({ data: { jti: session.jti, userId: user.id, expiresAt: new Date(exp) } })
+  return { token: clientTokenFor(session), expiresAt: new Date(exp).toISOString(), user: userResponse(user) }
+}
+async function clientSessionFrom(req: RequestLike): Promise<ClientSession> {
   const value = req.headers.authorization?.replace(/^Bearer\s+/i, '')
   const [payload, signature] = value?.split('.') || []
   if (!payload || !signature) throw new UnauthorizedException('Valid client session required')
@@ -352,15 +371,13 @@ function clientSessionFrom(req: RequestLike): ClientSession {
   try {
     if (!timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) throw new Error('signature mismatch')
     const session = JSON.parse(Buffer.from(payload, 'base64url').toString()) as ClientSession
-    if (!session.sub || session.exp <= Date.now()) throw new Error('expired session')
+    if (!session.sub || !session.jti || session.exp <= Date.now()) throw new Error('invalid session')
+    const stored = await prisma.clientSession.findUnique({ where: { jti: session.jti }, include: { user: { select: { enabled: true } } } })
+    if (!stored || stored.revokedAt || stored.expiresAt.getTime() <= Date.now() || stored.userId !== session.sub || !stored.user.enabled) throw new Error('revoked session')
     return session
   } catch {
     throw new UnauthorizedException('Valid client session required')
   }
-}
-function clientAuthResponse(user: ManagedUser) {
-  const exp = Date.now() + 30 * 24 * 60 * 60 * 1000
-  return { token: clientTokenFor(user.id), expiresAt: new Date(exp).toISOString(), user: userResponse(user) }
 }
 function calculateDistanceFare(distanceKm: number, pricing: DistancePricingSettings) {
   const subtotal = [...pricing.tiers]
@@ -372,8 +389,8 @@ function calculateDistanceFare(distanceKm: number, pricing: DistancePricingSetti
   return Math.max(pricing.minimumFare, subtotal)
 }
 function currencyCode(currency: string) {
-  if (currency === 'RMB' || currency === currencyLabels.RMB) return 'RMB'
-  if (currency === 'HKD' || currency === currencyLabels.HKD) return 'HKD'
+  if (currency === 'RMB' || currency === 'RMB¥' || currency === 'CNY' || currency === currencyLabels.RMB) return 'RMB'
+  if (currency === 'HKD' || currency === 'HKD$' || currency === currencyLabels.HKD) return 'HKD'
   return null
 }
 function displayCurrency(value: unknown, fallback: string) {
@@ -431,6 +448,7 @@ function quoteExpiryDate() {
 type PersistedQuote = {
   id: string
   distanceKm: number
+  durationSeconds: number | null
   currency: string
   subtotal: number
   total: number
@@ -482,6 +500,7 @@ function quoteResponse(quote: PersistedQuote) {
     id: quote.id,
     distanceMeters: quote.distanceKm * 1000,
     distanceKm: quote.distanceKm,
+    durationSeconds: quote.durationSeconds || 0,
     currency: quote.currency,
     subtotal: quote.subtotal,
     total: quote.total,
@@ -728,6 +747,15 @@ class ClientAuthController {
   @Post('phone/request')
   async requestPhoneCode(@Body() body: { countryCode?: string; phoneNumber?: string }) {
     const identity = parsePhoneIdentity(body)
+    const requestKey = `${identity.countryCode}:${identity.phoneNumber}`
+    const now = Date.now()
+    const requestState = phoneChallengeRequests.get(requestKey)
+    const shouldRateLimit = process.env.NODE_ENV === 'production'
+    if (shouldRateLimit && requestState && now - requestState.windowStartedAt < PHONE_CODE_REQUEST_WINDOW_MS && requestState.count >= PHONE_CODE_MAX_REQUESTS) {
+      throw new HttpException('Too many verification code requests', HttpStatus.TOO_MANY_REQUESTS)
+    }
+    if (shouldRateLimit && (!requestState || now - requestState.windowStartedAt >= PHONE_CODE_REQUEST_WINDOW_MS)) phoneChallengeRequests.set(requestKey, { count: 1, windowStartedAt: now })
+    else if (shouldRateLimit && requestState) requestState.count += 1
     if (process.env.NODE_ENV === 'production' && !process.env.AUTH_OTP_CODE) {
       throw new HttpException('OTP delivery is not configured', HttpStatus.SERVICE_UNAVAILABLE)
     }
@@ -735,8 +763,8 @@ class ClientAuthController {
     const code = process.env.NODE_ENV === 'production' && process.env.AUTH_OTP_CODE
       ? process.env.AUTH_OTP_CODE
       : String(Math.floor(10000 + Math.random() * 90000))
-    const exp = Date.now() + 5 * 60 * 1000
-    phoneChallenges.set(challengeId, { ...identity, code, exp })
+    const exp = now + PHONE_CODE_TTL_MS
+    phoneChallenges.set(challengeId, { ...identity, code, exp, attempts: 0 })
     for (const [id, challenge] of phoneChallenges) {
       if (challenge.exp <= Date.now()) phoneChallenges.delete(id)
     }
@@ -756,8 +784,13 @@ class ClientAuthController {
       throw new UnauthorizedException('Verification code expired')
     }
     const submittedCode = body.code?.trim() || ''
-    const developmentBypass = process.env.NODE_ENV !== 'production' && (!submittedCode || submittedCode === body.developmentCode)
-    if (!developmentBypass && submittedCode !== challenge.code) throw new UnauthorizedException('Invalid verification code')
+    const developmentCode = body.developmentCode?.trim() || ''
+    const developmentBypass = process.env.NODE_ENV !== 'production' && developmentCode !== '' && developmentCode === challenge.code
+    if (!developmentBypass && submittedCode !== challenge.code) {
+      challenge.attempts += 1
+      if (challenge.attempts >= PHONE_CODE_MAX_ATTEMPTS) phoneChallenges.delete(challengeId)
+      throw new UnauthorizedException('Invalid verification code')
+    }
     phoneChallenges.delete(challengeId)
     const existing = await prisma.user.findUnique({ where: { countryCode_phoneNumber: { countryCode: challenge.countryCode, phoneNumber: challenge.phoneNumber } } })
     const user = existing || await prisma.user.create({ data: { countryCode: challenge.countryCode, phoneNumber: challenge.phoneNumber } })
@@ -789,7 +822,8 @@ class ClientAuthController {
 
   @Post('logout')
   async logout(@Req() req: RequestLike) {
-    const session = clientSessionFrom(req)
+    const session = await clientSessionFrom(req)
+    await prisma.clientSession.updateMany({ where: { jti: session.jti, revokedAt: null }, data: { revokedAt: new Date() } })
     const user = await prisma.user.update({ where: { id: session.sub }, data: { lastLogoutAt: new Date() }, select: { id: true } })
     return { ok: Boolean(user.id) }
   }
@@ -895,12 +929,12 @@ class AdminController {
     const [data, total] = await prisma.$transaction([prisma.user.findMany({ orderBy: { createdAt: 'desc' } }), prisma.user.count()])
     return { data: data.map(userResponse), total }
   }
-  @Post('users') async createUser(@Req() req: RequestLike, @Body() body: { countryCode?: string; phoneNumber?: string; name?: string }) {
+  @Post('users') async createUser(@Req() req: RequestLike, @Body() body: { countryCode?: string; phoneNumber?: string; name?: string; displayName?: string; email?: string; gender?: string; region?: string; birthday?: string }) {
     requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
     const identity = parsePhoneIdentity(body)
     const duplicate = await prisma.user.findUnique({ where: { countryCode_phoneNumber: identity } })
     if (duplicate) throw new HttpException('A user with this phone number already exists', HttpStatus.CONFLICT)
-    return userResponse(await prisma.user.create({ data: { ...identity, name: body.name?.trim() || null } }))
+    return userResponse(await prisma.user.create({ data: { ...identity, name: body.name?.trim() || null, displayName: body.displayName?.trim() || null, email: body.email?.trim() || null, gender: body.gender?.trim() || null, region: body.region?.trim() || null, birthday: body.birthday ? new Date(body.birthday) : null } }))
   }
   @Get('users/:id') async getUser(@Req() req: RequestLike, @Param('id') id: string) {
     requireAuth(req)
@@ -912,14 +946,26 @@ class AdminController {
     ])
     return { ...userResponse(user), currentTrips: currentTrips.map(trip => ({ ...trip, scheduledAt: trip.scheduledAt.toISOString(), createdAt: trip.createdAt.toISOString(), updatedAt: trip.updatedAt.toISOString() })), currentCharterOrders, walletTransactions: user.walletTransactions }
   }
-  @Post('users/:id') async updateUser(@Req() req: RequestLike, @Param('id') id: string, @Body() body: { countryCode?: string; phoneNumber?: string; name?: string }) {
+  @Post('users/:id') async updateUser(@Req() req: RequestLike, @Param('id') id: string, @Body() body: { countryCode?: string; phoneNumber?: string; name?: string; displayName?: string; email?: string; gender?: string; region?: string; birthday?: string }) {
     requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
     const existing = await prisma.user.findUnique({ where: { id } })
     if (!existing) throw new HttpException('User not found', HttpStatus.NOT_FOUND)
     const identity = parsePhoneIdentity({ countryCode: body.countryCode ?? existing.countryCode, phoneNumber: body.phoneNumber ?? existing.phoneNumber })
     const duplicate = await prisma.user.findUnique({ where: { countryCode_phoneNumber: identity } })
     if (duplicate && duplicate.id !== id) throw new HttpException('A user with this phone number already exists', HttpStatus.CONFLICT)
-    return userResponse(await prisma.user.update({ where: { id }, data: { ...identity, name: body.name?.trim() || null } }))
+    return userResponse(await prisma.user.update({ where: { id }, data: { ...identity, name: body.name?.trim() || null, displayName: body.displayName?.trim() || null, email: body.email?.trim() || null, gender: body.gender?.trim() || null, region: body.region?.trim() || null, birthday: body.birthday ? new Date(body.birthday) : null } }))
+  }
+  @Post('users/:id/status') async updateUserStatus(@Req() req: RequestLike, @Param('id') id: string, @Body() body: { enabled?: boolean }) {
+    requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
+    if (typeof body.enabled !== 'boolean') throw new HttpException('Enabled status is required', HttpStatus.BAD_REQUEST)
+    const user = await prisma.user.findUnique({ where: { id }, select: { id: true } })
+    if (!user) throw new HttpException('User not found', HttpStatus.NOT_FOUND)
+    const updated = await prisma.$transaction(async tx => {
+      const result = await tx.user.update({ where: { id }, data: { enabled: body.enabled } })
+      if (!body.enabled) await tx.clientSession.updateMany({ where: { userId: id, revokedAt: null, expiresAt: { gt: new Date() } }, data: { revokedAt: new Date() } })
+      return result
+    })
+    return userResponse(updated)
   }
   @Post('users/:id/wallet-adjustments') async adjustWallet(@Req() req: RequestLike, @Param('id') id: string, @Body() body: { wallet?: 'CASH' | 'FARE'; direction?: 'INCREASE' | 'DECREASE'; amount?: number; reason?: string }) {
     const session = requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
@@ -955,6 +1001,7 @@ class AdminController {
   }
   @Get('trips') async listTrips(@Req() req: RequestLike) {
    requireAuth(req)
+   await prisma.trip.updateMany({ where: { status: 'PENDING', quote: { is: { expiresAt: { lte: new Date() } } } }, data: { status: 'CANCELLED' } })
    const data = await prisma.trip.findMany({
      include: {
        user: true,
@@ -972,20 +1019,21 @@ class AdminController {
    })
    return { data: data.map(tripResponse), total: data.length }
   }
-  @Post('trips') async createTrip(@Req() req: RequestLike, @Body() body: Partial<Trip>) {
+  @Post('trips') async createTrip(@Req() req: RequestLike, @Body() body: Partial<Prisma.TripUncheckedCreateInput>) {
    requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
    const userId = body.userId?.trim()
    const origin = body.origin?.trim()
    const destination = body.destination?.trim()
    const scheduledAt = new Date(body.scheduledAt || '')
    const allowedStatuses = ['PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED'] as const
+   const allowedExecutionPhases = ['WAITING_DRIVER', 'DRIVER_ASSIGNED', 'IN_PROGRESS'] as const
    const allowedRegions = ['HK', 'MACAU', 'GUANGDONG'] as const
-   if (!userId || !origin || !destination || !body.region || !allowedRegions.includes(body.region as typeof allowedRegions[number]) || Number.isNaN(scheduledAt.getTime()) || !body.status || !allowedStatuses.includes(body.status as typeof allowedStatuses[number])) throw new HttpException('Valid trip fields are required', HttpStatus.BAD_REQUEST)
+   if (!userId || !origin || !destination || !body.region || !allowedRegions.includes(body.region as typeof allowedRegions[number]) || Number.isNaN(scheduledAt.getTime()) || !body.status || !allowedStatuses.includes(body.status as typeof allowedStatuses[number]) || (body.executionPhase !== undefined && body.executionPhase !== null && !allowedExecutionPhases.includes(body.executionPhase as typeof allowedExecutionPhases[number]))) throw new HttpException('Valid trip fields are required', HttpStatus.BAD_REQUEST)
    if (!await prisma.user.findUnique({ where: { id: userId }, select: { id: true } })) throw new HttpException('User not found', HttpStatus.BAD_REQUEST)
-   const trip = await prisma.trip.create({ data: { userId, origin, destination, region: body.region as any, scheduledAt, status: body.status as any }, include: { user: true } })
+   const trip = await prisma.trip.create({ data: { userId, origin, destination, region: body.region as any, scheduledAt, status: body.status as any, executionPhase: body.status === 'CONFIRMED' ? (body.executionPhase as any || 'WAITING_DRIVER') : null, driverName: body.driverName || null, driverPhone: body.driverPhone || null, vehiclePlate: body.vehiclePlate || null }, include: { user: true } })
    return { ...trip, scheduledAt: trip.scheduledAt.toISOString(), createdAt: trip.createdAt.toISOString(), updatedAt: trip.updatedAt.toISOString(), user: userResponse(trip.user) }
   }
-   @Post('trips/:id') async updateTrip(@Req() req: RequestLike, @Param('id') id: string, @Body() body: Partial<Trip>) {
+   @Post('trips/:id') async updateTrip(@Req() req: RequestLike, @Param('id') id: string, @Body() body: Partial<Prisma.TripUncheckedCreateInput>) {
    requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
    const existing = await prisma.trip.findUnique({ where: { id } })
    if (!existing) throw new HttpException('Trip not found', HttpStatus.NOT_FOUND)
@@ -993,9 +1041,10 @@ class AdminController {
    const destination = body.destination?.trim()
    const scheduledAt = new Date(body.scheduledAt || existing.scheduledAt)
    const allowedStatuses = ['PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED'] as const
-   if (!origin || !destination || !body.region?.trim() || Number.isNaN(scheduledAt.getTime()) || !body.status || !allowedStatuses.includes(body.status as typeof allowedStatuses[number])) throw new HttpException('Valid trip fields are required', HttpStatus.BAD_REQUEST)
+   const allowedExecutionPhases = ['WAITING_DRIVER', 'DRIVER_ASSIGNED', 'IN_PROGRESS'] as const
+   if (!origin || !destination || !body.region?.trim() || Number.isNaN(scheduledAt.getTime()) || !body.status || !allowedStatuses.includes(body.status as typeof allowedStatuses[number]) || (body.executionPhase !== undefined && body.executionPhase !== null && !allowedExecutionPhases.includes(body.executionPhase as typeof allowedExecutionPhases[number]))) throw new HttpException('Valid trip fields are required', HttpStatus.BAD_REQUEST)
    if (body.userId && !await prisma.user.findUnique({ where: { id: body.userId }, select: { id: true } })) throw new HttpException('User not found', HttpStatus.BAD_REQUEST)
-   if (body.status === 'CANCELLED' && existing.status === 'COMPLETED') throw new HttpException('Completed trips cannot be cancelled', HttpStatus.CONFLICT)
+   if (body.status === 'CANCELLED' && (existing.status === 'COMPLETED' || existing.executionPhase === 'IN_PROGRESS')) throw new HttpException('Completed or in-progress trips cannot be cancelled', HttpStatus.CONFLICT)
    const region = body.region.trim()
    const trip = await prisma.$transaction(async tx => {
      const currentTrip = await tx.trip.findUniqueOrThrow({ where: { id }, select: { status: true, userId: true } })
@@ -1009,7 +1058,7 @@ class AdminController {
        if (payment.fareAmount > 0) await tx.walletTransaction.create({ data: { userId: user.id, wallet: 'FARE', type: 'REFUND', amount: payment.fareAmount, balanceAfter: fareBalance, reason: `訂單退款 - 車費餘額 (訂單: ${id.slice(-8)})`, paymentId: payment.id } })
        if (payment.cashAmount > 0) await tx.walletTransaction.create({ data: { userId: user.id, wallet: 'CASH', type: 'REFUND', amount: payment.cashAmount, balanceAfter: cashBalance, reason: `訂單退款 - 現金餘額 (訂單: ${id.slice(-8)})`, paymentId: payment.id } })
      }
-     return tx.trip.update({ where: { id }, data: { userId: body.userId || existing.userId, origin, destination, region: region as any, scheduledAt, status: body.status as any }, include: { user: true } })
+     return tx.trip.update({ where: { id }, data: { userId: body.userId || existing.userId, origin, destination, region: region as any, scheduledAt, status: body.status as any, executionPhase: body.status === 'CONFIRMED' ? (body.executionPhase as any || existing.executionPhase || 'WAITING_DRIVER') : null, driverName: body.driverName ?? existing.driverName, driverPhone: body.driverPhone ?? existing.driverPhone, vehiclePlate: body.vehiclePlate ?? existing.vehiclePlate }, include: { user: true } })
    })
    return { ...trip, scheduledAt: trip.scheduledAt.toISOString(), createdAt: trip.createdAt.toISOString(), updatedAt: trip.updatedAt.toISOString(), user: userResponse(trip.user) }
   }
@@ -1349,6 +1398,8 @@ class PublicQuotesController {
       throw new HttpException('Category, vehicle, and a valid distance in meters are required', HttpStatus.BAD_REQUEST)
     }
     const distanceKm = distanceMeters / 1000
+    const durationSeconds = Number(body.durationSeconds)
+    if (!Number.isFinite(durationSeconds) || durationSeconds < 0) throw new HttpException('A valid route duration is required', HttpStatus.BAD_REQUEST)
     const originRegion = typeof body.originRegion === 'string' ? body.originRegion.trim() : ''
     const originCity = typeof body.originCity === 'string' ? body.originCity.trim() : ''
     const destinationRegion = typeof body.destinationRegion === 'string' ? body.destinationRegion.trim() : ''
@@ -1514,6 +1565,7 @@ class PublicQuotesController {
       return tx.fareQuote.create({
         data: {
           distanceKm,
+          durationSeconds,
           currency: currencyLabels[currency],
           subtotal,
           total,
@@ -1828,7 +1880,7 @@ class PaymentCardsController {
 class WalletController {
   @Get('me')
   async getMe(@Req() req: RequestLike) {
-    const session = clientSessionFrom(req)
+    const session = await clientSessionFrom(req)
     const user = await prisma.user.findUnique({
       where: { id: session.sub },
       include: { walletTransactions: { orderBy: { createdAt: 'desc' }, take: 50 } }
@@ -1846,15 +1898,14 @@ class WalletController {
   }
 
   @Post('top-up')
-  async topUp(@Body() body: { amount?: number; userId?: string; method?: string }) {
+  async topUp(@Req() req: RequestLike, @Body() body: { amount?: number; method?: string }) {
+    const session = await clientSessionFrom(req)
     const amount = roundMoney(Number(body.amount))
     if (!Number.isFinite(amount) || amount <= 0) {
       throw new HttpException('Valid positive top up amount is required', HttpStatus.BAD_REQUEST)
     }
     const settings = await prisma.appSetting.findUniqueOrThrow({ where: { id: appSettingsDefaults.id } })
-    const userTarget = body.userId
-      ? await prisma.user.findUnique({ where: { id: body.userId } })
-      : await prisma.user.findFirst({ orderBy: { createdAt: 'asc' } })
+    const userTarget = await prisma.user.findUnique({ where: { id: session.sub } })
     if (!userTarget) throw new HttpException('User not found', HttpStatus.NOT_FOUND)
 
     const result = await prisma.$transaction(async tx => {
@@ -1882,6 +1933,47 @@ class WalletController {
 
 @Controller('payments')
 class PaymentsController {
+  @Post('trip-pending')
+  async tripPending(@Req() req: RequestLike, @Body() body: {
+    quoteId?: string
+    origin?: string
+    destination?: string
+    scheduledAt?: string
+  }) {
+    const quoteId = typeof body.quoteId === 'string' ? body.quoteId.trim() : ''
+    if (!quoteId) throw new HttpException('quoteId is required', HttpStatus.BAD_REQUEST)
+
+    const session = await clientSessionFrom(req)
+    const quote = await prisma.fareQuote.findUnique({ where: { id: quoteId }, include: { pricing: true } })
+    if (!quote) throw new HttpException('Quote not found', HttpStatus.NOT_FOUND)
+    if (quote.expiresAt && quote.expiresAt.getTime() <= Date.now()) throw new HttpException('Quote has expired', HttpStatus.GONE)
+
+    const existingTrip = await prisma.trip.findUnique({ where: { quoteId } })
+    const pendingExpiresAt = quoteExpiryDate()
+    if (existingTrip) {
+      if (existingTrip.userId !== session.sub) throw new ForbiddenException('Quote belongs to another user')
+      if (existingTrip.status !== 'PENDING') throw new HttpException('Quote already has a paid trip', HttpStatus.CONFLICT)
+      await prisma.fareQuote.update({ where: { id: quoteId }, data: { expiresAt: pendingExpiresAt } })
+      return { ok: true, tripId: existingTrip.id, quoteId, status: existingTrip.status }
+    }
+
+    const scheduledAt = body.scheduledAt ? new Date(body.scheduledAt) : new Date(Date.now() + 3600000)
+    await prisma.fareQuote.update({ where: { id: quoteId }, data: { expiresAt: pendingExpiresAt } })
+    const trip = await prisma.trip.create({
+      data: {
+        userId: session.sub,
+        quoteId,
+        origin: body.origin?.trim() || quote.pricing?.routeOriginCity || '香港',
+        destination: body.destination?.trim() || quote.pricing?.routeDestinationCity || '深圳',
+        region: 'GUANGDONG',
+        scheduledAt: Number.isNaN(scheduledAt.getTime()) ? new Date(Date.now() + 3600000) : scheduledAt,
+        estimatedArrivalAt: new Date((Number.isNaN(scheduledAt.getTime()) ? new Date(Date.now() + 3600000) : scheduledAt).getTime() + (quote.durationSeconds || 0) * 1000),
+        status: 'PENDING'
+      }
+    })
+    return { ok: true, tripId: trip.id, quoteId, status: trip.status }
+  }
+
   @Post('trip-pay')
   async tripPay(@Req() req: RequestLike, @Body() body: {
     quoteId?: string
@@ -1899,7 +1991,7 @@ class PaymentsController {
     const settings = await prisma.appSetting.findUniqueOrThrow({ where: { id: appSettingsDefaults.id } })
     let session: ClientSession
     try {
-      session = clientSessionFrom(req)
+      session = await clientSessionFrom(req)
     } catch {
       const adminSession = requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
       if (!body.userId) throw new HttpException('userId is required for administrator payments', HttpStatus.BAD_REQUEST)
@@ -1926,6 +2018,11 @@ class PaymentsController {
           paidSummary: { fareBalance: existingPayment.fareAmount, cashBalance: existingPayment.cashAmount, external: existingPayment.externalAmount, externalMethod: existingPayment.externalPaymentMethod },
           user: { id: existingUser.id, fareBalance: existingUser.fareBalance, cashBalance: existingUser.cashBalance }
         }
+      }
+      const existingPendingTrip = await tx.trip.findUnique({ where: { quoteId } })
+      if (existingPendingTrip) {
+        if (existingPendingTrip.userId !== userTarget.id) throw new ForbiddenException('Quote belongs to another user')
+        if (existingPendingTrip.status !== 'PENDING') throw new HttpException('Trip is not awaiting payment', HttpStatus.CONFLICT)
       }
       const quote = await tx.fareQuote.findUnique({
         where: { id: quoteId },
@@ -2008,26 +2105,42 @@ class PaymentsController {
         await tx.promotion.update({ where: { id: usage.promotionId }, data: { usageCount: { increment: 1 } } })
       }
 
-      // Create Trip record
+      // Create or confirm Trip record
       const origin = body.origin || quote.pricing?.routeOriginCity || '香港'
       const destination = body.destination || quote.pricing?.routeDestinationCity || '深圳'
       const scheduledAt = body.scheduledAt ? new Date(body.scheduledAt) : new Date(Date.now() + 3600000)
 
-      const trip = await tx.trip.create({
-        data: {
-          userId: user.id,
-          quoteId: quote.id,
-          origin,
-          destination,
-          region: 'GUANGDONG',
-          scheduledAt: Number.isNaN(scheduledAt.getTime()) ? new Date() : scheduledAt,
-          status: 'CONFIRMED',
-          fareBalancePaid: farePaid,
-          cashBalancePaid: cashPaid,
-          externalPaid,
-          externalPaymentMethod: internalPaymentMethod
-        }
-      })
+      const trip = existingPendingTrip
+        ? await tx.trip.update({
+            where: { id: existingPendingTrip.id },
+            data: {
+              origin,
+              destination,
+              scheduledAt: Number.isNaN(scheduledAt.getTime()) ? existingPendingTrip.scheduledAt : scheduledAt,
+              estimatedArrivalAt: new Date((Number.isNaN(scheduledAt.getTime()) ? existingPendingTrip.scheduledAt : scheduledAt).getTime() + (quote.durationSeconds || 0) * 1000),
+              status: 'CONFIRMED',
+              fareBalancePaid: farePaid,
+              cashBalancePaid: cashPaid,
+              externalPaid,
+              externalPaymentMethod: internalPaymentMethod
+            }
+          })
+        : await tx.trip.create({
+            data: {
+              userId: user.id,
+              quoteId: quote.id,
+              origin,
+              destination,
+              region: 'GUANGDONG',
+              scheduledAt: Number.isNaN(scheduledAt.getTime()) ? new Date() : scheduledAt,
+              estimatedArrivalAt: new Date((Number.isNaN(scheduledAt.getTime()) ? new Date() : scheduledAt).getTime() + (quote.durationSeconds || 0) * 1000),
+              status: 'CONFIRMED',
+              fareBalancePaid: farePaid,
+              cashBalancePaid: cashPaid,
+              externalPaid,
+              externalPaymentMethod: internalPaymentMethod
+            }
+          })
       const payment = await tx.payment.create({
         data: {
           tripId: trip.id,
@@ -2069,13 +2182,53 @@ class PaymentsController {
   }
 }
 
-function clientTripResponse(trip: Prisma.TripGetPayload<{ include: { payment: true } }>) {
+function clientTripResponse(trip: Prisma.TripGetPayload<{ include: { user: { select: { name: true; displayName: true; gender: true; countryCode: true; phoneNumber: true } }; payment: true; quote: { select: { expiresAt: true; total: true; currency: true; lines: true; vehicle: true; pricing: { select: { categoryName: true } } } } } }>) {
+  const paymentExpiresAt = trip.status === 'PENDING' ? trip.quote?.expiresAt || null : null
+  const vehicle = trip.quote?.vehicle
+  const vehicleCategoryName = trip.quote?.pricing?.categoryName || null
+  const rawName = (trip.user.displayName || trip.user.name || '').trim()
+  const passengerName = rawName ? rawName.slice(0, 1) : '—'
   return {
     id: trip.id,
+    quoteId: trip.quoteId,
     origin: trip.origin,
     destination: trip.destination,
     region: trip.region,
     scheduledAt: trip.scheduledAt.toISOString(),
+    estimatedArrivalAt: trip.estimatedArrivalAt?.toISOString() || null,
+    passenger: {
+      name: passengerName,
+      gender: trip.user.gender || null,
+      countryCode: trip.user.countryCode,
+      phoneNumber: trip.user.phoneNumber
+    },
+    paymentExpiresAt: paymentExpiresAt?.toISOString() || null,
+    quote: trip.quote ? {
+      total: trip.quote.total,
+      currency: trip.quote.currency,
+      lines: trip.quote.lines
+    } : null,
+    vehicle: vehicle ? {
+      id: vehicle.vehicleId,
+      categoryId: vehicle.categoryId,
+      categoryName: vehicleCategoryName,
+      brand: vehicle.brand,
+      model: vehicle.model,
+      series: vehicle.series,
+      seats: vehicle.seats,
+      modelChoiceLabel: vehicle.modelChoiceLabel
+    } : null,
+    executionPhase: trip.executionPhase || null,
+    driver: trip.driverName || trip.driverPhone || trip.vehiclePlate ? {
+      name: trip.driverName || '—',
+      phone: trip.driverPhone || '—',
+      vehiclePlate: trip.vehiclePlate || '—'
+    } : null,
+    assignedAt: trip.assignedAt?.toISOString() || null,
+    acceptedAt: trip.acceptedAt?.toISOString() || null,
+    arrivedAt: trip.arrivedAt?.toISOString() || null,
+    startedAt: trip.startedAt?.toISOString() || null,
+    completedAt: trip.completedAt?.toISOString() || null,
     status: trip.status,
     createdAt: trip.createdAt.toISOString(),
     payment: trip.payment ? {
@@ -2094,12 +2247,77 @@ function clientTripResponse(trip: Prisma.TripGetPayload<{ include: { payment: tr
 
 @Controller('client')
 class ClientOrdersController {
+  @Get('me')
+  async getProfile(@Req() req: RequestLike) {
+    const session = await clientSessionFrom(req)
+    const user = await prisma.user.findUnique({ where: { id: session.sub } })
+    if (!user) throw new HttpException('User not found', HttpStatus.NOT_FOUND)
+    return userResponse(user)
+  }
+
+  @Patch('me')
+  async updateProfile(@Req() req: RequestLike, @Body() body: { name?: string; displayName?: string; email?: string; password?: string; gender?: string; region?: string; birthday?: string; countryCode?: string; phoneNumber?: string }) {
+    const session = await clientSessionFrom(req)
+    const name = body.name?.trim() || null
+    const displayName = body.displayName?.trim() || null
+    const email = body.email?.trim() || null
+    const password = body.password?.trim() || ''
+    const gender = body.gender?.trim() || null
+    const region = body.region?.trim() || null
+    const birthday = body.birthday ? new Date(body.birthday) : null
+    const phone = body.countryCode || body.phoneNumber ? parsePhoneIdentity({ countryCode: body.countryCode, phoneNumber: body.phoneNumber }) : null
+    if (name && name.length > 100 || displayName && displayName.length > 100 || email && email.length > 254 || password && (password.length < 8 || password.length > 200) || gender && gender.length > 30 || region && region.length > 100 || body.birthday && Number.isNaN(birthday?.getTime())) throw new HttpException('Invalid profile fields', HttpStatus.BAD_REQUEST)
+    const user = await prisma.user.update({ where: { id: session.sub }, data: { name, displayName, email, ...(phone ? phone : {}), ...(password ? { passwordHash: hashPassword(password) } : {}), gender, region, birthday } })
+    return userResponse(user)
+  }
+
+  @Get('security')
+  async getSecurity(@Req() req: RequestLike) {
+    const session = await clientSessionFrom(req)
+    return clientSecurityResponse(await prisma.user.findUniqueOrThrow({ where: { id: session.sub }, include: { authIdentities: true } }))
+  }
+
+  @Patch('security')
+  async updateSecurity(@Req() req: RequestLike, @Body() body: { countryCode?: string; phoneNumber?: string; email?: string; password?: string }) {
+    const session = await clientSessionFrom(req)
+    const identity = parsePhoneIdentity(body)
+    const email = body.email?.trim() || null
+    const password = body.password?.trim() || ''
+    if (email && email.length > 254 || password && (password.length < 8 || password.length > 200)) throw new HttpException('Invalid security fields', HttpStatus.BAD_REQUEST)
+    const duplicate = await prisma.user.findFirst({ where: { countryCode: identity.countryCode, phoneNumber: identity.phoneNumber, id: { not: session.sub } } })
+    if (duplicate) throw new HttpException('Phone number is already connected', HttpStatus.CONFLICT)
+    const user = await prisma.user.update({ where: { id: session.sub }, data: { countryCode: identity.countryCode, phoneNumber: identity.phoneNumber, email, ...(password ? { passwordHash: hashPassword(password) } : {}), }, include: { authIdentities: true } })
+    return clientSecurityResponse(user)
+  }
+
+  @Post('security/providers')
+  async linkProvider(@Req() req: RequestLike, @Body() body: { provider?: string; providerToken?: string }) {
+    const session = await clientSessionFrom(req)
+    const provider = body.provider?.trim().toLowerCase()
+    const providerToken = body.providerToken?.trim()
+    if (provider !== 'wechat' && provider !== 'apple' || !providerToken) throw new HttpException('Valid third-party provider credentials are required', HttpStatus.BAD_REQUEST)
+    if (process.env.NODE_ENV === 'production') throw new HttpException('Third-party provider verification is not configured', HttpStatus.SERVICE_UNAVAILABLE)
+    const existing = await prisma.authIdentity.findUnique({ where: { provider_providerId: { provider, providerId: providerToken } } })
+    if (existing && existing.userId !== session.sub) throw new HttpException('Third-party account is already connected', HttpStatus.CONFLICT)
+    if (!existing) await prisma.authIdentity.create({ data: { provider, providerId: providerToken, userId: session.sub } })
+    return clientSecurityResponse(await prisma.user.findUniqueOrThrow({ where: { id: session.sub }, include: { authIdentities: true } }))
+  }
+
+  @Delete('security/providers/:provider')
+  async unlinkProvider(@Req() req: RequestLike, @Param('provider') provider: string) {
+    const session = await clientSessionFrom(req)
+    if (provider !== 'wechat' && provider !== 'apple') throw new HttpException('Unsupported third-party provider', HttpStatus.BAD_REQUEST)
+    const count = await prisma.authIdentity.count({ where: { userId: session.sub } })
+    if (count <= 1) throw new HttpException('At least one sign-in method must remain connected', HttpStatus.CONFLICT)
+    await prisma.authIdentity.deleteMany({ where: { userId: session.sub, provider } })
+    return clientSecurityResponse(await prisma.user.findUniqueOrThrow({ where: { id: session.sub }, include: { authIdentities: true } }))
+  }
   @Get('trips')
   async listTrips(@Req() req: RequestLike) {
-    const session = clientSessionFrom(req)
+    const session = await clientSessionFrom(req)
     const trips = await prisma.trip.findMany({
       where: { userId: session.sub },
-      include: { payment: true },
+      include: { user: { select: { name: true, displayName: true, gender: true, countryCode: true, phoneNumber: true } }, payment: true, quote: { select: { expiresAt: true, total: true, currency: true, lines: true, vehicle: true, pricing: { select: { categoryName: true } } } } },
       orderBy: { createdAt: 'desc' }
     })
     return { data: trips.map(clientTripResponse) }
@@ -2107,20 +2325,21 @@ class ClientOrdersController {
 
   @Get('trips/:id')
   async getTrip(@Req() req: RequestLike, @Param('id') id: string) {
-    const session = clientSessionFrom(req)
-    const trip = await prisma.trip.findFirst({ where: { id, userId: session.sub }, include: { payment: true } })
+    const session = await clientSessionFrom(req)
+    await prisma.trip.updateMany({ where: { id, userId: session.sub, status: 'PENDING', quote: { is: { expiresAt: { lte: new Date() } } } }, data: { status: 'CANCELLED' } })
+    const trip = await prisma.trip.findFirst({ where: { id, userId: session.sub }, include: { user: { select: { name: true, displayName: true, gender: true, countryCode: true, phoneNumber: true } }, payment: true, quote: { select: { expiresAt: true, total: true, currency: true, lines: true, vehicle: true, pricing: { select: { categoryName: true } } } } } })
     if (!trip) throw new HttpException('Trip not found', HttpStatus.NOT_FOUND)
     return clientTripResponse(trip)
   }
 
   @Post('trips/:id/cancel')
   async cancelTrip(@Req() req: RequestLike, @Param('id') id: string) {
-    const session = clientSessionFrom(req)
+    const session = await clientSessionFrom(req)
     return prisma.$transaction(async tx => {
-      const trip = await tx.trip.findFirst({ where: { id, userId: session.sub }, include: { payment: true } })
+      const trip = await tx.trip.findFirst({ where: { id, userId: session.sub }, include: { user: { select: { name: true, displayName: true, gender: true, countryCode: true, phoneNumber: true } }, payment: true, quote: { select: { expiresAt: true, total: true, currency: true, lines: true, vehicle: true, pricing: { select: { categoryName: true } } } } } })
       if (!trip) throw new HttpException('Trip not found', HttpStatus.NOT_FOUND)
       if (trip.status === 'CANCELLED') return clientTripResponse(trip)
-      if (trip.status === 'COMPLETED') throw new HttpException('Completed trips cannot be cancelled', HttpStatus.CONFLICT)
+      if (trip.status === 'COMPLETED' || trip.executionPhase === 'IN_PROGRESS') throw new HttpException('Completed or in-progress trips cannot be cancelled', HttpStatus.CONFLICT)
 
       const payment = trip.payment
       if (payment && payment.status === 'PAID') {
@@ -2132,14 +2351,14 @@ class ClientOrdersController {
         if (payment.fareAmount > 0) await tx.walletTransaction.create({ data: { userId: user.id, wallet: 'FARE', type: 'REFUND', amount: payment.fareAmount, balanceAfter: fareBalance, reason: `訂單退款 - 車費餘額 (訂單: ${trip.id.slice(-8)})`, paymentId: payment.id } })
         if (payment.cashAmount > 0) await tx.walletTransaction.create({ data: { userId: user.id, wallet: 'CASH', type: 'REFUND', amount: payment.cashAmount, balanceAfter: cashBalance, reason: `訂單退款 - 現金餘額 (訂單: ${trip.id.slice(-8)})`, paymentId: payment.id } })
       }
-      const updated = await tx.trip.update({ where: { id: trip.id }, data: { status: 'CANCELLED' }, include: { payment: true } })
+      const updated = await tx.trip.update({ where: { id: trip.id }, data: { status: 'CANCELLED', executionPhase: null }, include: { user: { select: { name: true, displayName: true, gender: true, countryCode: true, phoneNumber: true } }, payment: true, quote: { select: { expiresAt: true, total: true, currency: true, lines: true, vehicle: true, pricing: { select: { categoryName: true } } } } } })
       return clientTripResponse(updated)
     })
   }
 
   @Get('transactions')
   async listTransactions(@Req() req: RequestLike) {
-    const session = clientSessionFrom(req)
+    const session = await clientSessionFrom(req)
     const data = await prisma.payment.findMany({
       where: { userId: session.sub },
       orderBy: { createdAt: 'desc' },

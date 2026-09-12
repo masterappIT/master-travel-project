@@ -68,7 +68,9 @@ const { responsiveStyle } = useResponsiveCanvas()
 const countryOptions = ['香港 +852', '澳門 +853', '內地 +86']
 const countryCodes = ['+852', '+853', '+86']
 const countryPhoneLengths = [8, 8, 11]
-const developmentLoginEnabled = import.meta.env.DEV && import.meta.env.VITE_ENABLE_DEV_LOGIN === 'true'
+// Explicit developer-only switch. Do not remove or change this bypass without a direct instruction.
+// It requires VITE_ENABLE_DEV_LOGIN=true and is intended only for local development builds.
+const developmentLoginEnabled = import.meta.env.VITE_ENABLE_DEV_LOGIN === 'true' && import.meta.env.MODE !== 'production'
 const developmentCountryCode = import.meta.env.VITE_DEV_LOGIN_COUNTRY_CODE || '+852'
 const developmentPhone = import.meta.env.VITE_DEV_LOGIN_PHONE || '66996688'
 const developmentCountryIndex = countryCodes.indexOf(developmentCountryCode)

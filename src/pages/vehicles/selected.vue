@@ -40,7 +40,7 @@ import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { useTripStore } from '../../stores/trip'
 import { closeCachedPage, openCachedPage } from '../../utils/navigation'
 import { createFareQuote, listPublicPromotions, listPublicVehicles, planDrivingRoute, type PublicPromotion, type PublicVehicleExtra } from '../../services/api'
-import { useCurrency } from '../../composables/useCurrency'
+import { useCurrency, normalizeCurrency, formatCurrencyAmount } from '../../composables/useCurrency'
 import TripEditSheet from '../../components/home/TripEditSheet.vue'
 import VehicleCard from '../../components/vehicles/VehicleCard.vue'
 import type { Vehicle } from '../../types/vehicle'
@@ -130,7 +130,7 @@ const hasCombinablePromotion = computed(() => promotions.value.some(promotion =>
 const couponDiscountAmount = computed(() => {
   const promotion = cashCoupon.value
   if (!promotion || promotion.discountType !== 'FIXED_AMOUNT') return 0
-  const sourceCurrency = promotion.currency === 'HKD' || promotion.currency === 'HKD$' ? 'HKD' : 'RMB'
+  const sourceCurrency = normalizeCurrency(promotion.currency) || 'RMB'
   if (currency.value === sourceCurrency) return promotion.discountValue
   return sourceCurrency === 'RMB' ? promotion.discountValue / exchangeRate.value : promotion.discountValue * exchangeRate.value
 })
@@ -143,10 +143,6 @@ const displayedPromotionAmount = computed(() => {
   }
   return couponDiscountAmount.value
 })
-const formatCouponAmount = (amount: number, quoteCurrency?: string) => {
-  if (quoteCurrency === 'HKD' || quoteCurrency === 'HKD$' || currency.value === 'HKD') return `HK$${amount.toFixed(0)}`
-  return `¥${amount.toFixed(0)}`
-}
 const loadPromotions = async () => {
   try {
     promotions.value = await listPublicPromotions()
@@ -206,11 +202,7 @@ const routeRegion = (value: string | undefined, fallback: string) => {
   return fallback
 }
 let quoteRequestId = 0
-const formatExtraPrice = (amount: number, extraCurrency: string) => {
-  if (extraCurrency === 'HKD' || extraCurrency === 'HKD$') return `HKD$${amount.toFixed(0)}`
-  if (extraCurrency === 'RMB' || extraCurrency === 'RMB¥') return `¥${amount.toFixed(0)}`
-  return `${extraCurrency}${amount.toFixed(0)}`
-}
+const formatExtraPrice = (amount: number, extraCurrency: string) => formatCurrencyAmount(amount, normalizeCurrency(extraCurrency) || 'RMB', 0)
 const refreshQuote = async (extraIds = selectedExtras.value) => {
   syncRequiredExtras()
   const requiredIds = new Set(extras.value.filter(isTriggeredExtra).map(extra => extra.id))
@@ -229,6 +221,7 @@ const refreshQuote = async (extraIds = selectedExtras.value) => {
       categoryId,
       vehicleId: chosenVehicle.id,
       distanceMeters: distanceMeters!,
+      durationSeconds: (tripStore.activeDraft.durationHours || 0) * 3600,
       originRegion: tripStore.activeDraft.route.originRegion || routeRegion(tripStore.activeDraft.route.origin, ''),
       originCity: tripStore.activeDraft.route.originCity,
       destinationRegion: tripStore.activeDraft.route.destinationRegion || routeRegion(tripStore.activeDraft.route.destination, ''),
@@ -329,6 +322,6 @@ const goNext = async () => {
 </script>
 
 <style scoped>
-:global(html),:global(body),:global(#app){width:100%;min-width:0;height:100%;margin:0;overflow:hidden;background:#56657e}.page{position:fixed;top:50%;left:50%;width:430px;height:932px;overflow:hidden;background:#56657e;color:#fff;font-family:'Noto Sans TC',sans-serif;transform:translate(-50%,-50%) scale(min(1,calc(100vw / 430px),calc(100dvh / 932px)));transform-origin:center}.header{position:absolute;z-index:3;top:0;left:0;width:430px;height:155px;overflow:hidden;border-radius:25px;background:#56657e;color:#fff}.back-button{position:absolute;top:53px;left:25px;width:28px;height:40px;display:flex;align-items:center;justify-content:center}.back-button image{width:16px;height:29px}.route-summary{position:absolute;top:56px;left:53px;width:324px;height:59px}.origin-icon{position:absolute;top:12px;left:69px;width:8px;height:14.517px}.origin-label{position:absolute;top:9px;left:94px;font-size:14px;font-weight:700;line-height:20px}.route-icon{position:absolute;top:4px;left:139px;width:30px;height:30px}.destination-icon{position:absolute;top:13px;left:186px;width:8px;height:11.978px}.destination-label{position:absolute;top:9px;left:214px;font-size:14px;font-weight:700;line-height:20px}.booking-time{position:absolute;top:39px;left:0;width:324px;text-align:center;font-size:14px;font-weight:100;line-height:20px;white-space:nowrap}.tabs{position:absolute;bottom:0;left:26px;width:378px;height:30px;display:flex;justify-content:space-between}.tab{position:relative;height:30px;font-size:14px;line-height:20px;white-space:nowrap}.tab.active{color:#1effaa;font-weight:700}.tab image{position:absolute;bottom:1px;left:0;width:32px;height:2px}.vehicle-tag{position:absolute;left:24px;top:165px;width:66px;height:18px;border-radius:25px;background:#d9d9d9;color:#38434a;text-align:center;font-size:8px;font-weight:500;line-height:18px;white-space:nowrap}.selected-vehicle-card{position:absolute;z-index:3;top:193px;left:25px;width:380px;height:180px}.selected-vehicle-card :deep(.vehicle-card){margin:0}
+:global(html),:global(body),:global(#app){width:100%;min-width:0;height:100%;margin:0;overflow:hidden;background:#56657e}.page{position:fixed;top:0;left:0;width:430px;height:var(--mobile-height, 932px);overflow:hidden;background:#56657e;color:#fff;font-family:'Noto Sans TC',sans-serif;transform:scale(var(--mobile-scale, 1));transform-origin:top left}.header{position:absolute;z-index:3;top:0;left:0;width:430px;height:155px;overflow:hidden;border-radius:25px;background:#56657e;color:#fff}.back-button{position:absolute;top:53px;left:25px;width:28px;height:40px;display:flex;align-items:center;justify-content:center}.back-button image{width:16px;height:29px}.route-summary{position:absolute;top:56px;left:53px;width:324px;height:59px}.origin-icon{position:absolute;top:12px;left:69px;width:8px;height:14.517px}.origin-label{position:absolute;top:9px;left:94px;font-size:14px;font-weight:700;line-height:20px}.route-icon{position:absolute;top:4px;left:139px;width:30px;height:30px}.destination-icon{position:absolute;top:13px;left:186px;width:8px;height:11.978px}.destination-label{position:absolute;top:9px;left:214px;font-size:14px;font-weight:700;line-height:20px}.booking-time{position:absolute;top:39px;left:0;width:324px;text-align:center;font-size:14px;font-weight:100;line-height:20px;white-space:nowrap}.tabs{position:absolute;bottom:0;left:26px;width:378px;height:30px;display:flex;justify-content:space-between}.tab{position:relative;height:30px;font-size:14px;line-height:20px;white-space:nowrap}.tab.active{color:#1effaa;font-weight:700}.tab image{position:absolute;bottom:1px;left:0;width:32px;height:2px}.vehicle-tag{position:absolute;left:24px;top:165px;width:66px;height:18px;border-radius:25px;background:#d9d9d9;color:#38434a;text-align:center;font-size:8px;font-weight:500;line-height:18px;white-space:nowrap}.selected-vehicle-card{position:absolute;z-index:3;top:193px;left:25px;width:380px;height:180px}.selected-vehicle-card :deep(.vehicle-card){margin:0}
 .promo-card{position:absolute;z-index:2;top:306px;left:25px;width:380px;height:104px;overflow:hidden;border-radius:25px;background:#38434a;color:#fff}.promo-copy{position:absolute;left:27px;top:77px;font-size:12px;font-weight:500;white-space:nowrap}.promo-action{position:absolute;top:74px;right:25px;height:26px;padding:5px 10px;box-sizing:border-box;border:1px solid #1effaa;border-radius:10px;color:#1effaa;font-size:10px;line-height:14px}.promo-action.used-action{border-color:#f95c5c;color:#f95c5c}.extras{position:absolute;top:423px;left:26px;width:351px;height:360px}.extras-title{width:220px;height:30px;display:flex;align-items:center;gap:10px;color:#fff;font-size:14px;font-weight:300;white-space:nowrap}.extras-title image{width:30px;height:30px}.extra-row{position:relative;left:29px;width:322px;height:20px;display:flex;align-items:center;gap:10px;margin-top:18px;font-size:16px;font-weight:500;white-space:nowrap}.extras-title+.extra-row{margin-top:24px}.extra-row image{width:18px;height:18px}.extra-price{position:absolute;left:260px;color:#1effaa}.next-button{position:absolute;left:80px;top:826px;width:270px;height:48px;border-radius:25px;background:#1effaa;color:#38434a;text-align:center;line-height:48px;font-size:16px;font-weight:900}@media (max-width:599px){.page{top:0;left:0;height:var(--mobile-height,100dvh);border-radius:0;transform:scale(var(--mobile-scale,1));transform-origin:top left}}
 </style>

@@ -1,5 +1,5 @@
 import type { CrossBorderTrip } from '../../shared/types/trip'
-import { clearAuthentication, getAuthToken } from '../utils/auth'
+import { clearAuthentication, getAuthToken, type AuthUser } from '../utils/auth'
 
 let API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:3010'
 // #ifdef H5
@@ -71,6 +71,53 @@ export async function authenticateThirdParty(provider: 'wechat' | 'apple', provi
 export async function logoutClient(): Promise<void> {
   const response = await uni.request({ url: `${API_BASE_URL}/auth/logout`, method: 'POST', header: authHeaders() })
   if (response.statusCode >= 400) throw apiError(response, '登出失敗')
+}
+
+export type ClientProfile = AuthUser & { displayName: string | null; email: string | null; gender: string | null; region: string | null; birthday: string | null; cashBalance: number; fareBalance: number; membershipLevel?: string | null }
+
+export async function getClientProfile(): Promise<ClientProfile> {
+  const response = await uni.request({ url: `${API_BASE_URL}/client/me`, header: authHeaders() })
+  if (response.statusCode >= 400) throw apiError(response, '無法獲取個人資料')
+  return response.data as ClientProfile
+}
+
+export type ClientSecurity = {
+  countryCode: string
+  phoneNumber: string
+  email: string | null
+  linkedProviders: Array<'apple' | 'wechat'>
+}
+
+export async function getClientSecurity(): Promise<ClientSecurity> {
+  const response = await uni.request({ url: `${API_BASE_URL}/client/security`, header: authHeaders() })
+  if (response.statusCode >= 400) throw apiError(response, '無法獲取安全設定')
+  return response.data as ClientSecurity
+}
+
+export async function updateClientSecurity(security: { countryCode: string; phoneNumber: string; email: string; password?: string }): Promise<ClientSecurity> {
+  const response = await uni.request({ url: `${API_BASE_URL}/client/security`, method: 'PATCH' as UniApp.RequestOptions['method'], header: authHeaders(), data: security })
+  if (response.statusCode >= 400) throw apiError(response, '安全設定保存失敗')
+  return response.data as ClientSecurity
+}
+
+export async function linkClientProvider(provider: 'wechat' | 'apple', providerToken = `${provider}-dev-account`): Promise<ClientSecurity> {
+  const response = await uni.request({ url: `${API_BASE_URL}/client/security/providers`, method: 'POST', header: authHeaders(), data: { provider, providerToken } })
+  if (response.statusCode >= 400) throw apiError(response, '第三方帳戶連結失敗')
+  return response.data as ClientSecurity
+}
+
+export async function unlinkClientProvider(provider: 'wechat' | 'apple'): Promise<ClientSecurity> {
+  const response = await uni.request({ url: `${API_BASE_URL}/client/security/providers/${provider}`, method: 'DELETE', header: authHeaders() })
+  if (response.statusCode >= 400) throw apiError(response, '第三方帳戶解除連結失敗')
+  return response.data as ClientSecurity
+}
+
+export type ClientProfileUpdate = Pick<ClientProfile, 'name' | 'displayName' | 'email' | 'gender' | 'region' | 'birthday'> & { countryCode?: string; phoneNumber?: string }
+
+export async function updateClientProfile(profile: ClientProfileUpdate): Promise<ClientProfile> {
+  const response = await uni.request({ url: `${API_BASE_URL}/client/me`, method: 'PATCH' as UniApp.RequestOptions['method'], header: authHeaders(), data: profile })
+  if (response.statusCode >= 400) throw apiError(response, '個人資料保存失敗')
+  return response.data as ClientProfile
 }
 
 export async function getHealth(): Promise<{ status: string }> {
@@ -175,6 +222,7 @@ export type FareQuote = {
   id: string
   distanceMeters: number
   distanceKm: number
+  durationSeconds: number
   currency: string
   subtotal: number
   total: number
@@ -186,12 +234,17 @@ export type FareQuote = {
   lines: Array<{ type: string; sourceId: string | null; label: string; quantity: number; unitAmount: number; totalAmount: number; currency: string; order: number }>
 }
 
-export async function createFareQuote(input: { categoryId: string; vehicleId: string; distanceMeters: number; extraIds?: string[]; displayCurrency?: 'RMB' | 'HKD'; couponCode?: string; originRegion?: string; originCity?: string; destinationRegion?: string; destinationCity?: string; scheduledAt?: string }): Promise<FareQuote> {
+export async function createFareQuote(input: { categoryId: string; vehicleId: string; distanceMeters: number; durationSeconds: number; extraIds?: string[]; displayCurrency?: 'RMB' | 'HKD'; couponCode?: string; originRegion?: string; originCity?: string; destinationRegion?: string; destinationCity?: string; scheduledAt?: string }): Promise<FareQuote> {
   const response = await uni.request({ url: `${API_BASE_URL}/quotes`, method: 'POST', data: input })
   if (response.statusCode >= 400) throw new Error((response.data as { message?: string })?.message || '報價暫時無法取得')
   return response.data as FareQuote
 }
 
+export async function getFareQuote(id: string): Promise<FareQuote> {
+  const response = await uni.request({ url: `${API_BASE_URL}/quotes/${encodeURIComponent(id)}` })
+  if (response.statusCode >= 400) throw apiError(response, '報價資料無法載入')
+  return response.data as FareQuote
+}
 export async function consumeFareQuote(quoteId: string): Promise<void> {
   const response = await uni.request({ url: `${API_BASE_URL}/quotes/${encodeURIComponent(quoteId)}/consume`, method: 'POST' })
   if (response.statusCode >= 400) throw new Error((response.data as { message?: string })?.message || '優惠使用失敗')
@@ -343,14 +396,15 @@ export async function topUpWallet(params: {
   balanceType?: 'fare' | 'cash'
   channel?: string
   userId?: string
-}): Promise<{ message: string; data: WalletInfo }> {
+}): Promise<{ ok: boolean; user: WalletInfo; transaction: unknown }> {
   const response = await uni.request({
     url: `${API_BASE_URL}/wallet/top-up`,
     method: 'POST',
-    data: params
+    header: authHeaders(),
+    data: { amount: params.amount, method: params.channel }
   })
   if (response.statusCode >= 400) throw apiError(response, '增值失敗')
-  return response.data as { message: string; data: WalletInfo }
+  return response.data as { ok: boolean; user: WalletInfo; transaction: unknown }
 }
 
 export type TripPayRequest = {
@@ -383,6 +437,32 @@ export type TripPayResult = {
   }
 }
 
+export type CreatePendingTripRequest = {
+  quoteId: string
+  origin?: string
+  destination?: string
+  scheduledAt?: string
+  durationSeconds?: number
+}
+
+export type CreatePendingTripResult = {
+  ok: boolean
+  tripId: string
+  quoteId: string
+  status: 'PENDING'
+}
+
+export async function createPendingTrip(params: CreatePendingTripRequest): Promise<CreatePendingTripResult> {
+  const response = await uni.request({
+    url: `${API_BASE_URL}/payments/trip-pending`,
+    method: 'POST',
+    data: params,
+    header: authHeaders()
+  })
+  if (response.statusCode >= 400) throw apiError(response, '待付款訂單建立失敗')
+  return response.data as CreatePendingTripResult
+}
+
 export async function payTrip(params: TripPayRequest): Promise<TripPayResult> {
   const response = await uni.request({
     url: `${API_BASE_URL}/payments/trip-pay`,
@@ -411,12 +491,25 @@ export type ClientPayment = {
 
 export type ClientTrip = {
   id: string
+  quoteId: string | null
   origin: string
   destination: string
   region: string
   scheduledAt: string
-  status: 'PENDING' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED'
+  estimatedArrivalAt: string | null
+  quote?: { total: number; currency: string; lines: Array<{ type: string; label: string; totalAmount: number; currency: string }> } | null
+  passenger: { name: string; gender: string | null; countryCode: string; phoneNumber: string }
+  vehicle: { id: string; categoryId: string | null; categoryName: string | null; brand: string; model: string; series: string; seats: number; modelChoiceLabel: string } | null
   createdAt: string
+  status: 'PENDING' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED'
+  executionPhase: 'WAITING_DRIVER' | 'DRIVER_ASSIGNED' | 'IN_PROGRESS' | null
+  driver: { name: string; phone: string; vehiclePlate: string } | null
+  assignedAt: string | null
+  acceptedAt: string | null
+  arrivedAt: string | null
+  startedAt: string | null
+  completedAt: string | null
+  paymentExpiresAt: string | null
   payment: Omit<ClientPayment, 'tripId' | 'refundedAt' | 'trip'> & { refundedAt?: string | null } | null
 }
 

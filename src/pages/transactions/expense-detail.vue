@@ -27,6 +27,7 @@
 import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
+import { currencySymbol as getCurrencySymbol, normalizeCurrency } from '../../composables/useCurrency'
 import { closeCachedPage, openCachedPage } from '../../utils/navigation'
 import { listClientTransactions, type ClientPayment } from '../../services/api'
 
@@ -34,8 +35,9 @@ const { responsiveStyle } = useResponsiveCanvas()
 const payment = ref<ClientPayment | null>(null)
 const tripId = ref('')
 const expenseAmount = computed(() => payment.value?.total || 0)
-const currencyLabel = computed(() => payment.value?.currency?.includes('HKD') ? 'HKD' : 'RMB')
-const currencySymbol = computed(() => payment.value?.currency?.includes('HKD') ? '$' : '¥')
+const normalizedPaymentCurrency = computed(() => normalizeCurrency(payment.value?.currency) || 'RMB')
+const currencyLabel = computed(() => normalizedPaymentCurrency.value === 'HKD' ? 'HKD' : 'RMB')
+const currencySymbol = computed(() => getCurrencySymbol(normalizedPaymentCurrency.value))
 const paymentMethodLabel = computed(() => payment.value?.externalPaymentMethod === 'internal' ? '內部測試付款' : '錢包支付')
 const paymentMethodDescription = computed(() => payment.value?.externalPaymentMethod === 'internal' ? '內部測試交易' : '我的錢包餘額')
 const paymentTime = computed(() => payment.value ? new Date(payment.value.createdAt).toLocaleString('zh-HK') : '—')
