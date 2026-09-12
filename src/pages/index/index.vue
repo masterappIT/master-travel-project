@@ -1,5 +1,5 @@
 <template>
-  <view v-show="activePagePath === '/pages/index/index'" class="page">
+  <view v-show="activePagePath === '/pages/index/index'" class="page" :style="pageStyle">
     <view v-if="rideMode === 'cross-border'" class="page-content">
       <view class="canvas">
         <HomeMap v-if="activePagePath === '/pages/index/index'" map-id="home-main-map" :latitude="mapLatitude" :longitude="mapLongitude" :scale="mapScale" :markers="mapMarkers" :polyline="mapPolyline" :center-trigger="mapCenterTrigger" :booking-picker-open="bookingTimePicker" :pickup-label="origin" :destination-label="destination" :route-summary="routeSummary" />
@@ -121,9 +121,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useTripStore } from '../../stores/trip'
+// #ifdef MP-WEIXIN || MP-TOUTIAO
+import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
+// #endif
 import HomeHeader from '../../components/home/HomeHeader.vue'
 import HomeMap from '../../components/home/HomeMap.vue'
 import HomeTravelModeSwitch from '../../components/home/HomeTravelModeSwitch.vue'
@@ -137,6 +140,15 @@ import { activateEmbeddedPageHost, cachedPagePath, visitedPages, openCachedPage 
 import { planDrivingRoute, reverseGeocode, type Coordinate } from '../../services/api'
 import { findLocalRegion } from '../../utils/localRegions'
 
+// #ifdef MP-WEIXIN || MP-TOUTIAO
+const { responsiveStyle } = useResponsiveCanvas()
+// #endif
+const pageStyle = computed(() => {
+  // #ifdef MP-WEIXIN || MP-TOUTIAO
+  return responsiveStyle.value
+  // #endif
+  return {}
+})
 // #ifdef MP-WEIXIN || MP-TOUTIAO
 import TripsPage from '../trips/trips.vue'
 import MembershipPage from '../membership/membership.vue'
