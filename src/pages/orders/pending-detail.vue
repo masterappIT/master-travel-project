@@ -67,7 +67,7 @@ import { computed, ref, onMounted, onUnmounted, reactive, watch } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { useTripStore } from '../../stores/trip'
-import { closeCachedPage, cachedPageUrl, cachedPageStack, openCachedPage } from '../../utils/navigation'
+import { closeCachedPage, cachedPageUrl, openCachedPage, pagePath, getCachedPageSource, getCachedPagePreviousPath, getCachedPageOrderQuery, getCachedPageUrl } from '../../utils/navigation'
 import OrdersBackButton from '../../components/orders/OrdersBackButton.vue'
 import { formatOrderDetailAddress } from '../../utils/orderAddress'
 import { formatCurrencyAmount, normalizeCurrency } from '../../composables/useCurrency'
@@ -118,7 +118,8 @@ const expirePendingOrder = async () => {
     const cancelled = await cancelClientTrip(storedOrder.value.id)
     storedOrder.value = cancelled
     uni.showToast({ title: '付款時間已結束，訂單已取消', icon: 'none' })
-    setTimeout(() => uni.redirectTo({ url: `/pages/orders/cancelled-detail?id=${encodeURIComponent(cancelled.id)}` }), 500)
+    const returnToProfile = getCachedPageSource(currentOrderUrl.value) === 'profile'
+     openCachedPage(`/pages/orders/cancelled-detail?${returnToProfile ? 'from=profile&' : ''}id=${encodeURIComponent(cancelled.id)}`)
   } catch (error) {
     expiringPending = false
     uni.showToast({ title: error instanceof Error ? error.message : '訂單自動取消失敗', icon: 'none' })
@@ -164,7 +165,7 @@ const confirmPayment = async () => {
   try {
     await payTrip({ quoteId: storedOrder.value.quoteId, origin: storedOrder.value.origin, destination: storedOrder.value.destination, scheduledAt: storedOrder.value.scheduledAt, useFareBalance: walletSelections.fare, useCashBalance: walletSelections.cash, externalPaymentMethod: 'internal' })
     closePayment()
-    await loadOrder(cachedPageUrl.value)
+    await loadOrder(currentOrderUrl.value)
     uni.showToast({ title: '支付成功', icon: 'success' })
   } catch (error) { uni.showToast({ title: error instanceof Error ? error.message : '支付失敗', icon: 'none' }) } finally { paymentLoading.value = false }
 }
@@ -182,9 +183,14 @@ const orderNumber = computed(() => {
   const digits = (storedOrder.value?.id || '').replace(/\D/g, '')
   return digits ? `A${digits.slice(-8).padStart(8, '0')}` : '—'
 })
-const parseQueryParams = (url = '') => Object.fromEntries((url.split('?')[1] || '').split('&').filter(Boolean).map(pair => { const [key, ...value] = pair.split('='); return [decodeURIComponent(key), decodeURIComponent(value.join('=') || '')] }))
+const navigateOrderPage = (url: string) => {
+  // #ifdef MP-WEIXIN || MP-TOUTIAO
+  return openCachedPage(url)
+  // #endif
+  return uni.redirectTo({ url })
+}
 const loadOrder = async (url = '') => {
-  const params = parseQueryParams(url)
+  const params = getCachedPageOrderQuery(url)
   const id = params.id
   const fromProfile = params.from === 'profile'
   isTraveling.value = fromProfile
@@ -199,33 +205,45 @@ const loadOrder = async (url = '') => {
     paymentExpired.value = false
     if (storedOrder.value.status === 'PENDING') startPendingCountdown()
     else if (storedOrder.value.status === 'CONFIRMED' && fromProfile) startConfirmationCountdown()
-    else if (storedOrder.value.status === 'CONFIRMED' && !fromProfile) uni.redirectTo({ url: `/pages/orders/traveling-detail?id=${encodeURIComponent(storedOrder.value.id)}` })
-    else if (storedOrder.value.status === 'COMPLETED') uni.redirectTo({ url: `/pages/orders/detail?status=completed&id=${encodeURIComponent(storedOrder.value.id)}` })
-    else if (storedOrder.value.status === 'CANCELLED') uni.redirectTo({ url: `/pages/orders/cancelled-detail?id=${encodeURIComponent(storedOrder.value.id)}` })
+    else if (storedOrder.value.status === 'CONFIRMED' && !fromProfile) navigateOrderPage(`/pages/orders/traveling-detail?from=orders&id=${encodeURIComponent(storedOrder.value.id)}`)
+    else if (storedOrder.value.status === 'COMPLETED') navigateOrderPage(`/pages/orders/completed-detail?status=completed&from=${encodeURIComponent(params.from || 'orders')}&id=${encodeURIComponent(storedOrder.value.id)}`)
+    else if (storedOrder.value.status === 'CANCELLED') navigateOrderPage(`/pages/orders/cancelled-detail?from=${encodeURIComponent(params.from || 'orders')}&id=${encodeURIComponent(storedOrder.value.id)}`)
   } catch (error) {
     uni.showToast({ title: error instanceof Error ? error.message : '訂單載入失敗', icon: 'none' })
   }
 }
 const loadCurrentOrder = () => {
-  const candidates = [cachedPageUrl.value]
-  if (typeof window !== 'undefined' && window.location.hash) candidates.push(window.location.hash)
-  const source = candidates.find(candidate => parseQueryParams(candidate).id)
-  if (source) void loadOrder(source)
+  const source = typeof window !== 'undefined' && window.location.hash ? window.location.hash : currentOrderUrl.value
+  if (getCachedPageOrderQuery(source).id) void loadOrder(source)
 }
+
+const syncCachedOrder = (url = getCachedPageUrl()) => {
+  if (pagePath(url) !== '/pages/orders/pending-detail') return
+  const query = getCachedPageOrderQuery(url)
+  if (!query.id) return
+  void loadOrder(url)
+}
+
 onLoad((options) => {
-  const fromProfile = options?.from === 'profile'
-  const query = options ? `?id=${encodeURIComponent(options.id || '')}&from=${encodeURIComponent(options.from || '')}` : ''
-  currentOrderUrl.value = query
-  isTraveling.value = fromProfile
-  void loadOrder(query)
+  if (!options?.id) return
+  const query = Object.entries(options)
+    .filter(([key, value]) => key !== 'undefined' && value !== undefined && value !== null && value !== '')
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`)
+    .join('&')
+  const routeUrl = query ? `?${query}` : ''
+  currentOrderUrl.value = routeUrl
+  isTraveling.value = options.from === 'profile'
+  void loadOrder(routeUrl)
   isCompleted.value = false
 })
+// #ifdef H5
 onMounted(() => {
   isCompleted.value = false
   loadCurrentOrder()
 })
+// #endif
 // #ifdef MP-WEIXIN || MP-TOUTIAO
-watch(cachedPageUrl, loadCurrentOrder)
+watch(cachedPageUrl, (url) => syncCachedOrder(url), { immediate: true })
 // #endif
 onUnmounted(() => {
   if (paymentTimer) clearInterval(paymentTimer)
@@ -277,10 +295,6 @@ const currencyLabel = computed(() => formatCurrencyAmount(0, normalizeCurrency(s
 const baseFareTotal = computed(() => quoteLines.value.filter(item => item.type !== 'EXTRA' && item.type !== 'DISCOUNT').reduce((sum, item) => sum + Number(item.totalAmount || 0), 0))
 const surchargeItems = computed(() => quoteLines.value.filter(item => item.type === 'EXTRA'))
 const formatLineAmount = (line: { totalAmount: number; currency: string }) => formatCurrencyAmount(Math.abs(line.totalAmount), normalizeCurrency(line.currency) || normalizeCurrency(storedOrder.value?.quote?.currency) || 'RMB')
-const surchargeLabel = computed(() => {
-  const total = surchargeItems.value.reduce((sum, line) => sum + Math.abs(line.totalAmount), 0)
-  return total > 0 ? formatCurrencyAmount(total, normalizeCurrency(storedOrder.value?.quote?.currency) || 'RMB') : '—'
-})
 const discountLabel = computed(() => {
   const line = quoteLines.value.find(item => item.type === 'DISCOUNT' && item.totalAmount < 0)
   return line ? `-${formatCurrencyAmount(Math.abs(line.totalAmount), normalizeCurrency(line.currency) || normalizeCurrency(storedOrder.value?.quote?.currency) || 'RMB')}` : '—'
@@ -291,44 +305,12 @@ const detailDateLabel = computed(() => {
   const date = value ? new Date(value) : null
   return date && !Number.isNaN(date.valueOf()) ? `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')}` : '—'
 })
-const getCurrentPageSource = () => {
-  const candidates: string[] = []
-  if (cachedPageUrl.value) candidates.push(cachedPageUrl.value)
-  if (typeof window !== 'undefined' && window.location.hash) candidates.push(window.location.hash)
-
-  for (const candidate of candidates) {
-    const params = parseQueryParams(candidate)
-    const source = params.from || params.returnTo || ''
-    if (source) return source
-  }
-
-  return ''
-}
-
-const getSourceFromStack = () => {
-  const currentIndex = cachedPageStack.value.findIndex((entry) => (entry || '').split('?')[0] === '/pages/orders/pending-detail')
-  if (currentIndex < 0) return ''
-
-  const stackEntries = cachedPageStack.value.slice(0, currentIndex + 1)
-  for (let index = stackEntries.length - 1; index >= 0; index -= 1) {
-    const params = parseQueryParams(stackEntries[index])
-    if (params.from === 'profile' || params.returnTo === 'profile') return 'profile'
-    if (params.from === 'orders' || params.returnTo === 'orders') return 'orders'
-  }
-  return ''
-}
-
-const getPreviousStackPath = () => {
-  const currentIndex = cachedPageStack.value.findIndex((entry) => (entry || '').split('?')[0] === '/pages/orders/pending-detail')
-  if (currentIndex <= 0) return ''
-  return (cachedPageStack.value[currentIndex - 1] || '').split('?')[0]
-}
-
 const goBack = () => {
-  const explicitSource = getCurrentPageSource() || getSourceFromStack()
+  const explicitSource = getCachedPageSource()
   if (explicitSource === 'profile') return closeCachedPage('/pages/trips/trips')
 
-  const previousStackPath = getPreviousStackPath()
+  const previousStackPath = getCachedPagePreviousPath('/pages/orders/pending-detail')
+  if (previousStackPath === '/pages/index/index') return closeCachedPage('/pages/index/index')
   if (previousStackPath === '/pages/trips/trips') return closeCachedPage('/pages/trips/trips')
   return closeCachedPage('/pages/orders/orders')
 }
@@ -336,12 +318,12 @@ const cancelOrder = async () => {
   if (!storedOrder.value) return uni.showToast({ title: '找不到訂單', icon: 'none' })
   try {
     await cancelClientTrip(storedOrder.value.id)
-    openCachedPage(`/pages/orders/cancelled-detail?id=${encodeURIComponent(storedOrder.value.id)}`)
+    openCachedPage(`/pages/orders/cancelled-detail?from=${encodeURIComponent(getCachedPageSource() || 'orders')}&id=${encodeURIComponent(storedOrder.value.id)}`)
   } catch (error) {
     uni.showToast({ title: error instanceof Error ? error.message : '訂單取消失敗', icon: 'none' })
   }
 }
-const showPaymentRecords = () => openCachedPage(`/pages/transactions/expense-detail?tripId=${encodeURIComponent(storedOrder.value?.id || '')}`)
+const showPaymentRecords = () => openCachedPage(`/pages/transactions/expense-detail?from=${encodeURIComponent(getCachedPageSource() || 'orders')}&tripId=${encodeURIComponent(storedOrder.value?.id || '')}`)
 </script>
 <style scoped>
 :global(html),:global(body),:global(#app){width:100%;height:100%;margin:0;overflow:hidden}.page{position:fixed;top:0;left:0;width:430px;height:var(--mobile-height, 932px);overflow:hidden;background:#f0f2f5;color:#38434a;font-family:'Noto Sans TC',sans-serif;transform:scale(var(--mobile-scale, 1));transform-origin:top left}.header{position:absolute;top:0;left:0;width:430px;height:110px;border-radius:25px;background:#fff}.number{position:absolute;top:58px;left:122px;font-size:18px;font-weight:500}.assist{position:absolute;top:130px;right:33px;display:flex;align-items:center;gap:10px;color:#285cfc;font-size:16px}.assist image{width:25px;height:25px}.status{position:absolute;top:130px;left:33px;display:flex;align-items:center;gap:5px;color:#38434a;font-size:16px;font-weight:700}.status image{width:25px;height:25px}.pending-card{height:585px}.locations{position:absolute;top:20px;left:33px;font-size:14px}.locations view,.passenger view{display:flex;align-items:center;height:30px;gap:20px}.locations image{width:18px;height:18px}.times{position:absolute;top:80px;left:33px;display:flex;flex-direction:column;gap:5px;font-size:14px;font-weight:300}.passenger-title{position:absolute;top:135px;left:33px;font-size:14px}.passenger{position:absolute;top:165px;left:33px;font-size:14px}.passenger view{gap:10px}.passenger image{width:20px;height:20px}.passenger view:last-child image{width:15px;height:15px;margin-left:2px}.payment{position:absolute;top:20px;left:206px;width:194px;height:105px;font-size:14px;font-weight:300}.payment>text:first-child{position:absolute;top:0;right:-8px;line-height:20px;white-space:nowrap}.amount{position:absolute;top:0;right:0;color:#285cfc;font-weight:700;white-space:nowrap}.payment.pending .amount{top:70px}.payment.pending .pay-tag{top:30px}.payment.completed .amount{top:0}.payment.cancelled .amount{top:0;color:#38434a}.payment.cancelled .cancelled-tag{top:30px}.pay-tag{position:absolute;top:30px;right:0;padding:5px 10px;border:1px solid #f95c5c;border-radius:10px;color:#f95c5c;font-size:14px;font-weight:700;line-height:20px;white-space:nowrap}.paid-tag,.cancelled-tag{position:absolute;top:30px;right:0;padding:5px 10px;border-radius:10px;white-space:nowrap}.paid-tag{border:1px solid #285cfc;color:#285cfc;font-weight:700}.cancelled-tag{border:1px solid #38434a;color:#38434a;font-weight:400}.completed-payment{position:absolute;top:311px;left:30px;width:370px;height:126px}.payment-record{position:relative;display:flex;align-items:flex-start;gap:10px;width:370px;min-height:40px;padding-right:95px;box-sizing:border-box;font-size:14px;line-height:20px}.payment-record image{flex:none;width:25px;height:25px}.wallet-record{margin-top:0;align-items:center}.wallet-record image{width:25px;height:25px}.wechat-record{margin-top:15px}.record-amount{position:absolute;top:0;right:0;color:#38434a;font-size:16px;line-height:25px;white-space:nowrap}.record-link{display:flex;align-items:center;justify-content:space-between;width:370px;margin-top:20px;font-size:14px;font-weight:300}.record-link text{font-size:26px;line-height:15px}.detail{position:absolute;top:225px;left:0;width:430px;height:325px;padding:0 25px;box-sizing:border-box}.detail-title{font-size:18px;font-weight:500}.detail-date{float:right;margin-top:3px;font-size:14px}.line{height:1px;margin-top:25px;background:#d9d9d9}.row{display:flex;justify-content:space-between;margin-top:20px;font-size:18px;font-weight:300}.total{margin-top:48px;text-align:right;font-size:16px;font-weight:500}.cancel{display:block;width:max-content;margin:35px 0 0 auto;padding:5px 10px;border:1px solid #38434a;border-radius:10px;background:#fff;color:#38434a;font-size:18px;font-weight:700;line-height:25px}.pending-card.long-addresses .locations view{height:auto;min-height:44px;align-items:flex-start}.pending-card.long-addresses .locations view image{margin-top:2px}.pending-card.long-addresses .locations text{line-height:22px;white-space:pre-line}.pending-card.long-addresses .times{top:102px}.pending-card.long-addresses .passenger-title{top:157px}.pending-card.long-addresses .passenger{top:187px}.pending-card.long-addresses .detail{top:247px}.traveling-title{position:absolute;top:58px;left:50%;transform:translateX(-50%);font-size:18px;font-weight:500;line-height:27px}.traveling-order-number{position:absolute;top:110px;left:0;width:430px;height:56px;padding-left:38px;box-sizing:border-box;display:flex;align-items:center;background:#edf0f2;color:#38434a;font-size:18px;font-weight:500;line-height:27px}.traveling-map{display:none}.traveling-card{position:absolute;z-index:1;top:166px;left:25px;width:380px;height:479px;border-radius:25px;background:#fff}.traveling-status-row{position:absolute;top:0;left:0;width:100%;height:23px}.traveling-waiting{position:absolute;top:10px;left:15px;width:73px;height:23px;display:flex;align-items:center;color:#285cfc;font-size:12px;font-weight:700;line-height:normal}.waiting-mark{position:relative;width:20px;height:20px;margin-right:5px}.waiting-mark image:first-child{position:absolute;inset:0;width:20px;height:20px}.waiting-dot{position:absolute;top:7px;left:7px;width:6px;height:6px}.traveling-summary{position:absolute;top:20px;left:118px;width:144px;height:144px;text-align:center}.traveling-summary>image:first-child{position:absolute;top:0;left:57px;width:30px;height:30px}.traveling-summary>text:nth-child(2){position:absolute;top:40px;left:0;width:144px;height:22px;color:#285cfc;font-size:18px;font-style:normal;font-weight:700;line-height:22px;white-space:nowrap}.traveling-confirm{position:absolute;top:72px;left:23px;width:97px;height:20px;display:flex;align-items:center;gap:5px;color:#38434a;font-size:12px;font-weight:700;font-style:normal;line-height:20px;white-space:nowrap}.traveling-confirm image{width:20px;height:20px}.confirmation-countdown{position:absolute;top:112px;left:0;width:144px;color:#38434a;font-size:18px;font-weight:500;line-height:24px;text-align:center;white-space:nowrap}.traveling-info{position:absolute;top:161px;left:0;width:380px;height:325px;overflow:hidden;border-radius:25px}.traveling-tesla{position:absolute;top:21px;left:30px;width:25px;height:25px}.traveling-pickup{position:absolute;top:24px;left:60px;font-size:14px;font-weight:500;white-space:nowrap}.traveling-locations{position:absolute;top:54px;left:36px;width:302px;height:50px;font-size:14px}.traveling-locations view{position:absolute;left:0;width:302px;height:20px}.traveling-locations view:first-child{top:0}.traveling-locations view:last-child{top:30px}.traveling-locations.origin-long view:last-child{top:54px}.traveling-locations image{position:absolute;top:6px;left:0;width:18px;height:18px}.traveling-locations text{position:absolute;top:0;left:38px;width:302px;display:block;line-height:30px;white-space:pre-line;word-break:keep-all}.traveling-locations .long-location{height:auto;min-height:44px;align-items:flex-start}.traveling-locations .long-location image{top:2px}.traveling-locations .long-location text{line-height:22px;white-space:pre-line;word-break:keep-all}.traveling-vehicle{position:absolute;top:140px;left:70px;color:#000;font-size:14px;font-weight:300;line-height:normal;white-space:nowrap}.traveling-passenger{position:absolute;top:173.02px;left:33px;width:127px;height:80px;font-size:14px}.traveling-passenger>text{position:absolute;top:0;left:0;line-height:normal;white-space:nowrap}.traveling-passenger>view{position:absolute;height:20px}.traveling-passenger>view:first-of-type{top:30px;left:0;width:117px}.traveling-passenger>view:last-child{top:55px;left:5px;width:122px}.traveling-passenger>view image,.traveling-passenger>view text{position:absolute}.traveling-passenger>view:first-of-type image{top:0;left:0;width:20px;height:20px}.traveling-passenger>view:first-of-type text{top:0;left:30px;line-height:normal;white-space:nowrap}.traveling-passenger>view:last-child image{top:3px;left:0;width:15px;height:15px}.traveling-passenger>view:last-child text{top:0;left:25px;line-height:normal;white-space:nowrap}.traveling-divider{position:absolute;top:162px;left:5px;width:370px;height:1px;overflow:hidden}.traveling-divider image{position:absolute;top:0;left:0;width:370px;height:1px;transform:none;transform-origin:center}.traveling-divider.second{top:263px}.traveling-record{position:absolute;top:284px;left:26.185px;width:327.63px;height:20px;display:flex;align-items:center;justify-content:space-between;font-size:14px;font-weight:350;line-height:normal}.traveling-record image{flex:none;width:9px;height:15px}.payment-mask{position:absolute;inset:0;z-index:50;background:rgba(56,67,74,.9)}.payment-sheet{position:absolute;left:0;bottom:0;width:430px;height:643px;border-radius:18px 18px 0 0;background:#fff;color:#38434a;overflow:hidden}.payment-close{position:absolute;top:17px;left:389px;width:26px;height:26px}.payment-title{position:absolute;top:17px;left:calc(50% - 36px);font-size:18px;font-weight:500;white-space:nowrap}.payment-countdown{position:absolute;top:72px;left:149px;color:#000;font-size:14px;font-weight:300;white-space:nowrap}.payment-amount{position:absolute;top:98px;left:0;width:430px;display:flex;align-items:baseline;justify-content:center;color:#000;line-height:normal}.payment-currency{font-size:16px;font-weight:500}.payment-number{margin-left:6px;font-size:28px;font-weight:500}.payment-method-label{position:absolute;top:162px;left:17px;color:#000;font-size:12px;font-weight:300;white-space:nowrap}.payment-options{position:absolute;top:189px;left:14.5px;width:401px;height:142px;overflow:hidden;border-radius:25px}.payment-option{position:relative;width:100%;height:71px;display:flex;align-items:flex-start;box-sizing:border-box;padding:14px 49px;font-size:14px;white-space:nowrap}.payment-option>image:first-child{position:absolute;top:10px;left:9px;width:25px;height:25px}.payment-option-copy{display:flex;flex-direction:column;gap:3px}.payment-balance{color:#f95c5c;font-weight:700}.payment-radio{position:absolute;top:17px;right:31px;width:15px!important;height:15px!important}.payment-options:after{content:'';position:absolute;left:49px;right:33px;top:70px;height:1px;background:#d9d9d9;box-shadow:0 70px #d9d9d9}.payment-confirm{position:absolute;top:545px;left:80px;width:270px;height:48px;border-radius:25px;background:#1effaa;color:#38434a;text-align:center;line-height:48px;font-size:16px;font-weight:900;white-space:nowrap}

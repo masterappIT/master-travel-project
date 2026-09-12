@@ -3,7 +3,15 @@ import { computed, ref } from 'vue'
 const HOME_PATH = '/pages/index/index'
 const ORDER_RETURN_TARGET_KEY = 'order-detail-return-target'
 let embeddedHostActive = false
-const pagePath = (url: string) => url.split('?')[0]
+export const pagePath = (url: string) => url.split('?')[0]
+
+const parseQuery = (url = ''): Record<string, string> => {
+  const query = url.includes('?') ? url.slice(url.indexOf('?') + 1).split('#')[0] : ''
+  return Object.fromEntries(query.split('&').filter(Boolean).map((pair) => {
+    const [key, ...value] = pair.split('=')
+    return [decodeURIComponent(key), decodeURIComponent(value.join('=') || '')]
+  }))
+}
 
 export type OrderReturnTarget = 'profile' | 'orders'
 
@@ -21,6 +29,17 @@ export const cachedPagePath = computed(() => pagePath(cachedPageUrl.value))
 export const cachedPageStack = ref<string[]>([HOME_PATH])
 const cachedVisitedPages = ref<string[]>([HOME_PATH])
 export const visitedPages = computed(() => new Set(cachedVisitedPages.value))
+
+export const getCachedPageUrl = () => cachedPageUrl.value
+export const getCachedPageOrderQuery = (url = cachedPageUrl.value) => parseQuery(url)
+export const getCachedPageSource = (url = cachedPageUrl.value) => {
+  const query = parseQuery(url)
+  return query.from || query.returnTo || ''
+}
+export const getCachedPagePreviousPath = (targetPath: string) => {
+  const index = cachedPageStack.value.findIndex((entry) => pagePath(entry) === targetPath)
+  return index > 0 ? pagePath(cachedPageStack.value[index - 1]) : ''
+}
 
 export const activateEmbeddedPageHost = () => {
   embeddedHostActive = true

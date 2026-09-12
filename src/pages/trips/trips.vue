@@ -88,14 +88,11 @@ const handleOrderAction = async (name: string) => {
     setOrderReturnTarget('profile')
     try {
       const trips = await listClientTrips()
-      const upcomingTrips = trips
-        .filter(trip => trip.status === 'CONFIRMED')
-        .sort((a, b) => new Date(a.scheduledAt).valueOf() - new Date(b.scheduledAt).valueOf())
-      const latestTrip = upcomingTrips[0]
-      if (!latestTrip) return uni.showToast({ title: '目前沒有待出行訂單', icon: 'none' })
-      return openCachedPage(`/pages/orders/pending-detail?from=profile&id=${encodeURIComponent(latestTrip.id)}`)
+      const traveling = trips.find((trip) => trip.status === 'CONFIRMED' && trip.executionPhase !== 'IN_PROGRESS')
+      if (!traveling) return uni.showToast({ title: '目前沒有待出行訂單', icon: 'none' })
+      return openCachedPage(`/pages/orders/pending-detail?from=profile&id=${encodeURIComponent(traveling.id)}`)
     } catch (error) {
-      return uni.showToast({ title: error instanceof Error ? error.message : '無法載入待出行訂單', icon: 'none' })
+      return uni.showToast({ title: error instanceof Error ? error.message : '訂單載入失敗', icon: 'none' })
     }
   }
   comingSoon(name)
