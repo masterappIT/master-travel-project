@@ -12,7 +12,7 @@
         <view class="traveling-content">
           <view :class="['traveling-card', { 'long-addresses': hasLongAddress }]">
             <view class="card-top"><view class="locations"><view :class="{ 'long-location': isLongAddress(originLabel) }"><image src="/static/orders/origin.svg" mode="aspectFit" /><text>{{ formatAddressLabel(originLabel) }}</text></view><view :class="{ 'long-location': isLongAddress(destinationLabel) }"><image src="/static/orders/destination.svg" mode="aspectFit" /><text>{{ formatAddressLabel(destinationLabel) }}</text></view></view><view class="payment completed"><view class="paid-tag">已付款</view></view></view>
-            <view class="times"><text>預約時間 ：{{ bookingTime }}</text><text>到達時間 ：{{ arrivalTime }}</text></view>
+            <view class="times"><text>預約時間 ：{{ bookingTime }}</text><text>預計到達時間 ：{{ arrivalTime }}</text></view>
             <view class="passenger-title">乘客及聯絡資料：</view>
             <view class="passenger"><view><image src="/static/orders/passenger.svg" mode="aspectFit" /><text>{{ passengerLabel }}</text></view><view><image src="/static/orders/phone.svg" mode="aspectFit" /><text>{{ passengerPhoneLabel }}</text></view>            </view>
             <view class="detail">

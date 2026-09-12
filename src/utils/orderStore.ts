@@ -10,6 +10,7 @@ export interface StoredTripOrder {
   origin: string
   destination: string
   scheduledAt: string
+  paymentExpiresAt?: string | null
   vehicleTitle: string
   seats: number
   total: number

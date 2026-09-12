@@ -17,7 +17,7 @@
           <text v-if="order.status === '待確認'" class="countdown">交易時間剩餘：{{ order.countdown }}</text>
           <view v-if="order.status === '待確認'" class="payment">待付款</view>
           <text v-else-if="order.status === '待出行' || order.status === '已完成'" class="price">{{ formatAmount(order.total, order.currency) }}</text>
-          <view v-else-if="order.payment" :class="['payment', { refunded: order.payment === '已退款' }]">{{ order.payment }}</view>
+          <view v-else-if="order.status === '取消' && order.payment" :class="['payment', { refunded: order.payment === '已退款', 'refund-pending': order.payment === '退款申請中' }]">{{ order.payment }}</view>
           <view class="route"><text>{{ order.origin || '香港' }}</text><image src="/static/orders/route-arrow.svg" mode="aspectFit" /><text>{{ order.destination || '深圳' }}</text><text :class="['order-kind', { urgent: order.kind === '加急訂單' }]">（{{ order.kind }}）</text></view>
           <text class="pickup">預約時間 ：{{ formatDateTime(order.scheduledAt) }}</text>
           <text class="arrival">預計到達時間 ：{{ formatDateTime(order.estimatedArrivalAt || order.scheduledAt) }}</text>
@@ -38,10 +38,11 @@ import { formatOrderCardAddress } from '../../utils/orderAddress'
 import OrdersBackButton from '../../components/orders/OrdersBackButton.vue'
 type Tab = 'all' | 'completed' | 'cancelled'
 type OrderStatus = '已完成' | '待確認' | '待出行' | '取消' | '進行中'
-interface Order { id: string; status: OrderStatus; kind: '加急訂單' | '預約訂單'; countdown?: string; payment?: '已付款' | '已退款'; origin: string; destination: string; scheduledAt: string; estimatedArrivalAt?: string | null; paymentExpiresAt?: string | null; createdAt: string; vehicleTitle: string; seats: number; total: number; currency: string }
+interface Order { id: string; status: OrderStatus; kind: '加急訂單' | '預約訂單'; countdown?: string; payment?: '已付款' | '已退款' | '退款申請中'; origin: string; destination: string; scheduledAt: string; estimatedArrivalAt?: string | null; paymentExpiresAt?: string | null; createdAt: string; vehicleTitle: string; seats: number; total: number; currency: string }
 const { responsiveStyle } = useResponsiveCanvas()
 const orders = ref<Order[]>([])
 let loadingOrders: Promise<void> | null = null
+
 let countdownTimer: ReturnType<typeof setInterval> | null = null
 const addressLabel = (value: string | undefined, fallback: string) => formatOrderCardAddress(value, fallback)
 const formatCountdown = (expiresAt?: string | null) => {
@@ -70,6 +71,7 @@ const storedOrderToView = (order: StoredTripOrder): Order => ({
   destination: addressLabel(order.destination, '深圳'),
   scheduledAt: order.scheduledAt,
   estimatedArrivalAt: order.scheduledAt,
+  paymentExpiresAt: order.paymentExpiresAt,
   createdAt: order.createdAt,
   vehicleTitle: order.vehicleTitle,
   seats: order.seats,
@@ -86,7 +88,8 @@ const loadOrders = async () => {
       status: statusText(trip),
       kind: '預約訂單',
       countdown: trip.status === 'PENDING' ? formatCountdown(trip.paymentExpiresAt) : undefined,
-      payment: trip.payment?.status === 'REFUNDED' ? '已退款' : trip.payment ? '已付款' : undefined,
+      paymentExpiresAt: trip.paymentExpiresAt,
+      payment: trip.payment?.status === 'REFUNDED' || trip.payment?.refundedAt ? '已退款' : trip.status === 'CANCELLED' && trip.payment ? '退款申請中' : trip.payment ? '已付款' : undefined,
       origin: addressLabel(trip.origin, '香港'),
       destination: addressLabel(trip.destination, '深圳'),
       scheduledAt: trip.scheduledAt,
@@ -95,7 +98,7 @@ const loadOrders = async () => {
       vehicleTitle: trip.vehicle?.categoryName || '跨境商務車',
       seats: trip.vehicle?.seats || 0,
       total: trip.quote?.total || trip.payment?.total || 0,
-      currency: trip.quote?.currency || trip.payment?.currency || 'RMB¥'    }))
+    currency: trip.quote?.currency || trip.payment?.currency || 'RMB¥'    }))
     startCountdownRefresh()
     } catch (error) {
       orders.value = listStoredOrders().map(storedOrderToView)
@@ -140,5 +143,5 @@ const openOrder = (order: Order) => {
 const goBack = () => openCachedPage('/pages/trips/trips')
 </script>
 <style scoped>
-:global(html),:global(body),:global(#app){width:100%;min-width:0;height:100%;margin:0;overflow:hidden;overscroll-behavior:none}.page{position:fixed;top:0;left:0;width:430px;height:var(--mobile-height, 932px);overflow:hidden;border-radius:35px;background:#f0f2f5;color:#38434a;font-family:'Noto Sans TC',sans-serif;transform:scale(var(--mobile-scale, 1));transform-origin:top left}.header{position:absolute;z-index:2;top:0;left:0;width:430px;height:155px;overflow:hidden;border-radius:25px;background:#fff}.title{position:absolute;top:56px;left:50%;transform:translateX(-50%);font-size:18px;font-weight:500;line-height:27px;white-space:nowrap}.tabs{position:absolute;top:123px;left:49px;width:332px;height:32px;display:flex;justify-content:space-between}.tab{position:relative;height:32px;color:#38434a;font-size:16px;font-weight:700;line-height:23px}.tab.active{color:#285cfc}.tab image{position:absolute;bottom:0;left:50%;width:32px;height:2px;transform:translateX(-50%)}.content{position:absolute;top:155px;left:0;width:430px;height:calc(100% - 155px)}.date{display:block;height:23px;margin:6px 0 10px 17px;font-size:16px;line-height:23px}.orders-list{display:flex;flex-direction:column;gap:10px}.order-card{position:relative;width:430px;height:240px;flex:none;overflow:hidden;background:#fff;font-size:14px}.status{position:absolute;top:21px;left:30px;height:25px;display:flex;align-items:center;gap:5px;color:#285cfc;font-size:16px;font-weight:700}.status image{width:25px;height:25px}.status .in-progress{color:#1effaa}.status .pending-status,.status .cancelled-status{color:#38434a}.status .traveling-status{color:#285cfc}.countdown{position:absolute;top:24px;right:108px;font-weight:300;line-height:20px;white-space:nowrap}.payment{position:absolute;top:19px;right:30px;padding:5px 10px;border:1px solid #f95c5c;border-radius:10px;box-sizing:border-box;color:#f95c5c;font-weight:700;line-height:20px}.payment.refunded{border-color:#38434a;color:#38434a;font-weight:400}.price{position:absolute;top:23px;right:30px;color:#285cfc;font-weight:700;line-height:20px}.route{position:absolute;top:57px;left:72px;height:25px;display:flex;align-items:center;gap:15px;line-height:20px}.route image{width:25px;height:25px}.order-kind{margin-left:1px}.order-kind.urgent{color:#f95c5c}.pickup,.arrival,.vehicle{position:absolute;left:70px;line-height:20px;white-space:nowrap}.pickup{top:89px}.arrival{top:114px}.divider{position:absolute;top:162px;left:30px;width:370px;height:1px;background:#d9d9d9}.vehicle{top:170px;color:#000;font-weight:300}.bottom-space{height:12px}@media (max-width:599px){.page{top:0;left:0;height:var(--mobile-height,100dvh);border-radius:0;transform:scale(var(--mobile-scale,1));transform-origin:top left}}
+:global(html),:global(body),:global(#app){width:100%;min-width:0;height:100%;margin:0;overflow:hidden;overscroll-behavior:none}.page{position:fixed;top:0;left:0;width:430px;height:var(--mobile-height, 932px);overflow:hidden;border-radius:35px;background:#f0f2f5;color:#38434a;font-family:'Noto Sans TC',sans-serif;transform:scale(var(--mobile-scale, 1));transform-origin:top left}.header{position:absolute;z-index:2;top:0;left:0;width:430px;height:155px;overflow:hidden;border-radius:25px;background:#fff}.title{position:absolute;top:56px;left:50%;transform:translateX(-50%);font-size:18px;font-weight:500;line-height:27px;white-space:nowrap}.tabs{position:absolute;top:123px;left:49px;width:332px;height:32px;display:flex;justify-content:space-between}.tab{position:relative;height:32px;color:#38434a;font-size:16px;font-weight:700;line-height:23px}.tab.active{color:#285cfc}.tab image{position:absolute;bottom:0;left:50%;width:32px;height:2px;transform:translateX(-50%)}.content{position:absolute;top:155px;left:0;width:430px;height:calc(100% - 155px)}.date{display:block;height:23px;margin:6px 0 10px 17px;font-size:16px;line-height:23px}.orders-list{display:flex;flex-direction:column;gap:10px}.order-card{position:relative;width:430px;height:240px;flex:none;overflow:hidden;background:#fff;font-size:14px}.status{position:absolute;top:21px;left:30px;height:25px;display:flex;align-items:center;gap:5px;color:#285cfc;font-size:16px;font-weight:700}.status image{width:25px;height:25px}.status .in-progress{color:#1effaa}.status .pending-status,.status .cancelled-status{color:#38434a}.status .traveling-status{color:#285cfc}.countdown{position:absolute;top:24px;right:108px;font-weight:300;line-height:20px;white-space:nowrap}.payment{position:absolute;top:19px;right:30px;padding:5px 10px;border:1px solid #f95c5c;border-radius:10px;box-sizing:border-box;color:#f95c5c;font-weight:700;line-height:20px}.payment.refunded,.payment.refund-pending{border-color:#f95c5c;color:#f95c5c;font-weight:700}.price{position:absolute;top:23px;right:30px;color:#285cfc;font-weight:700;line-height:20px}.route{position:absolute;top:57px;left:72px;height:25px;display:flex;align-items:center;gap:15px;line-height:20px}.route image{width:25px;height:25px}.order-kind{margin-left:1px}.order-kind.urgent{color:#f95c5c}.pickup,.arrival,.vehicle{position:absolute;left:70px;line-height:20px;white-space:nowrap}.pickup{top:89px}.arrival{top:114px}.divider{position:absolute;top:162px;left:30px;width:370px;height:1px;background:#d9d9d9}.vehicle{top:170px;color:#000;font-weight:300}.bottom-space{height:12px}@media (max-width:599px){.page{top:0;left:0;height:var(--mobile-height,100dvh);border-radius:0;transform:scale(var(--mobile-scale,1));transform-origin:top left}}
 </style>

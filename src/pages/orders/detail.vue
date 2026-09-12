@@ -12,7 +12,7 @@
       <scroll-view class="traveling-scroll" scroll-y>
       <view class="card traveling-card">
         <view class="locations"><view><image src="/static/orders/origin.svg" mode="aspectFit" /><text>{{ originLabel }}</text></view><view><image src="/static/orders/destination.svg" mode="aspectFit" /><text>{{ destinationLabel }}</text></view></view>
-        <view class="times"><text>預約時間 ：{{ bookingTime }}</text><text>到達時間 ：{{ arrivalTime }}</text></view>
+        <view class="times"><text>預約時間 ：{{ bookingTime }}</text><text>預計到達時間 ：{{ arrivalTime }}</text></view>
         <view class="passenger-title">乘客及聯絡資料：</view><view class="passenger"><view><image src="/static/orders/passenger.svg" mode="aspectFit" /><text>{{ passengerLabel }}</text></view><view><image src="/static/orders/phone.svg" mode="aspectFit" /><text>{{ passengerPhoneLabel }}</text></view></view>
         <view class="payment completed">
           <text class="amount">{{ amountLabel }}</text>
@@ -29,7 +29,7 @@
       </view>
       <view :class="['card', { 'pending-card': !isCompleted, 'completed-card': isCompleted }]">
       <view class="locations"><view><image src="/static/orders/origin.svg" mode="aspectFit" /><text>{{ originLabel }}</text></view><view><image src="/static/orders/destination.svg" mode="aspectFit" /><text>{{ destinationLabel }}</text></view></view>
-      <view class="times"><text>預約時間 ：{{ bookingTime }}</text><text>到達時間 ：{{ arrivalTime }}</text></view>
+      <view class="times"><text>預約時間 ：{{ bookingTime }}</text><text>預計到達時間 ：{{ arrivalTime }}</text></view>
       <view class="passenger-title">乘客及聯絡資料：</view><view class="passenger"><view><image src="/static/orders/passenger.svg" mode="aspectFit" /><text>{{ passengerLabel }}</text></view><view><image src="/static/orders/phone.svg" mode="aspectFit" /><text>{{ passengerPhoneLabel }}</text></view></view>
       <view :class="['payment', { completed: isCompleted, pending: !isCompleted }]">
         <text v-if="!isCompleted">交易時間剩餘：05:00</text>
@@ -282,8 +282,8 @@ const showPaymentRecords = () => openCachedPage(`/pages/transactions/expense-det
   height: auto !important;
   border-radius: 25px;
   background: #fff;
-  min-height: 540px;
-  padding: 20px 30px 35px;
+  min-height: 0;
+  padding: 20px 30px 0;
   box-sizing: border-box;
 }
 .card .locations { position: static; width: 270px; }
@@ -295,34 +295,11 @@ const showPaymentRecords = () => openCachedPage(`/pages/transactions/expense-det
 .card .passenger-title { position: static; margin-top: 25px; }
 .card .passenger { position: static; margin-top: 8px; }
 .card .payment { top: 20px; left: auto; right: 0; }
-.card .detail { position: static; width: auto; height: auto; min-height: 325px; margin: 25px 0 0; padding: 0; }
+.card .detail { position: static; width: auto; height: auto; min-height: 0; margin: 25px 0 0; padding: 0 0 32px; }
 .card .detail .row { gap: 15px; }
 .card .detail .row text:last-child { white-space: nowrap; }
 .card .detail .completed-payment { position: static; width: 100%; height: auto; margin-top: 25px; }
 .card .detail .payment-record, .card .detail .payment-divider, .card .detail .record-link { width: 100%; }
 .card .detail .total { position: static; width: auto; margin-top: 25px; }
-/* Standard traveling-card geometry for the regular status detail card. */
-.standard-detail-card { position: relative; top: 175px; left: 0; width: 430px; min-height: 700px; height: auto !important; padding: 20px 30px 35px; box-sizing: border-box; border-radius: 25px; }
-.standard-detail-card .locations { position: static; width: 270px; }
-.standard-detail-card .locations view { display: flex; align-items: flex-start; gap: 20px; min-height: 30px; height: auto; }
-.standard-detail-card .locations image { flex: none; margin-top: 6px; }
-.standard-detail-card .locations text { flex: 1; min-width: 0; line-height: 30px; white-space: pre-line; overflow-wrap: anywhere; word-break: break-all; }
-.standard-detail-card .times { position: static; margin-top: 20px; }
-.standard-detail-card .passenger-title { position: static; margin-top: 25px; }
-.standard-detail-card .passenger { position: static; margin-top: 8px; }
-.standard-detail-card .detail { position: static; width: auto; height: auto; min-height: 325px; margin: 25px 0 0; padding: 0; }
-.standard-detail-card .detail .row { gap: 15px; }
-.standard-detail-card .detail .row text:last-child { white-space: nowrap; }
-.standard-detail-card .detail .completed-payment { position: static; width: 100%; height: auto; margin-top: 25px; }
-.standard-detail-card .detail .payment-record, .standard-detail-card .detail .payment-divider, .standard-detail-card .detail .record-link { width: 100%; }
-.standard-detail-card .detail .total { position: static; width: auto; margin-top: 25px; } .standard-detail-card .payment {
-  top: 20px;
-  left: auto;
-  right: 30px;
-  width: 164px;
-  min-height: 70px;
-  height: auto;
-}
-.standard-detail-card .payment .paid-tag { position: static; display: block; width: max-content; margin-left: auto; margin-top: 0; }
 @media (max-width:599px) { .page { height: var(--mobile-height,100dvh); overflow-y: auto; } }
 </style>
