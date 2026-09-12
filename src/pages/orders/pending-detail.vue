@@ -63,7 +63,7 @@
   </view>
 </template>
 <script setup lang="ts">
-import { computed, ref, onMounted, onUnmounted, reactive } from 'vue'
+import { computed, ref, onMounted, onUnmounted, reactive, watch } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { useTripStore } from '../../stores/trip'
@@ -71,7 +71,7 @@ import { closeCachedPage, cachedPageUrl, cachedPageStack, openCachedPage } from 
 import OrdersBackButton from '../../components/orders/OrdersBackButton.vue'
 import { formatOrderDetailAddress } from '../../utils/orderAddress'
 import { formatCurrencyAmount, normalizeCurrency } from '../../composables/useCurrency'
-import { getWalletMe } from '../../services/api'
+import { cancelClientTrip, getClientTrip, getFareQuote, getWalletMe, payTrip, type ClientTrip, type FareQuote } from '../../services/api'
 import { readWallet } from '../../utils/wallet'
 const isCompleted = ref(false)
 const paymentOpen = ref(false)
@@ -172,6 +172,12 @@ import { cancelClientTrip, getClientTrip, getFareQuote, getWalletMe, payTrip, ty
 const tripStore = useTripStore()
 const { responsiveStyle } = useResponsiveCanvas()
 const storedOrder = ref<ClientTrip | undefined>()
+const isTraveling = ref(false)
+const currentOrderUrl = ref('')
+const resetTimers = () => {
+  if (paymentTimer) { clearInterval(paymentTimer); paymentTimer = null }
+  if (confirmationTimer) { clearInterval(confirmationTimer); confirmationTimer = null }
+}
 const orderNumber = computed(() => {
   const digits = (storedOrder.value?.id || '').replace(/\D/g, '')
   return digits ? `A${digits.slice(-8).padStart(8, '0')}` : '—'
@@ -181,7 +187,13 @@ const loadOrder = async (url = '') => {
   const params = parseQueryParams(url)
   const id = params.id
   const fromProfile = params.from === 'profile'
-  if (!id) return
+  isTraveling.value = fromProfile
+  currentOrderUrl.value = url
+  resetTimers()
+  if (!id) {
+    storedOrder.value = undefined
+    return
+  }
   try {
     storedOrder.value = await getClientTrip(id)
     paymentExpired.value = false
@@ -194,17 +206,27 @@ const loadOrder = async (url = '') => {
     uni.showToast({ title: error instanceof Error ? error.message : '訂單載入失敗', icon: 'none' })
   }
 }
-const isTraveling = ref(false)
+const loadCurrentOrder = () => {
+  const candidates = [cachedPageUrl.value]
+  if (typeof window !== 'undefined' && window.location.hash) candidates.push(window.location.hash)
+  const source = candidates.find(candidate => parseQueryParams(candidate).id)
+  if (source) void loadOrder(source)
+}
 onLoad((options) => {
   const fromProfile = options?.from === 'profile'
+  const query = options ? `?id=${encodeURIComponent(options.id || '')}&from=${encodeURIComponent(options.from || '')}` : ''
+  currentOrderUrl.value = query
   isTraveling.value = fromProfile
-  const query = options ? `?id=${options.id || ''}&from=${fromProfile ? 'profile' : ''}` : ''
   void loadOrder(query)
   isCompleted.value = false
 })
 onMounted(() => {
   isCompleted.value = false
+  loadCurrentOrder()
 })
+// #ifdef MP-WEIXIN || MP-TOUTIAO
+watch(cachedPageUrl, loadCurrentOrder)
+// #endif
 onUnmounted(() => {
   if (paymentTimer) clearInterval(paymentTimer)
   if (confirmationTimer) clearInterval(confirmationTimer)
