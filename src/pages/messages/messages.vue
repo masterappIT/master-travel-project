@@ -12,11 +12,11 @@
     <view v-if="activeTab === 'all'" class="message-content">
       <text class="date-title">2024年3月15日</text>
       <view class="message-list">
-        <view v-for="message in sortedMessages" :key="message.type" :class="['message-card', { unread: isUnread(message.type) }]" @tap="openMessage(message.type)">
-          <image v-if="isUnread(message.type)" class="unread-dot" src="/static/messages/unread.svg" mode="aspectFit" />
-          <image class="message-icon" :src="message.icon" mode="aspectFit" />
-          <view class="message-copy"><text class="message-title">{{ message.title }}</text><text class="message-desc">{{ message.description }}</text></view>
-          <text class="message-date">2024年1月1日</text>
+        <view v-for="message in sortedMessages" :key="message.id" :class="['message-card', { unread: isUnread(message) }]" @tap="openMessage(message)">
+          <image v-if="isUnread(message)" class="unread-dot" src="/static/messages/unread.svg" mode="aspectFit" />
+          <image class="message-icon" :src="message.audience.includes('DRIVER') ? '/static/messages/order.svg' : '/static/messages/top-up.svg'" mode="aspectFit" />
+          <view class="message-copy"><text class="message-title">{{ message.title }}</text><text class="message-desc">{{ message.content }}</text></view>
+          <text class="message-date">{{ new Date(message.createdAt).toLocaleDateString() }}</text>
           <image class="chevron" src="/static/messages/chevron.svg" mode="aspectFit" />
         </view>
       </view>
@@ -35,6 +35,7 @@ import { closeCachedPage, openCachedPage } from '../../utils/navigation'
 
 const { responsiveStyle } = useResponsiveCanvas()
 import { computed, ref } from 'vue'
+import { listNotifications, markNotificationRead, type Notification } from '../../services/api'
 import { onShow } from '@dcloudio/uni-app'
 const activeTab = ref<'all' | 'important'>('all')
 const hkd = (amount: number) => formatCurrencyAmount(amount, 'HKD')
@@ -44,22 +45,25 @@ const messages = [
   { type: 'withdrawal', title: '您的餘額提現已到帳', description: `您的錢包餘額 ${hkd(0)}`, icon: '/static/messages/wallet.svg' },
   { type: 'refund', title: '您的訂單退款已到帳', description: '行程：香港 - 深圳機場（訂單編號：A82678634）', icon: '/static/messages/wallet.svg' }
 ] as const
-const readTypes = ref<string[]>([])
-const isUnread = (type: string) => !readTypes.value.includes(type)
-const sortedMessages = computed(() => [...messages].sort((a, b) => Number(isUnread(b.type)) - Number(isUnread(a.type))))
+const notifications = ref<Notification[]>([])
+const isUnread = (message: Notification) => !message.readAt
+const sortedMessages = computed(() => [...notifications.value].sort((a, b) => Number(isUnread(b)) - Number(isUnread(a))))
 
-onShow(() => {
-  const saved = uni.getStorageSync('read-message-types')
-  readTypes.value = Array.isArray(saved) ? saved : []
+onShow(async () => {
+  try {
+    notifications.value = (await listNotifications()).data
+  } catch {
+    notifications.value = []
+  }
 })
 
-const openMessage = (type: string) => {
-  if (isUnread(type)) {
-    readTypes.value = [...readTypes.value, type]
-    uni.setStorageSync('read-message-types', readTypes.value)
+const openMessage = async (message: Notification) => {
+  if (isUnread(message)) {
+    await markNotificationRead(message.id).catch(() => undefined)
+    message.readAt = new Date().toISOString()
   }
-  uni.setStorageSync('selected-message-type', type)
-  openCachedPage(`/pages/messages/detail?type=${type}`)
+  uni.setStorageSync('selected-notification', message)
+  openCachedPage(`/pages/messages/detail?id=${encodeURIComponent(message.id)}`)
 }
 const goBack = () => closeCachedPage('/pages/trips/trips')
 </script>

@@ -1,0 +1,58 @@
+name: driver_web
+description: EC Travel driver web UI
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+  flutter: '>=3.16.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_svg: ^2.0.10+1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/car.svg
+    - assets/circle-x.svg
+    - assets/apple.svg
+    - assets/chevron-down.svg
+    - assets/camera.svg
+    - assets/route-origin.svg
+    - assets/route-destination.svg
+    - assets/route-driver.svg
+    - assets/icon-home.svg
+    - assets/icon-person.svg
+    - assets/home-bell.svg
+    - assets/home-status-dot.svg
+    - assets/home-toggle.svg
+    - assets/home-divider.svg
+    - assets/home-star.svg
+    - assets/home-origin-dot.svg
+    - assets/home-destination-dot.svg
+    - assets/home-order-divider.svg
+    - assets/home-user.svg
+    - assets/home-nav-home.svg
+    - assets/home-nav-person.svg
+    - assets/profile-bell.svg
+    - assets/profile-user.svg
+    - assets/profile-chevron.svg
+    - assets/profile-divider.svg
+    - assets/profile-vehicle.svg
+    - assets/profile-clipboard.svg
+    - assets/profile-wechat.svg
+    - assets/profile-fps.svg
+    - assets/profile-toggle.svg
+    - assets/profile-headphones.svg
+    - assets/order-detail-origin.svg
+    - assets/order-detail-destination.svg
+    - assets/order-detail-car.svg
+    - assets/order-detail-check.svg
+    - assets/order-detail-car-mpv.svg

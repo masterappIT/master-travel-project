@@ -42,10 +42,20 @@ export const getCachedPagePreviousPath = (targetPath: string) => {
 }
 
 export const activateEmbeddedPageHost = () => {
+  if (embeddedHostActive) return
+
   embeddedHostActive = true
-  cachedPageUrl.value = HOME_PATH
-  cachedPageStack.value = [HOME_PATH]
-  cachedVisitedPages.value = [HOME_PATH]
+  if (cachedPageStack.value.length === 0) {
+    cachedPageStack.value = [HOME_PATH]
+  }
+  if (!cachedPageStack.value.some((entry) => pagePath(entry) === HOME_PATH)) {
+    cachedPageStack.value = [HOME_PATH, ...cachedPageStack.value]
+  }
+  cachedPageUrl.value = cachedPageStack.value[cachedPageStack.value.length - 1] || HOME_PATH
+  cachedVisitedPages.value = Array.from(new Set([
+    HOME_PATH,
+    ...cachedPageStack.value.map((entry) => pagePath(entry)),
+  ]))
 }
 
 export const deactivateEmbeddedPageHost = () => {

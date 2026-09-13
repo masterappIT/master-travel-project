@@ -1,0 +1,9 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="notification-bell">
+<path id="Rectangle" d="M16 4.90039C20.4735 4.90039 24.0996 8.52649 24.0996 13V18C24.0996 18.6075 23.6075 19.0996 23 19.0996H9C8.39249 19.0996 7.90039 18.6075 7.90039 18V13C7.90039 8.52649 11.5265 4.90039 16 4.90039Z" stroke="#333340" stroke-width="1.8"/>
+<circle id="Ellipse" cx="16" cy="3" r="2" fill="#333340"/>
+<path id="Ellipse_2" d="M16 21.75C17.3765 21.75 18.25 22.6557 18.25 23.5C18.25 24.3443 17.3765 25.25 16 25.25C14.6235 25.25 13.75 24.3443 13.75 23.5C13.75 22.6557 14.6235 21.75 16 21.75Z" stroke="#333340" stroke-width="1.5"/>
+<rect id="Rectangle_2" x="4" y="20" width="24" height="1.8" rx="0.9" fill="#333340"/>
+<circle id="notification-dot" cx="26" cy="6" r="3.25" fill="#ED4236" stroke="white" stroke-width="1.5"/>
+</g>
+</svg>

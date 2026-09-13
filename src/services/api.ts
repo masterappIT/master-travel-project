@@ -21,6 +21,26 @@ const authHeaders = () => {
   return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
+export type Notification = {
+  id: string
+  title: string
+  content: string
+  audience: string
+  readAt: string | null
+  createdAt: string
+}
+
+export async function listNotifications(): Promise<{ data: Notification[]; unread: number }> {
+  const response = await uni.request({ url: `${API_BASE_URL}/notifications/me`, header: authHeaders() })
+  if (response.statusCode >= 400) throw apiError(response, '無法載入消息')
+  return response.data as { data: Notification[]; unread: number }
+}
+
+export async function markNotificationRead(id: string): Promise<void> {
+  const response = await uni.request({ url: `${API_BASE_URL}/notifications/${encodeURIComponent(id)}/read`, method: 'POST', header: authHeaders() })
+  if (response.statusCode >= 400) throw apiError(response, '消息已讀失敗')
+}
+
 export type PhoneAuthChallenge = {
   challengeId: string
   expiresAt: string

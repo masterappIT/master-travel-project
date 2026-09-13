@@ -7,8 +7,25 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Notification {
+  id        String    @id @default(cuid())
+  title     String
+  content   String    @db.Text
+  audience  String
+  userId    String?
+  driverId  String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  driver    Driver?   @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt])
+  @@index([driverId, readAt, createdAt])
+  @@index([audience, createdAt])
+}
+
 model User {
-  id                 String              @id @default(cuid())
+  id                 String              @id
   countryCode        String              @default("+852")
   phoneNumber        String
   name               String?
@@ -30,18 +47,19 @@ model User {
   payments           Payment[]
   authIdentities     AuthIdentity[]
   clientSessions     ClientSession[]
+  notifications      Notification[]
 
   @@unique([countryCode, phoneNumber])
 }
 
 model ClientSession {
-  id        String   @id @default(cuid())
-  jti       String   @unique
+  id        String    @id @default(cuid())
+  jti       String    @unique
   userId    String
   expiresAt DateTime
   revokedAt DateTime?
-  createdAt DateTime @default(now())
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, revokedAt])
   @@index([expiresAt])
@@ -94,16 +112,17 @@ enum WalletTransactionType {
 }
 
 model Trip {
-  id                    String     @id @default(cuid())
+  id                    String              @id @default(cuid())
   userId                String
-  quoteId               String?    @unique
+  quoteId               String?             @unique
   origin                String
   destination           String
   region                Region
   scheduledAt           DateTime
   estimatedArrivalAt    DateTime?
-  status                TripStatus @default(PENDING)
+  status                TripStatus          @default(PENDING)
   executionPhase        TripExecutionPhase?
+  driverId              String?
   driverName            String?
   driverPhone           String?
   vehiclePlate          String?
@@ -112,38 +131,41 @@ model Trip {
   arrivedAt             DateTime?
   startedAt             DateTime?
   completedAt           DateTime?
-  fareBalancePaid       Float      @default(0)
-  cashBalancePaid       Float      @default(0)
-  externalPaid          Float      @default(0)
+  fareBalancePaid       Float               @default(0)
+  cashBalancePaid       Float               @default(0)
+  externalPaid          Float               @default(0)
   externalPaymentMethod String?
-  createdAt             DateTime   @default(now())
-  updatedAt             DateTime   @updatedAt
-  user                  User       @relation(fields: [userId], references: [id])
-  payment     Payment?
-  quote                 FareQuote? @relation(fields: [quoteId], references: [id], onDelete: SetNull)
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  user                  User                @relation(fields: [userId], references: [id])
+  driver                Driver?             @relation(fields: [driverId], references: [id], onDelete: SetNull)
+  orderUrls             TripOrderUrl[]
+  payment               Payment?
+  quote                 FareQuote?          @relation(fields: [quoteId], references: [id], onDelete: SetNull)
 
   @@index([userId, status])
   @@index([scheduledAt])
+  @@index([driverId, status])
 }
 
 model Payment {
-  id                    String         @id @default(cuid())
-  tripId                String         @unique
-  quoteId               String         @unique
+  id                    String              @id @default(cuid())
+  tripId                String              @unique
+  quoteId               String              @unique
   userId                String
   total                 Float
   currency              String
-  fareAmount            Float          @default(0)
-  cashAmount            Float          @default(0)
-  externalAmount        Float          @default(0)
+  fareAmount            Float               @default(0)
+  cashAmount            Float               @default(0)
+  externalAmount        Float               @default(0)
   externalPaymentMethod String?
   externalReference     String?
-  status                PaymentStatus  @default(PAID)
+  status                PaymentStatus       @default(PAID)
   refundedAt            DateTime?
-  createdAt             DateTime       @default(now())
-  updatedAt             DateTime       @updatedAt
-  trip                  Trip           @relation(fields: [tripId], references: [id], onDelete: Restrict)
-  user                  User           @relation(fields: [userId], references: [id], onDelete: Restrict)
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  trip                  Trip                @relation(fields: [tripId], references: [id], onDelete: Restrict)
+  user                  User                @relation(fields: [userId], references: [id], onDelete: Restrict)
   walletTransactions    WalletTransaction[]
 
   @@index([userId, createdAt])
@@ -183,6 +205,7 @@ model AppSetting {
   exchangeRate          Float
   adminLogo             String?  @db.Text
   severeWeatherEnabled  Boolean  @default(false)
+  driverRaceEnabled     Boolean  @default(false)
   fareBalancePayEnabled Boolean  @default(true)
   cashBalancePayEnabled Boolean  @default(true)
   wechatPayEnabled      Boolean  @default(true)
@@ -232,6 +255,95 @@ model VehicleCategory {
   updatedAt         DateTime                 @updatedAt
 
   @@index([enabled, order])
+}
+
+model Driver {
+  id                String               @id
+  driverType        String               @default("內部司機")
+  name              String
+  affiliation       String
+  plateType         String
+  hkPlate           String
+  mainlandPlate     String?
+  phoneCountryCode  String               @default("+852")
+  phone             String
+  vehicleCategory   String
+  vehicleColor      String
+  vehiclePhotos     Json
+  reviewStatus      String               @default("待審核")
+  settlementMethod  String?
+  settlementAccount String?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  trips             Trip[]
+  authIdentities    DriverAuthIdentity[]
+  otpChallenges     DriverOtpChallenge[]
+  sessions          DriverSession[]
+  notifications     Notification[]
+  orderUrls         TripOrderUrl[]
+
+  @@index([reviewStatus])
+  @@index([phone])
+  @@index([vehicleCategory])
+}
+
+model TripOrderUrl {
+  id         String    @id @default(cuid())
+  tokenHash  String    @unique
+  tripId     String
+  driverId   String?
+  validFrom  DateTime
+  validUntil DateTime
+  usedAt     DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  trip       Trip      @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  driver     Driver?   @relation(fields: [driverId], references: [id], onDelete: SetNull)
+
+  @@index([tripId])
+  @@index([driverId, validFrom, validUntil])
+}
+
+model DriverAuthIdentity {
+  id         String   @id @default(cuid())
+  provider   String
+  providerId String
+  driverId   String
+  driver     Driver   @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([provider, providerId])
+  @@unique([provider, driverId])
+  @@index([driverId])
+}
+
+model DriverOtpChallenge {
+  id          String    @id @default(cuid())
+  driverId    String?
+  countryCode String
+  phone       String
+  codeHash    String
+  expiresAt   DateTime
+  consumedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  driver      Driver?   @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
+  @@index([phone, expiresAt])
+  @@index([driverId, expiresAt])
+}
+
+model DriverSession {
+  id        String    @id @default(cuid())
+  jti       String    @unique
+  driverId  String
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+  driver    Driver    @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
+  @@index([driverId, revokedAt])
+  @@index([expiresAt])
 }
 
 model RouteMinimumFare {
@@ -299,21 +411,21 @@ model DistancePricingTier {
 }
 
 model VehicleExtra {
-  id                     String   @id
-  name                   String
-  label                  String
-  price                  Float
-  currency               String
-  enabled                Boolean  @default(true)
-  order                  Int
-  requiredForImmediate   Boolean  @default(false)
-  requiredWithinMinutes  Int?
-  triggerType            String   @default("NONE")
-  triggerEnabled         Boolean  @default(true)
-  nightStartTime         String?
-  nightEndTime           String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                    String   @id
+  name                  String
+  label                 String
+  price                 Float
+  currency              String
+  enabled               Boolean  @default(true)
+  order                 Int
+  requiredForImmediate  Boolean  @default(false)
+  requiredWithinMinutes Int?
+  triggerType           String   @default("NONE")
+  triggerEnabled        Boolean  @default(true)
+  nightStartTime        String?
+  nightEndTime          String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
   @@index([enabled, order])
 }

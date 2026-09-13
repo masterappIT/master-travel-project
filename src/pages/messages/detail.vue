@@ -32,11 +32,10 @@
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 
 import { closeCachedPage } from '../../utils/navigation'
-
-const { responsiveStyle } = useResponsiveCanvas()
 import { computed, ref } from 'vue'
 import { formatCurrencyAmount } from '../../composables/useCurrency'
 import { onLoad } from '@dcloudio/uni-app'
+import type { Notification } from '../../services/api'
 
 type MessageType = 'order' | 'top-up' | 'withdrawal' | 'refund'
 
@@ -99,9 +98,20 @@ const details = {
 
 const requestedType = uni.getStorageSync('selected-message-type') as MessageType
 const type = ref<MessageType>(requestedType && requestedType in details ? requestedType : 'order')
-const detail = computed(() => details[type.value])
+const { responsiveStyle } = useResponsiveCanvas()
+
+const notification = ref<Notification | null>(null)
+const detail = computed(() => notification.value ? {
+  title: notification.value.title,
+  status: notification.value.readAt ? '已讀' : '新消息',
+  icon: '/static/messages/top-up.svg',
+  rows: [{ label: '受眾', value: notification.value.audience.includes('DRIVER') ? '司機端' : '用戶端' }, { label: '發送時間', value: new Date(notification.value.createdAt).toLocaleString() }],
+  notice: notification.value.content
+} : details[type.value])
 
 onLoad((options) => {
+  const stored = uni.getStorageSync('selected-notification')
+  if (stored?.id) notification.value = stored as Notification
   const requestedType = options?.type as MessageType
   if (requestedType && requestedType in details) type.value = requestedType
 })

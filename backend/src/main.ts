@@ -2,7 +2,7 @@ import { NestFactory } from '@nestjs/core'
 import { Body, CallHandler, Controller, Delete, ExecutionContext, ForbiddenException, Get, HttpException, HttpStatus, Injectable, Module, NestInterceptor, Param, Patch, Post, Req, UnauthorizedException } from '@nestjs/common'
 import { NestExpressApplication } from '@nestjs/platform-express'
 import { APP_INTERCEPTOR } from '@nestjs/core'
-import { createHmac, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto'
+import { createHash, createHmac, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto'
 import { Observable, tap } from 'rxjs'
 import { loadEnvFile } from 'node:process'
 import { Prisma, PrismaClient, PromotionKind, DiscountType, PromotionStackingMode } from '@prisma/client'
@@ -22,6 +22,7 @@ type MasterBoxConversation = { id: string; messages?: MasterBoxMessage[] }
 type MasterBoxMessage = { id: string; direction: string; content: unknown; createdAt: string }
 type SupportSession = { conversationId: string; riderId: string; exp: number }
 type ClientSession = { sub: string; exp: number; jti: string }
+type DriverSessionToken = { sub: string; exp: number; jti: string }
 type PhoneChallenge = { countryCode: string; phoneNumber: string; code: string; exp: number; attempts: number }
 
 type User = { id: string; countryCode: string; phoneNumber: string; name: string | null; cashBalance: number; fareBalance: number; createdAt: string; lastLoginAt: string | null; lastLogoutAt: string | null }
@@ -52,6 +53,7 @@ const appSettingsDefaults = {
   exchangeRate: 0.92,
   adminLogo: null as string | null,
   severeWeatherEnabled: false,
+  driverRaceEnabled: false,
   fareBalancePayEnabled: true,
   cashBalancePayEnabled: true,
   wechatPayEnabled: true,
@@ -138,9 +140,15 @@ const membershipPlans: MembershipPlan[] = [
   { id: 'black', level: 'BLACK GOLD', name: '黑金會員', monthly: 128, yearly: 1288, recommended: true, benefits: ['每月 4 張乘車券', '專屬行程管家', '免費等候 20 分鐘'], enabled: true, order: 2 },
   { id: 'diamond', level: 'DIAMOND', name: '鑽石會員', monthly: 228, yearly: 2288, recommended: false, benefits: ['專屬車型升級', '機場快速接送', '全年專屬客服'], enabled: true, order: 3 },
 ]
+const generateUserId = async () => {
+  while (true) {
+    const id = String(randomBytes(4).readUInt32BE(0) % 1_000_000).padStart(6, '0')
+    if (!(await prisma.user.findUnique({ where: { id }, select: { id: true } }))) return id
+  }
+}
 const users: User[] = [
-  { id: 'usr_demo_001', countryCode: '+852', phoneNumber: '55550101', name: 'Demo Rider', cashBalance: 120, fareBalance: 80, createdAt: '2026-08-22T09:30:00.000Z', lastLoginAt: null, lastLogoutAt: null },
-  { id: 'usr_demo_002', countryCode: '+86', phoneNumber: '13800000202', name: 'Alex Chen', cashBalance: 0, fareBalance: 200, createdAt: '2026-08-27T14:10:00.000Z', lastLoginAt: null, lastLogoutAt: null },
+  { id: '483271', countryCode: '+852', phoneNumber: '55550101', name: 'Demo Rider', cashBalance: 120, fareBalance: 80, createdAt: '2026-08-22T09:30:00.000Z', lastLoginAt: null, lastLogoutAt: null },
+  { id: '719604', countryCode: '+86', phoneNumber: '13800000202', name: 'Alex Chen', cashBalance: 0, fareBalance: 200, createdAt: '2026-08-27T14:10:00.000Z', lastLoginAt: null, lastLogoutAt: null },
 ]
 const phoneChallenges = new Map<string, PhoneChallenge>()
 const phoneChallengeRequests = new Map<string, { count: number; windowStartedAt: number }>()
@@ -149,11 +157,11 @@ const PHONE_CODE_MAX_ATTEMPTS = 5
 const PHONE_CODE_REQUEST_WINDOW_MS = 15 * 60 * 1000
 const PHONE_CODE_MAX_REQUESTS = 3
 const trips: Trip[] = [
-  { id: 'trip_demo_001', userId: 'usr_demo_001', origin: 'Hong Kong Airport', destination: 'Shenzhen Bay Port', region: 'GUANGDONG', scheduledAt: '2026-09-02T10:00:00.000Z', status: 'CONFIRMED', createdAt: '2026-09-01T08:00:00.000Z' },
-  { id: 'trip_demo_002', userId: 'usr_demo_002', origin: 'Macau Ferry Terminal', destination: 'Zhuhai Gongbei', region: 'MACAU', scheduledAt: '2026-09-03T03:30:00.000Z', status: 'PENDING', createdAt: '2026-09-01T11:00:00.000Z' },
+  { id: 'trip_demo_001', userId: '483271', origin: 'Hong Kong Airport', destination: 'Shenzhen Bay Port', region: 'GUANGDONG', scheduledAt: '2026-09-02T10:00:00.000Z', status: 'CONFIRMED', createdAt: '2026-09-01T08:00:00.000Z' },
+  { id: 'trip_demo_002', userId: '719604', origin: 'Macau Ferry Terminal', destination: 'Zhuhai Gongbei', region: 'MACAU', scheduledAt: '2026-09-03T03:30:00.000Z', status: 'PENDING', createdAt: '2026-09-01T11:00:00.000Z' },
 ]
 const charterOrders: CharterOrder[] = [
-  { id: 'charter_demo_001', userId: 'usr_demo_001', originRegion: '香港', origin: '離島區 · 香港國際機場', destinationRegion: '澳門', destination: '嘉模堂區 · 偉龍馬路', scheduledAt: '2026-09-05T01:00:00.000Z', durationHours: 4, status: 'PENDING', createdAt: '2026-09-03T02:00:00.000Z' },
+  { id: 'charter_demo_001', userId: '483271', originRegion: '香港', origin: '離島區 · 香港國際機場', destinationRegion: '澳門', destination: '嘉模堂區 · 偉龍馬路', scheduledAt: '2026-09-05T01:00:00.000Z', durationHours: 4, status: 'PENDING', createdAt: '2026-09-03T02:00:00.000Z' },
 ]
 const vehicleCategoryDefaults: VehicleCategory[] = [
   { id: 'standard-mpv', name: '普通跨境商務車', tabLabel: '普通MPV', order: 1, enabled: true },
@@ -227,7 +235,7 @@ async function ensurePricingDefaults() {
     }
     for (const user of users) {
       await tx.user.upsert({
-        where: { id: user.id },
+        where: { countryCode_phoneNumber: { countryCode: user.countryCode, phoneNumber: user.phoneNumber } },
         create: { ...user, createdAt: new Date(user.createdAt) },
         update: {}
       })
@@ -243,6 +251,7 @@ function appSettingsResponse(settings: typeof appSettingsDefaults) {
     exchangeRate: settings.exchangeRate,
     adminLogo: settings.adminLogo,
     severeWeatherEnabled: settings.severeWeatherEnabled,
+    driverRaceEnabled: settings.driverRaceEnabled ?? false,
     fareBalancePayEnabled: settings.fareBalancePayEnabled ?? true,
     cashBalancePayEnabled: settings.cashBalancePayEnabled ?? true,
     wechatPayEnabled: settings.wechatPayEnabled ?? true,
@@ -356,6 +365,43 @@ function clientSecret() {
 function clientTokenFor(session: ClientSession) {
   const payload = Buffer.from(JSON.stringify(session)).toString('base64url')
   return `${payload}.${createHmac('sha256', clientSecret()).update(payload).digest('base64url')}`
+}
+function driverSecret() {
+  const value = process.env.DRIVER_SESSION_SECRET || process.env.ADMIN_SESSION_SECRET
+  if (value) return value
+  if (process.env.NODE_ENV !== 'production') return 'development-driver-secret'
+  throw new HttpException('Driver session secret is not configured', HttpStatus.SERVICE_UNAVAILABLE)
+}
+function driverTokenFor(session: DriverSessionToken) {
+  const payload = Buffer.from(JSON.stringify(session)).toString('base64url')
+  return `${payload}.${createHmac('sha256', driverSecret()).update(payload).digest('base64url')}`
+}
+function orderUrlTokenHash(token: string) { return createHash('sha256').update(token).digest('hex') }
+function orderUrlValue(token: string) { return `${process.env.DRIVER_ORDER_URL_BASE || '/driver/order'}?token=${encodeURIComponent(token)}` }
+async function driverAuthResponse(driver: any) {
+  const exp = Date.now() + 30 * 24 * 60 * 60 * 1000
+  const session: DriverSessionToken = { sub: driver.id, exp, jti: randomBytes(16).toString('hex') }
+  await prisma.driverSession.create({ data: { jti: session.jti, driverId: driver.id, expiresAt: new Date(exp) } })
+  return { token: driverTokenFor(session), expiresAt: new Date(exp).toISOString(), driver: driverResponse(driver) }
+}
+async function driverSessionFrom(req: RequestLike): Promise<DriverSessionToken> {
+  const value = req.headers.authorization?.replace(/^Bearer\s+/i, '')
+  const [payload, signature] = value?.split('.') || []
+  if (!payload || !signature) throw new UnauthorizedException('Valid driver session required')
+  const expected = createHmac('sha256', driverSecret()).update(payload).digest('base64url')
+  try {
+    if (!timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) throw new Error('signature mismatch')
+    const session = JSON.parse(Buffer.from(payload, 'base64url').toString()) as DriverSessionToken
+    if (!session.sub || !session.jti || session.exp <= Date.now()) throw new Error('invalid session')
+    const stored = await prisma.driverSession.findUnique({ where: { jti: session.jti }, include: { driver: true } })
+    if (!stored || stored.revokedAt || stored.expiresAt.getTime() <= Date.now() || stored.driverId !== session.sub) throw new Error('revoked session')
+    return session
+  } catch {
+    throw new UnauthorizedException('Valid driver session required')
+  }
+}
+function requireReviewedDriver(driver: { reviewStatus: string }) {
+  if (driver.reviewStatus !== '已完成審核' && driver.reviewStatus !== '已審核') throw new ForbiddenException('Driver review is required before direct order acceptance')
 }
 async function clientAuthResponse(user: ManagedUser) {
   const exp = Date.now() + 30 * 24 * 60 * 60 * 1000
@@ -553,6 +599,36 @@ function quoteResponse(quote: PersistedQuote) {
     lines: quote.lines.map(line => ({ type: line.type, sourceId: line.sourceId, label: line.label, quantity: line.quantity, unitAmount: line.unitAmount, totalAmount: line.totalAmount, currency: line.currency, order: line.order }))
   }
 }
+function driverResponse(driver: {
+  id: string
+  driverType: string
+  name: string
+  affiliation: string
+  plateType: string
+  hkPlate: string
+  mainlandPlate: string | null
+  phoneCountryCode: string
+  phone: string
+  vehicleCategory: string
+  vehicleColor: string
+  vehiclePhotos: unknown
+  reviewStatus: string
+  settlementMethod: string | null
+  settlementAccount: string | null
+  createdAt: Date
+  updatedAt: Date
+}) {
+  return { ...driver, vehiclePhotos: Array.isArray(driver.vehiclePhotos) ? driver.vehiclePhotos : [], createdAt: driver.createdAt.toISOString(), updatedAt: driver.updatedAt.toISOString() }
+}
+
+function validDriverPayload(body: Partial<Prisma.DriverCreateInput>) {
+  const required = ['name', 'affiliation', 'plateType', 'hkPlate', 'phone', 'vehicleCategory', 'vehicleColor'] as const
+  if (required.some(field => typeof body[field] !== 'string' || !body[field]!.trim())) return false
+  if (body.plateType !== '單牌' && body.plateType !== '兩地牌' && body.plateType !== '三地牌') return false
+  if ((body.plateType === '兩地牌' || body.plateType === '三地牌') && !body.mainlandPlate?.trim()) return false
+  return true
+}
+
 function tripResponse(trip: {
   scheduledAt: Date
   createdAt: Date
@@ -793,7 +869,7 @@ class ClientAuthController {
     }
     phoneChallenges.delete(challengeId)
     const existing = await prisma.user.findUnique({ where: { countryCode_phoneNumber: { countryCode: challenge.countryCode, phoneNumber: challenge.phoneNumber } } })
-    const user = existing || await prisma.user.create({ data: { countryCode: challenge.countryCode, phoneNumber: challenge.phoneNumber } })
+    const user = existing || await prisma.user.create({ data: { id: await generateUserId(), countryCode: challenge.countryCode, phoneNumber: challenge.phoneNumber } })
     const loggedInUser = await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } })
     return clientAuthResponse(loggedInUser)
   }
@@ -816,7 +892,7 @@ class ClientAuthController {
     }
 
     const phoneNumber = `${Date.now()}${randomBytes(2).toString('hex')}`.replace(/\D/g, '').slice(-15)
-    const user = await prisma.user.create({ data: { countryCode: '+852', phoneNumber, name: provider === 'wechat' ? 'WeChat User' : 'Apple User', lastLoginAt: new Date(), authIdentities: { create: { provider, providerId: providerToken } } } })
+    const user = await prisma.user.create({ data: { id: await generateUserId(), countryCode: '+852', phoneNumber, name: provider === 'wechat' ? 'WeChat User' : 'Apple User', lastLoginAt: new Date(), authIdentities: { create: { provider, providerId: providerToken } } } })
     return clientAuthResponse(user)
   }
 
@@ -826,6 +902,123 @@ class ClientAuthController {
     await prisma.clientSession.updateMany({ where: { jti: session.jti, revokedAt: null }, data: { revokedAt: new Date() } })
     const user = await prisma.user.update({ where: { id: session.sub }, data: { lastLogoutAt: new Date() }, select: { id: true } })
     return { ok: Boolean(user.id) }
+  }
+}
+
+@Controller('driver/auth')
+class DriverAuthController {
+  @Post('phone/request')
+  async requestPhoneCode(@Body() body: { countryCode?: string; phoneNumber?: string }) {
+    const identity = parsePhoneIdentity(body)
+    const driver = await prisma.driver.findFirst({ where: { phoneCountryCode: identity.countryCode, phone: identity.phoneNumber } })
+    if (!driver) throw new HttpException('Driver not found', HttpStatus.NOT_FOUND)
+    if (process.env.NODE_ENV === 'production' && !process.env.AUTH_OTP_CODE) throw new HttpException('OTP delivery is not configured', HttpStatus.SERVICE_UNAVAILABLE)
+    const code = process.env.NODE_ENV === 'production' ? process.env.AUTH_OTP_CODE! : '0000'
+    const challengeId = randomBytes(18).toString('hex')
+    const expiresAt = new Date(Date.now() + PHONE_CODE_TTL_MS)
+    await prisma.driverOtpChallenge.create({ data: { id: challengeId, driverId: driver.id, countryCode: identity.countryCode, phone: identity.phoneNumber, codeHash: hashPassword(code), expiresAt } })
+    return { challengeId, expiresAt: expiresAt.toISOString(), ...(process.env.NODE_ENV !== 'production' ? { developmentCode: code } : {}) }
+  }
+
+  @Post('phone/verify')
+  async verifyPhoneCode(@Body() body: { challengeId?: string; code?: string; developmentCode?: string }) {
+    const challenge = await prisma.driverOtpChallenge.findUnique({ where: { id: body.challengeId?.trim() || '' }, include: { driver: true } })
+    if (!challenge || challenge.consumedAt || challenge.expiresAt.getTime() <= Date.now() || !challenge.driver) throw new UnauthorizedException('Verification code expired')
+    const code = body.code?.trim() || body.developmentCode?.trim() || ''
+    if (!verifyPassword(code, challenge.codeHash)) throw new UnauthorizedException('Invalid verification code')
+    await prisma.driverOtpChallenge.update({ where: { id: challenge.id }, data: { consumedAt: new Date() } })
+    return driverAuthResponse(challenge.driver)
+  }
+
+  @Post('third-party')
+  async thirdParty(@Body() body: { provider?: string; providerToken?: string }) {
+    const provider = body.provider?.trim().toLowerCase()
+    if (provider !== 'wechat' && provider !== 'apple') throw new HttpException('Unsupported third-party provider', HttpStatus.BAD_REQUEST)
+    if (!body.providerToken?.trim()) throw new HttpException('Third-party provider token is required', HttpStatus.BAD_REQUEST)
+    throw new HttpException('Third-party provider verification is not configured', HttpStatus.SERVICE_UNAVAILABLE)
+  }
+
+  @Get('me')
+  async me(@Req() req: RequestLike) {
+    const session = await driverSessionFrom(req)
+    const driver = await prisma.driver.findUnique({ where: { id: session.sub } })
+    if (!driver) throw new UnauthorizedException('Driver not found')
+    return driverResponse(driver)
+  }
+
+  @Post('logout')
+  async logout(@Req() req: RequestLike) {
+    const session = await driverSessionFrom(req)
+    await prisma.driverSession.updateMany({ where: { jti: session.jti, revokedAt: null }, data: { revokedAt: new Date() } })
+    return { ok: true }
+  }
+
+  @Post('submit-review')
+  async submitReview(@Req() req: RequestLike) {
+    const session = await driverSessionFrom(req)
+    const driver = await prisma.driver.update({ where: { id: session.sub }, data: { reviewStatus: '待審核' } })
+    return driverResponse(driver)
+  }
+
+  @Get('trips/available')
+  async available(@Req() req: RequestLike) {
+    const session = await driverSessionFrom(req)
+    const driver = await prisma.driver.findUnique({ where: { id: session.sub } })
+    if (!driver) throw new UnauthorizedException('Driver not found')
+    const settings = await prisma.appSetting.findUniqueOrThrow({ where: { id: appSettingsDefaults.id } })
+    if (!settings.driverRaceEnabled) throw new ForbiddenException('Driver race acceptance is disabled')
+    requireReviewedDriver(driver)
+    return prisma.trip.findMany({ where: { driverId: null, status: { not: 'COMPLETED' }, executionPhase: { not: 'IN_PROGRESS' } }, orderBy: { scheduledAt: 'asc' } })
+  }
+
+  @Post('trips/:id/accept')
+  async accept(@Req() req: RequestLike, @Param('id') id: string) {
+    const session = await driverSessionFrom(req)
+    const settings = await prisma.appSetting.findUniqueOrThrow({ where: { id: appSettingsDefaults.id } })
+    if (!settings.driverRaceEnabled) throw new ForbiddenException('Driver race acceptance is disabled')
+    const driver = await prisma.driver.findUnique({ where: { id: session.sub } })
+    if (!driver) throw new UnauthorizedException('Driver not found')
+    requireReviewedDriver(driver)
+    const result = await prisma.trip.updateMany({ where: { id, driverId: null, status: { not: 'COMPLETED' }, executionPhase: { not: 'IN_PROGRESS' } }, data: { driverId: driver.id, driverName: driver.name, driverPhone: `${driver.phoneCountryCode} ${driver.phone}`, vehiclePlate: driver.hkPlate, acceptedAt: new Date() } })
+    if (result.count !== 1) throw new HttpException('Trip is no longer available', HttpStatus.CONFLICT)
+    return prisma.trip.findUnique({ where: { id }, include: { driver: true } })
+  }
+}
+
+@Controller('driver/order-urls')
+class DriverOrderUrlController {
+  @Get(':token')
+  async details(@Req() req: RequestLike, @Param('token') token: string) {
+    const session = await driverSessionFrom(req)
+    const item = await prisma.tripOrderUrl.findUnique({ where: { tokenHash: orderUrlTokenHash(token) }, include: { trip: { include: { user: true, driver: true } }, driver: true } })
+    if (!item) throw new HttpException('Order URL not found', HttpStatus.NOT_FOUND)
+    const now = new Date()
+    if (item.revokedAt || item.usedAt || now < item.validFrom || now > item.validUntil) throw new HttpException('Order URL has expired', HttpStatus.GONE)
+    if (item.driverId && item.driverId !== session.sub) throw new ForbiddenException('Order URL is assigned to another driver')
+    if (item.trip.driverId && item.trip.driverId !== session.sub) throw new HttpException('Trip has been accepted by another driver', HttpStatus.CONFLICT)
+    return { token, validFrom: item.validFrom.toISOString(), validUntil: item.validUntil.toISOString(), driverId: item.driverId, trip: tripResponse(item.trip) }
+  }
+
+  @Post(':token/accept')
+  async accept(@Req() req: RequestLike, @Param('token') token: string) {
+    const session = await driverSessionFrom(req)
+    const now = new Date()
+    const result = await prisma.$transaction(async tx => {
+      const item = await tx.tripOrderUrl.findUnique({ where: { tokenHash: orderUrlTokenHash(token) } })
+      if (!item) throw new HttpException('Order URL not found', HttpStatus.NOT_FOUND)
+      if (item.revokedAt || item.usedAt || now < item.validFrom || now > item.validUntil) throw new HttpException('Order URL has expired', HttpStatus.GONE)
+      if (item.driverId && item.driverId !== session.sub) throw new ForbiddenException('Order URL is assigned to another driver')
+      const driver = await tx.driver.findUnique({ where: { id: session.sub } })
+      if (!driver) throw new UnauthorizedException('Driver not found')
+      const trip = await tx.trip.findUnique({ where: { id: item.tripId } })
+      if (!trip || trip.status === 'COMPLETED' || trip.status === 'CANCELLED') throw new HttpException('Trip is not available', HttpStatus.CONFLICT)
+      if (!item.driverId && trip.driverId && trip.driverId !== driver.id) throw new HttpException('Trip has been accepted by another driver', HttpStatus.CONFLICT)
+      if (item.driverId && trip.driverId && trip.driverId !== driver.id) throw new HttpException('Trip has been accepted by another driver', HttpStatus.CONFLICT)
+      const claimed = await tx.tripOrderUrl.updateMany({ where: { id: item.id, usedAt: null, revokedAt: null }, data: { usedAt: now, driverId: driver.id } })
+      if (claimed.count !== 1) throw new HttpException('Order URL is no longer available', HttpStatus.CONFLICT)
+      return tx.trip.update({ where: { id: trip.id }, data: { driverId: driver.id, driverName: driver.name, driverPhone: `${driver.phoneCountryCode} ${driver.phone}`, vehiclePlate: driver.hkPlate, acceptedAt: now }, include: { user: true, driver: true } })
+    })
+    return tripResponse(result)
   }
 }
 
@@ -874,12 +1067,72 @@ class AdminAuthController {
 }
 @Controller('admin')
 class AdminController {
-  @Get('administrators') listAdministrators(@Req() req: RequestLike) { requireRole(req, ['SUPER_ADMIN']); return { data: administrators.map(publicAdministrator), total: administrators.length } }
+  @Get('drivers') async listDrivers(@Req() req: RequestLike) {
+    requireAuth(req)
+    const data = await prisma.driver.findMany({ orderBy: { createdAt: 'desc' } })
+    return { data: data.map(driverResponse), total: data.length }
+  }
+  @Post('drivers') async saveDriver(@Req() req: RequestLike, @Body() body: Partial<Prisma.DriverCreateInput> & { id?: string }) {
+    requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
+    if (!validDriverPayload(body)) throw new HttpException('Valid driver fields are required', HttpStatus.BAD_REQUEST)
+    const data = {
+      driverType: body.driverType?.trim() || '內部司機',
+      name: body.name!.trim(), affiliation: body.affiliation!.trim(), plateType: body.plateType!.trim(),
+      hkPlate: body.hkPlate!.trim(), mainlandPlate: body.mainlandPlate?.trim() || null,
+      phoneCountryCode: body.phoneCountryCode?.trim() || '+852', phone: body.phone!.trim(),
+      vehicleCategory: body.vehicleCategory!.trim(), vehicleColor: body.vehicleColor!.trim(),
+      vehiclePhotos: Array.isArray(body.vehiclePhotos) ? body.vehiclePhotos : [],
+      reviewStatus: body.reviewStatus?.trim() || '待審核',
+      settlementMethod: body.settlementMethod?.trim() || null, settlementAccount: body.settlementAccount?.trim() || null
+    }
+    const driver = body.id
+      ? await prisma.driver.update({ where: { id: body.id }, data })
+      : await prisma.driver.create({ data: { id: `driver-${Date.now()}-${randomBytes(4).toString('hex')}`, ...data } })
+    return driverResponse(driver)
+  }
+  @Delete('drivers/:id') async deleteDriver(@Req() req: RequestLike, @Param('id') id: string) {
+    requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
+    const existing = await prisma.driver.findUnique({ where: { id } })
+    if (!existing) throw new HttpException('Driver not found', HttpStatus.NOT_FOUND)
+    await prisma.driver.delete({ where: { id } })
+    return { ok: true }
+  }
+
+ @Get('administrators') listAdministrators(@Req() req: RequestLike) { requireRole(req, ['SUPER_ADMIN']); return { data: administrators.map(publicAdministrator), total: administrators.length } }
   @Post('administrators') saveAdministrator(@Req() req: RequestLike, @Body() body: Partial<Administrator> & { password?: string }) { const session = requireRole(req, ['SUPER_ADMIN']); const username = body.username?.trim(); const displayName = body.displayName?.trim(); const roles: AdminRole[] = ['SUPER_ADMIN', 'OPERATOR', 'VIEWER']; if (!username || !displayName || !body.role || !roles.includes(body.role)) throw new HttpException('Valid administrator fields are required', HttpStatus.BAD_REQUEST); const duplicate = administrators.find(item => item.username.toLowerCase() === username.toLowerCase() && item.id !== body.id); if (duplicate) throw new HttpException('Administrator username already exists', HttpStatus.CONFLICT); const existing = body.id ? administrators.find(item => item.id === body.id) : undefined; if (body.id && !existing) throw new HttpException('Administrator not found', HttpStatus.NOT_FOUND); if (!existing && (!body.password || body.password.length < 8)) throw new HttpException('Password must contain at least 8 characters', HttpStatus.BAD_REQUEST); if (existing) { const removingSuperAccess = existing.role === 'SUPER_ADMIN' && (body.role !== 'SUPER_ADMIN' || body.enabled === false); const enabledSuperAdministrators = administrators.filter(item => item.role === 'SUPER_ADMIN' && item.enabled); if (removingSuperAccess && enabledSuperAdministrators.length === 1) throw new HttpException('At least one enabled super administrator is required', HttpStatus.BAD_REQUEST); if (existing.id === session.sub && (body.role !== 'SUPER_ADMIN' || body.enabled === false)) throw new HttpException('Cannot remove your own super administrator access', HttpStatus.BAD_REQUEST); existing.username = username; existing.displayName = displayName; existing.role = body.role; existing.enabled = body.enabled ?? existing.enabled; existing.updatedAt = new Date().toISOString(); if (body.password) { if (body.password.length < 8) throw new HttpException('Password must contain at least 8 characters', HttpStatus.BAD_REQUEST); existing.passwordHash = hashPassword(body.password) } return publicAdministrator(existing) } const created: Administrator = { id: `admin-${Date.now()}`, username, displayName, role: body.role, enabled: body.enabled ?? true, passwordHash: hashPassword(body.password!), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), lastLoginAt: null }; administrators.push(created); return publicAdministrator(created) }
   @Delete('administrators/:id') disableAdministrator(@Req() req: RequestLike, @Param('id') id: string) { const session = requireRole(req, ['SUPER_ADMIN']); if (session.sub === id) throw new HttpException('Cannot disable the current administrator', HttpStatus.BAD_REQUEST); const admin = administrators.find(item => item.id === id); if (!admin) throw new HttpException('Administrator not found', HttpStatus.NOT_FOUND); if (admin.role === 'SUPER_ADMIN' && admin.enabled && administrators.filter(item => item.role === 'SUPER_ADMIN' && item.enabled).length === 1) throw new HttpException('At least one enabled super administrator is required', HttpStatus.BAD_REQUEST); admin.enabled = false; admin.updatedAt = new Date().toISOString(); return { ok: true } }
   @Get('audit-logs') listAuditLogs(@Req() req: RequestLike) { requireRole(req, ['SUPER_ADMIN']); return { data: adminAuditLogs.slice(0, 300), total: adminAuditLogs.length } }
 
-  @Get('promotions') async listPromotions(@Req() req: RequestLike) { requireAuth(req); return { data: await prisma.promotion.findMany({ orderBy: { createdAt: 'desc' } }) } }
+  @Get('notifications') async listNotifications(@Req() req: RequestLike) {
+    requireAuth(req)
+    return { data: await prisma.notification.findMany({ orderBy: { createdAt: 'desc' }, take: 300 }) }
+  }
+  @Post('notifications') async createNotification(@Req() req: RequestLike, @Body() body: { title?: string; content?: string; audience?: string; userIds?: string[]; driverIds?: string[] }) {
+    requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
+    const title = body.title?.trim()
+    const content = body.content?.trim()
+    const audience = body.audience === 'ALL_USERS' || body.audience === 'ALL_DRIVERS' ? body.audience : 'SELECTED'
+    if (!title || !content) throw new HttpException('Title and content are required', HttpStatus.BAD_REQUEST)
+    const requestedUserIds = Array.isArray(body.userIds) ? [...new Set(body.userIds.filter(id => typeof id === 'string' && id.trim()).map(id => id.trim()))] : []
+    const requestedDriverIds = Array.isArray(body.driverIds) ? [...new Set(body.driverIds.filter(id => typeof id === 'string' && id.trim()).map(id => id.trim()))] : []
+    const userIds = audience === 'ALL_USERS' ? (await prisma.user.findMany({ where: { enabled: true }, select: { id: true } })).map(item => item.id) : requestedUserIds
+    const driverIds = audience === 'ALL_DRIVERS' ? (await prisma.driver.findMany({ select: { id: true } })).map(item => item.id) : requestedDriverIds
+    if (!userIds.length && !driverIds.length) throw new HttpException('At least one recipient is required', HttpStatus.BAD_REQUEST)
+    if (audience === 'SELECTED') {
+      const [users, drivers] = await Promise.all([
+        userIds.length ? prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true } }) : [],
+        driverIds.length ? prisma.driver.findMany({ where: { id: { in: driverIds } }, select: { id: true } }) : []
+      ])
+      if (users.length !== userIds.length || drivers.length !== driverIds.length) throw new HttpException('One or more recipients were not found', HttpStatus.BAD_REQUEST)
+    }
+    const records: Array<{ title: string; content: string; audience: string; userId?: string; driverId?: string }> = [
+      ...[...new Set(userIds)].map(userId => ({ title, content, audience: 'USER', userId })),
+      ...[...new Set(driverIds)].map(driverId => ({ title, content, audience: 'DRIVER', driverId }))
+    ]
+    await prisma.notification.createMany({ data: records })
+    return { ok: true, count: records.length }
+  }
+
   @Post('promotions') async savePromotion(@Req() req: RequestLike, @Body() body: PromotionInput) {
     requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
     const id = typeof body.id === 'string' ? body.id.trim() : ''
@@ -934,7 +1187,7 @@ class AdminController {
     const identity = parsePhoneIdentity(body)
     const duplicate = await prisma.user.findUnique({ where: { countryCode_phoneNumber: identity } })
     if (duplicate) throw new HttpException('A user with this phone number already exists', HttpStatus.CONFLICT)
-    return userResponse(await prisma.user.create({ data: { ...identity, name: body.name?.trim() || null, displayName: body.displayName?.trim() || null, email: body.email?.trim() || null, gender: body.gender?.trim() || null, region: body.region?.trim() || null, birthday: body.birthday ? new Date(body.birthday) : null } }))
+    return userResponse(await prisma.user.create({ data: { id: await generateUserId(), ...identity, name: body.name?.trim() || null, displayName: body.displayName?.trim() || null, email: body.email?.trim() || null, gender: body.gender?.trim() || null, region: body.region?.trim() || null, birthday: body.birthday ? new Date(body.birthday) : null } }))
   }
   @Get('users/:id') async getUser(@Req() req: RequestLike, @Param('id') id: string) {
     requireAuth(req)
@@ -1014,6 +1267,7 @@ class AdminController {
          }
        },
        payment: true,
+       driver: true,
      },
      orderBy: { scheduledAt: 'asc' }
    })
@@ -1029,8 +1283,9 @@ class AdminController {
    const allowedExecutionPhases = ['WAITING_DRIVER', 'DRIVER_ASSIGNED', 'IN_PROGRESS'] as const
    const allowedRegions = ['HK', 'MACAU', 'GUANGDONG'] as const
    if (!userId || !origin || !destination || !body.region || !allowedRegions.includes(body.region as typeof allowedRegions[number]) || Number.isNaN(scheduledAt.getTime()) || !body.status || !allowedStatuses.includes(body.status as typeof allowedStatuses[number]) || (body.executionPhase !== undefined && body.executionPhase !== null && !allowedExecutionPhases.includes(body.executionPhase as typeof allowedExecutionPhases[number]))) throw new HttpException('Valid trip fields are required', HttpStatus.BAD_REQUEST)
+   if (body.driverId && !await prisma.driver.findUnique({ where: { id: body.driverId }, select: { id: true } })) throw new HttpException('Driver not found', HttpStatus.BAD_REQUEST)
    if (!await prisma.user.findUnique({ where: { id: userId }, select: { id: true } })) throw new HttpException('User not found', HttpStatus.BAD_REQUEST)
-   const trip = await prisma.trip.create({ data: { userId, origin, destination, region: body.region as any, scheduledAt, status: body.status as any, executionPhase: body.status === 'CONFIRMED' ? (body.executionPhase as any || 'WAITING_DRIVER') : null, driverName: body.driverName || null, driverPhone: body.driverPhone || null, vehiclePlate: body.vehiclePlate || null }, include: { user: true } })
+   const trip = await prisma.trip.create({ data: { userId, origin, destination, region: body.region as any, scheduledAt, status: body.status as any, executionPhase: body.status === 'CONFIRMED' ? (body.executionPhase as any || 'WAITING_DRIVER') : null,    driverId: body.driverId?.trim() || null, driverName: body.driverName || null, driverPhone: body.driverPhone || null, vehiclePlate: body.vehiclePlate || null }, include: { user: true } })
    return { ...trip, scheduledAt: trip.scheduledAt.toISOString(), createdAt: trip.createdAt.toISOString(), updatedAt: trip.updatedAt.toISOString(), user: userResponse(trip.user) }
   }
    @Post('trips/:id') async updateTrip(@Req() req: RequestLike, @Param('id') id: string, @Body() body: Partial<Prisma.TripUncheckedCreateInput>) {
@@ -1044,6 +1299,7 @@ class AdminController {
    const allowedExecutionPhases = ['WAITING_DRIVER', 'DRIVER_ASSIGNED', 'IN_PROGRESS'] as const
    if (!origin || !destination || !body.region?.trim() || Number.isNaN(scheduledAt.getTime()) || !body.status || !allowedStatuses.includes(body.status as typeof allowedStatuses[number]) || (body.executionPhase !== undefined && body.executionPhase !== null && !allowedExecutionPhases.includes(body.executionPhase as typeof allowedExecutionPhases[number]))) throw new HttpException('Valid trip fields are required', HttpStatus.BAD_REQUEST)
    if (body.userId && !await prisma.user.findUnique({ where: { id: body.userId }, select: { id: true } })) throw new HttpException('User not found', HttpStatus.BAD_REQUEST)
+   if (body.driverId && !await prisma.driver.findUnique({ where: { id: body.driverId }, select: { id: true } })) throw new HttpException('Driver not found', HttpStatus.BAD_REQUEST)
    if (body.status === 'CANCELLED' && (existing.status === 'COMPLETED' || existing.executionPhase === 'IN_PROGRESS')) throw new HttpException('Completed or in-progress trips cannot be cancelled', HttpStatus.CONFLICT)
    const region = body.region.trim()
    const trip = await prisma.$transaction(async tx => {
@@ -1058,9 +1314,52 @@ class AdminController {
        if (payment.fareAmount > 0) await tx.walletTransaction.create({ data: { userId: user.id, wallet: 'FARE', type: 'REFUND', amount: payment.fareAmount, balanceAfter: fareBalance, reason: `訂單退款 - 車費餘額 (訂單: ${id.slice(-8)})`, paymentId: payment.id } })
        if (payment.cashAmount > 0) await tx.walletTransaction.create({ data: { userId: user.id, wallet: 'CASH', type: 'REFUND', amount: payment.cashAmount, balanceAfter: cashBalance, reason: `訂單退款 - 現金餘額 (訂單: ${id.slice(-8)})`, paymentId: payment.id } })
      }
-     return tx.trip.update({ where: { id }, data: { userId: body.userId || existing.userId, origin, destination, region: region as any, scheduledAt, status: body.status as any, executionPhase: body.status === 'CONFIRMED' ? (body.executionPhase as any || existing.executionPhase || 'WAITING_DRIVER') : null, driverName: body.driverName ?? existing.driverName, driverPhone: body.driverPhone ?? existing.driverPhone, vehiclePlate: body.vehiclePlate ?? existing.vehiclePlate }, include: { user: true } })
+     return tx.trip.update({ where: { id }, data: { userId: body.userId || existing.userId, origin, destination, region: region as any, scheduledAt, status: body.status as any, executionPhase: body.status === 'CONFIRMED' ? (body.executionPhase as any || existing.executionPhase || 'WAITING_DRIVER') : null, driverId: body.driverId ?? existing.driverId, driverName: body.driverName ?? existing.driverName, driverPhone: body.driverPhone ?? existing.driverPhone, vehiclePlate: body.vehiclePlate ?? existing.vehiclePlate }, include: { user: true } })
    })
    return { ...trip, scheduledAt: trip.scheduledAt.toISOString(), createdAt: trip.createdAt.toISOString(), updatedAt: trip.updatedAt.toISOString(), user: userResponse(trip.user) }
+  }
+  @Post('trips/:id/dispatch') async dispatchTrip(@Req() req: RequestLike, @Param('id') id: string, @Body() body: { driverId?: string }) {
+   requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
+   const driverId = body.driverId?.trim()
+   if (!driverId) throw new HttpException('Driver is required', HttpStatus.BAD_REQUEST)
+   const [trip, driver] = await Promise.all([prisma.trip.findUnique({ where: { id } }), prisma.driver.findUnique({ where: { id: driverId } })])
+   if (!trip) throw new HttpException('Trip not found', HttpStatus.NOT_FOUND)
+   if (!driver) throw new HttpException('Driver not found', HttpStatus.BAD_REQUEST)
+   if (trip.status === 'COMPLETED' || trip.status === 'CANCELLED' || trip.executionPhase === 'IN_PROGRESS') throw new HttpException('This trip cannot be dispatched', HttpStatus.CONFLICT)
+   const updated = await prisma.trip.update({
+     where: { id },
+     data: { driverId: driver.id, driverName: driver.name, driverPhone: `${driver.phoneCountryCode} ${driver.phone}`, vehiclePlate: driver.hkPlate, status: 'CONFIRMED', executionPhase: 'DRIVER_ASSIGNED', assignedAt: new Date(), acceptedAt: null },
+     include: { user: true, driver: true }
+   })
+   return { ...updated, scheduledAt: updated.scheduledAt.toISOString(), createdAt: updated.createdAt.toISOString(), updatedAt: updated.updatedAt.toISOString(), user: userResponse(updated.user) }
+  }
+  @Post('trips/:id/order-url')
+  async createOrderUrl(@Req() req: RequestLike, @Param('id') id: string, @Body() body: { driverId?: string; validFrom?: string; validUntil?: string }) {
+    requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
+    const validFrom = new Date(body.validFrom || '')
+    const validUntil = new Date(body.validUntil || '')
+    if (Number.isNaN(validFrom.getTime()) || Number.isNaN(validUntil.getTime()) || validFrom >= validUntil) throw new HttpException('Valid URL date range is required', HttpStatus.BAD_REQUEST)
+    const [trip, driver] = await Promise.all([prisma.trip.findUnique({ where: { id } }), body.driverId ? prisma.driver.findUnique({ where: { id: body.driverId.trim() } }) : null])
+    if (!trip) throw new HttpException('Trip not found', HttpStatus.NOT_FOUND)
+    if (trip.status === 'COMPLETED' || trip.status === 'CANCELLED') throw new HttpException('This trip cannot create an order URL', HttpStatus.CONFLICT)
+    if (body.driverId && !driver) throw new HttpException('Driver not found', HttpStatus.BAD_REQUEST)
+    const token = randomBytes(32).toString('base64url')
+    const item = await prisma.tripOrderUrl.create({ data: { tokenHash: orderUrlTokenHash(token), tripId: id, driverId: driver?.id || null, validFrom, validUntil } })
+    return { id: item.id, token, url: orderUrlValue(token), tripId: id, driverId: item.driverId, validFrom: validFrom.toISOString(), validUntil: validUntil.toISOString(), usedAt: null, revokedAt: null }
+  }
+  @Get('trips/:id/order-urls')
+  async listOrderUrls(@Req() req: RequestLike, @Param('id') id: string) {
+    requireAuth(req)
+    const data = await prisma.tripOrderUrl.findMany({ where: { tripId: id }, include: { driver: true }, orderBy: { createdAt: 'desc' } })
+    return { data: data.map(item => ({ id: item.id, tripId: item.tripId, driver: item.driver ? driverResponse(item.driver) : null, validFrom: item.validFrom.toISOString(), validUntil: item.validUntil.toISOString(), usedAt: item.usedAt?.toISOString() || null, revokedAt: item.revokedAt?.toISOString() || null })), total: data.length }
+  }
+  @Post('trips/:id/order-urls/:urlId/revoke')
+  async revokeOrderUrl(@Req() req: RequestLike, @Param('id') id: string, @Param('urlId') urlId: string) {
+    requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
+    const item = await prisma.tripOrderUrl.findFirst({ where: { id: urlId, tripId: id } })
+    if (!item) throw new HttpException('Order URL not found', HttpStatus.NOT_FOUND)
+    const updated = await prisma.tripOrderUrl.update({ where: { id: urlId }, data: { revokedAt: new Date() } })
+    return { id: updated.id, revokedAt: updated.revokedAt?.toISOString() || null }
   }
   @Get('charter-orders') async listCharterOrders(@Req() req: RequestLike) { requireAuth(req); const usersById = new Map((await prisma.user.findMany()).map(user => [user.id, userResponse(user)])); return { data: charterOrders.map(order => ({ ...order, user: usersById.get(order.userId) || null })), total: charterOrders.length } }
   @Post('charter-orders/:id') async updateCharterOrder(@Req() req: RequestLike, @Param('id') id: string, @Body() body: Partial<CharterOrder>) { requireRole(req, ['SUPER_ADMIN', 'OPERATOR']); const order = charterOrders.find(item => item.id === id); if (!order) throw new HttpException('Charter order not found', HttpStatus.NOT_FOUND); const origin = body.origin?.trim(); const destination = body.destination?.trim(); const scheduledAt = new Date(body.scheduledAt || order.scheduledAt); const durationHours = Number(body.durationHours); const statuses = ['PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED']; const regions = ['大陸', '香港', '澳門']; if (!origin || !destination || !body.originRegion || !regions.includes(body.originRegion) || !body.destinationRegion || !regions.includes(body.destinationRegion) || Number.isNaN(scheduledAt.getTime()) || !Number.isFinite(durationHours) || durationHours <= 0 || !body.status || !statuses.includes(body.status)) throw new HttpException('Valid charter order fields are required', HttpStatus.BAD_REQUEST); if (body.userId && !await prisma.user.findUnique({ where: { id: body.userId }, select: { id: true } })) throw new HttpException('User not found', HttpStatus.BAD_REQUEST); Object.assign(order, { userId: body.userId || order.userId, originRegion: body.originRegion, origin, destinationRegion: body.destinationRegion, destination, scheduledAt: scheduledAt.toISOString(), durationHours, status: body.status }); return order }
@@ -1302,6 +1601,26 @@ class AdminController {
     return { ok: true }
   }
 }
+@Controller('notifications')
+class NotificationsController {
+  @Get('me') async listMine(@Req() req: RequestLike) {
+    const auth = req.headers.authorization || ''
+    if (!auth) throw new UnauthorizedException('Authentication required')
+    const session = await clientSessionFrom(req).catch(() => null)
+    if (session) {
+      const data = await prisma.notification.findMany({ where: { OR: [{ userId: session.sub }, { audience: 'ALL_USERS' }] }, orderBy: { createdAt: 'desc' }, take: 100 })
+      return { data, unread: data.filter(item => !item.readAt).length }
+    }
+    const driver = await driverSessionFrom(req)
+    const data = await prisma.notification.findMany({ where: { OR: [{ driverId: driver.sub }, { audience: 'ALL_DRIVERS' }] }, orderBy: { createdAt: 'desc' }, take: 100 })
+    return { data, unread: data.filter(item => !item.readAt).length }
+  }
+  @Post(':id/read') async markRead(@Req() req: RequestLike, @Param('id') id: string) {
+    try { const client = await clientSessionFrom(req); return prisma.notification.updateMany({ where: { id, OR: [{ userId: client.sub }, { audience: 'ALL_USERS' }] }, data: { readAt: new Date() } }) }
+    catch { const driver = await driverSessionFrom(req); return prisma.notification.updateMany({ where: { id, OR: [{ driverId: driver.sub }, { audience: 'ALL_DRIVERS' }] }, data: { readAt: new Date() } }) }
+  }
+}
+
 @Controller('membership-plans')
 class PublicMembershipPlansController { @Get() list() { return { data: membershipPlans.filter(item => item.enabled).sort((a, b) => a.order - b.order) } } }
 
@@ -1671,7 +1990,7 @@ class RecommendedAddressesController {
 @Controller('settings')
 class SettingsController {
   @Get() async get() { return appSettingsResponse(await prisma.appSetting.findUniqueOrThrow({ where: { id: appSettingsDefaults.id } })) }
-  @Post() async update(@Req() req: RequestLike, @Body() body: { language?: string; region?: string; currency?: string; pricingCurrency?: string; exchangeRate?: number; adminLogo?: string | null; severeWeatherEnabled?: boolean; fareBalancePayEnabled?: boolean; cashBalancePayEnabled?: boolean; wechatPayEnabled?: boolean; alipayPayEnabled?: boolean; bankCardPayEnabled?: boolean; sandboxMode?: boolean }) {
+  @Post() async update(@Req() req: RequestLike, @Body() body: { language?: string; region?: string; currency?: string; pricingCurrency?: string; exchangeRate?: number; adminLogo?: string | null; severeWeatherEnabled?: boolean; driverRaceEnabled?: boolean; fareBalancePayEnabled?: boolean; cashBalancePayEnabled?: boolean; wechatPayEnabled?: boolean; alipayPayEnabled?: boolean; bankCardPayEnabled?: boolean; sandboxMode?: boolean }) {
     const session = requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
     if (body.adminLogo !== undefined && session.role !== 'SUPER_ADMIN') throw new ForbiddenException('Only super administrators may update the logo')
     const settings = await prisma.appSetting.findUniqueOrThrow({ where: { id: appSettingsDefaults.id } })
@@ -1684,6 +2003,7 @@ class SettingsController {
         exchangeRate: body.exchangeRate !== undefined && Number.isFinite(Number(body.exchangeRate)) && Number(body.exchangeRate) > 0 ? Number(body.exchangeRate) : settings.exchangeRate,
         adminLogo: body.adminLogo === undefined ? settings.adminLogo : body.adminLogo === null ? null : validateAdminLogo(body.adminLogo),
         severeWeatherEnabled: body.severeWeatherEnabled ?? settings.severeWeatherEnabled,
+        driverRaceEnabled: body.driverRaceEnabled ?? settings.driverRaceEnabled,
         fareBalancePayEnabled: body.fareBalancePayEnabled ?? settings.fareBalancePayEnabled,
         cashBalancePayEnabled: body.cashBalancePayEnabled ?? settings.cashBalancePayEnabled,
         wechatPayEnabled: body.wechatPayEnabled ?? settings.wechatPayEnabled,
@@ -2384,7 +2704,7 @@ class ClientOrdersController {
 }
 
 @Controller('health') class HealthController { @Get() check() { return { status: 'ok', service: 'master-travel-project-api' } } }
-@Module({ controllers: [HealthController, LocationController, SettingsController, RecommendedAddressesController, PublicVehiclesController, PublicQuotesController, PublicMembershipPlansController, PublicPromotionsController, PaymentCardsController, WalletController, PaymentsController, ClientOrdersController, ClientAuthController, AdminAuthController, AdminController, SupportController], providers: [{ provide: APP_INTERCEPTOR, useClass: AdminAccessInterceptor }] }) class AppModule {}
+ @Module({ controllers: [HealthController, LocationController, SettingsController, RecommendedAddressesController, NotificationsController, PublicVehiclesController, PublicQuotesController, PublicMembershipPlansController, PublicPromotionsController, PaymentCardsController, WalletController, PaymentsController, ClientOrdersController, ClientAuthController, DriverAuthController, DriverOrderUrlController, AdminAuthController, AdminController, SupportController], providers: [{ provide: APP_INTERCEPTOR, useClass: AdminAccessInterceptor }] }) class AppModule {}
 async function bootstrap() {
   await prisma.$connect()
   await ensurePricingDefaults()
