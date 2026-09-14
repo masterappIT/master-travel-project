@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'app/router.dart';
 import 'core/layout/driver_page_shell.dart';
-import 'order_completed_page.dart';
+import 'core/navigation/driver_navigation.dart';
 
 class OrderInProgressPage extends StatelessWidget {
   const OrderInProgressPage({super.key});
@@ -61,9 +62,8 @@ class OrderInProgressPage extends StatelessWidget {
             const _TripProgressCard(),
             const SizedBox(height: 24),
             ElevatedButton(
-              onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                      builder: (_) => const OrderCompletedPage())),
+              onPressed: () =>
+                  DriverNavigation.push(context, DriverRoutes.orderCompleted),
               style: _completeStyle(),
               child: const Text('完成'),
             ),

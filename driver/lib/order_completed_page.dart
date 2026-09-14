@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'app/router.dart';
 import 'core/layout/driver_page_shell.dart';
-import 'order_hall_page.dart';
+import 'core/navigation/driver_navigation.dart';
 
 class OrderCompletedPage extends StatelessWidget {
   const OrderCompletedPage({super.key});
@@ -29,12 +30,7 @@ class OrderCompletedPage extends StatelessWidget {
             const SizedBox(height: 24),
             ElevatedButton(
               onPressed: () {
-                Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute<void>(
-                    builder: (_) => const OrderHallPage(),
-                  ),
-                  (route) => false,
-                );
+                DriverNavigation.replaceAll(context, DriverRoutes.orders);
               },
               style: _completeStyle(),
               child: const Text('確認完成'),

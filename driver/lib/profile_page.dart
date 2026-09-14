@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import 'app/router.dart';
 import 'core/layout/driver_page_shell.dart';
-import 'home_page.dart';
-import 'order_hall_page.dart';
-import 'order_history_page.dart';
+import 'core/navigation/driver_navigation.dart';
 
 class ProfilePage extends StatelessWidget {
   const ProfilePage({super.key});
@@ -15,12 +14,8 @@ class ProfilePage extends StatelessWidget {
       selectedIndex: 2,
       bottomPadding: 140,
       navHorizontalPadding: 30,
-      onHomeTap: () => Navigator.of(context).pushReplacement(
-        MaterialPageRoute<void>(builder: (_) => const HomePage()),
-      ),
-      onOrderTap: () => Navigator.of(context).pushReplacement(
-        MaterialPageRoute<void>(builder: (_) => const OrderHallPage()),
-      ),
+      onHomeTap: () => DriverNavigation.replace(context, DriverRoutes.home),
+      onOrderTap: () => DriverNavigation.replace(context, DriverRoutes.orders),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -37,8 +32,8 @@ class ProfilePage extends StatelessWidget {
                 '接單紀錄',
                 'assets/profile-clipboard.svg',
                 _IconTone.purple,
-                onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
-                    builder: (_) => const OrderHistoryPage())),
+                onTap: () =>
+                    DriverNavigation.push(context, DriverRoutes.orderHistory),
               ),
             ],
           ),

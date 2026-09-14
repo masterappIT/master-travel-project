@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import 'app/router.dart';
 import 'core/layout/driver_page_shell.dart';
-import 'order_accepted_page.dart';
+import 'core/navigation/driver_navigation.dart';
 
 class OrderDetailPage extends StatefulWidget {
   const OrderDetailPage({super.key});
@@ -93,9 +94,8 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
               const SizedBox(width: 12),
               Expanded(
                   child: ElevatedButton(
-                      onPressed: () => Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                              builder: (_) => const OrderAcceptedPage())),
+                      onPressed: () => DriverNavigation.push(
+                          context, DriverRoutes.orderAccepted),
                       style: _primaryButtonStyle(),
                       child: const Text('確認接單'))),
             ]),

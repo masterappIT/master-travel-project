@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'app/router.dart';
 import 'core/layout/driver_page_shell.dart';
-import 'order_detail_page.dart';
+import 'core/navigation/driver_navigation.dart';
 
 class OrderHallPage extends StatefulWidget {
   const OrderHallPage({super.key});
@@ -15,9 +15,7 @@ class _OrderHallPageState extends State<OrderHallPage> {
   int _selectedTab = 0;
 
   void _openOrderDetail() {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => const OrderDetailPage()),
-    );
+    DriverNavigation.push(context, DriverRoutes.orderDetail);
   }
 
   @override

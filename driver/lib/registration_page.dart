@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+
+import 'app/router.dart';
+import 'core/navigation/driver_navigation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-
-import 'home_page.dart';
 
 class RegistrationPage extends StatelessWidget {
   const RegistrationPage({super.key});
@@ -30,9 +31,8 @@ class RegistrationPage extends StatelessWidget {
                     SizedBox(
                       height: 56,
                       child: ElevatedButton(
-                        onPressed: () => Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                                builder: (_) => const HomePage())),
+                        onPressed: () =>
+                            DriverNavigation.push(context, DriverRoutes.home),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xff4cd964),
                           foregroundColor: const Color(0xff38434a),

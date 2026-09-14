@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import 'app/router.dart';
 import 'core/layout/driver_page_shell.dart';
-import 'order_in_progress_page.dart';
+import 'core/navigation/driver_navigation.dart';
 
 class OrderAcceptedPage extends StatelessWidget {
   const OrderAcceptedPage({super.key});
@@ -67,9 +68,8 @@ class OrderAcceptedPage extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                   child: ElevatedButton(
-                onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                        builder: (_) => const OrderInProgressPage())),
+                onPressed: () => DriverNavigation.push(
+                    context, DriverRoutes.orderInProgress),
                 style: _arrivedStyle(),
                 child: const Text('已到達上車點'),
               )),

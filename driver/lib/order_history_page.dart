@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import 'app/router.dart';
 import 'core/layout/driver_page_shell.dart';
-import 'home_page.dart';
-import 'order_hall_page.dart';
-import 'profile_page.dart';
+import 'core/navigation/driver_navigation.dart';
 
 class OrderHistoryPage extends StatefulWidget {
   const OrderHistoryPage({super.key});
@@ -22,12 +21,10 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
     return DriverPageShell(
       selectedIndex: _selectedTab,
       bottomPadding: 140,
-      onHomeTap: () => Navigator.of(context).pushReplacement(
-          MaterialPageRoute<void>(builder: (_) => const HomePage())),
-      onOrderTap: () => Navigator.of(context).pushReplacement(
-          MaterialPageRoute<void>(builder: (_) => OrderHallPage())),
-      onProfileTap: () => Navigator.of(context).pushReplacement(
-          MaterialPageRoute<void>(builder: (_) => const ProfilePage())),
+      onHomeTap: () => DriverNavigation.replace(context, DriverRoutes.home),
+      onOrderTap: () => DriverNavigation.replace(context, DriverRoutes.orders),
+      onProfileTap: () =>
+          DriverNavigation.replace(context, DriverRoutes.profile),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

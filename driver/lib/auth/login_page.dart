@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
-import '../registration_page.dart';
+import '../app/router.dart';
+import '../core/navigation/driver_navigation.dart';
 
 class LoginPage extends StatelessWidget {
   const LoginPage({super.key});
@@ -137,9 +138,8 @@ class _ActionCard extends StatelessWidget {
               label: '登入 / 註冊',
               fontSize: 16,
               fullWidth: true,
-              onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                      builder: (_) => const RegistrationPage()))),
+              onPressed: () =>
+                  DriverNavigation.push(context, DriverRoutes.registration)),
           const SizedBox(height: 16),
           const Text.rich(
               TextSpan(text: '登入即代表您同意 ', children: [
