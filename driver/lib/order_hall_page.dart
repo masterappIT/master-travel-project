@@ -62,19 +62,21 @@ class _OrderHallPageState extends State<OrderHallPage> {
                               const SizedBox(height: 12),
                               if (_selectedTab == 0) ...[
                                 _OrderCard(
+                                    passenger: '陳大文',
                                     time: '2024/03/15 14:00',
                                     price: '\$280.00',
-                                    origin: '香港中環',
-                                    destination: '深圳',
-                                    passenger: '陳大文 · 6.2 km · 18 分鐘',
+                                    origin: '香港中環置地廣場東門大堂',
+                                    destination: '深圳福田口岸',
+                                    estimatedTime: '預估 18 分鐘',
                                     onTap: _openOrderDetail),
                                 const SizedBox(height: 12),
                                 _OrderCard(
+                                    passenger: '王小姐',
                                     time: '2024/03/15 15:30',
                                     price: '\$420.00',
                                     origin: '香港機場',
                                     destination: '珠海',
-                                    passenger: '王小姐 · 34.5 km · 38 分鐘',
+                                    estimatedTime: '預估 38 分鐘',
                                     onTap: _openOrderDetail),
                               ] else
                                 const _EmptyAcceptedOrders(),
@@ -193,97 +195,106 @@ class _OrderTab extends StatelessWidget {
 
 class _OrderCard extends StatelessWidget {
   const _OrderCard(
-      {required this.time,
+      {required this.passenger,
+      required this.time,
       required this.price,
       required this.origin,
       required this.destination,
-      required this.passenger,
+      required this.estimatedTime,
       required this.onTap});
+  final String passenger;
   final String time;
   final String price;
   final String origin;
   final String destination;
-  final String passenger;
+  final String estimatedTime;
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border.all(color: const Color(0xffe5e7eb)),
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: const [
-            BoxShadow(
-                color: Color(0x0a000000), blurRadius: 4, offset: Offset(0, 2))
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              Flexible(
-                  child: Text(time,
-                      overflow: TextOverflow.ellipsis,
+  Widget build(BuildContext context) => InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            border: Border.all(color: const Color(0xffe5e7eb)),
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: const [
+              BoxShadow(
+                  color: Color(0x0a000000), blurRadius: 4, offset: Offset(0, 2))
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Flexible(
+                    child: Text('出發  $time',
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: Color(0xff1c1c2e))),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(price,
                       style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: Color(0xff1c1c2e)))),
-              const SizedBox(width: 12),
-              Text(price,
-                  style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xff4cd964))),
-            ]),
-            const SizedBox(height: 8),
-            _Route(origin: origin, destination: destination),
-            const SizedBox(height: 8),
-            Row(children: [
-              SvgPicture.asset('assets/route-driver.svg', width: 8, height: 8),
-              const SizedBox(width: 8),
-              Expanded(
-                  child: Text(passenger,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                          fontSize: 14, color: Color(0xff56657e)))),
-            ]),
-            const SizedBox(height: 8),
-            SizedBox(
-              height: 44,
-              child: ElevatedButton(
-                onPressed: onTap,
-                style: ElevatedButton.styleFrom(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xff4cd964))),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _RouteRow(asset: 'assets/route-origin.svg', label: origin),
+                  const SizedBox(height: 2),
+                  _RouteRow(
+                      asset: 'assets/route-destination.svg', label: destination),
+                ],
+              ),
+              const SizedBox(height: 12),
+              const Divider(height: 1, color: Color(0xffe5e7eb)),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  SvgPicture.asset('assets/route-driver.svg', width: 8, height: 8),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(passenger,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontSize: 14, color: Color(0xff56657e))),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 48,
+                child: ElevatedButton(
+                  onPressed: onTap,
+                  style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xff285cfc),
                     foregroundColor: Colors.white,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
+                        borderRadius: BorderRadius.circular(16)),
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12)),
-                child: const Text('接單',
-                    style:
-                        TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                        horizontal: 16, vertical: 12),
+                  ),
+                  child: const Text('接單',
+                      style: TextStyle(
+                          fontSize: 14, fontWeight: FontWeight.w700)),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-      );
-}
-
-class _Route extends StatelessWidget {
-  const _Route({required this.origin, required this.destination});
-  final String origin;
-  final String destination;
-
-  @override
-  Widget build(BuildContext context) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _RouteRow(asset: 'assets/route-origin.svg', label: origin),
-          const SizedBox(height: 2),
-          _RouteRow(asset: 'assets/route-destination.svg', label: destination),
-        ],
       );
 }
 

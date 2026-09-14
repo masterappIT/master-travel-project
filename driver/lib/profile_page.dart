@@ -4,6 +4,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'floating_nav_bar.dart';
 import 'home_page.dart';
 import 'order_hall_page.dart';
+import 'order_history_page.dart';
 
 class ProfilePage extends StatelessWidget {
   const ProfilePage({super.key});
@@ -28,7 +29,7 @@ class ProfilePage extends StatelessWidget {
                         width: width,
                         child: SingleChildScrollView(
                           padding: const EdgeInsets.fromLTRB(24, 24, 24, 140),
-                          child: const Column(
+                          child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               _ProfileHeader(),
@@ -47,7 +48,11 @@ class ProfilePage extends StatelessWidget {
                                   _MenuItem(
                                       '接單紀錄',
                                       'assets/profile-clipboard.svg',
-                                      _IconTone.purple),
+                                      _IconTone.purple,
+                                      onTap: () => Navigator.of(context).push(
+                                          MaterialPageRoute<void>(
+                                              builder: (_) =>
+                                                  const OrderHistoryPage()))),
                                 ],
                               ),
                               SizedBox(height: 24),
@@ -254,12 +259,13 @@ enum _IconTone { blue, green, purple, orange }
 
 class _MenuItem {
   const _MenuItem(this.label, this.asset, this.tone,
-      {this.detail, this.toggle = false});
+      {this.detail, this.toggle = false, this.onTap});
   final String label;
   final String asset;
   final _IconTone tone;
   final String? detail;
   final bool toggle;
+  final VoidCallback? onTap;
 }
 
 class _MenuCard extends StatelessWidget {
@@ -306,7 +312,7 @@ class _MenuRow extends StatelessWidget {
         button: true,
         label: item.label,
         child: InkWell(
-          onTap: () {},
+          onTap: item.onTap ?? () {},
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 14),
             child: Row(children: [

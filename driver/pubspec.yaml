@@ -20,6 +20,20 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
+    - assets/order-history-origin.svg
+    - assets/order-history-destination.svg
+    - assets/completed-origin.svg
+    - assets/completed-destination.svg
+    - assets/completed-divider.svg
+    - assets/in-progress-origin.svg
+    - assets/in-progress-route-line.svg
+    - assets/in-progress-destination.svg
+    - assets/in-progress-star.svg
+    - assets/in-progress-phone.svg
+    - assets/in-progress-arrow-right.svg
+    - assets/in-progress-chevron-left.svg
+    - assets/in-progress-route.svg
+    - assets/in-progress-divider.svg
     - assets/car.svg
     - assets/circle-x.svg
     - assets/apple.svg

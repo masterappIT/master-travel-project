@@ -3,7 +3,10 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:driver_web/home_page.dart';
 import 'package:driver_web/main.dart';
+import 'package:driver_web/order_completed_page.dart';
 import 'package:driver_web/order_hall_page.dart';
+import 'package:driver_web/order_history_page.dart';
+import 'package:driver_web/order_in_progress_page.dart';
 
 import 'package:driver_web/profile_page.dart';
 import 'package:driver_web/registration_page.dart';
@@ -95,22 +98,22 @@ void main() {
 
     expect(find.text('接單大廳'), findsOneWidget);
     expect(find.text('線上接單中'), findsOneWidget);
-    expect(find.text('香港中環'), findsOneWidget);
-    expect(find.text('香港機場'), findsOneWidget);
+    expect(find.text('香港中環置地廣場東門大堂'), findsOneWidget);
+    expect(find.text('深圳福田口岸'), findsOneWidget);
     expect(find.text('暫無成功接單'), findsNothing);
 
     await tester.tap(find.text('成功接單'));
     await tester.pump();
 
     expect(find.text('暫無成功接單'), findsOneWidget);
-    expect(find.text('香港中環'), findsNothing);
-    expect(find.text('香港機場'), findsNothing);
+    expect(find.text('香港中環置地廣場東門大堂'), findsNothing);
+    expect(find.text('深圳福田口岸'), findsNothing);
   });
   testWidgets('opens order details and selects a vehicle',
       (WidgetTester tester) async {
     await tester.pumpWidget(const MaterialApp(home: OrderHallPage()));
 
-    await tester.tap(find.text('接單').first);
+    await tester.tap(find.text('陳大文'));
     await tester.pumpAndSettle();
 
     expect(find.text('訂單詳情'), findsOneWidget);
@@ -119,9 +122,109 @@ void main() {
     expect(find.text('車輛 1'), findsOneWidget);
     expect(find.text('AB 1234'), findsOneWidget);
 
+    await tester.ensureVisible(find.text('車輛 2').first);
     await tester.tap(find.text('車輛 2').first);
     await tester.pump();
-    expect(find.text('車輛 2'), findsOneWidget);
-    expect(find.text('CD 5678'), findsOneWidget);
+    await tester.ensureVisible(find.text('確認接單'));
+    await tester.tap(find.text('確認接單'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('成功接單'), findsOneWidget);
+    expect(find.text('車資'), findsOneWidget);
+    expect(find.text('\$280.00'), findsOneWidget);
+    expect(find.text('車輛顏色'), findsOneWidget);
+    expect(find.text('白色'), findsOneWidget);
+  });
+
+  testWidgets('renders in-progress order page content',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(const MaterialApp(home: OrderInProgressPage()));
+
+    expect(find.text('進行中'), findsNWidgets(2));
+    expect(find.text('香港中環 → 深圳'), findsOneWidget);
+    expect(find.text('陳'), findsOneWidget);
+    expect(find.text('陳大文'), findsNWidgets(2));
+    expect(find.text('出發地'), findsOneWidget);
+    expect(find.text('目的地'), findsOneWidget);
+    expect(find.text('出發時間'), findsOneWidget);
+    expect(find.text('乘客'), findsOneWidget);
+    expect(find.text('車資'), findsOneWidget);
+    expect(find.text('\$280.00'), findsOneWidget);
+    expect(find.text('完成'), findsOneWidget);
+  });
+
+  testWidgets('opens completed page from in-progress action',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(const MaterialApp(home: OrderInProgressPage()));
+
+    await tester.ensureVisible(find.text('完成'));
+    await tester.tap(find.text('完成'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('行程已抵達目的地'), findsOneWidget);
+    expect(find.text('確認完成'), findsOneWidget);
+  });
+
+  testWidgets('renders order history page content',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(const MaterialApp(home: OrderHistoryPage()));
+
+    expect(find.text('接單紀錄'), findsOneWidget);
+    expect(find.text('已結算'), findsNWidgets(3));
+    expect(find.text('未結算'), findsNWidgets(3));
+    expect(find.text('2024年3月'), findsOneWidget);
+    expect(find.text('出發：香港中環'), findsOneWidget);
+    expect(find.text('目的：深圳'), findsOneWidget);
+    expect(find.text('\$680.00'), findsOneWidget);
+
+    await tester.tap(find.text('未結算').first);
+    await tester.pump();
+    expect(find.text('接單紀錄'), findsOneWidget);
+  });
+
+  testWidgets('opens order history from profile menu',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(const MaterialApp(home: ProfilePage()));
+
+    await tester.ensureVisible(find.text('接單紀錄'));
+    await tester.tap(find.text('接單紀錄'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('2024年3月'), findsOneWidget);
+    expect(find.text('出發：香港中環'), findsOneWidget);
+  });
+
+  testWidgets('navigates from order history to order hall',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(const MaterialApp(home: OrderHistoryPage()));
+
+    await tester.tap(find.text('接單').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('接單大廳'), findsOneWidget);
+  });
+
+  testWidgets('renders completed order page content',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(const MaterialApp(home: OrderCompletedPage()));
+
+    expect(find.text('行程已抵達目的地'), findsOneWidget);
+    expect(find.text('請與乘客確認車資並完成收款'), findsOneWidget);
+    expect(find.text('城市天際線預覽'), findsOneWidget);
+    expect(find.text('訂單詳情'), findsOneWidget);
+    expect(find.text('車資明細'), findsOneWidget);
+    expect(find.text('起步價'), findsOneWidget);
+    expect(find.text('里程費 (6.4 km × \$15)'), findsOneWidget);
+    expect(find.text('時間費 (19.5 分鐘 × \$2.5)'), findsOneWidget);
+    expect(find.text('總計應收'), findsOneWidget);
+    expect(find.text('\$280.00'), findsOneWidget);
+    expect(find.text('確認完成'), findsOneWidget);
+
+    await tester.ensureVisible(find.text('確認完成'));
+    await tester.tap(find.text('確認完成'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('接單大廳'), findsOneWidget);
+    expect(find.text('可接單'), findsOneWidget);
   });
 }

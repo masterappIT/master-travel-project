@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import 'order_accepted_page.dart';
+
 class OrderDetailPage extends StatefulWidget {
   const OrderDetailPage({super.key});
 
@@ -91,7 +93,10 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                     const SizedBox(width: 12),
                     Expanded(
                         child: ElevatedButton(
-                            onPressed: () {},
+                            onPressed: () => Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                    builder: (_) =>
+                                        const OrderAcceptedPage())),
                             style: _primaryButtonStyle(),
                             child: const Text('確認接單'))),
                   ]),
@@ -182,8 +187,18 @@ class _OrderInfoCard extends StatelessWidget {
                   color: Color(0x0a000000), blurRadius: 4, offset: Offset(0, 2))
             ]),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Row(children: [
-            Expanded(
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                    color: const Color(0xfff0f2f5),
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
                 child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -198,20 +213,26 @@ class _OrderInfoCard extends StatelessWidget {
                   SizedBox(height: 4),
                   Text('2024/03/15 14:00',
                       style: TextStyle(fontSize: 13, color: Color(0xff56657e)))
-                ]))
-          ]),
+                ]),
+              ),
+            ],
+          ),
           const SizedBox(height: 12),
           const _AddressRow(
               asset: 'assets/order-detail-origin.svg', label: '香港中環置地廣場東門大堂'),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           const _AddressRow(
               asset: 'assets/order-detail-destination.svg', label: '深圳福田口岸'),
           const SizedBox(height: 12),
           const Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Text('預估 18 分鐘',
-                    style: TextStyle(fontSize: 13, color: Color(0xff56657e))),
+                Expanded(
+                    child: Text('出發時間  2024/03/15 14:00',
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            fontSize: 13, color: Color(0xff56657e)))),
+                SizedBox(width: 12),
                 Text('\$280.00',
                     style: TextStyle(
                         fontSize: 20,
