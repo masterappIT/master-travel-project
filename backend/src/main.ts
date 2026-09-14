@@ -1133,6 +1133,12 @@ class AdminController {
     return { ok: true, count: records.length }
   }
 
+  @Get('promotions') async listPromotions(@Req() req: RequestLike) {
+    requireAuth(req)
+    const data = await prisma.promotion.findMany({ orderBy: [{ priority: 'asc' }, { createdAt: 'desc' }] })
+    return { data, total: data.length }
+  }
+
   @Post('promotions') async savePromotion(@Req() req: RequestLike, @Body() body: PromotionInput) {
     requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
     const id = typeof body.id === 'string' ? body.id.trim() : ''
@@ -1407,7 +1413,7 @@ class AdminController {
     const price = Number(body.price)
     if (!body.id || !body.label?.trim() || !Number.isFinite(price) || price < 0) throw new HttpException('Valid extra option fields are required', HttpStatus.BAD_REQUEST)
     const rawRequiredWithinMinutes = body.requiredWithinMinutes as unknown
-    const requiredWithinMinutes = rawRequiredWithinMinutes === null || rawRequiredWithinMinutes === '' ? null : Number(rawRequiredWithinMinutes)
+    const requiredWithinMinutes = rawRequiredWithinMinutes === undefined || rawRequiredWithinMinutes === null || rawRequiredWithinMinutes === '' ? null : Number(rawRequiredWithinMinutes)
     if (requiredWithinMinutes !== null && (!Number.isInteger(requiredWithinMinutes) || requiredWithinMinutes <= 0 || requiredWithinMinutes > 24 * 60)) throw new HttpException('Required time window must be between 1 and 1440 minutes', HttpStatus.BAD_REQUEST)
     const triggerType = normalizeTriggerType(body.triggerType, body.requiredForImmediate === true)
     const nightStartTime = body.nightStartTime === null || body.nightStartTime === '' ? null : String(body.nightStartTime)

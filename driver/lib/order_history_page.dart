@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
-import 'floating_nav_bar.dart';
+import 'core/layout/driver_page_shell.dart';
 import 'home_page.dart';
 import 'order_hall_page.dart';
 import 'profile_page.dart';
@@ -14,82 +14,41 @@ class OrderHistoryPage extends StatefulWidget {
 }
 
 class _OrderHistoryPageState extends State<OrderHistoryPage> {
-  int _selectedTab = 0;
+  final int _selectedTab = 0;
   int _selectedHistoryTab = 0;
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xfff0f2f5),
-      body: SafeArea(
-        child: Align(
-          alignment: Alignment.topCenter,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 430),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final width = constraints.maxWidth;
-                return Stack(
-                  children: [
-                    Align(
-                      alignment: Alignment.topCenter,
-                      child: SizedBox(
-                        width: width,
-                        child: SingleChildScrollView(
-                          padding: const EdgeInsets.fromLTRB(24, 24, 24, 140),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              _Header(
-                                  onBack: () => Navigator.of(context).pop()),
-                              const SizedBox(height: 16),
-                              _HistoryTabs(
-                                selectedIndex: _selectedHistoryTab,
-                                onChanged: (index) =>
-                                    setState(() => _selectedHistoryTab = index),
-                              ),
-                              const SizedBox(height: 16),
-                              const Text('2024年3月',
-                                  style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w700,
-                                      color: Color(0xff56657e))),
-                              const SizedBox(height: 8),
-                              ..._historyEntries
-                                  .map((entry) => Padding(
-                                        padding:
-                                            const EdgeInsets.only(bottom: 12),
-                                        child: _HistoryCard(entry: entry),
-                                      ))
-                                  .toList(),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      left: width > 60 ? 30 : 12,
-                      right: width > 60 ? 30 : 12,
-                      bottom: 16,
-                      child: FloatingNavBar(
-                        selectedIndex: _selectedTab,
-                        onHomeTap: () => Navigator.of(context).pushReplacement(
-                            MaterialPageRoute<void>(
-                                builder: (_) => const HomePage())),
-                        onOrderTap: () => Navigator.of(context).pushReplacement(
-                            MaterialPageRoute<void>(
-                                builder: (_) => OrderHallPage())),
-                        onProfileTap: () => Navigator.of(context)
-                            .pushReplacement(MaterialPageRoute<void>(
-                                builder: (_) => const ProfilePage())),
-                      ),
-                    ),
-                  ],
-                );
-              },
-            ),
+    return DriverPageShell(
+      selectedIndex: _selectedTab,
+      bottomPadding: 140,
+      onHomeTap: () => Navigator.of(context).pushReplacement(
+          MaterialPageRoute<void>(builder: (_) => const HomePage())),
+      onOrderTap: () => Navigator.of(context).pushReplacement(
+          MaterialPageRoute<void>(builder: (_) => OrderHallPage())),
+      onProfileTap: () => Navigator.of(context).pushReplacement(
+          MaterialPageRoute<void>(builder: (_) => const ProfilePage())),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _Header(onBack: () => Navigator.of(context).pop()),
+          const SizedBox(height: 16),
+          _HistoryTabs(
+            selectedIndex: _selectedHistoryTab,
+            onChanged: (index) => setState(() => _selectedHistoryTab = index),
           ),
-        ),
+          const SizedBox(height: 16),
+          const Text('2024年3月',
+              style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xff56657e))),
+          const SizedBox(height: 8),
+          ..._historyEntries.map((entry) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _HistoryCard(entry: entry),
+              )),
+        ],
       ),
     );
   }

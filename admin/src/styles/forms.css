@@ -1,0 +1,14 @@
+@import './tokens.css';
+
+.rate-control { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0; color: #29415f; font-size: 13px; font-weight: 700; white-space: nowrap; }
+.rate-control input { width: 110px; height: 40px; box-sizing: border-box; border: 1px solid #b8c7da; border-radius: 12px; padding: 7px 12px; color: #12243b; background: #fff; font-size: 17px; font-weight: 600; outline: none; transition: border-color .2s ease, box-shadow .2s ease; }
+.rate-control input:focus { border-color: #1769e0; box-shadow: 0 0 0 3px rgba(23,105,224,.12); }
+.shell main.readonly form button,
+.shell main.readonly .row-actions button,
+.shell main.readonly .admin-toolbar button,
+.shell main.readonly .currency-switcher button,
+.shell main.readonly td select {
+  pointer-events: none;
+  cursor: not-allowed;
+  opacity: .45;
+}

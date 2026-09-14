@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
-import 'floating_nav_bar.dart';
+import 'core/layout/driver_page_shell.dart';
 import 'home_page.dart';
 import 'order_hall_page.dart';
 import 'order_history_page.dart';
@@ -11,124 +11,74 @@ class ProfilePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xfff0f2f5),
-      body: SafeArea(
-        child: Align(
-          alignment: Alignment.topCenter,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 430),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final width = constraints.maxWidth;
-                return Stack(
-                  children: [
-                    Align(
-                      alignment: Alignment.topCenter,
-                      child: SizedBox(
-                        width: width,
-                        child: SingleChildScrollView(
-                          padding: const EdgeInsets.fromLTRB(24, 24, 24, 140),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              _ProfileHeader(),
-                              SizedBox(height: 24),
-                              _BalanceCard(),
-                              SizedBox(height: 24),
-                              _MenuCard(
-                                title: '主要功能',
-                                items: [
-                                  _MenuItem('個人資料', 'assets/profile-user.svg',
-                                      _IconTone.blue),
-                                  _MenuItem(
-                                      '車輛資料',
-                                      'assets/profile-vehicle.svg',
-                                      _IconTone.green),
-                                  _MenuItem(
-                                      '接單紀錄',
-                                      'assets/profile-clipboard.svg',
-                                      _IconTone.purple,
-                                      onTap: () => Navigator.of(context).push(
-                                          MaterialPageRoute<void>(
-                                              builder: (_) =>
-                                                  const OrderHistoryPage()))),
-                                ],
-                              ),
-                              SizedBox(height: 24),
-                              _MenuCard(
-                                title: '收款設定',
-                                items: [
-                                  _MenuItem('收款幣種', 'assets/profile-fps.svg',
-                                      _IconTone.orange,
-                                      detail: '港幣 HKD、人民幣 CNY'),
-                                  _MenuItem('微信支付', 'assets/profile-wechat.svg',
-                                      _IconTone.green,
-                                      detail: '已綁定：陳大文'),
-                                  _MenuItem('支付寶', 'assets/profile-fps.svg',
-                                      _IconTone.blue,
-                                      detail: '未綁定'),
-                                  _MenuItem('FPS 轉數快', 'assets/profile-fps.svg',
-                                      _IconTone.green,
-                                      detail: '已綁定：陳大文'),
-                                ],
-                              ),
-                              SizedBox(height: 24),
-                              _MenuCard(
-                                title: '設定',
-                                items: [
-                                  _MenuItem('通知設定', 'assets/profile-bell.svg',
-                                      _IconTone.blue),
-                                  _MenuItem('語言設定', 'assets/profile-fps.svg',
-                                      _IconTone.purple),
-                                  _MenuItem('自動結算', 'assets/profile-fps.svg',
-                                      _IconTone.orange,
-                                      toggle: true),
-                                  _MenuItem('結算方式', 'assets/profile-fps.svg',
-                                      _IconTone.green),
-                                ],
-                              ),
-                              SizedBox(height: 24),
-                              _MenuCard(
-                                title: '其他',
-                                items: [
-                                  _MenuItem('關於我們', 'assets/profile-fps.svg',
-                                      _IconTone.blue),
-                                  _MenuItem(
-                                      '聯繫客服',
-                                      'assets/profile-headphones.svg',
-                                      _IconTone.purple),
-                                ],
-                              ),
-                              SizedBox(height: 16),
-                              _LogoutButton(),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      left: width > 60 ? 30 : 12,
-                      right: width > 60 ? 30 : 12,
-                      bottom: 16,
-                      child: FloatingNavBar(
-                        selectedIndex: 2,
-                        onHomeTap: () => Navigator.of(context).pushReplacement(
-                          MaterialPageRoute<void>(
-                              builder: (_) => const HomePage()),
-                        ),
-                        onOrderTap: () => Navigator.of(context).pushReplacement(
-                          MaterialPageRoute<void>(
-                              builder: (_) => const OrderHallPage()),
-                        ),
-                      ),
-                    ),
-                  ],
-                );
-              },
-            ),
+    return DriverPageShell(
+      selectedIndex: 2,
+      bottomPadding: 140,
+      navHorizontalPadding: 30,
+      onHomeTap: () => Navigator.of(context).pushReplacement(
+        MaterialPageRoute<void>(builder: (_) => const HomePage()),
+      ),
+      onOrderTap: () => Navigator.of(context).pushReplacement(
+        MaterialPageRoute<void>(builder: (_) => const OrderHallPage()),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const _ProfileHeader(),
+          const SizedBox(height: 24),
+          const _BalanceCard(),
+          const SizedBox(height: 24),
+          _MenuCard(
+            title: '主要功能',
+            items: [
+              _MenuItem('個人資料', 'assets/profile-user.svg', _IconTone.blue),
+              _MenuItem('車輛資料', 'assets/profile-vehicle.svg', _IconTone.green),
+              _MenuItem(
+                '接單紀錄',
+                'assets/profile-clipboard.svg',
+                _IconTone.purple,
+                onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                    builder: (_) => const OrderHistoryPage())),
+              ),
+            ],
           ),
-        ),
+          const SizedBox(height: 24),
+          _MenuCard(
+            title: '收款設定',
+            items: [
+              _MenuItem('收款幣種', 'assets/profile-fps.svg', _IconTone.orange,
+                  detail: '港幣 HKD、人民幣 CNY'),
+              _MenuItem('微信支付', 'assets/profile-wechat.svg', _IconTone.green,
+                  detail: '已綁定：陳大文'),
+              _MenuItem('支付寶', 'assets/profile-fps.svg', _IconTone.blue,
+                  detail: '未綁定'),
+              _MenuItem('FPS 轉數快', 'assets/profile-fps.svg', _IconTone.green,
+                  detail: '已綁定：陳大文'),
+            ],
+          ),
+          const SizedBox(height: 24),
+          _MenuCard(
+            title: '設定',
+            items: [
+              _MenuItem('通知設定', 'assets/profile-bell.svg', _IconTone.blue),
+              _MenuItem('語言設定', 'assets/profile-fps.svg', _IconTone.purple),
+              _MenuItem('自動結算', 'assets/profile-fps.svg', _IconTone.orange,
+                  toggle: true),
+              _MenuItem('結算方式', 'assets/profile-fps.svg', _IconTone.green),
+            ],
+          ),
+          const SizedBox(height: 24),
+          _MenuCard(
+            title: '其他',
+            items: [
+              _MenuItem('關於我們', 'assets/profile-fps.svg', _IconTone.blue),
+              _MenuItem(
+                  '聯繫客服', 'assets/profile-headphones.svg', _IconTone.purple),
+            ],
+          ),
+          const SizedBox(height: 16),
+          const _LogoutButton(),
+        ],
       ),
     );
   }

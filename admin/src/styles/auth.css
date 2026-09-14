@@ -1,0 +1,15 @@
+@import './tokens.css';
+
+.login { position: relative; min-height: 100vh; display: grid; place-items: center; overflow: hidden; background: radial-gradient(circle at 15% 20%, #56657e 0, transparent 30rem), linear-gradient(135deg, #12243b, #2c527d); }
+.login-language { position: absolute; z-index: 2; top: 24px; right: 28px; border: 1px solid rgba(255,255,255,.45); border-radius: 12px; padding: 10px 14px; color: #fff; background: rgba(255,255,255,.12); font-weight: 700; backdrop-filter: blur(8px); }
+.login-language:hover { background: rgba(255,255,255,.2); }
+.login::before { top: 15%; right: 12%; width: 300px; height: 300px; border-color: rgba(255,255,255,.2); }
+.login-orb { position: absolute; border-radius: 50%; filter: blur(2px); opacity: .3; pointer-events: none; }
+.login-orb-one { width: 180px; height: 180px; top: 8%; left: 8%; background: #6eabff; }
+.login-orb-two { width: 120px; height: 120px; right: 18%; bottom: 8%; background: #8ed8ff; }
+.login form { position: relative; z-index: 1; width: min(430px, calc(100% - 40px)); padding: 42px; border: 1px solid rgba(255,255,255,.7); border-radius: 24px; background: rgba(255,255,255,.97); box-shadow: 0 24px 70px rgba(7,22,43,.28); }
+.login h1 { margin-top: 58px; }
+.login p { margin: 12px 0 30px; color: #657991; }
+.login input { display: block; width: 100%; margin: 12px 0; border: 1px solid #ccd8e7; border-radius: 12px; padding: 14px; color: #12243b; background: #f8fafd; }
+.login input:focus { outline: 3px solid #bcd8ff; border-color: #1769e0; }
+.login form button { width: 100%; margin-top: 12px; }

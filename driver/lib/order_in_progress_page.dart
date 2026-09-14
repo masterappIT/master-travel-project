@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'core/layout/driver_page_shell.dart';
 import 'order_completed_page.dart';
 
 class OrderInProgressPage extends StatelessWidget {
@@ -7,72 +8,66 @@ class OrderInProgressPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xfff0f2f5),
-      body: SafeArea(
-        child: Align(
-          alignment: Alignment.topCenter,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 430),
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Semantics(
-                        button: true,
-                        label: '返回接單大廳',
-                        child: InkWell(
-                          onTap: () => Navigator.of(context).pop(),
-                          child: Row(children: [
-                            SvgPicture.asset(
-                                'assets/in-progress-chevron-left.svg',
-                                width: 20,
-                                height: 20),
-                            const SizedBox(width: 8),
-                            Text('返回接單大廳',
-                                style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w500,
-                                    color: Color(0xff1c1c2e))),
-                          ]),
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 4),
-                        decoration: BoxDecoration(
-                            color: const Color(0xffeaf0ff),
-                            borderRadius: BorderRadius.circular(100)),
-                        child: const Text('進行中',
-                            style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xff285cfc))),
-                      ),
-                    ],
+    return DriverPageShell(
+      selectedIndex: 1,
+      showBottomNavigation: false,
+      topPadding: 24,
+      horizontalPadding: 24,
+      bottomPadding: 24,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Semantics(
+                  button: true,
+                  label: '返回接單大廳',
+                  child: InkWell(
+                    onTap: () => Navigator.of(context).pop(),
+                    child: Row(children: [
+                      SvgPicture.asset('assets/in-progress-chevron-left.svg',
+                          width: 20, height: 20),
+                      const SizedBox(width: 8),
+                      Text('返回接單大廳',
+                          style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                              color: Color(0xff1c1c2e))),
+                    ]),
                   ),
-                  const SizedBox(height: 24),
-                  const _ProgressMapPreview(),
-                  const SizedBox(height: 24),
-                  const _PassengerCard(),
-                  const SizedBox(height: 24),
-                  const _TripProgressCard(),
-                  const SizedBox(height: 24),
-                  ElevatedButton(
-                    onPressed: () => Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                            builder: (_) => const OrderCompletedPage())),
-                    style: _completeStyle(),
-                    child: const Text('完成'),
-                  ),
-                ],
-              ),
+                ),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  decoration: BoxDecoration(
+                      color: const Color(0xffeaf0ff),
+                      borderRadius: BorderRadius.circular(100)),
+                  child: const Text('進行中',
+                      style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xff285cfc))),
+                ),
+              ],
             ),
-          ),
+            const SizedBox(height: 24),
+            const _ProgressMapPreview(),
+            const SizedBox(height: 24),
+            const _PassengerCard(),
+            const SizedBox(height: 24),
+            const _TripProgressCard(),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                      builder: (_) => const OrderCompletedPage())),
+              style: _completeStyle(),
+              child: const Text('完成'),
+            ),
+          ],
         ),
       ),
     );

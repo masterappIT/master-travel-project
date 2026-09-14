@@ -1,0 +1,120 @@
+@import './tokens.css';
+
+.shell button.primary,
+.shell button.btn-save,
+.shell button.add-btn,
+.shell button.action-btn.edit-btn,
+.shell .driver-primary-action,
+.shell .administrator-primary-action,
+.shell .trip-add-order-btn,
+.shell .record-form > button:not(.secondary),
+.shell .address-form > div > button:not(.secondary),
+.shell .pricing-actions button:not(.secondary),
+.shell .driver-settlement-form button:not(.secondary) { border: 0; color: #fff; background: var(--gradient-primary); box-shadow: var(--shadow-primary); }
+.shell button.danger,
+.shell button.danger-btn,
+.shell button.action-btn.delete-btn { color: #fff; background: var(--color-danger); }
+.shell button.secondary { border: 1px solid var(--color-border); color: #425974; background: #e8eef6; box-shadow: none; }
+.shell button.primary,
+.shell button.secondary,
+.shell button.danger,
+.shell button.btn-save,
+.shell button.add-btn,
+.shell button.action-btn,
+.shell button.rate-control button,
+.shell .record-form > button,
+.shell .address-form > div > button { transition: background-color .16s ease, border-color .16s ease, box-shadow .16s ease, color .16s ease, filter .16s ease, transform .16s ease, opacity .16s ease; }
+.shell button.primary:hover:not(:disabled),
+.shell button.btn-save:hover:not(:disabled),
+.shell button.add-btn:hover:not(:disabled),
+.shell button.action-btn:hover:not(:disabled),
+.shell button.rate-control button:hover:not(:disabled) { filter: brightness(1.06); transform: translateY(-1px); }
+.shell button.secondary:hover:not(:disabled) { border-color: #9bbce8; color: var(--color-primary); background: #f5f9ff; }
+.shell button.danger:hover:not(:disabled), .shell button.danger-btn:hover:not(:disabled) { filter: brightness(1.06); transform: translateY(-1px); }
+.shell button:active:not(:disabled) { transform: translateY(0); filter: brightness(.98); }
+
+.shell .form-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border);
+}
+.shell .form-actions button {
+  width: auto;
+  min-width: 112px;
+  min-height: 44px;
+  height: 44px;
+  padding: 0 20px;
+  border-radius: var(--radius-control);
+}
+.shell .form-actions .primary {
+  color: #fff;
+  background: var(--gradient-primary);
+  box-shadow: var(--shadow-primary);
+}
+.shell .form-actions .secondary {
+  border: 1px solid var(--color-border);
+  color: var(--color-ink);
+  background: #f4f7fb;
+  box-shadow: none;
+}
+.shell .form-actions .primary:hover:not(:disabled) { filter: brightness(1.06); transform: translateY(-1px); }
+.shell .form-actions .secondary:hover:not(:disabled) { border-color: #9bbce8; color: var(--color-primary); background: #f5f9ff; }
+.shell .driver-primary-action, .shell .administrator-primary-action, .shell .trip-add-order-btn { min-height: 44px; height: 44px; padding: 0 18px; border-radius: var(--radius-control); background: var(--gradient-primary); box-shadow: var(--shadow-primary); }
+.shell .driver-primary-action:hover:not(:disabled), .shell .administrator-primary-action:hover:not(:disabled), .shell .trip-add-order-btn:hover:not(:disabled) { filter: brightness(1.06); transform: translateY(-1px); }
+.shell .notification-form-actions button,
+.shell .promo-modal-actions button,
+.shell .payment-save-bar button,
+.shell .trip-route-actions button { min-height: 44px; height: 44px; padding-inline: 18px; border-radius: var(--radius-control); }
+.shell .notification-form { gap: 12px; }
+.shell .notification-form-header,
+.shell .notification-form-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.shell .notification-form-header select { flex: 1; min-width: 180px; }.shell .notification-recipient-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 12px; border: 1px solid #dbe3ef; border-radius: 10px; background: #f8fbff; }
+.shell .notification-recipient-grid > input,
+.shell .notification-recipient-grid > p { grid-column: 1 / -1; }
+.shell .notification-recipient-grid label { display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: #52647d; }
+.shell .notification-recipient-grid select { width: 100%; min-height: 120px; padding: 6px; border: 1px solid #dbe3ef; border-radius: 7px; background: #fff; color: #12243b; }
+.shell .notification-recipient-grid option { padding: 5px; }
+.shell .notification-form-actions { justify-content: flex-start; }
+@media (max-width: 700px) {
+  .shell .notification-recipient-grid { grid-template-columns: 1fr; }
+}
+
+/* Keep primary actions compact while preserving a comfortable touch target. */
+.shell .form-actions button,
+.shell .notification-form-actions button,
+.shell .promo-modal-actions button,
+.shell .payment-save-bar button,
+.shell .driver-form-actions button,
+.shell .administrator-form-actions button,
+.shell .user-management .user-form-actions button {
+min-height: 40px;
+height: 40px;
+padding-inline: 16px;
+}
+.shell .form-actions button { min-width: 100px; }
+.driver-primary-action,
+.administrator-primary-action,
+.trip-add-order-btn,
+.dispatch-race-save {
+  min-height: 40px;
+  height: 40px;
+  padding: 0 16px;
+}
+.driver-table-wrap .row-actions button,
+.user-management .user-table-wrap .row-actions button {
+  min-height: 36px;
+  height: 36px;
+  padding-inline: 10px;
+}
+.trip-orders-panel .toolbar-actions button,
+.trip-orders-panel .trip-status-actions button,
+.pricing-actions button,
+.driver-settlement-bar .toolbar-actions button {
+  min-height: 40px;
+  height: 40px;
+  padding-inline: 14px;
+}

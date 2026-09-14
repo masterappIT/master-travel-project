@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import 'core/layout/driver_page_shell.dart';
 import 'order_accepted_page.dart';
 
 class OrderDetailPage extends StatefulWidget {
@@ -15,95 +16,90 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xfff0f2f5),
-      body: SafeArea(
-        child: Align(
-          alignment: Alignment.topCenter,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 430),
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    children: [
-                      Semantics(
-                        button: true,
-                        label: '返回接單大廳',
-                        child: IconButton(
-                          onPressed: () => Navigator.of(context).pop(),
-                          padding: EdgeInsets.zero,
-                          constraints:
-                              const BoxConstraints(minWidth: 44, minHeight: 44),
-                          icon: const Text('<',
-                              style: TextStyle(
-                                  fontSize: 18, color: Color(0xff1c1c2e))),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      const Text('訂單詳情',
-                          style: TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xff1c1c2e))),
-                    ],
+    return DriverPageShell(
+      selectedIndex: 1,
+      showBottomNavigation: false,
+      topPadding: 24,
+      horizontalPadding: 24,
+      bottomPadding: 32,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Semantics(
+                  button: true,
+                  label: '返回接單大廳',
+                  child: IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    padding: EdgeInsets.zero,
+                    constraints:
+                        const BoxConstraints(minWidth: 44, minHeight: 44),
+                    icon: const Text('<',
+                        style:
+                            TextStyle(fontSize: 18, color: Color(0xff1c1c2e))),
                   ),
-                  const SizedBox(height: 8),
-                  const Text('請確認乘客資訊與行程內容',
-                      style: TextStyle(fontSize: 14, color: Color(0xff56657e))),
-                  const SizedBox(height: 24),
-                  const _MapPreview(),
-                  const SizedBox(height: 24),
-                  const _OrderInfoCard(),
-                  const SizedBox(height: 24),
-                  const Text('選擇接單車輛',
-                      style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xff1c1c2e))),
-                  const SizedBox(height: 12),
-                  Row(children: [
-                    Expanded(
-                        child: _VehicleCard(
-                            index: 0,
-                            title: '車輛 1',
-                            type: '轎車',
-                            plate: 'AB 1234',
-                            selected: _selectedVehicle == 0,
-                            onTap: () => setState(() => _selectedVehicle = 0))),
-                    const SizedBox(width: 12),
-                    Expanded(
-                        child: _VehicleCard(
-                            index: 1,
-                            title: '車輛 2',
-                            type: 'MPV',
-                            plate: 'CD 5678',
-                            selected: _selectedVehicle == 1,
-                            onTap: () => setState(() => _selectedVehicle = 1))),
-                  ]),
-                  const SizedBox(height: 24),
-                  Row(children: [
-                    Expanded(
-                        child: OutlinedButton(
-                            onPressed: () => Navigator.of(context).pop(),
-                            style: _secondaryButtonStyle(),
-                            child: const Text('拒絕'))),
-                    const SizedBox(width: 12),
-                    Expanded(
-                        child: ElevatedButton(
-                            onPressed: () => Navigator.of(context).push(
-                                MaterialPageRoute<void>(
-                                    builder: (_) =>
-                                        const OrderAcceptedPage())),
-                            style: _primaryButtonStyle(),
-                            child: const Text('確認接單'))),
-                  ]),
-                ],
-              ),
+                ),
+                const SizedBox(width: 8),
+                const Text('訂單詳情',
+                    style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xff1c1c2e))),
+              ],
             ),
-          ),
+            const SizedBox(height: 8),
+            const Text('請確認乘客資訊與行程內容',
+                style: TextStyle(fontSize: 14, color: Color(0xff56657e))),
+            const SizedBox(height: 24),
+            const _MapPreview(),
+            const SizedBox(height: 24),
+            const _OrderInfoCard(),
+            const SizedBox(height: 24),
+            const Text('選擇接單車輛',
+                style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xff1c1c2e))),
+            const SizedBox(height: 12),
+            Row(children: [
+              Expanded(
+                  child: _VehicleCard(
+                      index: 0,
+                      title: '車輛 1',
+                      type: '轎車',
+                      plate: 'AB 1234',
+                      selected: _selectedVehicle == 0,
+                      onTap: () => setState(() => _selectedVehicle = 0))),
+              const SizedBox(width: 12),
+              Expanded(
+                  child: _VehicleCard(
+                      index: 1,
+                      title: '車輛 2',
+                      type: 'MPV',
+                      plate: 'CD 5678',
+                      selected: _selectedVehicle == 1,
+                      onTap: () => setState(() => _selectedVehicle = 1))),
+            ]),
+            const SizedBox(height: 24),
+            Row(children: [
+              Expanded(
+                  child: OutlinedButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      style: _secondaryButtonStyle(),
+                      child: const Text('拒絕'))),
+              const SizedBox(width: 12),
+              Expanded(
+                  child: ElevatedButton(
+                      onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                              builder: (_) => const OrderAcceptedPage())),
+                      style: _primaryButtonStyle(),
+                      child: const Text('確認接單'))),
+            ]),
+          ],
         ),
       ),
     );
@@ -202,18 +198,20 @@ class _OrderInfoCard extends StatelessWidget {
                 child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                  Text('陳大文',
-                      style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xff1c1c2e))),
-                  SizedBox(height: 4),
-                  Text('香港中環 → 深圳',
-                      style: TextStyle(fontSize: 13, color: Color(0xff57667d))),
-                  SizedBox(height: 4),
-                  Text('2024/03/15 14:00',
-                      style: TextStyle(fontSize: 13, color: Color(0xff56657e)))
-                ]),
+                      Text('陳大文',
+                          style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xff1c1c2e))),
+                      SizedBox(height: 4),
+                      Text('香港中環 → 深圳',
+                          style: TextStyle(
+                              fontSize: 13, color: Color(0xff57667d))),
+                      SizedBox(height: 4),
+                      Text('2024/03/15 14:00',
+                          style:
+                              TextStyle(fontSize: 13, color: Color(0xff56657e)))
+                    ]),
               ),
             ],
           ),
@@ -224,21 +222,18 @@ class _OrderInfoCard extends StatelessWidget {
           const _AddressRow(
               asset: 'assets/order-detail-destination.svg', label: '深圳福田口岸'),
           const SizedBox(height: 12),
-          const Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Expanded(
-                    child: Text('出發時間  2024/03/15 14:00',
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                            fontSize: 13, color: Color(0xff56657e)))),
-                SizedBox(width: 12),
-                Text('\$280.00',
-                    style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xff4cd964)))
-              ]),
+          const Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+            Expanded(
+                child: Text('出發時間  2024/03/15 14:00',
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 13, color: Color(0xff56657e)))),
+            SizedBox(width: 12),
+            Text('\$280.00',
+                style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xff4cd964)))
+          ]),
         ]),
       );
 }

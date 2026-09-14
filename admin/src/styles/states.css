@@ -1,0 +1,3 @@
+@import './tokens.css';
+
+.error, small { display: block; margin: 14px 0; color: #a52b2b; }.loading { position: fixed; right: 28px; bottom: 24px; border-radius: 999px; padding: 10px 14px; color: #245687; background: #fff; box-shadow: 0 8px 22px rgba(39,72,111,.14); }

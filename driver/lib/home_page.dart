@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
-import 'floating_nav_bar.dart';
-import 'order_hall_page.dart';
-import 'profile_page.dart';
+import 'app/router.dart';
+import 'core/layout/driver_page_shell.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -17,71 +16,28 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xfff0f2f5),
-      body: SafeArea(
-        child: Align(
-          alignment: Alignment.topCenter,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 430),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final contentWidth = constraints.maxWidth;
-                return Stack(
-                  children: [
-                    Align(
-                      alignment: Alignment.topCenter,
-                      child: SizedBox(
-                        width: contentWidth,
-                        child: SingleChildScrollView(
-                          padding: const EdgeInsets.fromLTRB(24, 12, 24, 120),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              _ProfileHeader(
-                                onNotificationTap: () {},
-                              ),
-                              const SizedBox(height: 20),
-                              _StatusCard(
-                                isOnline: _isOnline,
-                                onChanged: (value) =>
-                                    setState(() => _isOnline = value),
-                              ),
-                              const SizedBox(height: 20),
-                              const _EarningsCard(),
-                              const SizedBox(height: 20),
-                              const _QuickStatsRow(),
-                              const SizedBox(height: 20),
-                              const _RecentOrdersSection(),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      left: contentWidth > 60 ? 30 : 12,
-                      right: contentWidth > 60 ? 30 : 12,
-                      bottom: 16,
-                      child: FloatingNavBar(
-                        selectedIndex: 0,
-                        onOrderTap: () => Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (_) => const OrderHallPage(),
-                          ),
-                        ),
-                        onProfileTap: () => Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (_) => const ProfilePage(),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                );
-              },
-            ),
+    return DriverPageShell(
+      selectedIndex: 0,
+      topPadding: 12,
+      bottomPadding: 120,
+      onOrderTap: () => Navigator.of(context).pushNamed(DriverRoutes.orders),
+      onProfileTap: () => Navigator.of(context).pushNamed(DriverRoutes.profile),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _ProfileHeader(onNotificationTap: () {}),
+          const SizedBox(height: 20),
+          _StatusCard(
+            isOnline: _isOnline,
+            onChanged: (value) => setState(() => _isOnline = value),
           ),
-        ),
+          const SizedBox(height: 20),
+          const _EarningsCard(),
+          const SizedBox(height: 20),
+          const _QuickStatsRow(),
+          const SizedBox(height: 20),
+          const _RecentOrdersSection(),
+        ],
       ),
     );
   }

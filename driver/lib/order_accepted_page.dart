@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import 'core/layout/driver_page_shell.dart';
 import 'order_in_progress_page.dart';
 
 class OrderAcceptedPage extends StatelessWidget {
@@ -8,76 +9,72 @@ class OrderAcceptedPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xfff0f2f5),
-      body: SafeArea(
-        child: Align(
-          alignment: Alignment.topCenter,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 430),
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      InkWell(
-                        onTap: () => Navigator.of(context).pop(),
-                        child: Row(children: [
-                          const Text('<',
-                              style: TextStyle(
-                                  fontSize: 20, color: Color(0xff1c1c2e))),
-                          const SizedBox(width: 8),
-                          const Text('返回接單大廳',
-                              style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w500,
-                                  color: Color(0xff1c1c2e))),
-                        ]),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 4),
-                        decoration: BoxDecoration(
-                            color: const Color(0xffebf9f1),
-                            borderRadius: BorderRadius.circular(100)),
-                        child: const Text('成功接單',
-                            style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xff4cd964))),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  const _AcceptedMapPreview(),
-                  const SizedBox(height: 24),
-                  const _AcceptedOrderCard(),
-                  const SizedBox(height: 24),
-                  const _AcceptedVehicleCard(),
-                  const SizedBox(height: 24),
-                  Row(children: [
-                    Expanded(
-                        child: OutlinedButton(
-                            onPressed: () => Navigator.of(context).pop(),
-                            style: _cancelStyle(),
-                            child: const Text('取消訂單'))),
-                    const SizedBox(width: 12),
-                    Expanded(
-                        child: ElevatedButton(
-                      onPressed: () => Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                              builder: (_) => const OrderInProgressPage())),
-                      style: _arrivedStyle(),
-                      child: const Text('已到達上車點'),
-                    )),
+    return DriverPageShell(
+      selectedIndex: 1,
+      showBottomNavigation: false,
+      topPadding: 24,
+      horizontalPadding: 24,
+      bottomPadding: 24,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                InkWell(
+                  onTap: () => Navigator.of(context).pop(),
+                  child: Row(children: [
+                    const Text('<',
+                        style:
+                            TextStyle(fontSize: 20, color: Color(0xff1c1c2e))),
+                    const SizedBox(width: 8),
+                    const Text('返回接單大廳',
+                        style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                            color: Color(0xff1c1c2e))),
                   ]),
-                ],
-              ),
+                ),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  decoration: BoxDecoration(
+                      color: const Color(0xffebf9f1),
+                      borderRadius: BorderRadius.circular(100)),
+                  child: const Text('成功接單',
+                      style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xff4cd964))),
+                ),
+              ],
             ),
-          ),
+            const SizedBox(height: 24),
+            const _AcceptedMapPreview(),
+            const SizedBox(height: 24),
+            const _AcceptedOrderCard(),
+            const SizedBox(height: 24),
+            const _AcceptedVehicleCard(),
+            const SizedBox(height: 24),
+            Row(children: [
+              Expanded(
+                  child: OutlinedButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      style: _cancelStyle(),
+                      child: const Text('取消訂單'))),
+              const SizedBox(width: 12),
+              Expanded(
+                  child: ElevatedButton(
+                onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                        builder: (_) => const OrderInProgressPage())),
+                style: _arrivedStyle(),
+                child: const Text('已到達上車點'),
+              )),
+            ]),
+          ],
         ),
       ),
     );

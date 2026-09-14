@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'core/layout/driver_page_shell.dart';
 import 'order_hall_page.dart';
 
 class OrderCompletedPage extends StatelessWidget {
@@ -7,42 +8,38 @@ class OrderCompletedPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xfff0f2f5),
-      body: SafeArea(
-        child: Align(
-          alignment: Alignment.topCenter,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 430),
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const _CompletionHeader(),
-                  const SizedBox(height: 24),
-                  const _CompletedMapPreview(),
-                  const SizedBox(height: 24),
-                  const _OrderDetailsCard(),
-                  const SizedBox(height: 24),
-                  const _FareBreakdownCard(),
-                  const SizedBox(height: 24),
-                  ElevatedButton(
-                    onPressed: () {
-                      Navigator.of(context).pushAndRemoveUntil(
-                        MaterialPageRoute<void>(
-                          builder: (_) => const OrderHallPage(),
-                        ),
-                        (route) => false,
-                      );
-                    },
-                    style: _completeStyle(),
-                    child: const Text('確認完成'),
+    return DriverPageShell(
+      selectedIndex: 1,
+      showBottomNavigation: false,
+      topPadding: 24,
+      horizontalPadding: 24,
+      bottomPadding: 24,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const _CompletionHeader(),
+            const SizedBox(height: 24),
+            const _CompletedMapPreview(),
+            const SizedBox(height: 24),
+            const _OrderDetailsCard(),
+            const SizedBox(height: 24),
+            const _FareBreakdownCard(),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const OrderHallPage(),
                   ),
-                ],
-              ),
+                  (route) => false,
+                );
+              },
+              style: _completeStyle(),
+              child: const Text('確認完成'),
             ),
-          ),
+          ],
         ),
       ),
     );

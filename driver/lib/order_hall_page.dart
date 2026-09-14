@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'floating_nav_bar.dart';
-import 'home_page.dart';
-import 'profile_page.dart';
+import 'app/router.dart';
+import 'core/layout/driver_page_shell.dart';
 import 'order_detail_page.dart';
 
 class OrderHallPage extends StatefulWidget {
@@ -16,100 +15,59 @@ class _OrderHallPageState extends State<OrderHallPage> {
   int _selectedTab = 0;
 
   void _openOrderDetail() {
-    Navigator.of(context)
-        .push(MaterialPageRoute<void>(builder: (_) => const OrderDetailPage()));
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const OrderDetailPage()),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xfff0f2f5),
-      body: SafeArea(
-        child: Align(
-          alignment: Alignment.topCenter,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 430),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final contentWidth = constraints.maxWidth;
-                return Stack(
-                  children: [
-                    Align(
-                      alignment: Alignment.topCenter,
-                      child: SizedBox(
-                        width: contentWidth,
-                        child: SingleChildScrollView(
-                          padding: const EdgeInsets.fromLTRB(24, 24, 24, 104),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: const [
-                                    Text('接單大廳',
-                                        style: TextStyle(
-                                            fontSize: 24,
-                                            fontWeight: FontWeight.w700,
-                                            color: Color(0xff1c1c2e))),
-                                    _OnlineBadge()
-                                  ]),
-                              const SizedBox(height: 24),
-                              _OrderTabs(
-                                  selectedIndex: _selectedTab,
-                                  onChanged: (index) =>
-                                      setState(() => _selectedTab = index)),
-                              const SizedBox(height: 12),
-                              if (_selectedTab == 0) ...[
-                                _OrderCard(
-                                    passenger: '陳大文',
-                                    time: '2024/03/15 14:00',
-                                    price: '\$280.00',
-                                    origin: '香港中環置地廣場東門大堂',
-                                    destination: '深圳福田口岸',
-                                    estimatedTime: '預估 18 分鐘',
-                                    onTap: _openOrderDetail),
-                                const SizedBox(height: 12),
-                                _OrderCard(
-                                    passenger: '王小姐',
-                                    time: '2024/03/15 15:30',
-                                    price: '\$420.00',
-                                    origin: '香港機場',
-                                    destination: '珠海',
-                                    estimatedTime: '預估 38 分鐘',
-                                    onTap: _openOrderDetail),
-                              ] else
-                                const _EmptyAcceptedOrders(),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                        left: contentWidth > 60 ? 30 : 12,
-                        right: contentWidth > 60 ? 30 : 12,
-                        bottom: 16,
-                        child: FloatingNavBar(
-                          selectedIndex: 1,
-                          onHomeTap: () =>
-                              Navigator.of(context).pushReplacement(
-                            MaterialPageRoute<void>(
-                              builder: (_) => const HomePage(),
-                            ),
-                          ),
-                          onProfileTap: () =>
-                              Navigator.of(context).pushReplacement(
-                            MaterialPageRoute<void>(
-                              builder: (_) => const ProfilePage(),
-                            ),
-                          ),
-                        )),
-                  ],
-                );
-              },
-            ),
-          ),
-        ),
+    return DriverPageShell(
+      selectedIndex: 1,
+      bottomPadding: 104,
+      onHomeTap: () =>
+          Navigator.of(context).pushReplacementNamed(DriverRoutes.home),
+      onProfileTap: () =>
+          Navigator.of(context).pushReplacementNamed(DriverRoutes.profile),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: const [
+                Text('接單大廳',
+                    style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xff1c1c2e))),
+                _OnlineBadge()
+              ]),
+          const SizedBox(height: 24),
+          _OrderTabs(
+              selectedIndex: _selectedTab,
+              onChanged: (index) => setState(() => _selectedTab = index)),
+          const SizedBox(height: 12),
+          if (_selectedTab == 0) ...[
+            _OrderCard(
+                passenger: '陳大文',
+                time: '2024/03/15 14:00',
+                price: '\$280.00',
+                origin: '香港中環置地廣場東門大堂',
+                destination: '深圳福田口岸',
+                estimatedTime: '預估 18 分鐘',
+                onTap: _openOrderDetail),
+            const SizedBox(height: 12),
+            _OrderCard(
+                passenger: '王小姐',
+                time: '2024/03/15 15:30',
+                price: '\$420.00',
+                origin: '香港機場',
+                destination: '珠海',
+                estimatedTime: '預估 38 分鐘',
+                onTap: _openOrderDetail),
+          ] else
+            const _EmptyAcceptedOrders(),
+        ],
       ),
     );
   }
@@ -255,7 +213,8 @@ class _OrderCard extends StatelessWidget {
                   _RouteRow(asset: 'assets/route-origin.svg', label: origin),
                   const SizedBox(height: 2),
                   _RouteRow(
-                      asset: 'assets/route-destination.svg', label: destination),
+                      asset: 'assets/route-destination.svg',
+                      label: destination),
                 ],
               ),
               const SizedBox(height: 12),
@@ -263,7 +222,8 @@ class _OrderCard extends StatelessWidget {
               const SizedBox(height: 12),
               Row(
                 children: [
-                  SvgPicture.asset('assets/route-driver.svg', width: 8, height: 8),
+                  SvgPicture.asset('assets/route-driver.svg',
+                      width: 8, height: 8),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(passenger,
@@ -288,8 +248,8 @@ class _OrderCard extends StatelessWidget {
                         horizontal: 16, vertical: 12),
                   ),
                   child: const Text('接單',
-                      style: TextStyle(
-                          fontSize: 14, fontWeight: FontWeight.w700)),
+                      style:
+                          TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
                 ),
               ),
             ],
