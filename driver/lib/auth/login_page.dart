@@ -2,12 +2,101 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../app/route_names.dart';
+import '../core/api/driver_api_client.dart';
 import '../core/navigation/driver_navigation.dart';
 
 import 'package:driver_web/core/tokens/driver_tokens.dart';
 
-class LoginPage extends StatelessWidget {
+class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
+
+  @override
+  State<LoginPage> createState() => _LoginPageState();
+}
+
+class _LoginPageState extends State<LoginPage> {
+  static const _testLoginEnabled = bool.fromEnvironment('DRIVER_TEST_LOGIN');
+  final _phoneController = TextEditingController();
+  final _codeController = TextEditingController();
+  final _api = DriverApiClient.instance;
+  String? _challengeId;
+  String? _error;
+  bool _loading = false;
+
+  @override
+  void dispose() {
+    _phoneController.dispose();
+    _codeController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _testLogin() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final result = await _api.requestPhoneCode(
+          countryCode: '+852', phoneNumber: '99998880');
+      await _api.verifyPhoneCode(
+          challengeId: result['challengeId'] as String, code: '0000');
+      if (!mounted) return;
+      DriverNavigation.replace(context, DriverRouteNames.home);
+    } on DriverApiException catch (error) {
+      if (mounted) setState(() => _error = error.message);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _requestCode() async {
+    final phone = _phoneController.text.trim();
+    if (phone.isEmpty) {
+      setState(() => _error = '請輸入手機號碼');
+      return;
+    }
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final result =
+          await _api.requestPhoneCode(countryCode: '+852', phoneNumber: phone);
+      if (!mounted) return;
+      setState(() => _challengeId = result['challengeId'] as String?);
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('驗證碼已發送')));
+    } on DriverApiException catch (error) {
+      if (mounted) setState(() => _error = error.message);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _verify() async {
+    final code = _codeController.text.trim();
+    if (_challengeId == null) {
+      setState(() => _error = '請先獲取驗證碼');
+      return;
+    }
+    if (code.isEmpty) {
+      setState(() => _error = '請輸入驗證碼');
+      return;
+    }
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      await _api.verifyPhoneCode(challengeId: _challengeId!, code: code);
+      if (!mounted) return;
+      DriverNavigation.replace(context, DriverRouteNames.home);
+    } on DriverApiException catch (error) {
+      if (mounted) setState(() => _error = error.message);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -26,9 +115,27 @@ class LoginPage extends StatelessWidget {
                   children: [
                     const _Header(),
                     const SizedBox(height: DriverSpacing.xl),
-                    const _VerificationCard(),
+                    _VerificationCard(
+                        phoneController: _phoneController,
+                        codeController: _codeController,
+                        onRequestCode: _requestCode,
+                        loading: _loading),
+                    if (_error != null) ...[
+                      const SizedBox(height: DriverSpacing.sm),
+                      Text(_error!,
+                          style: const TextStyle(color: Colors.red),
+                          textAlign: TextAlign.center),
+                    ],
+                    if (_testLoginEnabled) ...[
+                      const SizedBox(height: DriverSpacing.md),
+                      _PrimaryButton(
+                          label: '測試登入（跳過驗證碼）',
+                          fontSize: DriverTypography.body,
+                          fullWidth: true,
+                          onPressed: _loading ? null : _testLogin),
+                    ],
                     const SizedBox(height: DriverSpacing.xl),
-                    const _ActionCard(),
+                    _ActionCard(onLogin: _verify, loading: _loading),
                   ],
                 ),
               ),
@@ -74,7 +181,15 @@ class _Header extends StatelessWidget {
 }
 
 class _VerificationCard extends StatelessWidget {
-  const _VerificationCard();
+  const _VerificationCard(
+      {required this.phoneController,
+      required this.codeController,
+      required this.onRequestCode,
+      required this.loading});
+  final TextEditingController phoneController;
+  final TextEditingController codeController;
+  final VoidCallback onRequestCode;
+  final bool loading;
 
   @override
   Widget build(BuildContext context) => _Card(
@@ -98,10 +213,12 @@ class _VerificationCard extends StatelessWidget {
               const SizedBox(width: DriverSpacing.md),
               Container(width: 1, height: 20, color: const Color(0xffd1d1d9)),
               const SizedBox(width: DriverSpacing.sm),
-              const Expanded(
-                  child: Text('請輸入手機號碼',
-                      style: TextStyle(
-                          fontSize: 15, color: DriverColors.secondaryText))),
+              Expanded(
+                  child: TextField(
+                      controller: phoneController,
+                      keyboardType: TextInputType.phone,
+                      decoration: const InputDecoration(
+                          border: InputBorder.none, hintText: '請輸入手機號碼'))),
             ]),
           ),
           const SizedBox(height: DriverSpacing.lg),
@@ -109,26 +226,30 @@ class _VerificationCard extends StatelessWidget {
           const SizedBox(height: DriverSpacing.sm),
           LayoutBuilder(
             builder: (context, constraints) {
-              final codeField = const SizedBox(
-                  height: 50, child: _InputHint('請輸入 6 位數簡訊驗證碼'));
+              final codeField = SizedBox(
+                  height: 50,
+                  child: TextField(
+                      controller: codeController,
+                      keyboardType: TextInputType.number,
+                      decoration: _inputDecoration('請輸入 6 位數簡訊驗證碼')));
               final compact = constraints.maxWidth < 350;
+              final button = _PrimaryButton(
+                  label: loading ? '處理中' : '獲取驗證碼',
+                  fontSize: DriverTypography.body,
+                  fullWidth: compact,
+                  onPressed: loading ? null : onRequestCode);
               return compact
                   ? Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        codeField,
-                        const SizedBox(height: DriverSpacing.md),
-                        const _PrimaryButton(
-                            label: '獲取驗證碼',
-                            fontSize: DriverTypography.body,
-                            fullWidth: true)
-                      ],
-                    )
+                          codeField,
+                          const SizedBox(height: DriverSpacing.md),
+                          button
+                        ])
                   : Row(children: [
                       Expanded(child: codeField),
                       const SizedBox(width: DriverSpacing.md),
-                      const _PrimaryButton(
-                          label: '獲取驗證碼', fontSize: DriverTypography.body),
+                      button
                     ]);
             },
           ),
@@ -137,17 +258,18 @@ class _VerificationCard extends StatelessWidget {
 }
 
 class _ActionCard extends StatelessWidget {
-  const _ActionCard();
+  const _ActionCard({required this.onLogin, required this.loading});
+  final VoidCallback onLogin;
+  final bool loading;
 
   @override
   Widget build(BuildContext context) => _Card(
         children: [
           _PrimaryButton(
-              label: '登入 / 註冊',
+              label: loading ? '登入中' : '登入 / 註冊',
               fontSize: DriverTypography.bodyLarge,
               fullWidth: true,
-              onPressed: () => DriverNavigation.push(
-                  context, DriverRouteNames.registration)),
+              onPressed: loading ? null : onLogin),
           const SizedBox(height: DriverSpacing.lg),
           const Text.rich(
               TextSpan(text: '登入即代表您同意 ', children: [
@@ -222,20 +344,6 @@ class _FieldLabel extends StatelessWidget {
           color: DriverColors.text));
 }
 
-class _InputHint extends StatelessWidget {
-  const _InputHint(this.label);
-  final String label;
-  @override
-  Widget build(BuildContext context) => Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      alignment: Alignment.centerLeft,
-      decoration: _fieldDecoration(),
-      child: Text(label,
-          style:
-              const TextStyle(fontSize: 15, color: DriverColors.secondaryText),
-          overflow: TextOverflow.ellipsis));
-}
-
 class _PrimaryButton extends StatelessWidget {
   const _PrimaryButton(
       {required this.label,
@@ -307,3 +415,9 @@ BoxDecoration _fieldDecoration() => BoxDecoration(
     color: Colors.white,
     border: Border.all(color: DriverColors.border),
     borderRadius: BorderRadius.circular(DriverRadii.input));
+
+InputDecoration _inputDecoration(String hint) => InputDecoration(
+      hintText: hint,
+      border: InputBorder.none,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+    );

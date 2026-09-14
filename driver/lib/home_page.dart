@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import 'app/route_names.dart';
+import 'core/api/driver_api_client.dart';
 import 'core/layout/driver_page_shell.dart';
 import 'core/navigation/driver_navigation.dart';
 
@@ -15,7 +16,51 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  bool _isOnline = true;
+  final _api = DriverApiClient.instance;
+  bool _isOnline = false;
+  bool _loading = true;
+  String? _error;
+  Map<String, dynamic>? _driver;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDriver();
+  }
+
+  Future<void> _loadDriver() async {
+    try {
+      final result = await _api.me();
+      if (!mounted) return;
+      final driver = Map<String, dynamic>.from(result);
+      setState(() {
+        _driver = driver;
+        _isOnline = driver['isOnline'] == true;
+        _loading = false;
+      });
+    } on DriverApiException catch (error) {
+      if (mounted)
+        setState(() {
+          _error = error.message;
+          _loading = false;
+        });
+    }
+  }
+
+  Future<void> _toggleOnline(bool value) async {
+    final previous = _isOnline;
+    setState(() => _isOnline = value);
+    try {
+      final result = await _api.updateStatus(value);
+      if (mounted) setState(() => _driver = Map<String, dynamic>.from(result));
+    } on DriverApiException catch (error) {
+      if (mounted)
+        setState(() {
+          _isOnline = previous;
+          _error = error.message;
+        });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -26,29 +71,36 @@ class _HomePageState extends State<HomePage> {
       onOrderTap: () => DriverNavigation.push(context, DriverRouteNames.orders),
       onProfileTap: () =>
           DriverNavigation.push(context, DriverRouteNames.profile),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _ProfileHeader(onNotificationTap: () {}),
-          const SizedBox(height: 20),
-          _StatusCard(
-            isOnline: _isOnline,
-            onChanged: (value) => setState(() => _isOnline = value),
-          ),
-          const SizedBox(height: 20),
-          const _EarningsCard(),
-          const SizedBox(height: 20),
-          const _QuickStatsRow(),
-          const SizedBox(height: 20),
-          const _RecentOrdersSection(),
-        ],
-      ),
+      child: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+              ? Center(child: Text(_error!))
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _ProfileHeader(
+                        name: (_driver?['name'] as String?) ?? '司機',
+                        onNotificationTap: () {}),
+                    const SizedBox(height: 20),
+                    _StatusCard(
+                      isOnline: _isOnline,
+                      onChanged: _toggleOnline,
+                    ),
+                    const SizedBox(height: 20),
+                    const _EarningsCard(),
+                    const SizedBox(height: 20),
+                    const _QuickStatsRow(),
+                    const SizedBox(height: 20),
+                    const _RecentOrdersSection(),
+                  ],
+                ),
     );
   }
 }
 
 class _ProfileHeader extends StatelessWidget {
-  const _ProfileHeader({required this.onNotificationTap});
+  const _ProfileHeader({required this.name, required this.onNotificationTap});
+  final String name;
   final VoidCallback onNotificationTap;
 
   @override
@@ -56,13 +108,13 @@ class _ProfileHeader extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Expanded(
-            child: const Column(
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
                     Flexible(
-                      child: Text('陳大文',
+                      child: Text(name,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                               fontSize: 24,

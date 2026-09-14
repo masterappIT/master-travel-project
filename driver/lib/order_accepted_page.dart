@@ -2,13 +2,50 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import 'app/route_names.dart';
+import 'core/api/driver_api_client.dart';
 import 'core/layout/driver_page_shell.dart';
 import 'core/navigation/driver_navigation.dart';
 
 import 'package:driver_web/core/tokens/driver_tokens.dart';
 
-class OrderAcceptedPage extends StatelessWidget {
-  const OrderAcceptedPage({super.key});
+class OrderAcceptedPage extends StatefulWidget {
+  const OrderAcceptedPage({super.key, this.tripId});
+
+  final String? tripId;
+
+  @override
+  State<OrderAcceptedPage> createState() => _OrderAcceptedPageState();
+}
+
+class _OrderAcceptedPageState extends State<OrderAcceptedPage> {
+  final _api = DriverApiClient.instance;
+  bool _loading = false;
+
+  Future<void> _markArrived() async {
+    setState(() => _loading = true);
+    try {
+      final tripId = widget.tripId;
+      if (tripId == null) throw StateError('missing trip id');
+      await _api.arriveTrip(tripId);
+      await _api.startTrip(tripId);
+      if (mounted)
+        DriverNavigation.push(
+          context,
+          DriverRouteNames.orderInProgress,
+          arguments: widget.tripId,
+        );
+    } on StateError {
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('找不到可到達的訂單')));
+    } on DriverApiException catch (error) {
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error.message)));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -67,10 +104,9 @@ class OrderAcceptedPage extends StatelessWidget {
             const SizedBox(width: DriverSpacing.md),
             Expanded(
                 child: ElevatedButton(
-              onPressed: () => DriverNavigation.push(
-                  context, DriverRouteNames.orderInProgress),
+              onPressed: _loading ? null : _markArrived,
               style: _arrivedStyle(),
-              child: const Text('已到達上車點'),
+              child: Text(_loading ? '處理中…' : '已到達上車點'),
             )),
           ]),
         ],

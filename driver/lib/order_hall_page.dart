@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'app/route_names.dart';
+import 'core/api/driver_api_client.dart';
 import 'core/layout/driver_page_shell.dart';
 import 'core/navigation/driver_navigation.dart';
 
@@ -14,10 +15,45 @@ class OrderHallPage extends StatefulWidget {
 }
 
 class _OrderHallPageState extends State<OrderHallPage> {
+  final _api = DriverApiClient.instance;
   int _selectedTab = 0;
+  bool _loading = true;
+  String? _error;
+  List<dynamic> _available = [];
+  List<dynamic> _accepted = [];
 
-  void _openOrderDetail() {
-    DriverNavigation.push(context, DriverRouteNames.orderDetail);
+  @override
+  void initState() {
+    super.initState();
+    _loadTrips();
+  }
+
+  Future<void> _loadTrips() async {
+    try {
+      final results = await Future.wait([_api.availableTrips(), _api.trips()]);
+      if (!mounted) return;
+      setState(() {
+        _available = results[0];
+        _accepted = results[1]
+            .where((trip) =>
+                trip is Map &&
+                trip['driverId'] != null &&
+                trip['completedAt'] == null)
+            .toList();
+        _loading = false;
+      });
+    } on DriverApiException catch (error) {
+      if (mounted)
+        setState(() {
+          _error = error.message;
+          _loading = false;
+        });
+    }
+  }
+
+  void _openOrderDetail(String id) {
+    DriverNavigation.push(context, DriverRouteNames.orderDetail, arguments: id)
+        .then((_) => _loadTrips());
   }
 
   @override
@@ -46,30 +82,71 @@ class _OrderHallPageState extends State<OrderHallPage> {
               selectedIndex: _selectedTab,
               onChanged: (index) => setState(() => _selectedTab = index)),
           const SizedBox(height: DriverSpacing.md),
-          if (_selectedTab == 0) ...[
-            _OrderCard(
-                passenger: '陳大文',
-                time: '2024/03/15 14:00',
-                price: '\$280.00',
-                origin: '香港中環置地廣場東門大堂',
-                destination: '深圳福田口岸',
-                estimatedTime: '預估 18 分鐘',
-                onTap: _openOrderDetail),
-            const SizedBox(height: DriverSpacing.md),
-            _OrderCard(
-                passenger: '王小姐',
-                time: '2024/03/15 15:30',
-                price: '\$420.00',
-                origin: '香港機場',
-                destination: '珠海',
-                estimatedTime: '預估 38 分鐘',
-                onTap: _openOrderDetail),
-          ] else
-            const _EmptyAcceptedOrders(),
+          if (_loading)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: DriverSpacing.xl),
+                child: CircularProgressIndicator(),
+              ),
+            )
+          else if (_error != null)
+            Center(child: Padding(
+              padding: EdgeInsets.symmetric(vertical: DriverSpacing.xl),
+              child: Text(_error!),
+            ))
+          else if (_selectedTab == 0)
+            ..._available.map((trip) {
+              final item = Map<String, dynamic>.from(trip as Map);
+              return Padding(
+                padding: const EdgeInsets.only(bottom: DriverSpacing.md),
+                child: _OrderCard(
+                  passenger: item['passengerName']?.toString() ??
+                      item['user']?['name']?.toString() ??
+                      '乘客',
+                  time: _formatTripTime(item['scheduledAt']),
+                  price: item['price'] != null ? '\$${item['price']}' : '待確認',
+                  origin: item['pickupAddress']?.toString() ??
+                      item['origin']?.toString() ??
+                      '起點待確認',
+                  destination: item['dropoffAddress']?.toString() ??
+                      item['destination']?.toString() ??
+                      '終點待確認',
+                  estimatedTime: '預估行程',
+                  onTap: () => _openOrderDetail(item['id'].toString()),
+                ),
+              );
+            })
+          else if (_accepted.isEmpty)
+            const _EmptyAcceptedOrders()
+          else
+            ..._accepted.map((trip) {
+              final item = Map<String, dynamic>.from(trip as Map);
+              return Padding(
+                padding: const EdgeInsets.only(bottom: DriverSpacing.md),
+                child: _OrderCard(
+                  passenger: item['user']?['name']?.toString() ??
+                      item['passengerName']?.toString() ??
+                      '乘客',
+                  time: _formatTripTime(item['scheduledAt']),
+                  price: item['price'] != null ? '\$${item['price']}' : '待確認',
+                  origin: item['pickupAddress']?.toString() ?? '起點待確認',
+                  destination: item['dropoffAddress']?.toString() ?? '終點待確認',
+                  estimatedTime: '已成功接單',
+                  onTap: () => _openOrderDetail(item['id'].toString()),
+                ),
+              );
+            }),
         ],
       ),
     );
   }
+}
+
+String _formatTripTime(dynamic value) {
+  if (value == null) return '時間待確認';
+  final date = DateTime.tryParse(value.toString());
+  if (date == null) return value.toString();
+  return '${date.year}/${date.month.toString().padLeft(2, '0')}/${date.day.toString().padLeft(2, '0')} ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
 }
 
 class _OnlineBadge extends StatelessWidget {

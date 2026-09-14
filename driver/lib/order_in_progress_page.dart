@@ -1,13 +1,45 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'app/route_names.dart';
+import 'core/api/driver_api_client.dart';
 import 'core/layout/driver_page_shell.dart';
 import 'core/navigation/driver_navigation.dart';
 
 import 'package:driver_web/core/tokens/driver_tokens.dart';
 
-class OrderInProgressPage extends StatelessWidget {
-  const OrderInProgressPage({super.key});
+class OrderInProgressPage extends StatefulWidget {
+  const OrderInProgressPage({super.key, this.tripId});
+
+  final String? tripId;
+
+  @override
+  State<OrderInProgressPage> createState() => _OrderInProgressPageState();
+}
+
+class _OrderInProgressPageState extends State<OrderInProgressPage> {
+  final _api = DriverApiClient.instance;
+  bool _loading = false;
+
+  Future<void> _completeTrip() async {
+    setState(() => _loading = true);
+    try {
+      final tripId = widget.tripId;
+      if (tripId == null) throw StateError('missing trip id');
+      await _api.completeTrip(tripId);
+      if (mounted)
+        DriverNavigation.push(context, DriverRouteNames.orderCompleted);
+    } on StateError {
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('找不到進行中的訂單')));
+    } on DriverApiException catch (error) {
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error.message)));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -62,10 +94,9 @@ class OrderInProgressPage extends StatelessWidget {
           const _TripProgressCard(),
           const SizedBox(height: DriverSpacing.xl),
           ElevatedButton(
-            onPressed: () =>
-                DriverNavigation.push(context, DriverRouteNames.orderCompleted),
+            onPressed: _loading ? null : _completeTrip,
             style: _completeStyle(),
-            child: const Text('完成'),
+            child: Text(_loading ? '處理中…' : '完成'),
           ),
         ],
       ),

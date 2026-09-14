@@ -2,20 +2,44 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import 'app/route_names.dart';
+import 'core/api/driver_api_client.dart';
 import 'core/layout/driver_page_shell.dart';
 import 'core/navigation/driver_navigation.dart';
 
 import 'package:driver_web/core/tokens/driver_tokens.dart';
 
 class OrderDetailPage extends StatefulWidget {
-  const OrderDetailPage({super.key});
+  const OrderDetailPage({super.key, this.tripId});
+  final String? tripId;
 
   @override
   State<OrderDetailPage> createState() => _OrderDetailPageState();
 }
 
 class _OrderDetailPageState extends State<OrderDetailPage> {
+  final _api = DriverApiClient.instance;
   int _selectedVehicle = 0;
+  bool _accepting = false;
+
+  Future<void> _acceptTrip() async {
+    if (widget.tripId == null) return;
+    setState(() => _accepting = true);
+    try {
+      await _api.acceptTrip(widget.tripId!);
+      if (mounted)
+        DriverNavigation.push(
+          context,
+          DriverRouteNames.orderAccepted,
+          arguments: widget.tripId,
+        );
+    } on DriverApiException catch (error) {
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error.message)));
+    } finally {
+      if (mounted) setState(() => _accepting = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -95,10 +119,9 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
             const SizedBox(width: DriverSpacing.md),
             Expanded(
                 child: ElevatedButton(
-                    onPressed: () => DriverNavigation.push(
-                        context, DriverRouteNames.orderAccepted),
+                    onPressed: _accepting ? null : _acceptTrip,
                     style: _primaryButtonStyle(),
-                    child: const Text('確認接單'))),
+                    child: Text(_accepting ? '處理中…' : '確認接單'))),
           ]),
         ],
       ),

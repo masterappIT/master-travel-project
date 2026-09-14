@@ -401,7 +401,7 @@ async function driverSessionFrom(req: RequestLike): Promise<DriverSessionToken> 
   }
 }
 function requireReviewedDriver(driver: { reviewStatus: string }) {
-  if (driver.reviewStatus !== '已完成審核' && driver.reviewStatus !== '已審核') throw new ForbiddenException('Driver review is required before direct order acceptance')
+  if (!['已完成審核', '已審核', '已通過'].includes(driver.reviewStatus)) throw new ForbiddenException('Driver review is required before direct order acceptance')
 }
 async function clientAuthResponse(user: ManagedUser) {
   const exp = Date.now() + 30 * 24 * 60 * 60 * 1000
@@ -615,10 +615,11 @@ function driverResponse(driver: {
   reviewStatus: string
   settlementMethod: string | null
   settlementAccount: string | null
+  isOnline?: boolean
   createdAt: Date
   updatedAt: Date
 }) {
-  return { ...driver, vehiclePhotos: Array.isArray(driver.vehiclePhotos) ? driver.vehiclePhotos : [], createdAt: driver.createdAt.toISOString(), updatedAt: driver.updatedAt.toISOString() }
+  return { ...driver, isOnline: driver.isOnline ?? false, vehiclePhotos: Array.isArray(driver.vehiclePhotos) ? driver.vehiclePhotos : [], createdAt: driver.createdAt.toISOString(), updatedAt: driver.updatedAt.toISOString() }
 }
 
 function validDriverPayload(body: Partial<Prisma.DriverCreateInput>) {
@@ -960,6 +961,87 @@ class DriverAuthController {
     return driverResponse(driver)
   }
 
+  @Patch('me')
+  async updateMe(@Req() req: RequestLike, @Body() body: { name?: unknown; phoneCountryCode?: unknown; phone?: unknown; vehicleCategory?: unknown; vehicleColor?: unknown; hkPlate?: unknown; mainlandPlate?: unknown; plateType?: unknown; vehiclePhotos?: unknown; settlementMethod?: unknown; settlementAccount?: unknown }) {
+    const session = await driverSessionFrom(req)
+    const data: Prisma.DriverUpdateInput = {}
+    const textFields = ['name', 'phoneCountryCode', 'phone', 'vehicleCategory', 'vehicleColor', 'hkPlate', 'mainlandPlate', 'plateType', 'settlementMethod', 'settlementAccount'] as const
+    for (const field of textFields) {
+      if (body[field] !== undefined) {
+        if (body[field] !== null && typeof body[field] !== 'string') throw new HttpException(`${field} must be a string`, HttpStatus.BAD_REQUEST)
+        if (body[field] === null && field !== 'mainlandPlate' && field !== 'settlementMethod' && field !== 'settlementAccount') throw new HttpException(`${field} cannot be null`, HttpStatus.BAD_REQUEST)
+        ;(data as Record<string, unknown>)[field] = body[field] === null ? null : body[field].trim()
+      }
+    }
+    if (body.vehiclePhotos !== undefined) {
+      if (!Array.isArray(body.vehiclePhotos) || body.vehiclePhotos.some(item => typeof item !== 'string')) throw new HttpException('vehiclePhotos must be an array of strings', HttpStatus.BAD_REQUEST)
+      data.vehiclePhotos = body.vehiclePhotos
+    }
+    if (Object.keys(data).length === 0) throw new HttpException('No profile fields supplied', HttpStatus.BAD_REQUEST)
+    const driver = await prisma.driver.update({ where: { id: session.sub }, data })
+    return driverResponse(driver)
+  }
+
+  @Post('status')
+  async updateStatus(@Req() req: RequestLike, @Body() body: { isOnline?: unknown }) {
+    const session = await driverSessionFrom(req)
+    if (typeof body.isOnline !== 'boolean') throw new HttpException('isOnline must be a boolean', HttpStatus.BAD_REQUEST)
+    const driver = await prisma.driver.update({ where: { id: session.sub }, data: { isOnline: body.isOnline } })
+    return driverResponse(driver)
+  }
+
+  @Get('trips')
+  async history(@Req() req: RequestLike) {
+    const session = await driverSessionFrom(req)
+    const trips = await prisma.trip.findMany({ where: { driverId: session.sub }, include: { user: true }, orderBy: { scheduledAt: 'desc' } })
+    return trips.map(trip => tripResponse(trip))
+  }
+
+  @Post('trips/:id/arrive')
+  async arrive(@Req() req: RequestLike, @Param('id') id: string) {
+    const session = await driverSessionFrom(req)
+    const trip = await prisma.trip.findUnique({ where: { id }, include: { user: true } })
+    if (!trip || trip.driverId !== session.sub) throw new HttpException('Trip not found', HttpStatus.NOT_FOUND)
+    if (!trip.acceptedAt || trip.startedAt || trip.completedAt || trip.status === 'CANCELLED') throw new HttpException('Trip cannot be marked arrived', HttpStatus.CONFLICT)
+    const updated = await prisma.trip.update({ where: { id }, data: { arrivedAt: new Date() }, include: { user: true } })
+    return tripResponse(updated)
+  }
+
+  @Post('trips/:id/start')
+  async start(@Req() req: RequestLike, @Param('id') id: string) {
+    const session = await driverSessionFrom(req)
+    const trip = await prisma.trip.findUnique({ where: { id }, include: { user: true } })
+    if (!trip || trip.driverId !== session.sub) throw new HttpException('Trip not found', HttpStatus.NOT_FOUND)
+    if (!trip.arrivedAt || trip.startedAt || trip.completedAt || trip.status === 'CANCELLED') throw new HttpException('Trip cannot be started', HttpStatus.CONFLICT)
+    const updated = await prisma.trip.update({ where: { id }, data: { startedAt: new Date(), executionPhase: 'IN_PROGRESS' }, include: { user: true } })
+    return tripResponse(updated)
+  }
+
+  @Post('trips/:id/complete')
+  async complete(@Req() req: RequestLike, @Param('id') id: string) {
+    const session = await driverSessionFrom(req)
+    const trip = await prisma.trip.findUnique({ where: { id }, include: { user: true } })
+    if (!trip || trip.driverId !== session.sub) throw new HttpException('Trip not found', HttpStatus.NOT_FOUND)
+    if (!trip.startedAt || trip.completedAt || trip.status === 'CANCELLED') throw new HttpException('Trip cannot be completed', HttpStatus.CONFLICT)
+    const updated = await prisma.trip.update({ where: { id }, data: { completedAt: new Date(), status: 'COMPLETED', executionPhase: null }, include: { user: true } })
+    return tripResponse(updated)
+  }
+
+  @Get('notifications')
+  async notifications(@Req() req: RequestLike) {
+    const session = await driverSessionFrom(req)
+    const items = await prisma.notification.findMany({ where: { driverId: session.sub }, orderBy: { createdAt: 'desc' } })
+    return items.map(item => ({ ...item, createdAt: item.createdAt.toISOString(), readAt: item.readAt?.toISOString() || null }))
+  }
+
+  @Post('notifications/:id/read')
+  async readNotification(@Req() req: RequestLike, @Param('id') id: string) {
+    const session = await driverSessionFrom(req)
+    const result = await prisma.notification.updateMany({ where: { id, driverId: session.sub }, data: { readAt: new Date() } })
+    if (result.count !== 1) throw new HttpException('Notification not found', HttpStatus.NOT_FOUND)
+    const item = await prisma.notification.findUniqueOrThrow({ where: { id } })
+    return { ...item, createdAt: item.createdAt.toISOString(), readAt: item.readAt?.toISOString() || null }
+  }
   @Get('trips/available')
   async available(@Req() req: RequestLike) {
     const session = await driverSessionFrom(req)
@@ -1334,7 +1416,7 @@ class AdminController {
    if (trip.status === 'COMPLETED' || trip.status === 'CANCELLED' || trip.executionPhase === 'IN_PROGRESS') throw new HttpException('This trip cannot be dispatched', HttpStatus.CONFLICT)
    const updated = await prisma.trip.update({
      where: { id },
-     data: { driverId: driver.id, driverName: driver.name, driverPhone: `${driver.phoneCountryCode} ${driver.phone}`, vehiclePlate: driver.hkPlate, status: 'CONFIRMED', executionPhase: 'DRIVER_ASSIGNED', assignedAt: new Date(), acceptedAt: null },
+     data: { driverId: driver.id, driverName: driver.name, driverPhone: `${driver.phoneCountryCode} ${driver.phone}`, vehiclePlate: driver.hkPlate, status: 'CONFIRMED', executionPhase: 'DRIVER_ASSIGNED', assignedAt: new Date(), acceptedAt: new Date() },
      include: { user: true, driver: true }
    })
    return { ...updated, scheduledAt: updated.scheduledAt.toISOString(), createdAt: updated.createdAt.toISOString(), updatedAt: updated.updatedAt.toISOString(), user: userResponse(updated.user) }
@@ -2725,7 +2807,9 @@ async function bootstrap() {
     'http://localhost:5173',
     'http://127.0.0.1:5173',
     'http://localhost:5174',
-    'http://127.0.0.1:5174'
+    'http://127.0.0.1:5174',
+    'http://localhost:8080',
+    'http://127.0.0.1:8080'
   ])
   app.enableCors({
     origin: (origin, callback) => callback(null, !origin || allowedOrigins.has(origin)),

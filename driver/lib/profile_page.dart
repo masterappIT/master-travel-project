@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import 'app/route_names.dart';
+import 'core/api/driver_api_client.dart';
 import 'core/layout/driver_page_shell.dart';
 import 'core/navigation/driver_navigation.dart';
 
@@ -15,9 +16,79 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
+  final _api = DriverApiClient.instance;
+  bool _loading = true;
+  String? _error;
   String _name = '陳大文';
   String _hongKongMacauPhone = '+852 9123 4567';
   String _mainlandPhone = '+86 未填寫';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
+
+  Future<void> _loadProfile() async {
+    try {
+      final driver = await _api.me();
+      if (!mounted) return;
+      setState(() {
+        _name = driver['name']?.toString() ?? _name;
+        _hongKongMacauPhone =
+            '${driver['phoneCountryCode'] ?? '+852'} ${driver['phone'] ?? ''}'
+                .trim();
+        _mainlandPhone = driver['mainlandPhone']?.toString() ?? _mainlandPhone;
+        _loading = false;
+      });
+    } on DriverApiException catch (error) {
+      if (mounted)
+        setState(() {
+          _error = error.message;
+          _loading = false;
+        });
+    }
+  }
+
+  Future<void> _showNotifications() async {
+    try {
+      final items = await _api.notifications();
+      if (!mounted) return;
+      await showModalBottomSheet<void>(
+        context: context,
+        builder: (context) => SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            padding: const EdgeInsets.all(24),
+            children: [
+              const Text('通知',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 12),
+              if (items.isEmpty) const Text('目前沒有通知'),
+              ...items.map((item) {
+                final notification = Map<String, dynamic>.from(item as Map);
+                final id = notification['id']?.toString();
+                return ListTile(
+                  title: Text(notification['title']?.toString() ?? '通知'),
+                  subtitle: Text(notification['message']?.toString() ?? ''),
+                  onTap: id == null
+                      ? null
+                      : () async {
+                          await _api.readNotification(id);
+                          if (context.mounted) Navigator.of(context).pop();
+                        },
+                );
+              }),
+            ],
+          ),
+        ),
+      );
+    } on DriverApiException catch (error) {
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error.message)));
+    }
+  }
 
   Future<void> _openProfileEditor() async {
     final result = await DriverNavigation.push(
@@ -49,71 +120,89 @@ class _ProfilePageState extends State<ProfilePage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _ProfileHeader(name: _name),
-          const SizedBox(height: DriverSpacing.xl),
-          const _BalanceCard(),
-          const SizedBox(height: DriverSpacing.xl),
-          _MenuCard(
-            title: '主要功能',
-            items: [
-              _MenuItem(
-                '個人資料',
-                'assets/profile-user.svg',
-                _IconTone.blue,
-                onTap: _openProfileEditor,
+          _ProfileHeader(name: _name, onNotification: _showNotifications),
+          if (_loading)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: DriverSpacing.xl),
+                child: CircularProgressIndicator(),
               ),
-              _MenuItem(
-                '車輛資料',
-                'assets/profile-vehicle.svg',
-                _IconTone.green,
-                onTap: () =>
-                    DriverNavigation.push(context, DriverRouteNames.vehicle),
-              ),
-              _MenuItem(
-                '接單紀錄',
-                'assets/profile-clipboard.svg',
-                _IconTone.purple,
-                onTap: () => DriverNavigation.push(
-                    context, DriverRouteNames.orderHistory),
-              ),
-            ],
-          ),
-          const SizedBox(height: DriverSpacing.xl),
-          _MenuCard(
-            title: '收款設定',
-            items: [
-              _MenuItem('收款幣種', 'assets/profile-fps.svg', _IconTone.orange,
-                  detail: '港幣 HKD、人民幣 CNY'),
-              _MenuItem('微信支付', 'assets/profile-wechat.svg', _IconTone.green,
-                  detail: '已綁定：$_name'),
-              _MenuItem('支付寶', 'assets/profile-fps.svg', _IconTone.blue,
-                  detail: '未綁定'),
-              _MenuItem('FPS 轉數快', 'assets/profile-fps.svg', _IconTone.green,
-                  detail: '已綁定：$_name'),
-            ],
-          ),
-          const SizedBox(height: DriverSpacing.xl),
-          _MenuCard(
-            title: '設定',
-            items: [
-              _MenuItem('通知設定', 'assets/profile-bell.svg', _IconTone.blue),
-              _MenuItem('語言設定', 'assets/profile-fps.svg', _IconTone.purple),
-              _MenuItem('自動結算', 'assets/profile-fps.svg', _IconTone.orange,
-                  toggle: true),
-              _MenuItem('結算方式', 'assets/profile-fps.svg', _IconTone.green),
-            ],
-          ),
-          const SizedBox(height: DriverSpacing.xl),
-          _MenuCard(
-            title: '其他',
-            items: [
-              _MenuItem('關於我們', 'assets/profile-fps.svg', _IconTone.blue),
-              _MenuItem(
-                  '聯繫客服', 'assets/profile-headphones.svg', _IconTone.purple),
-            ],
-          ),
-          const SizedBox(height: DriverSpacing.lg),
-          const _LogoutButton(),
+            )
+          else if (_error != null)
+            Center(child: Padding(
+              padding: EdgeInsets.symmetric(vertical: DriverSpacing.xl),
+              child: Text(_error!),
+            ))
+          else ...[
+            const SizedBox(height: DriverSpacing.xl),
+            const _BalanceCard(),
+            const SizedBox(height: DriverSpacing.xl),
+            _MenuCard(
+              title: '主要功能',
+              items: [
+                _MenuItem(
+                  '個人資料',
+                  'assets/profile-user.svg',
+                  _IconTone.blue,
+                  onTap: _openProfileEditor,
+                ),
+                _MenuItem(
+                  '車輛資料',
+                  'assets/profile-vehicle.svg',
+                  _IconTone.green,
+                  onTap: () =>
+                      DriverNavigation.push(context, DriverRouteNames.vehicle),
+                ),
+                _MenuItem(
+                  '接單紀錄',
+                  'assets/profile-clipboard.svg',
+                  _IconTone.purple,
+                  onTap: () => DriverNavigation.push(
+                      context, DriverRouteNames.orderHistory),
+                ),
+              ],
+            ),
+            const SizedBox(height: DriverSpacing.xl),
+            _MenuCard(
+              title: '收款設定',
+              items: [
+                _MenuItem('收款幣種', 'assets/profile-fps.svg', _IconTone.orange,
+                    detail: '港幣 HKD、人民幣 CNY'),
+                _MenuItem('微信支付', 'assets/profile-wechat.svg', _IconTone.green,
+                    detail: '已綁定：$_name'),
+                _MenuItem('支付寶', 'assets/profile-fps.svg', _IconTone.blue,
+                    detail: '未綁定'),
+                _MenuItem('FPS 轉數快', 'assets/profile-fps.svg', _IconTone.green,
+                    detail: '已綁定：$_name'),
+              ],
+            ),
+            const SizedBox(height: DriverSpacing.xl),
+            _MenuCard(
+              title: '設定',
+              items: [
+                _MenuItem('通知設定', 'assets/profile-bell.svg', _IconTone.blue),
+                _MenuItem('語言設定', 'assets/profile-fps.svg', _IconTone.purple),
+                _MenuItem('自動結算', 'assets/profile-fps.svg', _IconTone.orange,
+                    toggle: true),
+                _MenuItem('結算方式', 'assets/profile-fps.svg', _IconTone.green),
+              ],
+            ),
+            const SizedBox(height: DriverSpacing.xl),
+            _MenuCard(
+              title: '其他',
+              items: [
+                _MenuItem('關於我們', 'assets/profile-fps.svg', _IconTone.blue),
+                _MenuItem(
+                    '聯繫客服', 'assets/profile-headphones.svg', _IconTone.purple),
+              ],
+            ),
+            const SizedBox(height: DriverSpacing.lg),
+            _LogoutButton(onTap: () async {
+              await _api.logout();
+              if (mounted)
+                DriverNavigation.replaceAll(context, DriverRouteNames.login);
+            }),
+          ],
         ],
       ),
     );
@@ -121,9 +210,10 @@ class _ProfilePageState extends State<ProfilePage> {
 }
 
 class _ProfileHeader extends StatelessWidget {
-  const _ProfileHeader({required this.name});
+  const _ProfileHeader({required this.name, required this.onNotification});
 
   final String name;
+  final VoidCallback onNotification;
 
   @override
   Widget build(BuildContext context) {
@@ -142,7 +232,7 @@ class _ProfileHeader extends StatelessWidget {
               button: true,
               label: '通知',
               child: InkWell(
-                onTap: () {},
+                onTap: onNotification,
                 borderRadius: BorderRadius.circular(DriverRadii.card),
                 child: SvgPicture.asset('assets/profile-bell.svg',
                     width: 32, height: 32),
@@ -364,7 +454,8 @@ class _CardShell extends StatelessWidget {
 }
 
 class _LogoutButton extends StatelessWidget {
-  const _LogoutButton();
+  const _LogoutButton({required this.onTap});
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) => Semantics(

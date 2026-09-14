@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import 'app/route_names.dart';
+import 'core/api/driver_api_client.dart';
 import 'core/layout/driver_page_shell.dart';
 import 'core/navigation/driver_navigation.dart';
 
@@ -17,6 +18,35 @@ class OrderHistoryPage extends StatefulWidget {
 class _OrderHistoryPageState extends State<OrderHistoryPage> {
   final int _selectedTab = 0;
   int _selectedHistoryTab = 0;
+  final _api = DriverApiClient.instance;
+  List<dynamic> _trips = [];
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTrips();
+  }
+
+  Future<void> _loadTrips() async {
+    try {
+      final trips = await _api.trips();
+      if (mounted)
+        setState(() {
+          _trips = trips
+              .where((trip) => trip is Map && trip['completedAt'] != null)
+              .toList();
+          _loading = false;
+        });
+    } on DriverApiException catch (error) {
+      if (mounted)
+        setState(() {
+          _error = error.message;
+          _loading = false;
+        });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -44,10 +74,42 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                   fontWeight: FontWeight.w700,
                   color: DriverColors.secondaryText)),
           const SizedBox(height: DriverSpacing.sm),
-          ..._historyEntries.map((entry) => Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: _HistoryCard(entry: entry),
-              )),
+          if (_loading)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: DriverSpacing.xl),
+                child: CircularProgressIndicator(),
+              ),
+            )
+          else if (_error != null)
+            Center(child: Padding(
+              padding: EdgeInsets.symmetric(vertical: DriverSpacing.xl),
+              child: Text(_error!),
+            ))
+          else if (_trips.isEmpty)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: DriverSpacing.xl),
+                child: Text('暫無接單紀錄'),
+              ),
+            )
+          else
+            ..._trips.map((trip) {
+              final item = Map<String, dynamic>.from(trip as Map);
+              final date = DateTime.tryParse(item['completedAt']?.toString() ??
+                  item['scheduledAt']?.toString() ??
+                  '');
+              final entry = _HistoryEntry(
+                  date: date?.toString() ?? '日期待確認',
+                  price: item['price']?.toString() ?? '待確認',
+                  origin: item['pickupAddress']?.toString() ?? '起點待確認',
+                  destination: item['dropoffAddress']?.toString() ?? '終點待確認',
+                  passenger: item['user']?['name']?.toString() ?? '乘客',
+                  settled: true);
+              return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: _HistoryCard(entry: entry));
+            }),
         ],
       ),
     );

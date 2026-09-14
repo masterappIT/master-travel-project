@@ -44,9 +44,16 @@ abstract final class DriverRouter {
             initialMainlandPhone: values['mainlandPhone'] ?? '+86 未填寫',
           );
         },
-        DriverRouteNames.orderDetail: (_) => const OrderDetailPage(),
-        DriverRouteNames.orderAccepted: (_) => const OrderAcceptedPage(),
-        DriverRouteNames.orderInProgress: (_) => const OrderInProgressPage(),
+        DriverRouteNames.orderDetail: (context) {
+          final arguments = ModalRoute.of(context)?.settings.arguments;
+          return OrderDetailPage(tripId: arguments?.toString());
+        },
+        DriverRouteNames.orderAccepted: (context) => OrderAcceptedPage(
+              tripId: ModalRoute.of(context)?.settings.arguments?.toString(),
+            ),
+        DriverRouteNames.orderInProgress: (context) => OrderInProgressPage(
+              tripId: ModalRoute.of(context)?.settings.arguments?.toString(),
+            ),
         DriverRouteNames.orderCompleted: (_) => const OrderCompletedPage(),
       };
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'package:driver_web/core/api/driver_api_client.dart';
 import 'package:driver_web/core/tokens/driver_tokens.dart';
 
 /// Self-contained driver profile preview and edit screen.
@@ -24,6 +25,7 @@ class DriverProfilePage extends StatefulWidget {
 
 class _DriverProfilePageState extends State<DriverProfilePage> {
   bool _isEditing = false;
+  bool _isSaving = false;
   late final TextEditingController _nameController;
   late final TextEditingController _hongKongMacauPhoneController;
   late final TextEditingController _mainlandPhoneController;
@@ -58,18 +60,44 @@ class _DriverProfilePageState extends State<DriverProfilePage> {
     setState(() => _isEditing = false);
   }
 
-  void _saveProfile() {
+  Future<void> _saveProfile() async {
     FocusScope.of(context).unfocus();
-    final result = <String, String>{
-      'name': _nameController.text.trim(),
-      'hongKongMacauPhone': _hongKongMacauPhoneController.text.trim(),
-      'mainlandPhone': _mainlandPhoneController.text.trim(),
-    };
-    setState(() => _isEditing = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('個人資料已儲存')),
-    );
-    Navigator.of(context).pop(result);
+    final name = _nameController.text.trim();
+    if (name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('請輸入姓名')),
+      );
+      return;
+    }
+    setState(() => _isSaving = true);
+    try {
+      await DriverApiClient.instance.updateProfile({
+        'name': name,
+        'phoneCountryCode': '+852',
+        'phone': _hongKongMacauPhoneController.text
+            .trim()
+            .replaceFirst(RegExp(r'^\+85[23]\s*'), ''),
+      });
+      if (!mounted) return;
+      final result = <String, String>{
+        'name': name,
+        'hongKongMacauPhone': _hongKongMacauPhoneController.text.trim(),
+        'mainlandPhone': _mainlandPhoneController.text.trim(),
+      };
+      setState(() => _isEditing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('個人資料已儲存')),
+      );
+      Navigator.of(context).pop(result);
+    } on DriverApiException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.message)),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
   @override
@@ -203,12 +231,12 @@ class _DriverProfilePageState extends State<DriverProfilePage> {
                   Expanded(
                     child: ElevatedButton(
                       key: const ValueKey('driver-profile-save'),
-                      onPressed: _saveProfile,
+                      onPressed: _isSaving ? null : _saveProfile,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: DriverColors.activeBlue,
                         foregroundColor: Colors.white,
                       ),
-                      child: const Text('儲存'),
+                      child: Text(_isSaving ? '儲存中…' : '儲存'),
                     ),
                   ),
                 ],

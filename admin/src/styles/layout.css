@@ -63,10 +63,11 @@
 .logout { position: relative; z-index: 1; margin-top: 0; }
 .logout-mobile { display: none; }
 .logout:hover { color: #fff; background: rgba(255,255,255,.09); }
-.shell main { flex: 1 1 auto; min-width: 0; width: min(100%, var(--admin-content-max-width)); height: 100vh; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; padding: 46px clamp(24px, 5vw, 64px); }
+.shell main { flex: 1 1 auto; min-width: 0; width: min(100%, var(--admin-content-max-width)); height: 100vh; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; padding: 56px clamp(24px, 5vw, 64px); }
+.shell header { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 26px; }
 .shell header > div:first-child { min-width: 0; }
 .page-header-spacer { flex: 1 1 auto; min-height: 1px; }
-.header-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+.header-actions { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; justify-content: flex-end; }
 .eyebrow { display: block; color: #59708e; font-size: 11px; font-weight: 750; letter-spacing: .16em; }
 .shell h1 { margin: 8px 0 0; color: #12243b; font-size: clamp(28px, 4vw, 38px); line-height: 1.1; letter-spacing: -.045em; }
 .refresh { min-height: 40px; border: 0; border-radius: 11px; padding: 9px 14px; color: #fff; background: linear-gradient(135deg, #1769e0, #3f8df0); font-size: 13px; font-weight: 700; box-shadow: 0 6px 14px rgba(23,105,224,.16); }

@@ -13,6 +13,9 @@
 .record-form > button.secondary:hover:not(:disabled) { border-color: #9bbce8; color: var(--color-primary); background: #f5f9ff; }
 .created-url-dialog { width: min(620px, 100%); }
 .created-url-dialog input { min-height: 46px; }
+.order-url-form > button,
+.created-url-dialog > button { border-radius: 8px; }
+.dispatch-form > button { border-radius: 8px; }
 @keyframes modal-fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes modal-slide-in { from { opacity: 0; transform: translateY(10px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
 .toast-host { position: fixed; z-index: 1000; right: 20px; bottom: 20px; display: grid; gap: 10px; width: min(360px, calc(100vw - 32px)); }
