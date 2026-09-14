@@ -35,7 +35,9 @@ class VehicleLegacyPage extends StatelessWidget {
                       SizedBox(
                         height: 56,
                         child: ElevatedButton(
-                          onPressed: () {},
+                          onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('編輯功能請由個人資料頁開啟')),
+                          ),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: DriverColors.activeBlue,
                             foregroundColor: Colors.white,

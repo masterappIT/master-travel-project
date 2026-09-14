@@ -80,7 +80,8 @@ class _HomePageState extends State<HomePage> {
                   children: [
                     _ProfileHeader(
                         name: (_driver?['name'] as String?) ?? '司機',
-                        onNotificationTap: () {}),
+                        onNotificationTap: () => DriverNavigation.push(
+                            context, DriverRouteNames.profile)),
                     const SizedBox(height: 20),
                     _StatusCard(
                       isOnline: _isOnline,

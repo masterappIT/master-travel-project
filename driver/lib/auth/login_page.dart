@@ -304,12 +304,16 @@ class _ActionCard extends StatelessWidget {
           _SocialButton(
               color: DriverColors.success,
               asset: 'assets/circle-x.svg',
-              label: '微信登入'),
+              label: '微信登入',
+              onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('此登入方式尚未開放，請使用手機驗證碼登入')))),
           const SizedBox(height: DriverSpacing.lg),
           _SocialButton(
               color: const Color(0xff1a1a1a),
               asset: 'assets/apple.svg',
-              label: '以 Apple 登入'),
+              label: '以 Apple 登入',
+              onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('此登入方式尚未開放，請使用手機驗證碼登入')))),
         ],
       );
 }
@@ -378,16 +382,20 @@ class _PrimaryButton extends StatelessWidget {
 
 class _SocialButton extends StatelessWidget {
   const _SocialButton(
-      {required this.color, required this.asset, required this.label});
+      {required this.color,
+      required this.asset,
+      required this.label,
+      required this.onPressed});
   final Color color;
   final String asset;
   final String label;
+  final VoidCallback onPressed;
   @override
   Widget build(BuildContext context) => SizedBox(
         height: 52,
         width: double.infinity,
         child: ElevatedButton(
-          onPressed: () {},
+          onPressed: onPressed,
           style: ElevatedButton.styleFrom(
             backgroundColor: color,
             foregroundColor: Colors.white,

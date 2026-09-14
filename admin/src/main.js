@@ -9,6 +9,9 @@ import { sortByOrder, currencyLabel, formatOrderNumber, displayMainlandCity, api
 import { promotionKindLabel, promotionDiscountLabel } from './utils/promotions.js'
 import { dateTimeInput, formatTripAmount, paymentMethodLabel, formatBenefits } from './utils/display-formatters.js'
 import { createOperationsStorage } from './utils/operations-storage.js'
+import { createFeedbackController } from './utils/feedback.js'
+import { createErrorDisplay } from './utils/error-display.js'
+import { generateRandomCouponCodeStr, createTimeOptions, createOperationsDisplay } from './utils/entry-helpers.js'
 import { filterStoredDrivers } from './utils/drivers.js'
 import { createLocalization } from './utils/localization.js'
 import { createAdminSessionActions } from './utils/admin-session.js'
@@ -48,12 +51,14 @@ import { createNotificationsActions } from './pages/notifications/notifications.
 import { OperationsPage } from './pages/operations/OperationsPage.js'
 import { createOperationsPageState } from './pages/operations/operations.state.js'
 import { createOperationsActions } from './pages/operations/operations.actions.js'
+import { createCharterActions } from './pages/charters/charters.actions.js'
 import './style.css'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 const token = ref(import.meta.env.DEV ? 'dev-bypass' : (localStorage.getItem('admin_token') || ''))
 const locale = ref(localStorage.getItem('admin_locale') || 'en')
 const { t, translateRegion, translateStatus, formatDate, toggleLocale } = createLocalization(locale)
+const displayError = createErrorDisplay({ locale, t })
 const view = ref('dashboard')
 const mobileNavOpen = ref(false)
 const vehiclesPageState = createVehiclesPageState()
@@ -91,25 +96,7 @@ const promotionForm = ref(null)
 const promotionSaving = ref(false)
 const promotionDeletingId = ref('')
 const promotionTogglingId = ref('')
-const toasts = ref([])
-const confirmDialog = ref({ open: false, title: '', message: '', confirmLabel: '確認', cancelLabel: '取消', danger: false, action: null })
-let toastId = 0
-function dismissToast(id) { toasts.value = toasts.value.filter(item => item.id !== id) }
-function notify(message, type = 'success') {
-  const id = ++toastId
-  toasts.value.push({ id, message, type })
-  window.setTimeout(() => dismissToast(id), 4000)
-}
-function requestConfirmation({ title = '確認操作', message, confirmLabel = '確認', cancelLabel = '取消', danger = false }) {
-  return new Promise(resolve => {
-    confirmDialog.value = { open: true, title, message, confirmLabel, cancelLabel, danger, action: resolve }
-  })
-}
-function resolveConfirmation(confirmed) {
-  const resolve = confirmDialog.value.action
-  confirmDialog.value = { open: false, title: '', message: '', confirmLabel: '確認', cancelLabel: '取消', danger: false, action: null }
-  resolve?.(confirmed)
-}
+const { toasts, confirmDialog, dismissToast, notify, requestConfirmation, resolveConfirmation } = createFeedbackController()
 const membershipForm = ref(null)
 const categoryForm = ref(null)
 const vehicleForm = ref(null)
@@ -223,17 +210,8 @@ const entryFilter = operationsPageState.entryFilter
 const expenseFilter = operationsPageState.expenseFilter
 const canWrite = computed(() => currentAdministrator.value?.role !== 'VIEWER')
 const isSuperAdministrator = computed(() => currentAdministrator.value?.role === 'SUPER_ADMIN')
-const timeOptions = Array.from({ length: 48 }, (_, index) => `${String(Math.floor(index / 2)).padStart(2, '0')}:${index % 2 ? '30' : '00'}`)
+const timeOptions = createTimeOptions()
 
-function displayError(message) {
-  const error = typeof message === 'object' && message ? message : null
-  if (error?.kind === 'network') return locale.value === 'zh' ? '網路連線失敗，請稍後重試。' : 'Network request failed. Please try again.'
-  if (error?.kind === 'unauthorized' || error?.status === 401 || String(error?.message || message).includes('session')) return t('sessionExpired')
-  if (error?.kind === 'forbidden' || error?.status === 403) return locale.value === 'zh' ? '您沒有執行此操作的權限。' : 'You do not have permission to perform this action.'
-  if (error?.kind === 'not-found' || error?.status === 404) return locale.value === 'zh' ? '找不到要求的資料。' : 'The requested data was not found.'
-  const text = error?.message || message || 'Request failed'
-  return text === 'Request failed' ? t('requestFailed') : text
-}
 
 async function api(path, options = {}) {
   return apiClient(path, options)
@@ -374,20 +352,12 @@ const notificationsActions = createNotificationsActions({ api, notificationForm,
 const { resetNotification, clearNotificationRecipients, toggleNotificationRecipient, notificationRecipientChecked, saveNotification } = notificationsActions
 const paymentsActions = createPaymentsActions({ api, paymentSettings, paymentSettingsSaved, driverRaceSaving, error, displayError })
 const { savePaymentSettings } = paymentsActions
-async function updateCharterStatus(order, status) { try { await api(`/admin/charter-orders/${order.id}/status`, { method: 'POST', body: JSON.stringify({ status }) }); await load() } catch (e) { error.value = displayError(e) } }
+const { updateCharterStatus, editCharter, saveCharter } = createCharterActions({ api, charterForm, load, error, displayError, dateTimeInput })
 const { edit: editUser, reset: resetUser, select: selectUser, save: saveUser, updateStatus: updateUserStatus, openWalletAdjustment, saveWalletAdjustment } = usersActions
 const tripsActions = createTripsActions({ api, tripsApi, addressesApi, tripForm, selectedTrip, tripQuote, tripBookingStep, tripPaymentMethod, tripUseFareBalance, tripUseCashBalance, tripLocationKeyword, tripLocationResults, tripLocationSearching, tripLocationTarget, dispatchForm, orderUrlForm, createdOrderUrl, users, trips, error, load, displayError, canWrite, requestConfirmation, notify, tripCatalog, dateTimeInput })
 const { editTrip, resetTrip, clearTripLocationSearch, searchTripLocation, selectTripLocation, handleTripRegionChange, showTrip, closeTrip, updateTripStatus, prepareTripQuote, calculateTripRoute, completeTripBooking, saveTrip, openDispatch, saveDispatch, openOrderUrlForm, createOrderUrl, closeCreatedOrderUrl, copyOrderUrl, revokeOrderUrl } = tripsActions
-function editCharter(item) { charterForm.value = { ...item, scheduledAt: dateTimeInput(item.scheduledAt) } }
-async function saveCharter() { try { await api(`/admin/charter-orders/${charterForm.value.id}`, { method: 'POST', body: JSON.stringify(charterForm.value) }); charterForm.value = null; await load() } catch (e) { error.value = displayError(e) } }
 const membershipActions = createMembershipActions({ api, membershipForm, membershipPlans, load, error, displayError, requestConfirmation, notify, t })
 const { editMembership, resetMembership, saveMembership, removeMembership } = membershipActions
-function generateRandomCouponCodeStr() {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-  let code = ''
-  for (let i = 0; i < 6; i++) code += chars.charAt(Math.floor(Math.random() * chars.length))
-  return `PROMO${code}`
-}
 const promotionsActions = createPromotionsActions({ api, promotionForm, promotionSaving, promotionDeletingId, promotionTogglingId, pricingCurrency, dateTimeInput, nextTick, load, error, displayError, notify, requestConfirmation, t, generateRandomCouponCodeStr })
 const { openPromotionForm, resetPromotion, editPromotion, savePromotion, removePromotion, duplicatePromotion, togglePromotionEnabled, generateRandomCouponCode } = promotionsActions
 
@@ -412,9 +382,7 @@ const filteredPersonnel = operationsPageState.filteredPersonnel
 const filteredDrivers = driversPageState.filtered
 const filteredEntryItems = operationsPageState.filteredEntryItems
 const filteredExpenses = operationsPageState.filteredExpenses
-const incomeRows = computed(() => [...trips.value.map((item, index) => ({ id: item.id, date: item.scheduledAt, category: '接送服務', description: `${item.origin} → ${item.destination}`, amount: 680 + index * 120 })), ...charterOrders.value.map(item => ({ id: item.id, date: item.scheduledAt, category: '包車服務', description: `${item.origin} → ${item.destination}`, amount: item.durationHours * 500 }))])
-const incomeTotal = computed(() => incomeRows.value.reduce((total, item) => total + (Number(item.amount) || 0), 0))
-const expenseTotal = computed(() => expenseItems.value.reduce((total, item) => total + (Number(item.amount) || 0), 0))
+const { incomeRows, incomeTotal, expenseTotal } = createOperationsDisplay({ trips, charterOrders, expenseItems })
 const filteredNotificationUsers = notificationPageState.filteredUsers
 const filteredNotificationDrivers = notificationPageState.filteredDrivers
 

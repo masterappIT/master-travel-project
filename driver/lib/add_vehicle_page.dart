@@ -167,7 +167,8 @@ class _AddVehiclePageState extends State<AddVehiclePage> {
                   color: DriverColors.text)),
           const SizedBox(height: DriverSpacing.md),
           InkWell(
-            onTap: () {},
+            onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('車輛相片上傳功能尚未開放'))),
             borderRadius: BorderRadius.circular(DriverRadii.input),
             child: Container(
               padding: const EdgeInsets.all(20),

@@ -462,7 +462,7 @@ class _LogoutButton extends StatelessWidget {
         button: true,
         label: '登出帳號',
         child: InkWell(
-          onTap: () {},
+          onTap: onTap,
           child: const Padding(
             padding: EdgeInsets.symmetric(vertical: 16),
             child: Center(
