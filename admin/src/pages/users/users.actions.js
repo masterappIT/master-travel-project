@@ -1,4 +1,4 @@
-export function createUsersActions({ usersApi, users, selectedUser, userForm, walletTransactions, topUpWithdrawalHistory, walletAdjustment, load, requestConfirmation, canWrite, displayError, error }) {
+export function createUsersActions({ usersApi, users, selectedUser, userForm, walletTransactions, topUpWithdrawalHistory, walletAdjustment, load, view, requestConfirmation, canWrite, displayError, error }) {
   const edit = item => {
     selectedUser.value = null
     walletAdjustment.value = null
@@ -31,6 +31,7 @@ export function createUsersActions({ usersApi, users, selectedUser, userForm, wa
     try {
       const user = await usersApi.save(userForm.value.id, userForm.value)
       userForm.value = null
+      view.value = 'users'
       await load()
       await select(user)
     } catch (err) {

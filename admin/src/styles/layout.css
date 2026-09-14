@@ -61,6 +61,7 @@
 .readonly-badge { border-radius: 999px; padding: 8px 12px; color: #8b6200; background: #fff3cc; font-size: 12px; font-weight: 750; }
 .rate-control button { min-height: 40px; padding: 8px 13px; border: 0; border-radius: var(--radius-control); color: #fff; background: var(--gradient-primary); font-size: 13px; font-weight: 750; box-shadow: var(--shadow-primary); }
 .logout { position: relative; z-index: 1; margin-top: 0; }
+.logout-mobile { display: none; }
 .logout:hover { color: #fff; background: rgba(255,255,255,.09); }
 .shell main { flex: 1 1 auto; min-width: 0; width: min(100%, var(--admin-content-max-width)); height: 100vh; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; padding: 46px clamp(24px, 5vw, 64px); }
 .shell header > div:first-child { min-width: 0; }

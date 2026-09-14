@@ -90,12 +90,15 @@ export const ConfirmDialog = {
   render() {
     if (!this.open) return null
     return h('div', { class: 'confirm-backdrop', role: 'presentation', onKeydown: this.onKeydown, onClick: event => { if (event.target === event.currentTarget) this.cancel() } }, [
-      h('div', { class: 'confirm-dialog', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'admin-confirm-title', tabindex: '-1' }, [
-        h('h2', { id: 'admin-confirm-title' }, this.title),
-        h('p', this.message),
+      h('div', { class: ['confirm-dialog', { 'confirm-dialog-danger': this.danger }], role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'admin-confirm-title', 'aria-describedby': 'admin-confirm-message', tabindex: '-1' }, [
+        h('div', { class: 'confirm-dialog-content' }, [
+          h('span', { class: 'confirm-dialog-eyebrow' }, this.danger ? '請確認此項操作' : '確認操作'),
+          h('h2', { id: 'admin-confirm-title' }, this.title),
+          h('p', { id: 'admin-confirm-message' }, this.message)
+        ]),
         h('div', { class: 'confirm-actions' }, [
           h('button', { type: 'button', class: 'secondary', onClick: this.cancel }, this.cancelLabel),
-          h('button', { ref: 'confirmButton', type: 'button', class: this.danger ? 'danger' : 'primary', onClick: this.confirm }, this.confirmLabel)
+          h('button', { ref: 'confirmButton', type: 'button', class: this.danger ? 'danger' : 'restore-confirm', onClick: this.confirm }, this.confirmLabel)
         ])
       ])
     ])
