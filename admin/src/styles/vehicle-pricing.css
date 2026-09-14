@@ -1,0 +1,127 @@
+@import './tokens.css';
+
+/* Desktop vehicle and pricing workspace: intentionally separate from mobile rules. */
+@media (min-width: 701px) {
+  .shell .vehicle-admin button,
+  .shell .route-pricing-admin button { font-family: inherit; font-weight: 750; letter-spacing: .01em; cursor: pointer; }
+  .shell .vehicle-admin .record-form > button[type='submit'],
+  .shell .route-pricing-admin .record-form > button[type='submit'],
+  .shell .vehicle-admin .extra-editor button[type='submit'] { min-height: 40px; height: 40px; border: 0; border-radius: 8px; padding: 0 19px; color: #fff; background: #163b5c; box-shadow: 3px 3px 0 #8bb9c5; transition: transform .16s ease, box-shadow .16s ease, background .16s ease; }
+  .shell .vehicle-admin .record-form > button[type='submit']:hover,
+  .shell .route-pricing-admin .record-form > button[type='submit']:hover,
+  .shell .vehicle-admin .extra-editor button[type='submit']:hover { background: #287f9d; transform: translate(-2px, -2px); box-shadow: 5px 5px 0 #8bb9c5; }
+  .shell .vehicle-admin .admin-toolbar button,
+  .shell .route-pricing-admin .admin-toolbar button,
+  .shell .vehicle-admin .pricing-actions button,
+  .shell .vehicle-admin .currency-switcher button { border: 0; border-radius: 8px; padding: 0 19px; color: #fff; background: #163b5c; box-shadow: 3px 3px 0 #8bb9c5; transition: transform .16s ease, box-shadow .16s ease, background .16s ease; }
+  .shell .vehicle-admin .admin-toolbar button:hover,
+  .shell .route-pricing-admin .admin-toolbar button:hover,
+  .shell .vehicle-admin .pricing-actions button:hover,
+  .shell .vehicle-admin .currency-switcher button:hover { background: #287f9d; transform: translate(-2px, -2px); box-shadow: 5px 5px 0 #8bb9c5; }
+  .shell .vehicle-admin .row-actions,
+  .shell .route-pricing-admin .row-actions { display: flex; flex-wrap: wrap; gap: 7px; }
+  .shell .vehicle-admin .row-actions button,
+  .shell .route-pricing-admin .row-actions button,
+  .shell .vehicle-admin .card-action,
+  .shell .vehicle-admin .extra-sort-actions button,
+  .shell .vehicle-admin .record-form > button.secondary,
+  .shell .route-pricing-admin .record-form > button.secondary { min-height: 34px; height: 34px; border: 1px solid #b8cad8; border-radius: 7px; padding: 0 12px; color: #31526d; background: #fff; box-shadow: none; }
+  .shell .vehicle-admin .row-actions button:hover,
+  .shell .route-pricing-admin .row-actions button:hover,
+  .shell .vehicle-admin .card-action:hover,
+  .shell .vehicle-admin .extra-sort-actions button:hover,
+  .shell .vehicle-admin .record-form > button.secondary:hover,
+  .shell .route-pricing-admin .record-form > button.secondary:hover { border-color: #287f9d; color: #287f9d; background: #edf8fa; transform: translateY(-2px); }
+  .shell .vehicle-admin .row-actions .danger,
+  .shell .route-pricing-admin .row-actions button:last-child,
+  .shell .vehicle-admin .row-actions button.danger { border-color: #e0a7a7; color: #a33f48; background: #fff7f7; box-shadow: none; }
+  .shell .vehicle-admin .modal-backdrop { z-index: 55; }
+  .shell .vehicle-admin .modal-backdrop .record-form { width: min(560px, calc(100vw - 48px)); max-height: min(760px, calc(100vh - 48px)); margin: 0; padding: 30px; overflow-y: auto; border: 1px solid #d9e5ef; border-radius: 20px; background: #fff; box-shadow: 0 30px 90px rgb(10 42 67 / 28%); }
+  .shell .vehicle-admin .modal-backdrop .vehicle-editor { width: min(760px, calc(100vw - 48px)); grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .shell .vehicle-admin .modal-backdrop .record-form h3,
+  .shell .vehicle-admin .modal-backdrop .record-form p { grid-column: 1 / -1; }
+  .shell .vehicle-admin .modal-backdrop .record-form > button { width: auto; margin-top: 8px; }
+  .shell .vehicle-admin .modal-backdrop .record-form > button[type='submit'] { justify-self: end; }
+  .shell .vehicle-admin .modal-backdrop .record-form > button.secondary { justify-self: start; }
+  .shell .vehicle-admin .modal-backdrop .record-form .catalog-enabled { display: flex; align-items: center; gap: 7px; min-height: 28px; color: #29415f; font-size: 14px; font-weight: 700; }
+  .shell .vehicle-admin .modal-backdrop .record-form .catalog-enabled input { width: 17px; height: 17px; min-height: 17px; }
+  .shell .vehicle-admin .modal-backdrop .record-form .editor-actions { display: flex; grid-column: 1 / -1; align-items: center; justify-content: flex-end; gap: 10px; margin-top: 4px; }
+  .shell .vehicle-admin .modal-backdrop .record-form .editor-actions button { width: 104px; min-width: 0; height: 38px; min-height: 38px; margin: 0; border-radius: 8px; font-size: 14px; font-weight: 800; box-shadow: none; transform: none; }
+  .shell .vehicle-admin .modal-backdrop .record-form .editor-actions button.secondary { border: 1px solid #d6e0ec; color: #375271; background: #e8eef7; }
+  .shell .vehicle-admin .modal-backdrop .record-form .editor-actions button.secondary:hover { border-color: #c5d3e3; color: #294765; background: #dfe8f3; transform: none; }
+  .shell .vehicle-admin .modal-backdrop .record-form .editor-actions button[type='submit'] { border: 0; color: #fff; background: #087df5; }
+  .shell .vehicle-admin .modal-backdrop .record-form .editor-actions button[type='submit']:hover { background: #006fe8; transform: none; box-shadow: none; }
+  .shell .editor-section:has(.pricing-form),
+  .shell .editor-section:has(.record-form) { display: grid; gap: 22px; max-width: 1180px; }
+
+  .shell .vehicle-tabs { display: none; }
+
+  .shell .vehicle-admin > .panel,
+  .shell .editor-section:has(.pricing-form) > .panel,
+  .shell .editor-section:has(.record-form) > .panel {
+    border: 1px solid #d9e3ef;
+    border-radius: 18px;
+    background: #fff;
+    box-shadow: 0 10px 26px rgb(25 55 90 / 7%);
+  }
+
+  .shell .vehicle-admin > .panel:nth-of-type(1) {
+    position: relative;
+    overflow: visible;
+    padding: 24px;
+    background: linear-gradient(135deg, #102a43 0%, #1e4d73 58%, #287f9d 100%);
+    color: #fff;
+  }
+  .shell .vehicle-admin > .panel:nth-of-type(1)::after {
+    position: absolute;
+    right: 28px;
+    bottom: 20px;
+    color: rgb(255 255 255 / 18%);
+    content: 'PRICING CONTROL';
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: .18em;
+  }
+  .shell .vehicle-admin > .panel:nth-of-type(1) h2,
+  .shell .vehicle-admin > .panel:nth-of-type(1) .muted { color: #fff; }
+  .shell .currency-switcher { display: flex; align-items: center; justify-content: space-between; gap: 28px; min-height: 112px; padding: 24px 28px; }
+  .shell .currency-switcher h2 { margin: 0 0 6px; font-size: 22px; letter-spacing: -.03em; }
+  .shell .currency-switcher .muted { display: block; max-width: 590px; color: #d5e8f5; line-height: 1.55; }
+  .shell .currency-switcher-actions { position: relative; z-index: 1; display: flex; gap: 10px; }
+  .shell .currency-switcher select { min-width: 170px; border-color: rgb(255 255 255 / 35%); color: #173957; background: #fff; }
+  .shell .currency-switcher button { background: #f6c453; color: #173957; box-shadow: none; }
+
+  .shell .vehicle-admin > .panel:not(:first-child) { overflow: hidden; }
+  .shell .admin-toolbar { align-items: flex-end; gap: 18px; padding: 24px 26px 18px; border-bottom: 1px solid #edf2f7; }
+  .shell .admin-toolbar h2 { font-size: 21px; letter-spacing: -.025em; }
+  .shell .admin-toolbar button { min-height: 42px; padding-inline: 17px; border-radius: 10px; }
+  .shell .vehicle-admin .record-form { margin: 0 26px 22px; padding: 18px; border: 1px solid #e1eaf3; border-radius: 13px; background: #f7fafc; }
+  .shell .vehicle-admin table,
+  .shell .editor-section:has(.record-form) table { border-top: 0; }
+  .shell .vehicle-admin th,
+  .shell .editor-section:has(.record-form) th { color: #647b94; background: #f5f8fb; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; }
+  .shell .vehicle-admin td,
+  .shell .vehicle-admin th,
+  .shell .editor-section:has(.record-form) td,
+  .shell .editor-section:has(.record-form) th { padding: 15px 18px; border-bottom: 1px solid #edf2f7; }
+  .shell .vehicle-admin tbody tr:hover,
+  .shell .editor-section:has(.record-form) tbody tr:hover { background: #f8fbff; }
+
+  .shell .pricing-form { padding: 0 26px 24px; }
+  .shell .pricing-settings { display: grid; grid-template-columns: minmax(250px, 1fr) minmax(220px, .8fr); gap: 16px; margin: 0 0 20px; padding: 18px; border: 1px solid #e2eaf3; border-radius: 13px; background: #f7fafc; }
+  .shell .pricing-settings label { justify-content: space-between; gap: 14px; }
+  .shell .pricing-settings input { width: 150px; min-height: 40px; background: #fff; }
+  .shell .pricing-form table { min-width: 0; border: 1px solid #e2eaf3; border-radius: 12px; overflow: hidden; }
+  .shell .pricing-form td input { min-height: 38px; width: 120px; background: #fff; }
+  .shell .pricing-actions { justify-content: space-between; padding-top: 18px; border-top: 1px solid #edf2f7; }
+
+  .shell .trigger-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; padding: 0 26px 24px; }
+  .shell .trigger-card { min-height: 180px; padding: 19px; border: 1px solid #dce6f0; border-radius: 14px; background: #f8fafc; }
+  .shell .trigger-card.active { border-color: #71b5b0; background: linear-gradient(145deg, #f1fbfa, #fff); box-shadow: inset 0 3px 0 #3b9992; }
+  .shell .trigger-card h3 { margin: 7px 0 8px; font-size: 18px; }
+  .shell .trigger-card p { min-height: 38px; line-height: 1.5; }
+
+  .shell .editor-section:has(.record-form) .panel { overflow: hidden; }
+  .shell .editor-section:has(.record-form) .record-form { margin: 0 26px 22px; padding: 18px; border: 1px solid #e1eaf3; border-radius: 13px; background: #f7fafc; }
+  .shell .editor-section:has(.record-form) .admin-toolbar { align-items: flex-start; }
+}

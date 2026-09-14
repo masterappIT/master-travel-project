@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
-import '../app/router.dart';
+import '../app/route_names.dart';
 import '../core/navigation/driver_navigation.dart';
+
+import 'package:driver_web/core/tokens/driver_tokens.dart';
 
 class LoginPage extends StatelessWidget {
   const LoginPage({super.key});
@@ -10,7 +12,7 @@ class LoginPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xfff0f2f5),
+      backgroundColor: DriverColors.background,
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) => Align(
@@ -23,9 +25,9 @@ class LoginPage extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     const _Header(),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: DriverSpacing.xl),
                     const _VerificationCard(),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: DriverSpacing.xl),
                     const _ActionCard(),
                   ],
                 ),
@@ -48,22 +50,24 @@ class _Header extends StatelessWidget {
             width: 72,
             height: 72,
             decoration: BoxDecoration(
-              color: const Color(0xff4a6cf7),
+              color: DriverColors.primary,
               borderRadius: BorderRadius.circular(20),
             ),
             alignment: Alignment.center,
             child: SvgPicture.asset('assets/car.svg', width: 32, height: 32),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: DriverSpacing.lg),
           const Text('跨境出行',
               style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.w700,
-                  color: Color(0xff1c1c2e)),
+                  color: DriverColors.text),
               textAlign: TextAlign.center),
-          const SizedBox(height: 16),
+          const SizedBox(height: DriverSpacing.lg),
           const Text('司機端登入 / 註冊',
-              style: TextStyle(fontSize: 14, color: Color(0xff56657e)),
+              style: TextStyle(
+                  fontSize: DriverTypography.body,
+                  color: DriverColors.secondaryText),
               textAlign: TextAlign.center),
         ],
       );
@@ -76,7 +80,7 @@ class _VerificationCard extends StatelessWidget {
   Widget build(BuildContext context) => _Card(
         children: [
           const _FieldLabel('手機號碼'),
-          const SizedBox(height: 8),
+          const SizedBox(height: DriverSpacing.sm),
           Container(
             height: 50,
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -85,23 +89,24 @@ class _VerificationCard extends StatelessWidget {
               const Text('+852',
                   style: TextStyle(
                       fontSize: 15,
-                      color: Color(0xff1c1c2e),
+                      color: DriverColors.text,
                       fontWeight: FontWeight.w500)),
-              const SizedBox(width: 4),
+              const SizedBox(width: DriverSpacing.xs),
               const Text('▼',
-                  style: TextStyle(fontSize: 10, color: Color(0xff80808c))),
-              const SizedBox(width: 12),
+                  style:
+                      TextStyle(fontSize: 10, color: DriverColors.mutedText)),
+              const SizedBox(width: DriverSpacing.md),
               Container(width: 1, height: 20, color: const Color(0xffd1d1d9)),
-              const SizedBox(width: 8),
+              const SizedBox(width: DriverSpacing.sm),
               const Expanded(
                   child: Text('請輸入手機號碼',
-                      style:
-                          TextStyle(fontSize: 15, color: Color(0xff56657e)))),
+                      style: TextStyle(
+                          fontSize: 15, color: DriverColors.secondaryText))),
             ]),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: DriverSpacing.lg),
           const _FieldLabel('驗證碼'),
-          const SizedBox(height: 8),
+          const SizedBox(height: DriverSpacing.sm),
           LayoutBuilder(
             builder: (context, constraints) {
               final codeField = const SizedBox(
@@ -112,15 +117,18 @@ class _VerificationCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         codeField,
-                        const SizedBox(height: 12),
+                        const SizedBox(height: DriverSpacing.md),
                         const _PrimaryButton(
-                            label: '獲取驗證碼', fontSize: 14, fullWidth: true)
+                            label: '獲取驗證碼',
+                            fontSize: DriverTypography.body,
+                            fullWidth: true)
                       ],
                     )
                   : Row(children: [
                       Expanded(child: codeField),
-                      const SizedBox(width: 12),
-                      const _PrimaryButton(label: '獲取驗證碼', fontSize: 14),
+                      const SizedBox(width: DriverSpacing.md),
+                      const _PrimaryButton(
+                          label: '獲取驗證碼', fontSize: DriverTypography.body),
                     ]);
             },
           ),
@@ -136,40 +144,46 @@ class _ActionCard extends StatelessWidget {
         children: [
           _PrimaryButton(
               label: '登入 / 註冊',
-              fontSize: 16,
+              fontSize: DriverTypography.bodyLarge,
               fullWidth: true,
-              onPressed: () =>
-                  DriverNavigation.push(context, DriverRoutes.registration)),
-          const SizedBox(height: 16),
+              onPressed: () => DriverNavigation.push(
+                  context, DriverRouteNames.registration)),
+          const SizedBox(height: DriverSpacing.lg),
           const Text.rich(
               TextSpan(text: '登入即代表您同意 ', children: [
                 TextSpan(
                     text: '司機服務條款',
                     style: TextStyle(
-                        fontWeight: FontWeight.w700, color: Color(0xff4a6cf7))),
+                        fontWeight: FontWeight.w700,
+                        color: DriverColors.primary)),
                 TextSpan(text: ' 與 '),
                 TextSpan(
                     text: '隱私政策',
                     style: TextStyle(
-                        fontWeight: FontWeight.w700, color: Color(0xff4a6cf7)))
+                        fontWeight: FontWeight.w700,
+                        color: DriverColors.primary))
               ]),
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 13, color: Color(0xff56657e))),
-          const SizedBox(height: 16),
+              style: TextStyle(
+                  fontSize: DriverTypography.label,
+                  color: DriverColors.secondaryText)),
+          const SizedBox(height: DriverSpacing.lg),
           Row(children: [
-            const Expanded(child: Divider(color: Color(0xffd9d9d9))),
+            const Expanded(child: Divider(color: DriverColors.border)),
             const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 12),
                 child: Text('或',
-                    style: TextStyle(fontSize: 13, color: Color(0xff56657e)))),
-            const Expanded(child: Divider(color: Color(0xffd9d9d9))),
+                    style: TextStyle(
+                        fontSize: DriverTypography.label,
+                        color: DriverColors.secondaryText))),
+            const Expanded(child: Divider(color: DriverColors.border)),
           ]),
-          const SizedBox(height: 16),
+          const SizedBox(height: DriverSpacing.lg),
           _SocialButton(
-              color: const Color(0xff4cd964),
+              color: DriverColors.success,
               asset: 'assets/circle-x.svg',
               label: '微信登入'),
-          const SizedBox(height: 16),
+          const SizedBox(height: DriverSpacing.lg),
           _SocialButton(
               color: const Color(0xff1a1a1a),
               asset: 'assets/apple.svg',
@@ -186,8 +200,8 @@ class _Card extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
             color: Colors.white,
-            border: Border.all(color: const Color(0xffe5e7eb)),
-            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: DriverColors.divider),
+            borderRadius: BorderRadius.circular(DriverRadii.card),
             boxShadow: const [
               BoxShadow(
                   color: Color(0x0a000000), blurRadius: 4, offset: Offset(0, 2))
@@ -203,7 +217,9 @@ class _FieldLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Text(label,
       style: const TextStyle(
-          fontSize: 14, fontWeight: FontWeight.w500, color: Color(0xff1c1c2e)));
+          fontSize: DriverTypography.body,
+          fontWeight: FontWeight.w500,
+          color: DriverColors.text));
 }
 
 class _InputHint extends StatelessWidget {
@@ -215,7 +231,8 @@ class _InputHint extends StatelessWidget {
       alignment: Alignment.centerLeft,
       decoration: _fieldDecoration(),
       child: Text(label,
-          style: const TextStyle(fontSize: 15, color: Color(0xff56657e)),
+          style:
+              const TextStyle(fontSize: 15, color: DriverColors.secondaryText),
           overflow: TextOverflow.ellipsis));
 }
 
@@ -236,12 +253,12 @@ class _PrimaryButton extends StatelessWidget {
         child: ElevatedButton(
           onPressed: onPressed ?? () {},
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xff285cfc),
+            backgroundColor: DriverColors.activeBlue,
             foregroundColor: Colors.white,
             elevation: 8,
             shadowColor: const Color(0x33285cfc),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(DriverRadii.card)),
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
           ),
           child: Text(label,
@@ -267,18 +284,19 @@ class _SocialButton extends StatelessWidget {
             backgroundColor: color,
             foregroundColor: Colors.white,
             elevation: 0,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(DriverRadii.card)),
             padding: EdgeInsets.zero,
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               SvgPicture.asset(asset, width: 20, height: 20),
-              const SizedBox(width: 12),
+              const SizedBox(width: DriverSpacing.md),
               Text(label,
                   style: const TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.w700)),
+                      fontSize: DriverTypography.bodyLarge,
+                      fontWeight: FontWeight.w700)),
             ],
           ),
         ),
@@ -287,5 +305,5 @@ class _SocialButton extends StatelessWidget {
 
 BoxDecoration _fieldDecoration() => BoxDecoration(
     color: Colors.white,
-    border: Border.all(color: const Color(0xffd9d9d9)),
-    borderRadius: BorderRadius.circular(12));
+    border: Border.all(color: DriverColors.border),
+    borderRadius: BorderRadius.circular(DriverRadii.input));

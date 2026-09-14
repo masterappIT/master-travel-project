@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import 'core/tokens/driver_tokens.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 class FloatingNavBar extends StatelessWidget {
@@ -81,8 +83,8 @@ class _NavItem extends StatelessWidget {
                               height: 2,
                               decoration: BoxDecoration(
                                 color: selected
-                                    ? const Color(0xff295cfc)
-                                    : const Color(0xff9999a1),
+                                    ? DriverColors.navActive
+                                    : DriverColors.navInactive,
                                 borderRadius: BorderRadius.circular(1),
                               ),
                             ),
@@ -97,8 +99,8 @@ class _NavItem extends StatelessWidget {
                         fontWeight:
                             selected ? FontWeight.w700 : FontWeight.w400,
                         color: selected
-                            ? const Color(0xff295cfc)
-                            : const Color(0xff9999a1))),
+                            ? DriverColors.navActive
+                            : DriverColors.navInactive)),
               ],
             ),
           ),

@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
-import 'app/router.dart';
+import 'app/route_names.dart';
 import 'core/layout/driver_page_shell.dart';
+import 'core/navigation/driver_navigation.dart';
+
+import 'package:driver_web/core/tokens/driver_tokens.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -20,8 +23,9 @@ class _HomePageState extends State<HomePage> {
       selectedIndex: 0,
       topPadding: 12,
       bottomPadding: 120,
-      onOrderTap: () => Navigator.of(context).pushNamed(DriverRoutes.orders),
-      onProfileTap: () => Navigator.of(context).pushNamed(DriverRoutes.profile),
+      onOrderTap: () => DriverNavigation.push(context, DriverRouteNames.orders),
+      onProfileTap: () =>
+          DriverNavigation.push(context, DriverRouteNames.profile),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -51,36 +55,44 @@ class _ProfileHeader extends StatelessWidget {
   Widget build(BuildContext context) => Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          const Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Text('陳大文',
-                      style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xff1c1c2e))),
-                  SizedBox(width: 8),
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                        color: Color(0xffebf9f1),
-                        borderRadius: BorderRadius.all(Radius.circular(100))),
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      child: Text('已認證司機',
+          Expanded(
+            child: const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text('陳大文',
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                              fontSize: 12,
+                              fontSize: 24,
                               fontWeight: FontWeight.w700,
-                              color: Color(0xff2b7a42))),
+                              color: DriverColors.text)),
                     ),
-                  ),
-                ],
-              ),
-              SizedBox(height: 4),
-              Text('兩地牌 · 轎車',
-                  style: TextStyle(fontSize: 13, color: Color(0xff56657e))),
-            ],
+                    SizedBox(width: 8),
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                          color: DriverColors.successBackground,
+                          borderRadius: BorderRadius.all(Radius.circular(100))),
+                      child: Padding(
+                        padding:
+                            EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        child: Text('已認證司機',
+                            style: TextStyle(
+                                fontSize: DriverTypography.caption,
+                                fontWeight: FontWeight.w700,
+                                color: DriverColors.darkGreen)),
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: 4),
+                Text('兩地牌 · 轎車',
+                    style: TextStyle(
+                        fontSize: DriverTypography.label,
+                        color: DriverColors.secondaryText)),
+              ],
+            ),
           ),
           Semantics(
             button: true,
@@ -94,7 +106,7 @@ class _ProfileHeader extends StatelessWidget {
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                     color: Colors.white,
-                    border: Border.all(color: const Color(0xffe5e7eb)),
+                    border: Border.all(color: DriverColors.divider),
                     borderRadius: BorderRadius.circular(20)),
                 child: SvgPicture.asset('assets/home-bell.svg',
                     width: 24, height: 24),
@@ -113,13 +125,13 @@ class _StatusCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) => InkWell(
         onTap: () => onChanged(!isOnline),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(DriverRadii.card),
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
               color: Colors.white,
-              border: Border.all(color: const Color(0xffe5e7eb)),
-              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: DriverColors.divider),
+              borderRadius: BorderRadius.circular(DriverRadii.card),
               boxShadow: const [
                 BoxShadow(
                     color: Color(0x0a000000),
@@ -129,16 +141,21 @@ class _StatusCard extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(children: [
-                SvgPicture.asset('assets/home-status-dot.svg',
-                    width: 12, height: 12),
-                const SizedBox(width: 8),
-                Text(isOnline ? '目前狀態：在線接單' : '目前狀態：離線',
-                    style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xff1c1c2e))),
-              ]),
+              Flexible(
+                child: Row(children: [
+                  SvgPicture.asset('assets/home-status-dot.svg',
+                      width: 12, height: 12),
+                  const SizedBox(width: DriverSpacing.sm),
+                  Flexible(
+                    child: Text(isOnline ? '目前狀態：在線接單' : '目前狀態：離線',
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontSize: DriverTypography.bodyLarge,
+                            fontWeight: FontWeight.w700,
+                            color: DriverColors.text)),
+                  ),
+                ]),
+              ),
               Semantics(
                 toggled: isOnline,
                 label: '在線接單切換',
@@ -161,17 +178,19 @@ class _EarningsCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text('今日收入',
-                style: TextStyle(fontSize: 14, color: Color(0xff56657e))),
-            const SizedBox(height: 4),
+                style: TextStyle(
+                    fontSize: DriverTypography.body,
+                    color: DriverColors.secondaryText)),
+            const SizedBox(height: DriverSpacing.xs),
             const Text('\$1,280.00',
                 style: TextStyle(
                     fontSize: 36,
                     fontWeight: FontWeight.w800,
-                    color: Color(0xff1c1c2e))),
-            const SizedBox(height: 16),
+                    color: DriverColors.text)),
+            const SizedBox(height: DriverSpacing.lg),
             SvgPicture.asset('assets/home-divider.svg',
                 width: double.infinity, height: 1),
-            const SizedBox(height: 16),
+            const SizedBox(height: DriverSpacing.lg),
             const Row(children: [
               Expanded(child: _Stat(label: '今日接單', value: '3 單')),
               Expanded(child: _Stat(label: '在線時數', value: '4.5 小時')),
@@ -210,12 +229,12 @@ class _RecentOrdersSection extends StatelessWidget {
                 style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w700,
-                    color: Color(0xff1c1c2e))),
+                    color: DriverColors.text)),
             Text('查看全部',
                 style: TextStyle(
-                    fontSize: 14,
+                    fontSize: DriverTypography.body,
                     fontWeight: FontWeight.w500,
-                    color: Color(0xff285cfc))),
+                    color: DriverColors.activeBlue)),
           ]),
           SizedBox(height: 12),
           _RecentOrderCard(
@@ -256,25 +275,26 @@ class _RecentOrderCard extends StatelessWidget {
             Expanded(
               child: Text(time,
                   overflow: TextOverflow.ellipsis,
-                  style:
-                      const TextStyle(fontSize: 14, color: Color(0xff56657e))),
+                  style: const TextStyle(
+                      fontSize: DriverTypography.body,
+                      color: DriverColors.secondaryText)),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: DriverSpacing.sm),
             Text(price,
                 style: const TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w700,
-                    color: Color(0xff2b7a42))),
+                    color: DriverColors.darkGreen)),
           ]),
-          const SizedBox(height: 12),
+          const SizedBox(height: DriverSpacing.md),
           _RouteRow(asset: 'assets/home-origin-dot.svg', text: origin),
-          const SizedBox(height: 8),
+          const SizedBox(height: DriverSpacing.sm),
           _RouteRow(
               asset: 'assets/home-destination-dot.svg', text: destination),
-          const SizedBox(height: 12),
+          const SizedBox(height: DriverSpacing.md),
           SvgPicture.asset('assets/home-order-divider.svg',
               width: double.infinity, height: 1),
-          const SizedBox(height: 12),
+          const SizedBox(height: DriverSpacing.md),
           Row(children: [
             Expanded(
               child: Row(children: [
@@ -284,17 +304,19 @@ class _RecentOrderCard extends StatelessWidget {
                   child: Text(passenger,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                          fontSize: 13, color: Color(0xff56657e))),
+                          fontSize: DriverTypography.label,
+                          color: DriverColors.secondaryText)),
                 ),
               ]),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: DriverSpacing.sm),
             Flexible(
               child: Text(distance,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.end,
-                  style:
-                      const TextStyle(fontSize: 13, color: Color(0xff56657e))),
+                  style: const TextStyle(
+                      fontSize: DriverTypography.label,
+                      color: DriverColors.secondaryText)),
             ),
           ]),
         ]),
@@ -308,14 +330,14 @@ class _RouteRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Row(children: [
         SvgPicture.asset(asset, width: 8, height: 8),
-        const SizedBox(width: 8),
+        const SizedBox(width: DriverSpacing.sm),
         Expanded(
             child: Text(text,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w500,
-                    color: Color(0xff1c1c2e))))
+                    color: DriverColors.text)))
       ]);
 }
 
@@ -328,13 +350,15 @@ class _Stat extends StatelessWidget {
   Widget build(BuildContext context) =>
       Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(label,
-            style: const TextStyle(fontSize: 12, color: Color(0xff56657e))),
+            style: const TextStyle(
+                fontSize: DriverTypography.caption,
+                color: DriverColors.secondaryText)),
         const SizedBox(height: 2),
         Text(value,
             style: TextStyle(
                 fontSize: valueSize,
                 fontWeight: FontWeight.w700,
-                color: const Color(0xff1c1c2e)))
+                color: DriverColors.text))
       ]);
 }
 
@@ -345,18 +369,20 @@ class _RatingStat extends StatelessWidget {
   Widget build(BuildContext context) =>
       Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         const Text('評分',
-            style: TextStyle(fontSize: 13, color: Color(0xff56657e))),
-        const SizedBox(height: 4),
+            style: TextStyle(
+                fontSize: DriverTypography.label,
+                color: DriverColors.secondaryText)),
+        const SizedBox(height: DriverSpacing.xs),
         Row(children: [
           SvgPicture.asset('assets/home-star.svg', width: 16, height: 16),
-          const SizedBox(width: 4),
+          const SizedBox(width: DriverSpacing.xs),
           Flexible(
             child: Text('4.9 / 5.0',
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w700,
-                    color: Color(0xff1c1c2e))),
+                    color: DriverColors.text)),
           )
         ])
       ]);
@@ -372,8 +398,8 @@ class _Card extends StatelessWidget {
       padding: EdgeInsets.all(padding),
       decoration: BoxDecoration(
           color: Colors.white,
-          border: Border.all(color: const Color(0xffe5e7eb)),
-          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: DriverColors.divider),
+          borderRadius: BorderRadius.circular(DriverRadii.card),
           boxShadow: const [
             BoxShadow(
                 color: Color(0x0a000000), blurRadius: 4, offset: Offset(0, 2))

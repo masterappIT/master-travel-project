@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'app/router.dart';
+import 'app/route_names.dart';
 import 'core/layout/driver_page_shell.dart';
 import 'core/navigation/driver_navigation.dart';
+
+import 'package:driver_web/core/tokens/driver_tokens.dart';
 
 class OrderInProgressPage extends StatelessWidget {
   const OrderInProgressPage({super.key});
@@ -15,60 +17,57 @@ class OrderInProgressPage extends StatelessWidget {
       topPadding: 24,
       horizontalPadding: 24,
       bottomPadding: 24,
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Semantics(
-                  button: true,
-                  label: '返回接單大廳',
-                  child: InkWell(
-                    onTap: () => Navigator.of(context).pop(),
-                    child: Row(children: [
-                      SvgPicture.asset('assets/in-progress-chevron-left.svg',
-                          width: 20, height: 20),
-                      const SizedBox(width: 8),
-                      Text('返回接單大廳',
-                          style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w500,
-                              color: Color(0xff1c1c2e))),
-                    ]),
-                  ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Semantics(
+                button: true,
+                label: '返回接單大廳',
+                child: InkWell(
+                  onTap: () => Navigator.of(context).pop(),
+                  child: Row(children: [
+                    SvgPicture.asset('assets/in-progress-chevron-left.svg',
+                        width: 20, height: 20),
+                    const SizedBox(width: DriverSpacing.sm),
+                    Text('返回接單大廳',
+                        style: TextStyle(
+                            fontSize: DriverTypography.bodyLarge,
+                            fontWeight: FontWeight.w500,
+                            color: DriverColors.text)),
+                  ]),
                 ),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                  decoration: BoxDecoration(
-                      color: const Color(0xffeaf0ff),
-                      borderRadius: BorderRadius.circular(100)),
-                  child: const Text('進行中',
-                      style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xff285cfc))),
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
-            const _ProgressMapPreview(),
-            const SizedBox(height: 24),
-            const _PassengerCard(),
-            const SizedBox(height: 24),
-            const _TripProgressCard(),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: () =>
-                  DriverNavigation.push(context, DriverRoutes.orderCompleted),
-              style: _completeStyle(),
-              child: const Text('完成'),
-            ),
-          ],
-        ),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                decoration: BoxDecoration(
+                    color: DriverColors.infoBackground,
+                    borderRadius: BorderRadius.circular(DriverRadii.pill)),
+                child: const Text('進行中',
+                    style: TextStyle(
+                        fontSize: DriverTypography.label,
+                        fontWeight: FontWeight.w700,
+                        color: DriverColors.activeBlue)),
+              ),
+            ],
+          ),
+          const SizedBox(height: DriverSpacing.xl),
+          const _ProgressMapPreview(),
+          const SizedBox(height: DriverSpacing.xl),
+          const _PassengerCard(),
+          const SizedBox(height: DriverSpacing.xl),
+          const _TripProgressCard(),
+          const SizedBox(height: DriverSpacing.xl),
+          ElevatedButton(
+            onPressed: () =>
+                DriverNavigation.push(context, DriverRouteNames.orderCompleted),
+            style: _completeStyle(),
+            child: const Text('完成'),
+          ),
+        ],
       ),
     );
   }
@@ -80,13 +79,15 @@ class _ProgressMapPreview extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         height: 180,
         decoration: BoxDecoration(
-            color: const Color(0xff1c1c2e),
-            borderRadius: BorderRadius.circular(16)),
+            color: DriverColors.text,
+            borderRadius: BorderRadius.circular(DriverRadii.card)),
         child: Stack(children: [
           const Center(
               child: Column(mainAxisSize: MainAxisSize.min, children: [
             Text('香港中環 → 深圳',
-                style: TextStyle(fontSize: 13, color: Color(0xb3ffffff))),
+                style: TextStyle(
+                    fontSize: DriverTypography.label,
+                    color: Color(0xb3ffffff))),
             SizedBox(height: 12),
             _RouteText(),
           ])),
@@ -103,24 +104,25 @@ class _RouteText extends StatelessWidget {
         Row(mainAxisSize: MainAxisSize.min, children: [
           SvgPicture.asset('assets/in-progress-origin.svg',
               width: 8, height: 8),
-          const SizedBox(width: 8),
+          const SizedBox(width: DriverSpacing.sm),
           const Text('香港中環',
               style: TextStyle(
-                  fontSize: 16,
+                  fontSize: DriverTypography.bodyLarge,
                   fontWeight: FontWeight.w700,
                   color: Colors.white)),
         ]),
-        const SizedBox(height: 4),
+        const SizedBox(height: DriverSpacing.xs),
         const Text('│',
-            style: TextStyle(fontSize: 12, color: Color(0xff80a0ff))),
-        const SizedBox(height: 4),
+            style: TextStyle(
+                fontSize: DriverTypography.caption, color: Color(0xff80a0ff))),
+        const SizedBox(height: DriverSpacing.xs),
         Row(mainAxisSize: MainAxisSize.min, children: [
           SvgPicture.asset('assets/in-progress-destination.svg',
               width: 8, height: 8),
-          const SizedBox(width: 8),
+          const SizedBox(width: DriverSpacing.sm),
           const Text('深圳',
               style: TextStyle(
-                  fontSize: 16,
+                  fontSize: DriverTypography.bodyLarge,
                   fontWeight: FontWeight.w700,
                   color: Colors.white)),
         ]),
@@ -135,9 +137,10 @@ class _MapLabel extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
           color: const Color(0x1affffff),
-          borderRadius: BorderRadius.circular(100)),
+          borderRadius: BorderRadius.circular(DriverRadii.pill)),
       child: Text(label,
-          style: const TextStyle(fontSize: 12, color: Colors.white)));
+          style: const TextStyle(
+              fontSize: DriverTypography.caption, color: Colors.white)));
 }
 
 class _PassengerCard extends StatelessWidget {
@@ -152,35 +155,36 @@ class _PassengerCard extends StatelessWidget {
                 height: 48,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                    color: const Color(0xfff0f2f5),
+                    color: DriverColors.background,
                     borderRadius: BorderRadius.circular(24)),
                 child: const Text('陳',
                     style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w700,
-                        color: Color(0xff1c1c2e)))),
-            const SizedBox(width: 12),
+                        color: DriverColors.text))),
+            const SizedBox(width: DriverSpacing.md),
             Expanded(
                 child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                   Text('陳大文',
                       style: TextStyle(
-                          fontSize: 16,
+                          fontSize: DriverTypography.bodyLarge,
                           fontWeight: FontWeight.w700,
-                          color: Color(0xff1c1c2e))),
+                          color: DriverColors.text)),
                   SizedBox(height: 2),
                   Row(children: [
                     SvgPicture.asset('assets/in-progress-star.svg',
                         width: 12, height: 12),
                     SizedBox(width: 4),
                     Text('乘客好評度 4.9',
-                        style:
-                            TextStyle(fontSize: 13, color: Color(0xff56657e))),
+                        style: TextStyle(
+                            fontSize: DriverTypography.label,
+                            color: DriverColors.secondaryText)),
                   ]),
                 ])),
             _CircleAssetButton(asset: 'assets/in-progress-phone.svg'),
-            const SizedBox(width: 8),
+            const SizedBox(width: DriverSpacing.sm),
             _CircleAssetButton(
                 asset: 'assets/in-progress-arrow-right.svg', highlighted: true),
           ]),
@@ -198,8 +202,9 @@ class _CircleAssetButton extends StatelessWidget {
         height: 44,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-            color:
-                highlighted ? const Color(0xffeaf0ff) : const Color(0xfff0f2f5),
+            color: highlighted
+                ? DriverColors.infoBackground
+                : DriverColors.background,
             borderRadius: BorderRadius.circular(24)),
         child: SvgPicture.asset(asset, width: 20, height: 20),
       );
@@ -217,11 +222,11 @@ class _TripProgressCard extends StatelessWidget {
             const SizedBox(width: 10),
             const Text('進行中',
                 style: TextStyle(
-                    fontSize: 16,
+                    fontSize: DriverTypography.bodyLarge,
                     fontWeight: FontWeight.w700,
-                    color: Color(0xff1c1c2e))),
+                    color: DriverColors.text)),
           ]),
-          const Divider(height: 1, color: Color(0xfff0f2f5)),
+          const Divider(height: 1, color: DriverColors.background),
           const _InfoRow(label: '出發地', value: '香港中環置地廣場東門大堂'),
           const _InfoRow(label: '目的地', value: '深圳福田口岸'),
           const _InfoRow(label: '出發時間', value: '2024/03/15 14:00'),
@@ -242,16 +247,17 @@ class _InfoRow extends StatelessWidget {
         SizedBox(
             width: 96,
             child: Text(label,
-                style:
-                    const TextStyle(fontSize: 14, color: Color(0xff56657e)))),
-        const SizedBox(width: 12),
+                style: const TextStyle(
+                    fontSize: DriverTypography.body,
+                    color: DriverColors.secondaryText))),
+        const SizedBox(width: DriverSpacing.md),
         Expanded(
             child: Text(value,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                    fontSize: 14,
+                    fontSize: DriverTypography.body,
                     fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
-                    color: const Color(0xff1c1c2e)))),
+                    color: DriverColors.text))),
       ]);
 }
 
@@ -264,8 +270,8 @@ class _Panel extends StatelessWidget {
         padding: EdgeInsets.all(padding),
         decoration: BoxDecoration(
             color: Colors.white,
-            border: Border.all(color: const Color(0xffe5e7eb)),
-            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: DriverColors.divider),
+            borderRadius: BorderRadius.circular(DriverRadii.card),
             boxShadow: const [
               BoxShadow(
                   color: Color(0x0a000000), blurRadius: 4, offset: Offset(0, 2))
@@ -284,8 +290,9 @@ class _Panel extends StatelessWidget {
 ButtonStyle _completeStyle() => ElevatedButton.styleFrom(
       minimumSize: const Size.fromHeight(56),
       foregroundColor: Colors.white,
-      backgroundColor: const Color(0xff285cfc),
+      backgroundColor: DriverColors.activeBlue,
       elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(DriverRadii.card)),
       textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
     );

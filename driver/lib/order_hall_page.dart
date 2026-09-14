@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'app/router.dart';
+import 'app/route_names.dart';
 import 'core/layout/driver_page_shell.dart';
 import 'core/navigation/driver_navigation.dart';
+
+import 'package:driver_web/core/tokens/driver_tokens.dart';
 
 class OrderHallPage extends StatefulWidget {
   const OrderHallPage({super.key});
@@ -15,7 +17,7 @@ class _OrderHallPageState extends State<OrderHallPage> {
   int _selectedTab = 0;
 
   void _openOrderDetail() {
-    DriverNavigation.push(context, DriverRoutes.orderDetail);
+    DriverNavigation.push(context, DriverRouteNames.orderDetail);
   }
 
   @override
@@ -23,10 +25,9 @@ class _OrderHallPageState extends State<OrderHallPage> {
     return DriverPageShell(
       selectedIndex: 1,
       bottomPadding: 104,
-      onHomeTap: () =>
-          Navigator.of(context).pushReplacementNamed(DriverRoutes.home),
+      onHomeTap: () => DriverNavigation.replace(context, DriverRouteNames.home),
       onProfileTap: () =>
-          Navigator.of(context).pushReplacementNamed(DriverRoutes.profile),
+          DriverNavigation.replace(context, DriverRouteNames.profile),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -37,14 +38,14 @@ class _OrderHallPageState extends State<OrderHallPage> {
                     style: TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.w700,
-                        color: Color(0xff1c1c2e))),
+                        color: DriverColors.text)),
                 _OnlineBadge()
               ]),
-          const SizedBox(height: 24),
+          const SizedBox(height: DriverSpacing.xl),
           _OrderTabs(
               selectedIndex: _selectedTab,
               onChanged: (index) => setState(() => _selectedTab = index)),
-          const SizedBox(height: 12),
+          const SizedBox(height: DriverSpacing.md),
           if (_selectedTab == 0) ...[
             _OrderCard(
                 passenger: '陳大文',
@@ -54,7 +55,7 @@ class _OrderHallPageState extends State<OrderHallPage> {
                 destination: '深圳福田口岸',
                 estimatedTime: '預估 18 分鐘',
                 onTap: _openOrderDetail),
-            const SizedBox(height: 12),
+            const SizedBox(height: DriverSpacing.md),
             _OrderCard(
                 passenger: '王小姐',
                 time: '2024/03/15 15:30',
@@ -78,11 +79,11 @@ class _OnlineBadge extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
         decoration: BoxDecoration(
-            color: const Color(0xff285cfc),
-            borderRadius: BorderRadius.circular(100)),
+            color: DriverColors.activeBlue,
+            borderRadius: BorderRadius.circular(DriverRadii.pill)),
         child: const Text('線上接單中',
             style: TextStyle(
-                fontSize: 12,
+                fontSize: DriverTypography.caption,
                 fontWeight: FontWeight.w700,
                 color: Colors.white)),
       );
@@ -124,25 +125,24 @@ class _OrderTab extends StatelessWidget {
         child: Material(
           color: Colors.transparent,
           child: InkWell(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(DriverRadii.input),
             onTap: onTap,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
                 color: Colors.white,
                 border: Border.all(
-                    color: selected
-                        ? const Color(0xff4a6cf7)
-                        : const Color(0xffd9d9d9)),
-                borderRadius: BorderRadius.circular(12),
+                    color:
+                        selected ? DriverColors.primary : DriverColors.border),
+                borderRadius: BorderRadius.circular(DriverRadii.input),
               ),
               child: Text(label,
                   style: TextStyle(
-                      fontSize: 14,
+                      fontSize: DriverTypography.body,
                       fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
                       color: selected
-                          ? const Color(0xff4a6cf7)
-                          : const Color(0xff56657e))),
+                          ? DriverColors.primary
+                          : DriverColors.secondaryText)),
             ),
           ),
         ),
@@ -169,13 +169,13 @@ class _OrderCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) => InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(DriverRadii.card),
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: Colors.white,
-            border: Border.all(color: const Color(0xffe5e7eb)),
-            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: DriverColors.divider),
+            borderRadius: BorderRadius.circular(DriverRadii.card),
             boxShadow: const [
               BoxShadow(
                   color: Color(0x0a000000), blurRadius: 4, offset: Offset(0, 2))
@@ -192,19 +192,19 @@ class _OrderCard extends StatelessWidget {
                     child: Text('出發  $time',
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                            fontSize: 14,
+                            fontSize: DriverTypography.body,
                             fontWeight: FontWeight.w500,
-                            color: Color(0xff1c1c2e))),
+                            color: DriverColors.text)),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: DriverSpacing.md),
                   Text(price,
                       style: const TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.w700,
-                          color: Color(0xff4cd964))),
+                          color: DriverColors.success)),
                 ],
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: DriverSpacing.md),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -215,39 +215,41 @@ class _OrderCard extends StatelessWidget {
                       label: destination),
                 ],
               ),
-              const SizedBox(height: 12),
-              const Divider(height: 1, color: Color(0xffe5e7eb)),
-              const SizedBox(height: 12),
+              const SizedBox(height: DriverSpacing.md),
+              const Divider(height: 1, color: DriverColors.divider),
+              const SizedBox(height: DriverSpacing.md),
               Row(
                 children: [
                   SvgPicture.asset('assets/route-driver.svg',
                       width: 8, height: 8),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: DriverSpacing.sm),
                   Expanded(
                     child: Text(passenger,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                            fontSize: 14, color: Color(0xff56657e))),
+                            fontSize: DriverTypography.body,
+                            color: DriverColors.secondaryText)),
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: DriverSpacing.md),
               SizedBox(
                 height: 48,
                 child: ElevatedButton(
                   onPressed: onTap,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xff285cfc),
+                    backgroundColor: DriverColors.activeBlue,
                     foregroundColor: Colors.white,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16)),
+                        borderRadius: BorderRadius.circular(DriverRadii.card)),
                     padding: const EdgeInsets.symmetric(
                         horizontal: 16, vertical: 12),
                   ),
                   child: const Text('接單',
-                      style:
-                          TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                      style: TextStyle(
+                          fontSize: DriverTypography.body,
+                          fontWeight: FontWeight.w700)),
                 ),
               ),
             ],
@@ -264,14 +266,14 @@ class _RouteRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Row(children: [
         SvgPicture.asset(asset, width: 8, height: 8),
-        const SizedBox(width: 8),
+        const SizedBox(width: DriverSpacing.sm),
         Expanded(
             child: Text(label,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
-                    fontSize: 14,
+                    fontSize: DriverTypography.body,
                     fontWeight: FontWeight.w500,
-                    color: Color(0xff1c1c2e)))),
+                    color: DriverColors.text))),
       ]);
 }
 
@@ -283,10 +285,12 @@ class _EmptyAcceptedOrders extends StatelessWidget {
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
             color: Colors.white,
-            border: Border.all(color: const Color(0xffe5e7eb)),
-            borderRadius: BorderRadius.circular(16)),
+            border: Border.all(color: DriverColors.divider),
+            borderRadius: BorderRadius.circular(DriverRadii.card)),
         child: const Text('暫無成功接單',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 14, color: Color(0xff56657e))),
+            style: TextStyle(
+                fontSize: DriverTypography.body,
+                color: DriverColors.secondaryText)),
       );
 }

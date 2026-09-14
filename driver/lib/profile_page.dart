@@ -1,12 +1,41 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
-import 'app/router.dart';
+import 'app/route_names.dart';
 import 'core/layout/driver_page_shell.dart';
 import 'core/navigation/driver_navigation.dart';
 
-class ProfilePage extends StatelessWidget {
+import 'package:driver_web/core/tokens/driver_tokens.dart';
+
+class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
+
+  @override
+  State<ProfilePage> createState() => _ProfilePageState();
+}
+
+class _ProfilePageState extends State<ProfilePage> {
+  String _name = '陳大文';
+  String _hongKongMacauPhone = '+852 9123 4567';
+  String _mainlandPhone = '+86 未填寫';
+
+  Future<void> _openProfileEditor() async {
+    final result = await DriverNavigation.push(
+      context,
+      DriverRouteNames.profileEdit,
+      arguments: <String, String>{
+        'name': _name,
+        'hongKongMacauPhone': _hongKongMacauPhone,
+        'mainlandPhone': _mainlandPhone,
+      },
+    );
+    if (!mounted || result is! Map<String, String>) return;
+    setState(() {
+      _name = result['name'] ?? _name;
+      _hongKongMacauPhone = result['hongKongMacauPhone'] ?? _hongKongMacauPhone;
+      _mainlandPhone = result['mainlandPhone'] ?? _mainlandPhone;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -14,44 +43,56 @@ class ProfilePage extends StatelessWidget {
       selectedIndex: 2,
       bottomPadding: 140,
       navHorizontalPadding: 30,
-      onHomeTap: () => DriverNavigation.replace(context, DriverRoutes.home),
-      onOrderTap: () => DriverNavigation.replace(context, DriverRoutes.orders),
+      onHomeTap: () => DriverNavigation.replace(context, DriverRouteNames.home),
+      onOrderTap: () =>
+          DriverNavigation.replace(context, DriverRouteNames.orders),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const _ProfileHeader(),
-          const SizedBox(height: 24),
+          _ProfileHeader(name: _name),
+          const SizedBox(height: DriverSpacing.xl),
           const _BalanceCard(),
-          const SizedBox(height: 24),
+          const SizedBox(height: DriverSpacing.xl),
           _MenuCard(
             title: '主要功能',
             items: [
-              _MenuItem('個人資料', 'assets/profile-user.svg', _IconTone.blue),
-              _MenuItem('車輛資料', 'assets/profile-vehicle.svg', _IconTone.green),
+              _MenuItem(
+                '個人資料',
+                'assets/profile-user.svg',
+                _IconTone.blue,
+                onTap: _openProfileEditor,
+              ),
+              _MenuItem(
+                '車輛資料',
+                'assets/profile-vehicle.svg',
+                _IconTone.green,
+                onTap: () =>
+                    DriverNavigation.push(context, DriverRouteNames.vehicle),
+              ),
               _MenuItem(
                 '接單紀錄',
                 'assets/profile-clipboard.svg',
                 _IconTone.purple,
-                onTap: () =>
-                    DriverNavigation.push(context, DriverRoutes.orderHistory),
+                onTap: () => DriverNavigation.push(
+                    context, DriverRouteNames.orderHistory),
               ),
             ],
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: DriverSpacing.xl),
           _MenuCard(
             title: '收款設定',
             items: [
               _MenuItem('收款幣種', 'assets/profile-fps.svg', _IconTone.orange,
                   detail: '港幣 HKD、人民幣 CNY'),
               _MenuItem('微信支付', 'assets/profile-wechat.svg', _IconTone.green,
-                  detail: '已綁定：陳大文'),
+                  detail: '已綁定：$_name'),
               _MenuItem('支付寶', 'assets/profile-fps.svg', _IconTone.blue,
                   detail: '未綁定'),
               _MenuItem('FPS 轉數快', 'assets/profile-fps.svg', _IconTone.green,
-                  detail: '已綁定：陳大文'),
+                  detail: '已綁定：$_name'),
             ],
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: DriverSpacing.xl),
           _MenuCard(
             title: '設定',
             items: [
@@ -62,7 +103,7 @@ class ProfilePage extends StatelessWidget {
               _MenuItem('結算方式', 'assets/profile-fps.svg', _IconTone.green),
             ],
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: DriverSpacing.xl),
           _MenuCard(
             title: '其他',
             items: [
@@ -71,7 +112,7 @@ class ProfilePage extends StatelessWidget {
                   '聯繫客服', 'assets/profile-headphones.svg', _IconTone.purple),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: DriverSpacing.lg),
           const _LogoutButton(),
         ],
       ),
@@ -80,7 +121,9 @@ class ProfilePage extends StatelessWidget {
 }
 
 class _ProfileHeader extends StatelessWidget {
-  const _ProfileHeader();
+  const _ProfileHeader({required this.name});
+
+  final String name;
 
   @override
   Widget build(BuildContext context) {
@@ -90,17 +133,17 @@ class _ProfileHeader extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text('陳大文',
+            Text(name,
                 style: TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.w700,
-                    color: Color(0xff1c1c2e))),
+                    color: DriverColors.text)),
             Semantics(
               button: true,
               label: '通知',
               child: InkWell(
                 onTap: () {},
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(DriverRadii.card),
                 child: SvgPicture.asset('assets/profile-bell.svg',
                     width: 32, height: 32),
               ),
@@ -111,17 +154,19 @@ class _ProfileHeader extends StatelessWidget {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
           decoration: BoxDecoration(
-              color: const Color(0xffebf9f1),
-              borderRadius: BorderRadius.circular(100)),
+              color: DriverColors.successBackground,
+              borderRadius: BorderRadius.circular(DriverRadii.pill)),
           child: const Text('已認證司機',
               style: TextStyle(
-                  fontSize: 13,
+                  fontSize: DriverTypography.label,
                   fontWeight: FontWeight.w700,
-                  color: Color(0xff2b7a42))),
+                  color: DriverColors.darkGreen)),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: DriverSpacing.sm),
         const Text('香港 · 兩地牌 · 轎車',
-            style: TextStyle(fontSize: 14, color: Color(0xff6b7280))),
+            style: TextStyle(
+                fontSize: DriverTypography.body,
+                color: DriverColors.warningText)),
       ],
     );
   }
@@ -137,10 +182,10 @@ class _BalanceCard extends StatelessWidget {
           children: [
             const Text('結算概覽',
                 style: TextStyle(
-                    fontSize: 16,
+                    fontSize: DriverTypography.bodyLarge,
                     fontWeight: FontWeight.w700,
-                    color: Color(0xff1c1c2e))),
-            const SizedBox(height: 12),
+                    color: DriverColors.text)),
+            const SizedBox(height: DriverSpacing.md),
             Row(children: [
               const Expanded(
                   child: _BalanceTile(
@@ -149,12 +194,12 @@ class _BalanceCard extends StatelessWidget {
                       background: Color(0xffedfaf0),
                       labelColor: Color(0xff338040),
                       valueColor: Color(0xff29a140))),
-              const SizedBox(width: 12),
+              const SizedBox(width: DriverSpacing.md),
               const Expanded(
                   child: _BalanceTile(
                       label: '未結算',
                       value: '\$3,420',
-                      background: Color(0xfffff5eb),
+                      background: DriverColors.warningBackground,
                       labelColor: Color(0xff99591a),
                       valueColor: Color(0xffd9801a))),
             ]),
@@ -180,9 +225,12 @@ class _BalanceTile extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-            color: background, borderRadius: BorderRadius.circular(12)),
+            color: background,
+            borderRadius: BorderRadius.circular(DriverRadii.input)),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(label, style: TextStyle(fontSize: 13, color: labelColor)),
+          Text(label,
+              style: TextStyle(
+                  fontSize: DriverTypography.label, color: labelColor)),
           const SizedBox(height: 6),
           FittedBox(
               alignment: Alignment.centerLeft,
@@ -224,10 +272,10 @@ class _MenuCard extends StatelessWidget {
             Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Text(title,
               style: const TextStyle(
-                  fontSize: 16,
+                  fontSize: DriverTypography.bodyLarge,
                   fontWeight: FontWeight.w700,
-                  color: Color(0xff1c1c2e))),
-          const SizedBox(height: 12),
+                  color: DriverColors.text)),
+          const SizedBox(height: DriverSpacing.md),
           for (var i = 0; i < items.length; i++) ...[
             _MenuRow(item: items[i]),
             if (i < items.length - 1)
@@ -235,7 +283,7 @@ class _MenuCard extends StatelessWidget {
                   height: 1,
                   indent: 48,
                   endIndent: 0,
-                  color: Color(0xffe5e7eb)),
+                  color: DriverColors.divider),
           ],
         ]),
       );
@@ -246,10 +294,10 @@ class _MenuRow extends StatelessWidget {
   final _MenuItem item;
 
   Color get _background => switch (item.tone) {
-        _IconTone.blue => const Color(0xffeaf0ff),
+        _IconTone.blue => DriverColors.infoBackground,
         _IconTone.green => const Color(0xffecfdf3),
         _IconTone.purple => const Color(0xfff2edff),
-        _IconTone.orange => const Color(0xfffff5eb),
+        _IconTone.orange => DriverColors.warningBackground,
       };
 
   @override
@@ -269,18 +317,20 @@ class _MenuRow extends StatelessWidget {
                       color: _background,
                       borderRadius: BorderRadius.circular(18)),
                   child: SvgPicture.asset(item.asset, width: 18, height: 18)),
-              const SizedBox(width: 12),
+              const SizedBox(width: DriverSpacing.md),
               Expanded(
                   child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                     Text(item.label,
                         style: const TextStyle(
-                            fontSize: 16, color: Color(0xff38434a))),
+                            fontSize: DriverTypography.bodyLarge,
+                            color: DriverColors.labelText)),
                     if (item.detail != null)
                       Text(item.detail!,
                           style: const TextStyle(
-                              fontSize: 12, color: Color(0xff6b7280))),
+                              fontSize: DriverTypography.caption,
+                              color: DriverColors.warningText)),
                   ])),
               if (item.toggle)
                 SvgPicture.asset('assets/profile-toggle.svg',
@@ -303,8 +353,8 @@ class _CardShell extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
             color: Colors.white,
-            border: Border.all(color: const Color(0xffe5e7eb)),
-            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: DriverColors.divider),
+            borderRadius: BorderRadius.circular(DriverRadii.card),
             boxShadow: const [
               BoxShadow(
                   color: Color(0x0a000000), blurRadius: 4, offset: Offset(0, 2))
@@ -328,7 +378,7 @@ class _LogoutButton extends StatelessWidget {
               child: Text(
                 '登出帳號',
                 style: TextStyle(
-                  fontSize: 16,
+                  fontSize: DriverTypography.bodyLarge,
                   fontWeight: FontWeight.w700,
                   color: Color(0xffef4444),
                 ),

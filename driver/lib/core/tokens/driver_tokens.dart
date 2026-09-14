@@ -4,7 +4,41 @@ abstract final class DriverColors {
   static const background = Color(0xfff0f2f5);
   static const text = Color(0xff1c1c2e);
   static const secondaryText = Color(0xff56657e);
+  static const mutedText = Color(0xff80808c);
+  static const labelText = Color(0xff38434a);
+  static const border = Color(0xffd9d9d9);
+  static const divider = Color(0xffe5e7eb);
   static const primary = Color(0xff4a6cf7);
+  static const activeBlue = Color(0xff285cfc);
+  static const success = Color(0xff4cd964);
+  static const successBackground = Color(0xffebf9f1);
+  static const warningBackground = Color(0xfffff5eb);
+  static const warningText = Color(0xff6b7280);
+  static const infoBackground = Color(0xffeaf0ff);
+  static const darkGreen = Color(0xff2b7a42);
+  static const navInactive = Color(0xff9999a1);
+  static const navActive = Color(0xff295cfc);
+}
+
+abstract final class DriverSpacing {
+  static const xs = 4.0;
+  static const sm = 8.0;
+  static const md = 12.0;
+  static const lg = 16.0;
+  static const xl = 24.0;
+}
+
+abstract final class DriverRadii {
+  static const card = 16.0;
+  static const input = 12.0;
+  static const pill = 100.0;
+}
+
+abstract final class DriverTypography {
+  static const body = 14.0;
+  static const bodyLarge = 16.0;
+  static const label = 13.0;
+  static const caption = 12.0;
 }
 
 abstract final class DriverDimensions {
@@ -13,4 +47,5 @@ abstract final class DriverDimensions {
   static const pageHorizontalPadding = 24.0;
   static const navHorizontalPadding = 30.0;
   static const bottomNavigationPadding = 140.0;
+  static const navBottomInset = 16.0;
 }

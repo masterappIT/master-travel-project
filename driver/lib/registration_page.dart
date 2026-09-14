@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
-import 'app/router.dart';
+import 'app/route_names.dart';
 import 'core/navigation/driver_navigation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+
+import 'package:driver_web/core/tokens/driver_tokens.dart';
 
 class RegistrationPage extends StatelessWidget {
   const RegistrationPage({super.key});
@@ -11,7 +13,7 @@ class RegistrationPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xfff0f2f5),
+      backgroundColor: DriverColors.background,
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) => Align(
@@ -25,27 +27,29 @@ class RegistrationPage extends StatelessWidget {
                   children: [
                     _RegistrationHeader(
                         onBack: () => Navigator.of(context).maybePop()),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: DriverSpacing.xl),
                     const _RegistrationCard(),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: DriverSpacing.xl),
                     SizedBox(
                       height: 56,
                       child: ElevatedButton(
-                        onPressed: () =>
-                            DriverNavigation.push(context, DriverRoutes.home),
+                        onPressed: () => DriverNavigation.push(
+                            context, DriverRouteNames.home),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xff4cd964),
-                          foregroundColor: const Color(0xff38434a),
+                          backgroundColor: DriverColors.success,
+                          foregroundColor: DriverColors.labelText,
                           elevation: 8,
                           shadowColor: const Color(0x334cd964),
                           shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16)),
+                              borderRadius:
+                                  BorderRadius.circular(DriverRadii.card)),
                           padding: const EdgeInsets.symmetric(
                               horizontal: 24, vertical: 16),
                         ),
                         child: const Text('提交審核',
                             style: TextStyle(
-                                fontSize: 16, fontWeight: FontWeight.w700)),
+                                fontSize: DriverTypography.bodyLarge,
+                                fontWeight: FontWeight.w700)),
                       ),
                     ),
                   ],
@@ -78,20 +82,22 @@ class _RegistrationHeader extends StatelessWidget {
                   constraints:
                       const BoxConstraints(minWidth: 44, minHeight: 44),
                   icon: const Icon(Icons.chevron_left,
-                      size: 24, color: Color(0xff1c1c2e)),
+                      size: 24, color: DriverColors.text),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: DriverSpacing.sm),
                 const Text('司機註冊',
                     style: TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.w700,
-                        color: Color(0xff1c1c2e))),
+                        color: DriverColors.text)),
               ],
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: DriverSpacing.sm),
           const Text('請完成以下資料以完成審核',
-              style: TextStyle(fontSize: 14, color: Color(0xff56657e))),
+              style: TextStyle(
+                  fontSize: DriverTypography.body,
+                  color: DriverColors.secondaryText)),
         ],
       );
 }
@@ -118,8 +124,8 @@ class _RegistrationCardState extends State<_RegistrationCard> {
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Colors.white,
-          border: Border.all(color: const Color(0xffe5e7eb)),
-          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: DriverColors.divider),
+          borderRadius: BorderRadius.circular(DriverRadii.card),
           boxShadow: const [
             BoxShadow(
                 color: Color(0x0a000000), blurRadius: 4, offset: Offset(0, 2))
@@ -129,7 +135,7 @@ class _RegistrationCardState extends State<_RegistrationCard> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const _TextFieldSection(label: '姓名', hint: '請輸入司機姓名'),
-            const SizedBox(height: 16),
+            const SizedBox(height: DriverSpacing.lg),
             _ChoiceSection(
               label: '車輛歸屬地',
               options: _regions,
@@ -141,7 +147,7 @@ class _RegistrationCardState extends State<_RegistrationCard> {
                 }
               }),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: DriverSpacing.lg),
             _PlateSection(
               region: _regions[_regionIndex],
               plateType: _plateType,
@@ -149,16 +155,16 @@ class _RegistrationCardState extends State<_RegistrationCard> {
               onPlateTypeChanged: (index) =>
                   setState(() => _plateType = _availablePlateTypes[index]),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: DriverSpacing.lg),
             const _PhoneSection(),
-            const SizedBox(height: 16),
+            const SizedBox(height: DriverSpacing.lg),
             const _TextFieldSection(
                 label: '車輛類別',
                 hint: '請選擇車輛類別',
                 trailing: 'assets/chevron-down.svg'),
-            const SizedBox(height: 16),
+            const SizedBox(height: DriverSpacing.lg),
             const _TextFieldSection(label: '車輛顏色', hint: '例如：白色'),
-            const SizedBox(height: 16),
+            const SizedBox(height: DriverSpacing.lg),
             const _VehiclePhotoSection(),
           ],
         ),
@@ -178,10 +184,10 @@ class _TextFieldSection extends StatelessWidget {
         children: [
           Text(label,
               style: const TextStyle(
-                  fontSize: 14,
+                  fontSize: DriverTypography.body,
                   fontWeight: FontWeight.w500,
-                  color: Color(0xff1c1c2e))),
-          const SizedBox(height: 8),
+                  color: DriverColors.text)),
+          const SizedBox(height: DriverSpacing.sm),
           Container(
             height: 50,
             decoration: _registrationFieldDecoration(),
@@ -189,8 +195,8 @@ class _TextFieldSection extends StatelessWidget {
               readOnly: trailing != null,
               decoration: InputDecoration(
                 hintText: hint,
-                hintStyle:
-                    const TextStyle(fontSize: 15, color: Color(0xff56657e)),
+                hintStyle: const TextStyle(
+                    fontSize: 15, color: DriverColors.secondaryText),
                 border: InputBorder.none,
                 contentPadding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -202,7 +208,7 @@ class _TextFieldSection extends StatelessWidget {
                             SvgPicture.asset(trailing!, width: 16, height: 16),
                       ),
               ),
-              style: const TextStyle(fontSize: 15, color: Color(0xff1c1c2e)),
+              style: const TextStyle(fontSize: 15, color: DriverColors.text),
             ),
           ),
         ],
@@ -240,10 +246,10 @@ class _ChoiceSectionState extends State<_ChoiceSection> {
         children: [
           Text(widget.label,
               style: const TextStyle(
-                  fontSize: 14,
+                  fontSize: DriverTypography.body,
                   fontWeight: FontWeight.w500,
-                  color: Color(0xff1c1c2e))),
-          const SizedBox(height: 12),
+                  color: DriverColors.text)),
+          const SizedBox(height: DriverSpacing.md),
           Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -272,17 +278,16 @@ class _ChoiceChip extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xff285cfc) : const Color(0xfff5f7fa),
+          color: selected ? DriverColors.activeBlue : const Color(0xfff5f7fa),
           border: Border.all(
-              color:
-                  selected ? const Color(0xff285cfc) : const Color(0xffd9d9d9)),
+              color: selected ? DriverColors.activeBlue : DriverColors.border),
           borderRadius: BorderRadius.circular(20),
         ),
         child: Text(label,
             style: TextStyle(
-                fontSize: 14,
+                fontSize: DriverTypography.body,
                 fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
-                color: selected ? Colors.white : const Color(0xff38434a))),
+                color: selected ? Colors.white : DriverColors.labelText)),
       );
 }
 
@@ -322,15 +327,16 @@ class _PlateSection extends StatelessWidget {
           selected: plateTypes.indexOf(plateType),
           onChanged: onPlateTypeChanged,
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: DriverSpacing.md),
         LayoutBuilder(
           builder: (context, constraints) => constraints.maxWidth < 340
               ? Column(
-                  children: _withSpacing(fields, const SizedBox(height: 12)))
+                  children: _withSpacing(
+                      fields, const SizedBox(height: DriverSpacing.md)))
               : Row(
                   children: _withSpacing(
                   [for (final field in fields) Expanded(child: field)],
-                  const SizedBox(width: 12),
+                  const SizedBox(width: DriverSpacing.md),
                 )),
         ),
       ],
@@ -361,10 +367,10 @@ class _PhoneSectionState extends State<_PhoneSection> {
         children: [
           const Text('聯繫電話',
               style: TextStyle(
-                  fontSize: 14,
+                  fontSize: DriverTypography.body,
                   fontWeight: FontWeight.w500,
-                  color: Color(0xff1c1c2e))),
-          const SizedBox(height: 12),
+                  color: DriverColors.text)),
+          const SizedBox(height: DriverSpacing.md),
           LayoutBuilder(
             builder: (context, constraints) {
               final fields = [
@@ -380,12 +386,12 @@ class _PhoneSectionState extends State<_PhoneSection> {
               return constraints.maxWidth < 370
                   ? Column(children: [
                       fields[0],
-                      const SizedBox(height: 12),
+                      const SizedBox(height: DriverSpacing.md),
                       fields[1]
                     ])
                   : Row(children: [
                       Expanded(child: fields[0]),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: DriverSpacing.md),
                       Expanded(child: fields[1])
                     ]);
             },
@@ -421,7 +427,7 @@ class _PhoneField extends StatelessWidget {
               ListTile(
                 title: Text('${entry.key} ${entry.value}'),
                 trailing: entry.key == selectedRegion
-                    ? const Icon(Icons.check, color: Color(0xff285cfc))
+                    ? const Icon(Icons.check, color: DriverColors.activeBlue)
                     : null,
                 onTap: () {
                   onRegionChanged?.call(entry.key);
@@ -440,10 +446,10 @@ class _PhoneField extends StatelessWidget {
         children: [
           Text(label,
               style: const TextStyle(
-                  fontSize: 14,
+                  fontSize: DriverTypography.body,
                   fontWeight: FontWeight.w500,
-                  color: Color(0xff1c1c2e))),
-          const SizedBox(height: 8),
+                  color: DriverColors.text)),
+          const SizedBox(height: DriverSpacing.sm),
           Row(children: [
             SizedBox(
               height: 50,
@@ -454,13 +460,13 @@ class _PhoneField extends StatelessWidget {
                       decoration: _registrationFieldDecoration(),
                       child: Text(prefix,
                           style: const TextStyle(
-                              fontSize: 14,
+                              fontSize: DriverTypography.body,
                               fontWeight: FontWeight.w500,
-                              color: Color(0xff1c1c2e))))
+                              color: DriverColors.text)))
                   : Material(
                       color: Colors.transparent,
                       child: InkWell(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(DriverRadii.input),
                         onTap: () => _showRegionPicker(context),
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -473,19 +479,20 @@ class _PhoneField extends StatelessWidget {
                                   '$selectedRegion $prefix',
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
-                                      fontSize: 13, color: Color(0xff1c1c2e)),
+                                      fontSize: DriverTypography.label,
+                                      color: DriverColors.text),
                                 ),
                               ),
                               const SizedBox(width: 2),
                               const Icon(Icons.arrow_drop_down,
-                                  size: 18, color: Color(0xff56657e)),
+                                  size: 18, color: DriverColors.secondaryText),
                             ],
                           ),
                         ),
                       ),
                     ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: DriverSpacing.sm),
             Expanded(
               child: SizedBox(
                 height: 50,
@@ -516,20 +523,20 @@ class _VehiclePhotoSection extends StatelessWidget {
         children: [
           const Text('車輛相片',
               style: TextStyle(
-                  fontSize: 14,
+                  fontSize: DriverTypography.body,
                   fontWeight: FontWeight.w500,
-                  color: Color(0xff1c1c2e))),
-          const SizedBox(height: 12),
+                  color: DriverColors.text)),
+          const SizedBox(height: DriverSpacing.md),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
             decoration: BoxDecoration(
                 color: Colors.white,
                 border: Border.all(
-                    color: const Color(0xff4a6cf7), style: BorderStyle.none),
-                borderRadius: BorderRadius.circular(12)),
+                    color: DriverColors.primary, style: BorderStyle.none),
+                borderRadius: BorderRadius.circular(DriverRadii.input)),
             child: CustomPaint(
-              painter: _DashedBorderPainter(
-                  color: const Color(0xff4a6cf7), radius: 12),
+              painter:
+                  _DashedBorderPainter(color: DriverColors.primary, radius: 12),
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 1),
                 child: Column(children: [
@@ -538,19 +545,20 @@ class _VehiclePhotoSection extends StatelessWidget {
                       height: 40,
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
-                          color: const Color(0xffeaf0ff),
+                          color: DriverColors.infoBackground,
                           borderRadius: BorderRadius.circular(20)),
                       child: SvgPicture.asset('assets/camera.svg',
                           width: 20, height: 20)),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: DriverSpacing.md),
                   const Text('點擊上傳車輛相片',
                       style: TextStyle(
-                          fontSize: 13,
+                          fontSize: DriverTypography.label,
                           fontWeight: FontWeight.w500,
-                          color: Color(0xff4a6cf7))),
-                  const SizedBox(height: 4),
+                          color: DriverColors.primary)),
+                  const SizedBox(height: DriverSpacing.xs),
                   const Text('建議上傳車頭、車身、車尾照片，方便審核',
-                      style: TextStyle(fontSize: 11, color: Color(0xff56657e)),
+                      style: TextStyle(
+                          fontSize: 11, color: DriverColors.secondaryText),
                       textAlign: TextAlign.center),
                 ]),
               ),
@@ -590,26 +598,27 @@ InputDecoration _registrationInputDecoration({
 }) =>
     InputDecoration(
       hintText: hintText,
-      hintStyle: const TextStyle(fontSize: 15, color: Color(0xff56657e)),
+      hintStyle:
+          const TextStyle(fontSize: 15, color: DriverColors.secondaryText),
       filled: true,
       fillColor: Colors.white,
       contentPadding: contentPadding ??
           const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xffd9d9d9)),
+        borderRadius: BorderRadius.circular(DriverRadii.input),
+        borderSide: const BorderSide(color: DriverColors.border),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xffd9d9d9)),
+        borderRadius: BorderRadius.circular(DriverRadii.input),
+        borderSide: const BorderSide(color: DriverColors.border),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xff285cfc)),
+        borderRadius: BorderRadius.circular(DriverRadii.input),
+        borderSide: const BorderSide(color: DriverColors.activeBlue),
       ),
     );
 
 BoxDecoration _registrationFieldDecoration() => BoxDecoration(
     color: Colors.white,
-    border: Border.all(color: const Color(0xffd9d9d9)),
-    borderRadius: BorderRadius.circular(12));
+    border: Border.all(color: DriverColors.border),
+    borderRadius: BorderRadius.circular(DriverRadii.input));

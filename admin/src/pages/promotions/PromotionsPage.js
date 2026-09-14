@@ -6,6 +6,13 @@ export const PromotionsPage = {
     return inject('adminContext')
   },
   template: String.raw`<section v-if="view==='promotions'" class="promotion-admin">
+  <div class="promotion-page-heading">
+    <div>
+      <span class="eyebrow">PROMOTION MANAGEMENT</span>
+      <h2>優惠設定</h2>
+      <p class="muted">管理折扣活動、優惠碼與會員專屬優惠</p>
+    </div>
+  </div>
   <div class="promotion-summary">
     <article class="summary-card" :class="{ active: promotionFilterTab === 'CAMPAIGN' }" @click="promotionFilterTab = (promotionFilterTab === 'CAMPAIGN' ? 'ALL' : 'CAMPAIGN')">
       <div>

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
 import 'app/router.dart';
+import 'app/route_names.dart';
+
+import 'package:driver_web/core/tokens/driver_tokens.dart';
 
 void main() => runApp(const DriverApp());
 
@@ -14,11 +17,11 @@ class DriverApp extends StatelessWidget {
       theme: ThemeData(
         fontFamily: 'Noto Sans TC',
         useMaterial3: true,
-        scaffoldBackgroundColor: const Color(0xfff0f2f5),
+        scaffoldBackgroundColor: DriverColors.background,
       ),
-      routes: DriverRoutes.builders,
+      routes: DriverRouter.builders,
       home: null,
-      initialRoute: DriverRoutes.login,
+      initialRoute: DriverRouteNames.login,
     );
   }
 }

@@ -55,7 +55,7 @@ class DriverPageShell extends StatelessWidget {
                     Positioned(
                       left: navHorizontalPadding,
                       right: navHorizontalPadding,
-                      bottom: 16,
+                      bottom: DriverDimensions.navBottomInset,
                       child: FloatingNavBar(
                         selectedIndex: selectedIndex,
                         onHomeTap: onHomeTap,

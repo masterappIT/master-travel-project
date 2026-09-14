@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'app/router.dart';
+import 'app/route_names.dart';
 import 'core/layout/driver_page_shell.dart';
 import 'core/navigation/driver_navigation.dart';
+
+import 'package:driver_web/core/tokens/driver_tokens.dart';
 
 class OrderCompletedPage extends StatelessWidget {
   const OrderCompletedPage({super.key});
@@ -15,28 +17,25 @@ class OrderCompletedPage extends StatelessWidget {
       topPadding: 24,
       horizontalPadding: 24,
       bottomPadding: 24,
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const _CompletionHeader(),
-            const SizedBox(height: 24),
-            const _CompletedMapPreview(),
-            const SizedBox(height: 24),
-            const _OrderDetailsCard(),
-            const SizedBox(height: 24),
-            const _FareBreakdownCard(),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: () {
-                DriverNavigation.replaceAll(context, DriverRoutes.orders);
-              },
-              style: _completeStyle(),
-              child: const Text('確認完成'),
-            ),
-          ],
-        ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const _CompletionHeader(),
+          const SizedBox(height: DriverSpacing.xl),
+          const _CompletedMapPreview(),
+          const SizedBox(height: DriverSpacing.xl),
+          const _OrderDetailsCard(),
+          const SizedBox(height: DriverSpacing.xl),
+          const _FareBreakdownCard(),
+          const SizedBox(height: DriverSpacing.xl),
+          ElevatedButton(
+            onPressed: () {
+              DriverNavigation.replaceAll(context, DriverRouteNames.orders);
+            },
+            style: _completeStyle(),
+            child: const Text('確認完成'),
+          ),
+        ],
       ),
     );
   }
@@ -54,10 +53,12 @@ class _CompletionHeader extends StatelessWidget {
               style: TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.w700,
-                  color: Color(0xff1c1c2e))),
+                  color: DriverColors.text)),
           SizedBox(height: 12),
           Text('請與乘客確認車資並完成收款',
-              style: TextStyle(fontSize: 14, color: Color(0xff56657e))),
+              style: TextStyle(
+                  fontSize: DriverTypography.body,
+                  color: DriverColors.secondaryText)),
         ],
       );
 }
@@ -69,8 +70,8 @@ class _CheckBadge extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-            color: const Color(0xffebf9f1),
-            borderRadius: BorderRadius.circular(100)),
+            color: DriverColors.successBackground,
+            borderRadius: BorderRadius.circular(DriverRadii.pill)),
         child: SvgPicture.asset('assets/completed-check.svg',
             width: 24, height: 24),
       );
@@ -83,8 +84,8 @@ class _CompletedMapPreview extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         height: 180,
         decoration: BoxDecoration(
-            color: const Color(0xff1c1c2e),
-            borderRadius: BorderRadius.circular(16),
+            color: DriverColors.text,
+            borderRadius: BorderRadius.circular(DriverRadii.card),
             boxShadow: const [
               BoxShadow(
                   color: Color(0x1a000000),
@@ -95,7 +96,9 @@ class _CompletedMapPreview extends StatelessWidget {
           const Center(
               child: Column(mainAxisSize: MainAxisSize.min, children: [
             Text('城市天際線預覽',
-                style: TextStyle(fontSize: 13, color: Color(0xb3ffffff))),
+                style: TextStyle(
+                    fontSize: DriverTypography.label,
+                    color: Color(0xb3ffffff))),
             SizedBox(height: 8),
             _CompletedRouteText(),
           ])),
@@ -112,24 +115,25 @@ class _CompletedRouteText extends StatelessWidget {
   Widget build(BuildContext context) => Column(children: [
         Row(mainAxisSize: MainAxisSize.min, children: [
           SvgPicture.asset('assets/completed-origin.svg', width: 8, height: 8),
-          const SizedBox(width: 8),
+          const SizedBox(width: DriverSpacing.sm),
           const Text('香港中環',
               style: TextStyle(
-                  fontSize: 16,
+                  fontSize: DriverTypography.bodyLarge,
                   fontWeight: FontWeight.w700,
                   color: Colors.white)),
         ]),
         const SizedBox(height: 2),
         const Text('│',
-            style: TextStyle(fontSize: 12, color: Color(0xff80a0ff))),
+            style: TextStyle(
+                fontSize: DriverTypography.caption, color: Color(0xff80a0ff))),
         const SizedBox(height: 2),
         Row(mainAxisSize: MainAxisSize.min, children: [
           SvgPicture.asset('assets/completed-destination.svg',
               width: 8, height: 8),
-          const SizedBox(width: 8),
+          const SizedBox(width: DriverSpacing.sm),
           const Text('深圳',
               style: TextStyle(
-                  fontSize: 16,
+                  fontSize: DriverTypography.bodyLarge,
                   fontWeight: FontWeight.w700,
                   color: Colors.white)),
         ]),
@@ -145,9 +149,10 @@ class _MapLabel extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
           color: const Color(0x1affffff),
-          borderRadius: BorderRadius.circular(100)),
+          borderRadius: BorderRadius.circular(DriverRadii.pill)),
       child: Text(label,
-          style: const TextStyle(fontSize: 12, color: Colors.white)));
+          style: const TextStyle(
+              fontSize: DriverTypography.caption, color: Colors.white)));
 }
 
 class _OrderDetailsCard extends StatelessWidget {
@@ -159,9 +164,9 @@ class _OrderDetailsCard extends StatelessWidget {
         children: [
           const Text('訂單詳情',
               style: TextStyle(
-                  fontSize: 14,
+                  fontSize: DriverTypography.body,
                   fontWeight: FontWeight.w500,
-                  color: Color(0xff1c1c2e))),
+                  color: DriverColors.text)),
           const _InfoRow(label: '出發地', value: '香港中環置地廣場東門大堂'),
           const _InfoRow(label: '目的地', value: '深圳福田口岸'),
           const _InfoRow(label: '出發時間', value: '2024/03/15 14:00'),
@@ -179,9 +184,9 @@ class _FareBreakdownCard extends StatelessWidget {
         children: [
           const Text('車資明細',
               style: TextStyle(
-                  fontSize: 14,
+                  fontSize: DriverTypography.body,
                   fontWeight: FontWeight.w500,
-                  color: Color(0xff1c1c2e))),
+                  color: DriverColors.text)),
           const _FareRow(label: '起步價', value: '\$150.00'),
           const _FareRow(label: '里程費 (6.4 km × \$15)', value: '\$96.00'),
           const _FareRow(label: '時間費 (19.5 分鐘 × \$2.5)', value: '\$34.00'),
@@ -204,16 +209,17 @@ class _InfoRow extends StatelessWidget {
           SizedBox(
               width: 70,
               child: Text(label,
-                  style:
-                      const TextStyle(fontSize: 14, color: Color(0xff56657e)))),
-          const SizedBox(width: 12),
+                  style: const TextStyle(
+                      fontSize: DriverTypography.body,
+                      color: DriverColors.secondaryText))),
+          const SizedBox(width: DriverSpacing.md),
           Expanded(
               child: Text(value,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                      fontSize: 14,
+                      fontSize: DriverTypography.body,
                       fontWeight: FontWeight.w500,
-                      color: Color(0xff1c1c2e)))),
+                      color: DriverColors.text))),
         ],
       );
 }
@@ -230,11 +236,13 @@ class _FareRow extends StatelessWidget {
           Flexible(
               child: Text(label,
                   overflow: TextOverflow.ellipsis,
-                  style:
-                      const TextStyle(fontSize: 14, color: Color(0xff56657e)))),
-          const SizedBox(width: 12),
+                  style: const TextStyle(
+                      fontSize: DriverTypography.body,
+                      color: DriverColors.secondaryText))),
+          const SizedBox(width: DriverSpacing.md),
           Text(value,
-              style: const TextStyle(fontSize: 14, color: Color(0xff1c1c2e))),
+              style: const TextStyle(
+                  fontSize: DriverTypography.body, color: DriverColors.text)),
         ],
       );
 }
@@ -249,14 +257,14 @@ class _FareTotal extends StatelessWidget {
         children: const [
           Text('總計應收',
               style: TextStyle(
-                  fontSize: 16,
+                  fontSize: DriverTypography.bodyLarge,
                   fontWeight: FontWeight.w700,
-                  color: Color(0xff1c1c2e))),
+                  color: DriverColors.text)),
           Text('\$280.00',
               style: TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.w700,
-                  color: Color(0xff4cd964))),
+                  color: DriverColors.success)),
         ],
       );
 }
@@ -271,8 +279,8 @@ class _Panel extends StatelessWidget {
         padding: EdgeInsets.all(padding),
         decoration: BoxDecoration(
             color: Colors.white,
-            border: Border.all(color: const Color(0xffe5e7eb)),
-            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: DriverColors.divider),
+            borderRadius: BorderRadius.circular(DriverRadii.card),
             boxShadow: const [
               BoxShadow(
                   color: Color(0x0a000000), blurRadius: 4, offset: Offset(0, 2))
@@ -291,9 +299,11 @@ class _Panel extends StatelessWidget {
 ButtonStyle _completeStyle() => ElevatedButton.styleFrom(
       minimumSize: const Size.fromHeight(56),
       foregroundColor: Colors.white,
-      backgroundColor: const Color(0xff285cfc),
+      backgroundColor: DriverColors.activeBlue,
       elevation: 0,
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(DriverRadii.card)),
+      textStyle: const TextStyle(
+          fontSize: DriverTypography.bodyLarge, fontWeight: FontWeight.w700),
     );

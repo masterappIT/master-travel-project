@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
-import 'app/router.dart';
+import 'app/route_names.dart';
 import 'core/layout/driver_page_shell.dart';
 import 'core/navigation/driver_navigation.dart';
+
+import 'package:driver_web/core/tokens/driver_tokens.dart';
 
 class OrderDetailPage extends StatefulWidget {
   const OrderDetailPage({super.key});
@@ -23,84 +25,82 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
       topPadding: 24,
       horizontalPadding: 24,
       bottomPadding: 32,
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Semantics(
-                  button: true,
-                  label: '返回接單大廳',
-                  child: IconButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    padding: EdgeInsets.zero,
-                    constraints:
-                        const BoxConstraints(minWidth: 44, minHeight: 44),
-                    icon: const Text('<',
-                        style:
-                            TextStyle(fontSize: 18, color: Color(0xff1c1c2e))),
-                  ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Semantics(
+                button: true,
+                label: '返回接單大廳',
+                child: IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  padding: EdgeInsets.zero,
+                  constraints:
+                      const BoxConstraints(minWidth: 44, minHeight: 44),
+                  icon: const Text('<',
+                      style: TextStyle(fontSize: 18, color: DriverColors.text)),
                 ),
-                const SizedBox(width: 8),
-                const Text('訂單詳情',
-                    style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xff1c1c2e))),
-              ],
-            ),
-            const SizedBox(height: 8),
-            const Text('請確認乘客資訊與行程內容',
-                style: TextStyle(fontSize: 14, color: Color(0xff56657e))),
-            const SizedBox(height: 24),
-            const _MapPreview(),
-            const SizedBox(height: 24),
-            const _OrderInfoCard(),
-            const SizedBox(height: 24),
-            const Text('選擇接單車輛',
-                style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xff1c1c2e))),
-            const SizedBox(height: 12),
-            Row(children: [
-              Expanded(
-                  child: _VehicleCard(
-                      index: 0,
-                      title: '車輛 1',
-                      type: '轎車',
-                      plate: 'AB 1234',
-                      selected: _selectedVehicle == 0,
-                      onTap: () => setState(() => _selectedVehicle = 0))),
-              const SizedBox(width: 12),
-              Expanded(
-                  child: _VehicleCard(
-                      index: 1,
-                      title: '車輛 2',
-                      type: 'MPV',
-                      plate: 'CD 5678',
-                      selected: _selectedVehicle == 1,
-                      onTap: () => setState(() => _selectedVehicle = 1))),
-            ]),
-            const SizedBox(height: 24),
-            Row(children: [
-              Expanded(
-                  child: OutlinedButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      style: _secondaryButtonStyle(),
-                      child: const Text('拒絕'))),
-              const SizedBox(width: 12),
-              Expanded(
-                  child: ElevatedButton(
-                      onPressed: () => DriverNavigation.push(
-                          context, DriverRoutes.orderAccepted),
-                      style: _primaryButtonStyle(),
-                      child: const Text('確認接單'))),
-            ]),
-          ],
-        ),
+              ),
+              const SizedBox(width: DriverSpacing.sm),
+              const Text('訂單詳情',
+                  style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w700,
+                      color: DriverColors.text)),
+            ],
+          ),
+          const SizedBox(height: DriverSpacing.sm),
+          const Text('請確認乘客資訊與行程內容',
+              style: TextStyle(
+                  fontSize: DriverTypography.body,
+                  color: DriverColors.secondaryText)),
+          const SizedBox(height: DriverSpacing.xl),
+          const _MapPreview(),
+          const SizedBox(height: DriverSpacing.xl),
+          const _OrderInfoCard(),
+          const SizedBox(height: DriverSpacing.xl),
+          const Text('選擇接單車輛',
+              style: TextStyle(
+                  fontSize: DriverTypography.body,
+                  fontWeight: FontWeight.w700,
+                  color: DriverColors.text)),
+          const SizedBox(height: DriverSpacing.md),
+          Row(children: [
+            Expanded(
+                child: _VehicleCard(
+                    index: 0,
+                    title: '車輛 1',
+                    type: '轎車',
+                    plate: 'AB 1234',
+                    selected: _selectedVehicle == 0,
+                    onTap: () => setState(() => _selectedVehicle = 0))),
+            const SizedBox(width: DriverSpacing.md),
+            Expanded(
+                child: _VehicleCard(
+                    index: 1,
+                    title: '車輛 2',
+                    type: 'MPV',
+                    plate: 'CD 5678',
+                    selected: _selectedVehicle == 1,
+                    onTap: () => setState(() => _selectedVehicle = 1))),
+          ]),
+          const SizedBox(height: DriverSpacing.xl),
+          Row(children: [
+            Expanded(
+                child: OutlinedButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    style: _secondaryButtonStyle(),
+                    child: const Text('拒絕'))),
+            const SizedBox(width: DriverSpacing.md),
+            Expanded(
+                child: ElevatedButton(
+                    onPressed: () => DriverNavigation.push(
+                        context, DriverRouteNames.orderAccepted),
+                    style: _primaryButtonStyle(),
+                    child: const Text('確認接單'))),
+          ]),
+        ],
       ),
     );
   }
@@ -108,20 +108,24 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
 
 ButtonStyle _secondaryButtonStyle() => OutlinedButton.styleFrom(
       minimumSize: const Size.fromHeight(56),
-      foregroundColor: const Color(0xff1c1c2e),
+      foregroundColor: DriverColors.text,
       backgroundColor: Colors.white,
-      side: const BorderSide(color: Color(0xffe5e7eb)),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+      side: const BorderSide(color: DriverColors.divider),
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(DriverRadii.card)),
+      textStyle: const TextStyle(
+          fontSize: DriverTypography.bodyLarge, fontWeight: FontWeight.w700),
     );
 
 ButtonStyle _primaryButtonStyle() => ElevatedButton.styleFrom(
       minimumSize: const Size.fromHeight(56),
       foregroundColor: Colors.white,
-      backgroundColor: const Color(0xff285cfc),
+      backgroundColor: DriverColors.activeBlue,
       elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(DriverRadii.card)),
+      textStyle: const TextStyle(
+          fontSize: DriverTypography.bodyLarge, fontWeight: FontWeight.w700),
     );
 
 class _MapPreview extends StatelessWidget {
@@ -130,8 +134,8 @@ class _MapPreview extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         height: 180,
         decoration: BoxDecoration(
-            color: const Color(0xff1c1c2e),
-            borderRadius: BorderRadius.circular(16),
+            color: DriverColors.text,
+            borderRadius: BorderRadius.circular(DriverRadii.card),
             boxShadow: const [
               BoxShadow(
                   color: Color(0x1a000000),
@@ -142,11 +146,13 @@ class _MapPreview extends StatelessWidget {
           const Center(
               child: Column(mainAxisSize: MainAxisSize.min, children: [
             Text('地圖路徑預覽',
-                style: TextStyle(fontSize: 13, color: Color(0xb3ffffff))),
+                style: TextStyle(
+                    fontSize: DriverTypography.label,
+                    color: Color(0xb3ffffff))),
             SizedBox(height: 8),
             Text('香港中環 → 深圳',
                 style: TextStyle(
-                    fontSize: 16,
+                    fontSize: DriverTypography.bodyLarge,
                     fontWeight: FontWeight.w700,
                     color: Colors.white))
           ])),
@@ -164,9 +170,10 @@ class _MapLabel extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
           color: const Color(0x1affffff),
-          borderRadius: BorderRadius.circular(100)),
+          borderRadius: BorderRadius.circular(DriverRadii.pill)),
       child: Text(label,
-          style: const TextStyle(fontSize: 12, color: Colors.white)));
+          style: const TextStyle(
+              fontSize: DriverTypography.caption, color: Colors.white)));
 }
 
 class _OrderInfoCard extends StatelessWidget {
@@ -176,8 +183,8 @@ class _OrderInfoCard extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
             color: Colors.white,
-            border: Border.all(color: const Color(0xffe5e7eb)),
-            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: DriverColors.divider),
+            borderRadius: BorderRadius.circular(DriverRadii.card),
             boxShadow: const [
               BoxShadow(
                   color: Color(0x0a000000), blurRadius: 4, offset: Offset(0, 2))
@@ -190,49 +197,53 @@ class _OrderInfoCard extends StatelessWidget {
                 width: 56,
                 height: 56,
                 decoration: BoxDecoration(
-                    color: const Color(0xfff0f2f5),
-                    borderRadius: BorderRadius.circular(12)),
+                    color: DriverColors.background,
+                    borderRadius: BorderRadius.circular(DriverRadii.input)),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: DriverSpacing.md),
               const Expanded(
                 child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text('陳大文',
                           style: TextStyle(
-                              fontSize: 16,
+                              fontSize: DriverTypography.bodyLarge,
                               fontWeight: FontWeight.w700,
-                              color: Color(0xff1c1c2e))),
+                              color: DriverColors.text)),
                       SizedBox(height: 4),
                       Text('香港中環 → 深圳',
                           style: TextStyle(
-                              fontSize: 13, color: Color(0xff57667d))),
+                              fontSize: DriverTypography.label,
+                              color: Color(0xff57667d))),
                       SizedBox(height: 4),
                       Text('2024/03/15 14:00',
-                          style:
-                              TextStyle(fontSize: 13, color: Color(0xff56657e)))
+                          style: TextStyle(
+                              fontSize: DriverTypography.label,
+                              color: DriverColors.secondaryText))
                     ]),
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: DriverSpacing.md),
           const _AddressRow(
               asset: 'assets/order-detail-origin.svg', label: '香港中環置地廣場東門大堂'),
-          const SizedBox(height: 12),
+          const SizedBox(height: DriverSpacing.md),
           const _AddressRow(
               asset: 'assets/order-detail-destination.svg', label: '深圳福田口岸'),
-          const SizedBox(height: 12),
+          const SizedBox(height: DriverSpacing.md),
           const Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
             Expanded(
                 child: Text('出發時間  2024/03/15 14:00',
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 13, color: Color(0xff56657e)))),
+                    style: TextStyle(
+                        fontSize: DriverTypography.label,
+                        color: DriverColors.secondaryText))),
             SizedBox(width: 12),
             Text('\$280.00',
                 style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w700,
-                    color: Color(0xff4cd964)))
+                    color: DriverColors.success))
           ]),
         ]),
       );
@@ -245,11 +256,12 @@ class _AddressRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Row(children: [
         SvgPicture.asset(asset, width: 8, height: 8),
-        const SizedBox(width: 8),
+        const SizedBox(width: DriverSpacing.sm),
         Expanded(
             child: Text(label,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 14, color: Color(0xff1c1c2e))))
+                style: const TextStyle(
+                    fontSize: DriverTypography.body, color: DriverColors.text)))
       ]);
 }
 
@@ -274,7 +286,7 @@ class _VehicleCard extends StatelessWidget {
         label: '$title $plate',
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(DriverRadii.card),
           child: Container(
             height: 116,
             padding: const EdgeInsets.all(12),
@@ -282,10 +294,10 @@ class _VehicleCard extends StatelessWidget {
                 color: Colors.white,
                 border: Border.all(
                     color: selected
-                        ? const Color(0xff285cfc)
-                        : const Color(0xffe5e7eb),
+                        ? DriverColors.activeBlue
+                        : DriverColors.divider,
                     width: selected ? 2 : 1),
-                borderRadius: BorderRadius.circular(16)),
+                borderRadius: BorderRadius.circular(DriverRadii.card)),
             child: Stack(children: [
               Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Container(
@@ -293,9 +305,9 @@ class _VehicleCard extends StatelessWidget {
                     height: 32,
                     decoration: BoxDecoration(
                         color: selected
-                            ? const Color(0xffeaf0ff)
-                            : const Color(0xfff0f2f5),
-                        borderRadius: BorderRadius.circular(16)),
+                            ? DriverColors.infoBackground
+                            : DriverColors.background,
+                        borderRadius: BorderRadius.circular(DriverRadii.card)),
                     alignment: Alignment.center,
                     child: SvgPicture.asset(
                         index == 0
@@ -307,13 +319,14 @@ class _VehicleCard extends StatelessWidget {
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Text(title,
                       style: const TextStyle(
-                          fontSize: 14,
+                          fontSize: DriverTypography.body,
                           fontWeight: FontWeight.w700,
-                          color: Color(0xff1c1c2e))),
+                          color: DriverColors.text)),
                   const SizedBox(height: 2),
                   Text(type,
                       style: const TextStyle(
-                          fontSize: 12, color: Color(0xff56657e)))
+                          fontSize: DriverTypography.caption,
+                          color: DriverColors.secondaryText))
                 ])
               ]),
               Positioned(
@@ -323,7 +336,7 @@ class _VehicleCard extends StatelessWidget {
                       style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w700,
-                          color: Color(0xff1c1c2e)))),
+                          color: DriverColors.text))),
               Positioned(
                   right: 0,
                   bottom: 0,
@@ -331,11 +344,10 @@ class _VehicleCard extends StatelessWidget {
                       width: 20,
                       height: 20,
                       decoration: BoxDecoration(
-                          color:
-                              selected ? const Color(0xff4a6cf7) : Colors.white,
+                          color: selected ? DriverColors.primary : Colors.white,
                           border: selected
                               ? null
-                              : Border.all(color: const Color(0xffd9d9d9)),
+                              : Border.all(color: DriverColors.border),
                           borderRadius: BorderRadius.circular(10)),
                       alignment: Alignment.center,
                       child: selected

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
-import 'app/router.dart';
+import 'app/route_names.dart';
 import 'core/layout/driver_page_shell.dart';
 import 'core/navigation/driver_navigation.dart';
+
+import 'package:driver_web/core/tokens/driver_tokens.dart';
 
 class OrderHistoryPage extends StatefulWidget {
   const OrderHistoryPage({super.key});
@@ -21,26 +23,27 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
     return DriverPageShell(
       selectedIndex: _selectedTab,
       bottomPadding: 140,
-      onHomeTap: () => DriverNavigation.replace(context, DriverRoutes.home),
-      onOrderTap: () => DriverNavigation.replace(context, DriverRoutes.orders),
+      onHomeTap: () => DriverNavigation.replace(context, DriverRouteNames.home),
+      onOrderTap: () =>
+          DriverNavigation.replace(context, DriverRouteNames.orders),
       onProfileTap: () =>
-          DriverNavigation.replace(context, DriverRoutes.profile),
+          DriverNavigation.replace(context, DriverRouteNames.profile),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _Header(onBack: () => Navigator.of(context).pop()),
-          const SizedBox(height: 16),
+          const SizedBox(height: DriverSpacing.lg),
           _HistoryTabs(
             selectedIndex: _selectedHistoryTab,
             onChanged: (index) => setState(() => _selectedHistoryTab = index),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: DriverSpacing.lg),
           const Text('2024年3月',
               style: TextStyle(
-                  fontSize: 14,
+                  fontSize: DriverTypography.body,
                   fontWeight: FontWeight.w700,
-                  color: Color(0xff56657e))),
-          const SizedBox(height: 8),
+                  color: DriverColors.secondaryText)),
+          const SizedBox(height: DriverSpacing.sm),
           ..._historyEntries.map((entry) => Padding(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: _HistoryCard(entry: entry),
@@ -69,23 +72,23 @@ class _Header extends StatelessWidget {
                 height: 36,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                    border: Border.all(color: const Color(0xffd9d9d9)),
+                    border: Border.all(color: DriverColors.border),
                     borderRadius: BorderRadius.circular(18)),
                 child: const Text('‹',
                     style: TextStyle(
                         fontSize: 24,
                         height: 1,
                         fontWeight: FontWeight.w700,
-                        color: Color(0xff1c1c2e))),
+                        color: DriverColors.text)),
               ),
             ),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: DriverSpacing.lg),
           const Text('接單紀錄',
               style: TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.w700,
-                  color: Color(0xff1c1c2e))),
+                  color: DriverColors.text)),
         ],
       );
 }
@@ -102,7 +105,7 @@ class _HistoryTabs extends StatelessWidget {
               label: '已結算',
               selected: selectedIndex == 0,
               onTap: () => onChanged(0)),
-          const SizedBox(width: 12),
+          const SizedBox(width: DriverSpacing.md),
           _HistoryTab(
               label: '未結算',
               selected: selectedIndex == 1,
@@ -121,25 +124,24 @@ class _HistoryTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Material(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(DriverRadii.input),
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(DriverRadii.input),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
                 border: Border.all(
-                    color: selected
-                        ? const Color(0xff4a6cf7)
-                        : const Color(0xffd9d9d9)),
-                borderRadius: BorderRadius.circular(12)),
+                    color:
+                        selected ? DriverColors.primary : DriverColors.border),
+                borderRadius: BorderRadius.circular(DriverRadii.input)),
             child: Text(label,
                 style: TextStyle(
-                    fontSize: 14,
+                    fontSize: DriverTypography.body,
                     fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
                     color: selected
-                        ? const Color(0xff4a6cf7)
-                        : const Color(0xff56657e))),
+                        ? DriverColors.primary
+                        : DriverColors.secondaryText)),
           ),
         ),
       );
@@ -201,8 +203,8 @@ class _HistoryCard extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
             color: Colors.white,
-            border: Border.all(color: const Color(0xffd9d9d9)),
-            borderRadius: BorderRadius.circular(16)),
+            border: Border.all(color: DriverColors.border),
+            borderRadius: BorderRadius.circular(DriverRadii.card)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -213,16 +215,17 @@ class _HistoryCard extends StatelessWidget {
                     child: Text('出發  ${entry.date}',
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                            fontSize: 13, color: Color(0xff56657e)))),
-                const SizedBox(width: 8),
+                            fontSize: DriverTypography.label,
+                            color: DriverColors.secondaryText))),
+                const SizedBox(width: DriverSpacing.sm),
                 Text(entry.price,
                     style: const TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w700,
-                        color: Color(0xff1c1c2e))),
+                        color: DriverColors.text)),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: DriverSpacing.md),
             _RouteRow(
                 asset: 'assets/order-history-origin.svg',
                 label: '出發：${entry.origin}'),
@@ -230,7 +233,7 @@ class _HistoryCard extends StatelessWidget {
             _RouteRow(
                 asset: 'assets/order-history-destination.svg',
                 label: '目的：${entry.destination}'),
-            const SizedBox(height: 12),
+            const SizedBox(height: DriverSpacing.md),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -238,20 +241,21 @@ class _HistoryCard extends StatelessWidget {
                     child: Row(children: [
                   SvgPicture.asset('assets/order-history-destination.svg',
                       width: 8, height: 8),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: DriverSpacing.sm),
                   Flexible(
                       child: Text(entry.passenger,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                              fontSize: 13, color: Color(0xff56657e)))),
+                              fontSize: DriverTypography.label,
+                              color: DriverColors.secondaryText))),
                 ])),
-                const SizedBox(width: 8),
+                const SizedBox(width: DriverSpacing.sm),
                 Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
                       color: entry.settled
-                          ? const Color(0xffebf9f1)
+                          ? DriverColors.successBackground
                           : const Color(0xfffff4e5),
                       borderRadius: BorderRadius.circular(4)),
                   child: Text(entry.settled ? '已結算' : '未結算',
@@ -259,7 +263,7 @@ class _HistoryCard extends StatelessWidget {
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
                           color: entry.settled
-                              ? const Color(0xff2b7a42)
+                              ? DriverColors.darkGreen
                               : const Color(0xffb7791f))),
                 ),
               ],
@@ -278,14 +282,14 @@ class _RouteRow extends StatelessWidget {
   Widget build(BuildContext context) => Row(
         children: [
           SvgPicture.asset(asset, width: 8, height: 8),
-          const SizedBox(width: 8),
+          const SizedBox(width: DriverSpacing.sm),
           Expanded(
               child: Text(label,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                      fontSize: 14,
+                      fontSize: DriverTypography.body,
                       fontWeight: FontWeight.w500,
-                      color: Color(0xff1c1c2e)))),
+                      color: DriverColors.text))),
         ],
       );
 }

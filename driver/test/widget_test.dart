@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:driver_web/app/router.dart';
 import 'package:driver_web/home_page.dart';
 import 'package:driver_web/main.dart';
 import 'package:driver_web/order_completed_page.dart';
@@ -8,8 +9,17 @@ import 'package:driver_web/order_hall_page.dart';
 import 'package:driver_web/order_history_page.dart';
 import 'package:driver_web/order_in_progress_page.dart';
 
+import 'package:driver_web/driver_profile_page.dart';
 import 'package:driver_web/profile_page.dart';
 import 'package:driver_web/registration_page.dart';
+import 'package:driver_web/vehicle_page.dart';
+import 'package:driver_web/add_vehicle_page.dart';
+
+Widget testApp(Widget home) {
+  final routes = Map<String, WidgetBuilder>.from(DriverRouter.builders)
+    ..remove('/');
+  return MaterialApp(home: home, routes: routes);
+}
 
 void main() {
   testWidgets('renders the driver login page', (WidgetTester tester) async {
@@ -22,7 +32,7 @@ void main() {
 
   testWidgets('uses mainland and Hong Kong plates for mainland ownership',
       (WidgetTester tester) async {
-    await tester.pumpWidget(const MaterialApp(home: RegistrationPage()));
+    await tester.pumpWidget(testApp(const RegistrationPage()));
 
     await tester.tap(find.text('中國內地'));
     await tester.pump();
@@ -37,7 +47,7 @@ void main() {
 
   testWidgets('updates plate fields from region and plate type selections',
       (WidgetTester tester) async {
-    await tester.pumpWidget(const MaterialApp(home: RegistrationPage()));
+    await tester.pumpWidget(testApp(const RegistrationPage()));
 
     expect(find.text('香港車牌'), findsOneWidget);
     expect(find.text('澳門車牌'), findsNothing);
@@ -66,9 +76,46 @@ void main() {
     expect(find.text('內地車牌'), findsOneWidget);
   });
 
+  testWidgets('matches vehicle plate fields to ownership and plate type',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(testApp(const AddVehiclePage()));
+
+    expect(find.text('香港車牌'), findsOneWidget);
+    expect(find.text('內地車牌'), findsOneWidget);
+    expect(find.text('澳門車牌'), findsNothing);
+
+    await tester.tap(find.text('單牌'));
+    await tester.pump();
+    expect(find.text('香港車牌'), findsOneWidget);
+    expect(find.text('內地車牌'), findsNothing);
+
+    await tester.tap(find.text('澳門'));
+    await tester.pump();
+    expect(find.text('澳門車牌'), findsOneWidget);
+    expect(find.text('香港車牌'), findsNothing);
+
+    await tester.tap(find.text('兩地牌'));
+    await tester.pump();
+    expect(find.text('澳門車牌'), findsOneWidget);
+    expect(find.text('內地車牌'), findsOneWidget);
+
+    await tester.tap(find.text('三地牌'));
+    await tester.pump();
+    expect(find.text('香港車牌'), findsOneWidget);
+    expect(find.text('澳門車牌'), findsOneWidget);
+    expect(find.text('內地車牌'), findsOneWidget);
+
+    await tester.tap(find.text('中國內地'));
+    await tester.pump();
+    expect(find.text('三地牌'), findsNothing);
+    expect(find.text('兩地牌'), findsOneWidget);
+    expect(find.text('內地車牌'), findsOneWidget);
+    expect(find.text('香港車牌'), findsOneWidget);
+    expect(find.text('澳門車牌'), findsNothing);
+  });
   testWidgets('renders the driver home page and toggles online status',
       (WidgetTester tester) async {
-    await tester.pumpWidget(const MaterialApp(home: HomePage()));
+    await tester.pumpWidget(testApp(const HomePage()));
 
     expect(find.text('陳大文'), findsOneWidget);
     expect(find.text('今日收入'), findsOneWidget);
@@ -81,9 +128,23 @@ void main() {
     expect(find.text('目前狀態：離線'), findsOneWidget);
   });
 
+  testWidgets('renders and edits the standalone driver profile page',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(testApp(const DriverProfilePage()));
+
+    expect(find.text('個人資料'), findsOneWidget);
+    expect(find.text('基本資料'), findsOneWidget);
+    expect(find.text('+852 9123 4567'), findsOneWidget);
+    expect(find.text('+86 未填寫'), findsOneWidget);
+    expect(find.text('修改'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('driver-profile-edit')));
+    await tester.pump();
+    expect(find.byType(TextField), findsNWidgets(3));
+  });
   testWidgets('renders the driver profile page and navigation',
       (WidgetTester tester) async {
-    await tester.pumpWidget(const MaterialApp(home: ProfilePage()));
+    await tester.pumpWidget(testApp(const ProfilePage()));
 
     expect(find.text('陳大文'), findsOneWidget);
     expect(find.text('結算概覽'), findsOneWidget);
@@ -94,7 +155,7 @@ void main() {
 
   testWidgets('switches between available and accepted orders',
       (WidgetTester tester) async {
-    await tester.pumpWidget(const MaterialApp(home: OrderHallPage()));
+    await tester.pumpWidget(testApp(const OrderHallPage()));
 
     expect(find.text('接單大廳'), findsOneWidget);
     expect(find.text('線上接單中'), findsOneWidget);
@@ -111,7 +172,7 @@ void main() {
   });
   testWidgets('opens order details and selects a vehicle',
       (WidgetTester tester) async {
-    await tester.pumpWidget(const MaterialApp(home: OrderHallPage()));
+    await tester.pumpWidget(testApp(const OrderHallPage()));
 
     await tester.tap(find.text('陳大文'));
     await tester.pumpAndSettle();
@@ -138,7 +199,7 @@ void main() {
 
   testWidgets('renders in-progress order page content',
       (WidgetTester tester) async {
-    await tester.pumpWidget(const MaterialApp(home: OrderInProgressPage()));
+    await tester.pumpWidget(testApp(const OrderInProgressPage()));
 
     expect(find.text('進行中'), findsNWidgets(2));
     expect(find.text('香港中環 → 深圳'), findsOneWidget);
@@ -155,7 +216,7 @@ void main() {
 
   testWidgets('opens completed page from in-progress action',
       (WidgetTester tester) async {
-    await tester.pumpWidget(const MaterialApp(home: OrderInProgressPage()));
+    await tester.pumpWidget(testApp(const OrderInProgressPage()));
 
     await tester.ensureVisible(find.text('完成'));
     await tester.tap(find.text('完成'));
@@ -167,7 +228,7 @@ void main() {
 
   testWidgets('renders order history page content',
       (WidgetTester tester) async {
-    await tester.pumpWidget(const MaterialApp(home: OrderHistoryPage()));
+    await tester.pumpWidget(testApp(const OrderHistoryPage()));
 
     expect(find.text('接單紀錄'), findsOneWidget);
     expect(find.text('已結算'), findsNWidgets(3));
@@ -184,7 +245,7 @@ void main() {
 
   testWidgets('opens order history from profile menu',
       (WidgetTester tester) async {
-    await tester.pumpWidget(const MaterialApp(home: ProfilePage()));
+    await tester.pumpWidget(testApp(const ProfilePage()));
 
     await tester.ensureVisible(find.text('接單紀錄'));
     await tester.tap(find.text('接單紀錄'));
@@ -194,9 +255,49 @@ void main() {
     expect(find.text('出發：香港中環'), findsOneWidget);
   });
 
+  testWidgets('opens profile from the bottom navigation',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(testApp(const HomePage()));
+
+    await tester.tap(find.text('我的'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('結算概覽'), findsOneWidget);
+    expect(find.text('登出帳號'), findsOneWidget);
+  });
+
+  testWidgets('opens vehicle preview from the profile menu',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(testApp(const ProfilePage()));
+
+    await tester.ensureVisible(find.text('車輛資料'));
+    await tester.tap(find.text('車輛資料'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('車輛資料'), findsOneWidget);
+    expect(find.text('兩地牌轎車'), findsOneWidget);
+    expect(find.text('車牌類型'), findsNothing);
+  });
+
+  testWidgets('opens vehicle card in prefilled edit form',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(testApp(const VehiclePage()));
+
+    await tester.tap(find.text('兩地牌轎車'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('新增車輛'), findsOneWidget);
+    expect(find.text('香港'), findsOneWidget);
+    expect(find.text('兩地牌'), findsOneWidget);
+    expect(find.text('轎車'), findsOneWidget);
+    expect(find.widgetWithText(TextField, 'AB 1234'), findsOneWidget);
+    expect(find.widgetWithText(TextField, 'CD 5678 粵Z'), findsOneWidget);
+    expect(find.text('白色'), findsOneWidget);
+  });
+
   testWidgets('navigates from order history to order hall',
       (WidgetTester tester) async {
-    await tester.pumpWidget(const MaterialApp(home: OrderHistoryPage()));
+    await tester.pumpWidget(testApp(const OrderHistoryPage()));
 
     await tester.tap(find.text('接單').last);
     await tester.pumpAndSettle();
@@ -206,7 +307,7 @@ void main() {
 
   testWidgets('renders completed order page content',
       (WidgetTester tester) async {
-    await tester.pumpWidget(const MaterialApp(home: OrderCompletedPage()));
+    await tester.pumpWidget(testApp(const OrderCompletedPage()));
 
     expect(find.text('行程已抵達目的地'), findsOneWidget);
     expect(find.text('請與乘客確認車資並完成收款'), findsOneWidget);
