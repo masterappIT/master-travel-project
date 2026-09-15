@@ -42,11 +42,12 @@ class _ProfilePageState extends State<ProfilePage> {
         _loading = false;
       });
     } on DriverApiException catch (error) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _error = error.message;
           _loading = false;
         });
+      }
     }
   }
 
@@ -84,9 +85,10 @@ class _ProfilePageState extends State<ProfilePage> {
         ),
       );
     } on DriverApiException catch (error) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(error.message)));
+      }
     }
   }
 
@@ -199,8 +201,10 @@ class _ProfilePageState extends State<ProfilePage> {
             const SizedBox(height: DriverSpacing.lg),
             _LogoutButton(onTap: () async {
               await _api.logout();
-              if (mounted)
-                DriverNavigation.replaceAll(context, DriverRouteNames.login);
+              if (!context.mounted) {
+                return;
+              }
+              DriverNavigation.replaceAll(context, DriverRouteNames.login);
             }),
           ],
         ],

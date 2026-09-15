@@ -74,13 +74,13 @@ class _AddVehiclePageState extends State<AddVehiclePage> {
     if (_plateType == '兩地牌') {
       final labels = _ownership == '中國內地'
           ? const ['內地車牌', '香港車牌']
-          : [_ownership + '車牌', '內地車牌'];
+          : ['$_ownership車牌', '內地車牌'];
       return [
-        for (final label in labels) _PlateInput(label, '請輸入' + label + '號碼'),
+        for (final label in labels) _PlateInput(label, '請輸入$label號碼'),
       ];
     }
     final local = _ownership == '中國內地' ? '內地' : _ownership;
-    return [_PlateInput(local + '車牌', '請輸入' + local + '車牌號碼')];
+    return [_PlateInput('$local車牌', '請輸入$local車牌號碼')];
   }
 
   TextEditingController _controllerFor(String label) {

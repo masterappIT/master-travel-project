@@ -32,19 +32,21 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
   Future<void> _loadTrips() async {
     try {
       final trips = await _api.trips();
-      if (mounted)
+      if (mounted) {
         setState(() {
           _trips = trips
               .where((trip) => trip is Map && trip['completedAt'] != null)
               .toList();
           _loading = false;
         });
+      }
     } on DriverApiException catch (error) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _error = error.message;
           _loading = false;
         });
+      }
     }
   }
 
@@ -224,37 +226,6 @@ class _HistoryEntry {
   final String passenger;
   final bool settled;
 }
-
-const _historyEntries = [
-  _HistoryEntry(
-      date: '2024/03/15 14:00',
-      price: '\$280.00',
-      origin: '香港中環',
-      destination: '深圳',
-      passenger: '陳大文',
-      settled: true),
-  _HistoryEntry(
-      date: '2024/03/12 09:30',
-      price: '\$420.00',
-      origin: '香港機場',
-      destination: '珠海',
-      passenger: '王小姐',
-      settled: true),
-  _HistoryEntry(
-      date: '2024/03/08 11:15',
-      price: '\$550.00',
-      origin: '尖沙咀',
-      destination: '廣州',
-      passenger: '張先生',
-      settled: false),
-  _HistoryEntry(
-      date: '2024/03/02 16:45',
-      price: '\$680.00',
-      origin: '銅鑼灣',
-      destination: '澳門',
-      passenger: '劉先生',
-      settled: false),
-];
 
 class _HistoryCard extends StatelessWidget {
   const _HistoryCard({required this.entry});

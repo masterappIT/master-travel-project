@@ -26,16 +26,19 @@ class _OrderInProgressPageState extends State<OrderInProgressPage> {
       final tripId = widget.tripId;
       if (tripId == null) throw StateError('missing trip id');
       await _api.completeTrip(tripId);
-      if (mounted)
+      if (mounted) {
         DriverNavigation.push(context, DriverRouteNames.orderCompleted);
+      }
     } on StateError {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(const SnackBar(content: Text('找不到進行中的訂單')));
+      }
     } on DriverApiException catch (error) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(error.message)));
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }

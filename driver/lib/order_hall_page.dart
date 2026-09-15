@@ -43,11 +43,12 @@ class _OrderHallPageState extends State<OrderHallPage> {
         _loading = false;
       });
     } on DriverApiException catch (error) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _error = error.message;
           _loading = false;
         });
+      }
     }
   }
 

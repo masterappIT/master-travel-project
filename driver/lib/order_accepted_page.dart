@@ -28,20 +28,23 @@ class _OrderAcceptedPageState extends State<OrderAcceptedPage> {
       if (tripId == null) throw StateError('missing trip id');
       await _api.arriveTrip(tripId);
       await _api.startTrip(tripId);
-      if (mounted)
+      if (mounted) {
         DriverNavigation.push(
           context,
           DriverRouteNames.orderInProgress,
           arguments: widget.tripId,
         );
+      }
     } on StateError {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(const SnackBar(content: Text('找不到可到達的訂單')));
+      }
     } on DriverApiException catch (error) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(error.message)));
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }

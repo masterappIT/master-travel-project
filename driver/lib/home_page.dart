@@ -39,11 +39,12 @@ class _HomePageState extends State<HomePage> {
         _loading = false;
       });
     } on DriverApiException catch (error) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _error = error.message;
           _loading = false;
         });
+      }
     }
   }
 
@@ -54,11 +55,12 @@ class _HomePageState extends State<HomePage> {
       final result = await _api.updateStatus(value);
       if (mounted) setState(() => _driver = Map<String, dynamic>.from(result));
     } on DriverApiException catch (error) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _isOnline = previous;
           _error = error.message;
         });
+      }
     }
   }
 

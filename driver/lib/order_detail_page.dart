@@ -26,16 +26,18 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
     setState(() => _accepting = true);
     try {
       await _api.acceptTrip(widget.tripId!);
-      if (mounted)
+      if (mounted) {
         DriverNavigation.push(
           context,
           DriverRouteNames.orderAccepted,
           arguments: widget.tripId,
         );
+      }
     } on DriverApiException catch (error) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(error.message)));
+      }
     } finally {
       if (mounted) setState(() => _accepting = false);
     }

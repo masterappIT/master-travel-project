@@ -43,7 +43,7 @@ class DriverApiClient {
 
   Map<String, String> get _headers => {
         'Content-Type': 'application/json',
-        if (token != null) 'Authorization': 'Bearer ' + token!,
+        if (token != null) 'Authorization': 'Bearer ${token!}',
       };
 
   Future<Map<String, dynamic>> requestPhoneCode(
@@ -107,9 +107,10 @@ class DriverApiClient {
           headers: _headers));
 
   Future<void> logout() async {
-    if (token != null)
+    if (token != null) {
       await _client.post(Uri.parse('$baseUrl/driver/auth/logout'),
           headers: _headers);
+    }
     token = null;
   }
 
