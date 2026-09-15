@@ -45,7 +45,7 @@ export function createTripsActions({ api, tripsApi, addressesApi, tripForm, sele
     const categoryId = tripForm.value.categoryId || vehicle?.categoryId
     if (!categoryId || !tripForm.value.distanceMeters) { error.value = '請先搜尋並選擇完整路線，再選擇車型'; return }
     try {
-      tripQuote.value = await api('/quotes', { method: 'POST', body: JSON.stringify({ categoryId, vehicleId: tripForm.value.vehicleId, distanceMeters: Number(tripForm.value.distanceMeters), extraIds: tripForm.value.extraIds || [], displayCurrency: 'RMB', userId: tripForm.value.userId, originRegion: tripForm.value.region === 'HK' ? '香港' : tripForm.value.region === 'MACAU' ? '澳門' : '大陸', destinationRegion: tripForm.value.region === 'HK' ? '香港' : tripForm.value.region === 'MACAU' ? '澳門' : '大陸', originCity: tripForm.value.originCity || '', destinationCity: tripForm.value.destinationCity || '', scheduledAt: tripForm.value.scheduledAt }) })
+      tripQuote.value = await api('/quotes', { method: 'POST', body: JSON.stringify({ categoryId, vehicleId: tripForm.value.vehicleId, distanceMeters: Number(tripForm.value.distanceMeters), durationSeconds: Number(tripForm.value.durationSeconds || 0), extraIds: tripForm.value.extraIds || [], displayCurrency: 'RMB', userId: tripForm.value.userId, originRegion: tripForm.value.region === 'HK' ? '香港' : tripForm.value.region === 'MACAU' ? '澳門' : '大陸', destinationRegion: tripForm.value.region === 'HK' ? '香港' : tripForm.value.region === 'MACAU' ? '澳門' : '大陸', originCity: tripForm.value.originCity || '', destinationCity: tripForm.value.destinationCity || '', scheduledAt: tripForm.value.scheduledAt }) })
       tripBookingStep.value = 'payment'; error.value = ''
     } catch (err) { error.value = displayError(err) }
   }

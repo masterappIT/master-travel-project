@@ -82,7 +82,7 @@ const loadQuotes = async () => {
     vehicleId: vehicle.id,
     distanceMeters: distanceMeters!,
     durationSeconds: (tripStore.activeDraft.durationHours || 0) * 3600,
-    originRegion: tripStore.activeDraft.route.originCity,
+    originRegion: tripStore.activeDraft.route.originRegion || routeRegion(tripStore.activeDraft.route.origin, ''),
     destinationRegion: tripStore.activeDraft.route.destinationRegion || routeRegion(tripStore.activeDraft.route.destination, ''),
     destinationCity: tripStore.activeDraft.route.destinationCity,
     scheduledAt: tripStore.departureTime,

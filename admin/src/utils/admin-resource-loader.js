@@ -1,0 +1,115 @@
+export async function loadAddressResources({ addressesApi, addresses, mainlandCities, displayMainlandCity, displayError }) {
+  const [addressResult, cityResult] = await Promise.allSettled([
+    addressesApi.list(),
+    addressesApi.cities()
+  ])
+
+  if (addressResult.status === 'fulfilled') {
+    addresses.value = addressResult.value.data
+  } else {
+    addresses.value = []
+  }
+
+  if (cityResult.status === 'fulfilled') {
+    mainlandCities.value = cityResult.value.data.map(item => ({ ...item, name: displayMainlandCity(item.name) }))
+  } else {
+    mainlandCities.value = []
+  }
+
+  const errors = [addressResult, cityResult]
+    .filter(result => result.status === 'rejected')
+    .map(result => result.reason?.message)
+    .filter(Boolean)
+
+  return errors.length ? displayError(errors[0]) : ''
+}
+
+export async function loadDispatchOrderUrls({ trips, tripsApi, orderUrls }) {
+  orderUrls.value = []
+  for (const trip of trips.value) {
+    const result = await tripsApi.orderUrls(trip.id)
+    orderUrls.value.push(...result.data)
+  }
+}
+
+export async function loadNotificationResources({ api, usersApi, driversApi, notifications, notificationUsers, notificationDrivers }) {
+  const [notificationResult, userResult, driverResult] = await Promise.all([
+    api('/admin/notifications'),
+    usersApi.list(),
+    driversApi.list()
+  ])
+  notifications.value = notificationResult.data
+  notificationUsers.value = userResult.data
+  notificationDrivers.value = driverResult.data
+}
+
+export async function loadVehicleResources({ api, categories, vehicles, extras, distancePricing, sortByOrder }) {
+  const [categoryResult, vehicleResult, extraResult, pricingResult] = await Promise.all([
+    api('/admin/vehicle-categories'),
+    api('/admin/vehicles'),
+    api('/admin/vehicle-extras'),
+    api('/admin/distance-pricing')
+  ])
+  categories.value = sortByOrder(categoryResult.data)
+  vehicles.value = sortByOrder(vehicleResult.data)
+  extras.value = sortByOrder(extraResult.data)
+  distancePricing.value = sortByOrder(pricingResult.data)
+}
+
+export async function loadMembershipResources({ api, membershipPlans }) {
+  membershipPlans.value = (await api('/admin/membership-plans')).data
+}
+
+export async function loadPromotionResources({ api, promotions }) {
+  promotions.value = (await api('/admin/promotions')).data
+}
+
+export async function loadRoutePricingResources({ api, categories, routeMinimumFares }) {
+  const [categoryResult, fareResult] = await Promise.all([
+    api('/admin/vehicle-categories'),
+    api('/admin/route-minimum-fares')
+  ])
+  categories.value = categoryResult.data
+  routeMinimumFares.value = fareResult.data
+}
+
+export async function loadCoreUsers({ usersApi, users }) {
+  users.value = (await usersApi.list()).data
+}
+
+
+export async function loadDriversResources({ driversApi, vehicleCategories, drivers }) {
+  const [categoryResult, driverResult] = await Promise.all([driversApi.categories(), driversApi.list()])
+  vehicleCategories.value = categoryResult.data.filter(item => item.enabled !== false)
+  if (!driverResult.data.length && drivers.value.length) {
+    for (const driver of drivers.value) await driversApi.save(driver)
+    drivers.value = (await driversApi.list()).data
+  } else {
+    drivers.value = driverResult.data
+  }
+  localStorage.setItem('admin_drivers', JSON.stringify(drivers.value))
+}
+
+export async function loadDispatchResources({ tripsApi, driversApi, trips, drivers, orderUrls, tripPage }) {
+  const [tripResult, driverResult] = await Promise.all([tripsApi.list(), driversApi.list()])
+  trips.value = tripResult.data
+  drivers.value = driverResult.data
+  await loadDispatchOrderUrls({ trips, tripsApi, orderUrls })
+  tripPage.value = 1
+}
+
+export async function loadTripsResources({ tripsApi, driversApi, api, trips, drivers, tripPage, tripCatalog }) {
+  const [tripResult, catalogResult, driverResult] = await Promise.all([tripsApi.list(), api('/vehicles'), driversApi.list()])
+  trips.value = tripResult.data
+  drivers.value = driverResult.data
+  tripPage.value = 1
+  tripCatalog.value = catalogResult
+}
+
+export async function loadCharterResources({ api, charterOrders }) {
+  charterOrders.value = (await api('/admin/charter-orders')).data
+}
+
+export async function loadAdministratorResources({ api, administrators }) {
+  administrators.value = (await api('/admin/administrators')).data
+}

@@ -1,11 +1,7 @@
-import { createApp, ref, computed, nextTick, onMounted, watch, provide } from 'vue'
-import { createApiClient } from './api/client'
-import { createUsersApi } from './api/users.js'
-import { createDriversApi } from './api/drivers.js'
-import { createTripsApi } from './api/trips.js'
-import { createAddressesApi } from './api/addresses.js'
+import { createApp, computed, nextTick, onMounted, watch, provide } from 'vue'
+import { createAdminApi } from './utils/admin-api.js'
 import { LoadingState, ErrorState, EmptyState, ToastHost, ConfirmDialog } from './components/index.js'
-import { sortByOrder, currencyLabel, formatOrderNumber, displayMainlandCity, apiMainlandCity, displayPlaceName } from './utils/formatters.js'
+import { sortByOrder, formatOrderNumber, displayMainlandCity, apiMainlandCity, displayPlaceName } from './utils/formatters.js'
 import { promotionKindLabel, promotionDiscountLabel } from './utils/promotions.js'
 import { dateTimeInput, formatTripAmount, paymentMethodLabel, formatBenefits } from './utils/display-formatters.js'
 import { createOperationsStorage } from './utils/operations-storage.js'
@@ -19,23 +15,21 @@ import { createAdminShellState } from './utils/admin-shell-state.js'
 import { createAdminResourceState } from './utils/admin-resource-state.js'
 import { createAdminAuxiliaryState } from './utils/admin-auxiliary-state.js'
 import { createAdminInteractionState } from './utils/admin-interaction-state.js'
+import { createAdminPageStates } from './utils/admin-page-states.js'
 import { createLocalization } from './utils/localization.js'
 import { createAdminSessionActions } from './utils/admin-session.js'
 import { createPromotionDisplay } from './utils/promotion-display.js'
+import { applyAdminSettings } from './utils/admin-settings-loader.js'
+import { loadAddressResources, loadDispatchOrderUrls, loadNotificationResources, loadVehicleResources, loadMembershipResources, loadPromotionResources, loadRoutePricingResources, loadCoreUsers, loadDriversResources, loadDispatchResources, loadTripsResources, loadCharterResources, loadAdministratorResources } from './utils/admin-resource-loader.js'
 import { primaryNavigation, operationsNavigation, createNavigationController, createOverlayController } from './layout/index.js'
-import { createUsersPageState } from './pages/users/users.state.js'
-import { createUsersActions } from './pages/users/users.actions.js'
 import { UsersPage } from './pages/users/UsersPage.js'
+import { createUsersActions } from './pages/users/users.actions.js'
 import { DriversPage } from './pages/drivers/DriversPage.js'
-import { createDriversPageState } from './pages/drivers/drivers.state.js'
 import { createDriversActions } from './pages/drivers/drivers.actions.js'
 import { TripsPage } from './pages/trips/TripsPage.js'
-import { createTripsPageState } from './pages/trips/trips.state.js'
 import { createTripsActions } from './pages/trips/trips.actions.js'
 import { AddressesPage } from './pages/addresses/AddressesPage.js'
-import { createAddressesPageState } from './pages/addresses/addresses.state.js'
 import { createAddressesActions } from './pages/addresses/addresses.actions.js'
-import { createPromotionsPageState } from './pages/promotions/promotions.state.js'
 import { createPromotionsActions } from './pages/promotions/promotions.actions.js'
 import { PromotionsPage } from './pages/promotions/PromotionsPage.js'
 import { MembershipPage } from './pages/membership/MembershipPage.js'
@@ -55,7 +49,6 @@ import { NotificationsPage } from './pages/notifications/NotificationsPage.js'
 import { createNotificationsPageState } from './pages/notifications/notifications.state.js'
 import { createNotificationsActions } from './pages/notifications/notifications.actions.js'
 import { OperationsPage } from './pages/operations/OperationsPage.js'
-import { createOperationsPageState } from './pages/operations/operations.state.js'
 import { createOperationsActions } from './pages/operations/operations.actions.js'
 import { createCharterActions } from './pages/charters/charters.actions.js'
 import './style.css'
@@ -80,70 +73,22 @@ const driverRaceSaving = paymentsPageState.raceSaving
 const notificationPageState = createNotificationsPageState(notificationUsers, notificationDrivers)
 const notificationRecipientSearch = notificationPageState.recipientSearch
 const { addressForm, userForm, walletAdjustment, tripForm, selectedTrip, dispatchForm, orderUrlForm, charterForm, administratorForm, notificationForm, mainlandCityForm, membershipForm, categoryForm, vehicleForm, extraForm, personnelForm, driverForm, settlementForm, entryForm, expenseForm } = createAdminFormState()
-const usersPageState = createUsersPageState(users, 10)
-const addressesPageState = createAddressesPageState(addresses)
-const addressRegionFilter = addressesPageState.regionFilter
-const addressCityFilter = addressesPageState.cityFilter
-const totalAddressCount = addressesPageState.totalCount
-const enabledAddressCount = addressesPageState.enabledCount
-const mainlandAddressCount = addressesPageState.mainlandCount
-const promotionsPageState = createPromotionsPageState(promotions)
-const promotionFilterTab = promotionsPageState.filterTab
-const promotionSearchQuery = promotionsPageState.searchQuery
-const userPage = usersPageState.page
-const userPageSize = usersPageState.pageSize
-const userSearchQuery = usersPageState.searchQuery
-const userStatusFilter = usersPageState.statusFilter
-const filteredUsers = usersPageState.filtered
-const userPageCount = usersPageState.pageCount
-const pagedUsers = usersPageState.paged
-const goToUserPage = usersPageState.goToPage
-const tripsPageState = createTripsPageState(trips, 10)
-const tripSearchQuery = tripsPageState.searchQuery
-const tripStatusFilter = tripsPageState.statusFilter
-const tripDateFilter = tripsPageState.dateFilter
-const tripPage = tripsPageState.page
-const tripPageSize = tripsPageState.pageSize
-const dispatchSearch = tripsPageState.dispatchSearch
-const dispatchPage = tripsPageState.dispatchPage
-const dispatchPageSize = tripsPageState.pageSize
-
-const tripDateYear = tripsPageState.dateYear
-const tripDateMonth = tripsPageState.dateMonth
-const tripDateDay = tripsPageState.dateDay
-const tripDateYears = tripsPageState.dateYears
-const tripDateDays = tripsPageState.dateDays
-const clearTripDateFilter = tripsPageState.clearDateFilter
-const driversPageState = createDriversPageState(drivers)
-const driverFilter = driversPageState.statusFilter
-const driverTypeFilter = driversPageState.typeFilter
-const driverSearch = driversPageState.searchQuery
-const driverFiltersActive = driversPageState.hasActiveFilters
-const resetDriverFilters = driversPageState.resetFilters
-const operationsPageState = createOperationsPageState(personnel, entryItems, expenseItems)
-const personnelFilter = operationsPageState.personnelFilter
-const entryFilter = operationsPageState.entryFilter
-const expenseFilter = operationsPageState.expenseFilter
+const {
+  usersPageState, addressesPageState, promotionsPageState, tripsPageState, driversPageState, operationsPageState,
+  addressRegionFilter, addressCityFilter, totalAddressCount, enabledAddressCount, mainlandAddressCount,
+  promotionFilterTab, promotionSearchQuery,
+  userPage, userPageSize, userSearchQuery, userStatusFilter, filteredUsers, userPageCount, pagedUsers, goToUserPage,
+  tripSearchQuery, tripStatusFilter, tripDateFilter, tripPage, tripPageSize, dispatchSearch, dispatchPage, dispatchPageSize,
+  tripDateYear, tripDateMonth, tripDateDay, tripDateYears, tripDateDays, clearTripDateFilter,
+  driverFilter, driverTypeFilter, driverSearch, driverFiltersActive, resetDriverFilters,
+  personnelFilter, entryFilter, expenseFilter
+} = createAdminPageStates({ users, addresses, promotions, trips, drivers, personnel, entryItems, expenseItems })
 const canWrite = computed(() => currentAdministrator.value?.role !== 'VIEWER')
 const isSuperAdministrator = computed(() => currentAdministrator.value?.role === 'SUPER_ADMIN')
 const timeOptions = createTimeOptions()
 
 
-async function api(path, options = {}) {
-  return apiClient(path, options)
-}
-const apiClient = createApiClient({
-  baseUrl: API,
-  getToken: () => token.value,
-  onUnauthorized: () => {
-    token.value = ''
-    localStorage.removeItem('admin_token')
-  }
-})
-const usersApi = createUsersApi(apiClient)
-const driversApi = createDriversApi(apiClient)
-const tripsApi = createTripsApi(apiClient)
-const addressesApi = createAddressesApi(apiClient)
+const { api, usersApi, driversApi, tripsApi, addressesApi } = createAdminApi({ baseUrl: API, token })
 const usersActions = createUsersActions({
   usersApi,
   users,
@@ -165,97 +110,28 @@ async function load() {
   const requestedView = view.value
   try {
     const settings = await api('/settings')
-    exchangeRate.value = Number(settings.exchangeRate) || 0.92
-    pricingCurrency.value = settings.pricingCurrency === 'HKD' ? 'HKD' : 'RMB'
-    severeWeatherEnabled.value = Boolean(settings.severeWeatherEnabled)
-    adminLogo.value = settings.adminLogo || ''
-    paymentSettings.value = {
-      driverRaceEnabled: Boolean(settings.driverRaceEnabled),
-      fareBalancePayEnabled: settings.fareBalancePayEnabled !== false,
-      cashBalancePayEnabled: settings.cashBalancePayEnabled !== false,
-      wechatPayEnabled: settings.wechatPayEnabled !== false,
-      alipayPayEnabled: settings.alipayPayEnabled !== false,
-      bankCardPayEnabled: settings.bankCardPayEnabled !== false,
-      sandboxMode: Boolean(settings.sandboxMode)
-    }
+    applyAdminSettings(settings, { exchangeRate, pricingCurrency, severeWeatherEnabled, adminLogo, paymentSettings })
     if (!token.value) return
     if (!currentAdministrator.value) currentAdministrator.value = await api('/admin/auth/me')
     if (requestedView === 'dashboard') dashboard.value = await api('/admin/dashboard')
-    if (['users', 'trips', 'charters'].includes(requestedView)) users.value = (await usersApi.list()).data
-    if (requestedView === 'drivers') {
-      const [categoryResult, driverResult] = await Promise.all([driversApi.categories(), driversApi.list()])
-      vehicleCategories.value = categoryResult.data.filter(item => item.enabled !== false)
-      if (!driverResult.data.length && drivers.value.length) {
-        for (const driver of drivers.value) await driversApi.save(driver)
-        drivers.value = (await driversApi.list()).data
-      } else {
-        drivers.value = driverResult.data
-      }
-      localStorage.setItem('admin_drivers', JSON.stringify(drivers.value))
-    }
-    if (requestedView === 'dispatch') {
-      const [tripResult, driverResult] = await Promise.all([tripsApi.list(), driversApi.list()])
-      trips.value = tripResult.data
-      drivers.value = driverResult.data
-      orderUrls.value = []
-      for (const trip of trips.value) {
-        const result = await tripsApi.orderUrls(trip.id)
-        orderUrls.value.push(...result.data)
-      }
-      tripPage.value = 1
-    }
-    if (requestedView === 'trips') {
-      const [tripResult, catalogResult, driverResult] = await Promise.all([tripsApi.list(), api('/vehicles'), driversApi.list()])
-      trips.value = tripResult.data
-      drivers.value = driverResult.data
-      tripPage.value = 1
-      tripCatalog.value = catalogResult
-    }
-    if (requestedView === 'charters') charterOrders.value = (await api('/admin/charter-orders')).data
+    if (['users', 'trips', 'charters'].includes(requestedView)) await loadCoreUsers({ usersApi, users })
+    if (requestedView === 'drivers') await loadDriversResources({ driversApi, vehicleCategories, drivers })
+    if (requestedView === 'dispatch') await loadDispatchResources({ tripsApi, driversApi, trips, drivers, orderUrls, tripPage })
+    if (requestedView === 'trips') await loadTripsResources({ tripsApi, driversApi, api, trips, drivers, tripPage, tripCatalog })
+    if (requestedView === 'charters') await loadCharterResources({ api, charterOrders })
     if (requestedView === 'addresses') {
-      const [addressResult, cityResult] = await Promise.allSettled([
-        addressesApi.list(),
-        addressesApi.cities()
-      ])
-      if (addressResult.status === 'fulfilled') {
-        addresses.value = addressResult.value.data
-      } else {
-        addresses.value = []
-        error.value = displayError(addressResult.reason?.message || '推薦地址載入失敗')
-      }
-      if (cityResult.status === 'fulfilled') {
-        mainlandCities.value = cityResult.value.data.map(item => ({ ...item, name: displayMainlandCity(item.name) }))
-      } else {
-        mainlandCities.value = []
-        error.value = displayError(cityResult.reason?.message || '城市資料載入失敗')
-      }
+      error.value = await loadAddressResources({ addressesApi, addresses, mainlandCities, displayMainlandCity, displayError })
     }
-    if (['membership', 'promotions'].includes(requestedView)) membershipPlans.value = (await api('/admin/membership-plans')).data
-    if (requestedView === 'promotions') promotions.value = (await api('/admin/promotions')).data
-    if (requestedView === 'administrators') administrators.value = (await api('/admin/administrators')).data
+    if (requestedView === 'membership') await loadMembershipResources({ api, membershipPlans })
+    if (requestedView === 'promotions') await loadPromotionResources({ api, promotions })
+    if (requestedView === 'administrators') await loadAdministratorResources({ api, administrators })
     if (requestedView === 'notifications') {
-      const [notificationResult, userResult, driverResult] = await Promise.all([
-        api('/admin/notifications'),
-        usersApi.list(),
-        driversApi.list()
-      ])
-      notifications.value = notificationResult.data
-      notificationUsers.value = userResult.data
-      notificationDrivers.value = driverResult.data
+      await loadNotificationResources({ api, usersApi, driversApi, notifications, notificationUsers, notificationDrivers })
     }
     if (requestedView === 'vehicles') {
-      const [categoryResult, vehicleResult, extraResult, pricingResult] = await Promise.all([
-        api('/admin/vehicle-categories'),
-        api('/admin/vehicles'),
-        api('/admin/vehicle-extras'),
-        api('/admin/distance-pricing')
-      ])
-      categories.value = sortByOrder(categoryResult.data)
-      vehicles.value = sortByOrder(vehicleResult.data)
-      extras.value = sortByOrder(extraResult.data)
-      distancePricing.value = sortByOrder(pricingResult.data)
+      await loadVehicleResources({ api, categories, vehicles, extras, distancePricing, sortByOrder })
     }
-    if (requestedView === 'route-pricing') { categories.value = (await api('/admin/vehicle-categories')).data; routeMinimumFares.value = (await api('/admin/route-minimum-fares')).data }
+    if (requestedView === 'route-pricing') await loadRoutePricingResources({ api, categories, routeMinimumFares })
   }
   catch (e) { error.value = displayError(e); if (e.message.includes('session')) { token.value = ''; localStorage.removeItem('admin_token') } }
   finally {
