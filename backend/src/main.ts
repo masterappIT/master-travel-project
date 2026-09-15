@@ -31,6 +31,8 @@ type AddressRegion = '大陸' | '香港' | '澳門'
 interface RecommendedAddress { id: string; region: AddressRegion; city: string | null; name: string; address: string; latitude: number | null; longitude: number | null; enabled: boolean; order: number }
 interface MainlandCity { id: string; name: string; enabled: boolean; order: number }
 interface CharterOrder { id: string; userId: string; originRegion: string; origin: string; destinationRegion: string; destination: string; scheduledAt: string; durationHours: number; status: string; createdAt: string }
+interface FlightAirport { iata: string; name: string; city: string; latitude: number | null; longitude: number | null }
+interface FlightLookupResult { flightNumber: string; direction: 'arrival' | 'departure'; status: string; scheduledTime: string; origin: FlightAirport; destination: FlightAirport }
 interface VehicleCategory { id: string; name: string; tabLabel: string; order: number; enabled: boolean }
 interface VehicleCatalogItem { id: string; categoryId: string | null; brand: string; model: string; series: string; seats: number; image: string; colorLabel: string; modelChoiceLabel: string; enabled: boolean; order: number }
 type VehicleExtraTriggerType = 'NONE' | 'IMMEDIATE' | 'NIGHT' | 'WEATHER'
@@ -2132,6 +2134,56 @@ class LocationController {
       throw new HttpException(data.info || 'Unable to query AMap', HttpStatus.BAD_GATEWAY)
     }
     return data
+  }
+
+  @Get('flight-information/lookup')
+  async lookupFlight(@Req() req: RequestLike) {
+    const flightNumber = (req.query?.flightNumber || '').replace(/\s+/g, '').toUpperCase()
+    const date = req.query?.date || ''
+    if (!/^[A-Z0-9]{2,8}$/.test(flightNumber) || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      throw new HttpException('Valid flightNumber and date are required', HttpStatus.BAD_REQUEST)
+    }
+    const fetchDirection = async (arrival: boolean) => {
+      const url = `https://www.hongkongairport.com/flightinfo-rest/rest/flights/past?date=${encodeURIComponent(date)}&lang=en&cargo=false&arrival=${arrival}`
+      const response = await fetch(url)
+      if (!response.ok) throw new HttpException('Unable to query HKIA flight information', HttpStatus.BAD_GATEWAY)
+      return await response.json() as Array<{ date?: string; arrival?: boolean; list?: Array<{ time?: string; status?: string; flight?: Array<{ no?: string }>; origin?: string[]; destination?: string[] }> }>
+    }
+    const [arrivals, departures] = await Promise.all([fetchDirection(true), fetchDirection(false)])
+    const matches: Array<{ direction: 'arrival' | 'departure'; item: NonNullable<typeof arrivals[number]['list']>[number] }> = []
+    for (const day of arrivals) for (const item of day.list || []) if ((item.flight || []).some(flight => (flight.no || '').replace(/\s+/g, '').toUpperCase() === flightNumber)) matches.push({ direction: 'arrival', item })
+    for (const day of departures) for (const item of day.list || []) if ((item.flight || []).some(flight => (flight.no || '').replace(/\s+/g, '').toUpperCase() === flightNumber)) matches.push({ direction: 'departure', item })
+    if (matches.length === 0) throw new HttpException('找不到指定日期的航班', HttpStatus.NOT_FOUND)
+    if (matches.length > 1) throw new HttpException('航班資料有多個匹配結果，請確認航班方向', HttpStatus.CONFLICT)
+    const match = matches[0]
+    const code = match.direction === 'arrival' ? match.item.origin?.[0] : match.item.destination?.[0]
+    if (!code) throw new HttpException('航班機場資料不完整', HttpStatus.BAD_GATEWAY)
+    const airportMetadata: Record<string, Omit<FlightAirport, 'iata'>> = {
+      HKG: { name: '香港國際機場', city: '香港', latitude: 22.308, longitude: 113.9185 },
+      SHA: { name: '上海虹橋國際機場', city: '上海', latitude: 31.1979, longitude: 121.3363 },
+      PVG: { name: '上海浦東國際機場', city: '上海', latitude: 31.1443, longitude: 121.8083 },
+      PKX: { name: '北京大興國際機場', city: '北京', latitude: 39.5098, longitude: 116.4105 },
+      CAN: { name: '廣州白雲國際機場', city: '廣州', latitude: 23.3924, longitude: 113.2988 },
+      SZX: { name: '深圳寶安國際機場', city: '深圳', latitude: 22.6393, longitude: 113.8107 },
+      MFM: { name: '澳門國際機場', city: '澳門', latitude: 22.1496, longitude: 113.5916 },
+      TPE: { name: '桃園國際機場', city: '桃園', latitude: 25.0797, longitude: 121.2342 },
+      ICN: { name: '仁川國際機場', city: '首爾', latitude: 37.4602, longitude: 126.4407 },
+      NRT: { name: '成田國際機場', city: '東京', latitude: 35.772, longitude: 140.3929 },
+      KIX: { name: '關西國際機場', city: '大阪', latitude: 34.4347, longitude: 135.244 },
+      SIN: { name: '新加坡樟宜機場', city: '新加坡', latitude: 1.3644, longitude: 103.9915 },
+      BKK: { name: '蘇凡納布國際機場', city: '曼谷', latitude: 13.6900, longitude: 100.7501 },
+      MNL: { name: '尼諾伊·阿基諾國際機場', city: '馬尼拉', latitude: 14.5086, longitude: 121.0198 },
+      CDG: { name: '巴黎戴高樂機場', city: '巴黎', latitude: 49.0097, longitude: 2.5479 },
+      LAX: { name: '洛杉磯國際機場', city: '洛杉磯', latitude: 33.9416, longitude: -118.4085 },
+      SYD: { name: '悉尼機場', city: '悉尼', latitude: -33.9399, longitude: 151.1753 }
+    }
+    const airport = (iata: string): FlightAirport => ({
+      iata,
+      ...(airportMetadata[iata] || { name: iata, city: iata, latitude: null, longitude: null })
+    })
+    const origin = match.direction === 'arrival' ? airport(code) : airport('HKG')
+    const destination = match.direction === 'arrival' ? airport('HKG') : airport(code)
+    return { flightNumber, direction: match.direction, status: match.item.status || '', scheduledTime: match.item.time || '', origin, destination }
   }
 
   @Get('reverse-geocode')

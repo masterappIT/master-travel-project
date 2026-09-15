@@ -215,6 +215,32 @@ export async function planDrivingRoute(origin: Coordinate, destination: Coordina
   return response.data as DrivingRoute
 }
 
+export type FlightAirport = {
+  iata: string
+  name: string
+  city: string
+  latitude: number | null
+  longitude: number | null
+}
+
+export type FlightLookupResult = {
+  flightNumber: string
+  direction: 'arrival' | 'departure'
+  status: string
+  scheduledTime: string
+  origin: FlightAirport
+  destination: FlightAirport
+}
+
+export async function lookupFlight(flightNumber: string, date: string): Promise<FlightLookupResult> {
+  const response = await uni.request({
+    url: `${API_BASE_URL}/location/flight-information/lookup`,
+    data: { flightNumber, date }
+  })
+  if (response.statusCode >= 400) throw apiError(response, '航班資料暫時無法取得')
+  return response.data as FlightLookupResult
+}
+
 export type PublicVehicleCategory = { id: string; name: string; tabLabel: string; order: number; enabled: boolean }
 export type PublicVehicle = {
   id: string

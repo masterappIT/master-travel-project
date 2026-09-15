@@ -15,6 +15,11 @@ export interface TripRoute {
   originCity?: string
   destinationRegion?: string
   destinationCity?: string
+  flightNumber?: string
+  flightDirection?: 'arrival' | 'departure'
+  flightStatus?: string
+  originAirportIata?: string
+  destinationAirportIata?: string
 }
 
 export interface FareBreakdown {

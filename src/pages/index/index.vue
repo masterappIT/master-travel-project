@@ -15,7 +15,7 @@
           @origin="chooseOrigin"
           @destination="chooseDestination"
           @departure-time="chooseDepartureTime"
-          @update:flight-number="flightNumber = $event"
+          @update:flight-number="handleFlightNumberInput"
         />
         <view v-if="origin || destination" class="accessible-values">{{ [origin, destination].filter(Boolean).join(' · ') }}</view>
         <AddressPicker
@@ -32,13 +32,41 @@
         />
         <!-- #ifdef H5 -->
         <Teleport to="body">
-          <BookingTimePicker v-if="bookingTimePicker" @close="bookingTimePicker = false" @confirm="confirmDepartureTime" />
+           <BookingTimePicker v-if="bookingTimePicker" @close="bookingTimePicker = false" @confirm="confirmDepartureTime" />
         </Teleport>
         <!-- #endif -->
         <!-- #ifndef H5 -->
         <BookingTimePicker v-if="bookingTimePicker" @close="bookingTimePicker = false" @confirm="confirmDepartureTime" />
         <!-- #endif -->
-      </view>
+       <view v-if="flightLookup" class="flight-modal" role="dialog" aria-label="航班資訊確認">
+         <view class="flight-modal-mask" @tap="closeFlightLookup" />
+         <view class="flight-modal-card">
+           <view class="flight-modal-title">航班資訊</view>
+           <view class="flight-modal-number">{{ flightLookup.flightNumber }}</view>
+           <view class="flight-modal-status">{{ flightLookup.status || '航班資料已更新' }} · {{ flightLookup.scheduledTime }}</view>
+           <view class="flight-modal-route">
+             <view class="flight-modal-airport">
+               <text class="flight-modal-label">出發地</text>
+               <text class="flight-modal-iata">{{ flightLookup.origin.iata }}</text>
+               <text>{{ airportSummary(flightLookup.origin) }}</text>
+             </view>
+             <text class="flight-modal-arrow">→</text>
+             <view class="flight-modal-airport flight-modal-airport--right">
+               <text class="flight-modal-label">到達地</text>
+               <text class="flight-modal-iata">{{ flightLookup.destination.iata }}</text>
+               <text>{{ airportSummary(flightLookup.destination) }}</text>
+             </view>
+           </view>
+           <view class="flight-modal-question">請選擇接送方向</view>
+           <view v-if="!canGoToAirport" class="flight-modal-notice">航班出發機場不在廣東省、香港或澳門服務範圍，只能選擇從航班到達機場出發</view>
+           <view class="flight-modal-actions">
+             <button class="flight-modal-action" :class="{ 'flight-modal-action--disabled': !canGoToAirport }" :disabled="!canGoToAirport" @tap="confirmFlightDirection('to-airport')">去機場</button>
+             <button class="flight-modal-action flight-modal-action--primary" @tap="confirmFlightDirection('from-airport')">從機場出發</button>
+           </view>
+           <text class="flight-modal-cancel" @tap="closeFlightLookup">返回修改</text>
+         </view>
+       </view>
+     </view>
     </view>
     <template v-else>
       <HomeTravelModeSwitch :mode="rideMode" layout="business" @update:mode="switchRideMode" />
@@ -137,7 +165,7 @@ import HomeBottomNav from '../../components/home/HomeBottomNav.vue'
 import AddressPicker from '../../components/home/AddressPicker.vue'
 import BookingTimePicker from '../../components/home/BookingTimePicker.vue'
 import { activateEmbeddedPageHost, cachedPagePath, visitedPages, openCachedPage } from '../../utils/navigation'
-import { planDrivingRoute, reverseGeocode, type Coordinate } from '../../services/api'
+import { planDrivingRoute, reverseGeocode, lookupFlight, type Coordinate, type FlightLookupResult } from '../../services/api'
 import { findLocalRegion } from '../../utils/localRegions'
 
 // #ifdef H5 || MP-WEIXIN || MP-TOUTIAO
@@ -220,6 +248,7 @@ const initialBusinessOrigin: BusinessLocation = { region: '香港', place: '香�
 const initialBusinessDestination: BusinessLocation = { region: '大陸', place: '' }
 const departureTime = ref('')
 const flightNumber = ref('')
+const flightLookup = ref<FlightLookupResult | null>(null)
 const mapLatitude = ref(22.3046)
 const mapLongitude = ref(114.1619)
 const mapScale = ref(13)
@@ -426,19 +455,149 @@ const selectCurrentLocation = () => {
   }
   addressPicker.value = null
 }
+const handleFlightNumberInput = (value: string) => {
+  flightNumber.value = value
+  if (travelMode.value !== 'airport' || value.length < 3) return
+  void lookupFlightForDate(value)
+}
+const lookupFlightForDate = async (value: string) => {
+  const date = new Date().toISOString().slice(0, 10)
+  try {
+    const result = await lookupFlight(value, date)
+    if (value !== flightNumber.value) return
+    flightLookup.value = result
+    if (result.scheduledTime) departureTime.value = `${date}T${result.scheduledTime}:00`
+  } catch (error) {
+    if (value === flightNumber.value) flightLookup.value = null
+  }
+}
 const chooseDepartureTime = () => { bookingTimePicker.value = true }
-const confirmDepartureTime = (value: string) => {
-  if (travelMode.value === 'airport' && !flightNumber.value.trim()) {
-    uni.showToast({ title: '請先填寫航班號', icon: 'none' })
+const airportDisplayMetadata: Record<string, { city: string; name: string }> = {
+  PKX: { city: '北京', name: '北京大興國際機場' },
+  HKG: { city: '香港', name: '香港國際機場' },
+  CAN: { city: '廣州', name: '廣州白雲國際機場' },
+  SZX: { city: '深圳', name: '深圳寶安國際機場' },
+  MFM: { city: '澳門', name: '澳門國際機場' }
+}
+const airportDisplay = (airport: FlightLookupResult['origin']) => {
+  const fallback = airportDisplayMetadata[airport.iata]
+  return {
+    city: airport.city === airport.iata ? (fallback?.city || airport.city) : airport.city,
+    name: airport.name === airport.iata ? (fallback?.name || airport.name) : airport.name
+  }
+}
+const airportSummary = (airport: FlightLookupResult['origin']) => {
+  const display = airportDisplay(airport)
+  return `${display.city} · ${display.name}`
+}
+const applyFlightLookup = (result: FlightLookupResult) => {
+  const airportSelection = (airport: FlightLookupResult['origin']): AddressSelection => {
+    const detectedRegion = airport.latitude !== null && airport.longitude !== null
+      ? findLocalRegion(airport.latitude, airport.longitude)?.region
+      : undefined
+    const localRegion: AddressSelection['region'] = detectedRegion === '香港'
+      ? '香港'
+      : detectedRegion === '澳門'
+        ? '澳門'
+        : detectedRegion === '中國內地'
+          ? '大陸'
+          : null
+    return {
+      region: localRegion as AddressSelection['region'],
+      name: airport.name === airport.iata ? (airportDisplayMetadata[airport.iata]?.name || airport.name) : airport.name,
+      address: airportSummary(airport),
+      city: airport.city === airport.iata ? (airportDisplayMetadata[airport.iata]?.city || airport.city) : airport.city,
+      latitude: airport.latitude ?? undefined,
+      longitude: airport.longitude ?? undefined
+    }
+  }
+  const nextOrigin = airportSelection(result.origin)
+  const nextDestination = airportSelection(result.destination)
+  originSelection.value = nextOrigin
+  destinationSelection.value = nextDestination
+  origin.value = `${nextOrigin.city} · ${nextOrigin.name}`
+  destination.value = `${nextDestination.city} · ${nextDestination.name}`
+  selectedCoordinates.value.origin = nextOrigin.latitude !== undefined && nextOrigin.longitude !== undefined ? { latitude: nextOrigin.latitude, longitude: nextOrigin.longitude } : undefined
+  selectedCoordinates.value.destination = nextDestination.latitude !== undefined && nextDestination.longitude !== undefined ? { latitude: nextDestination.latitude, longitude: nextDestination.longitude } : undefined
+  tripStore.setRoute(origin.value, destination.value, {
+    originRegion: nextOrigin.region || undefined,
+    originCity: nextOrigin.city,
+    destinationRegion: nextDestination.region || undefined,
+    destinationCity: nextDestination.city,
+    originLatitude: nextOrigin.latitude,
+    originLongitude: nextOrigin.longitude,
+    destinationLatitude: nextDestination.latitude,
+    destinationLongitude: nextDestination.longitude
+  })
+  tripStore.updateActiveDraft({ route: { ...tripStore.activeDraft.route, flightNumber: result.flightNumber, flightDirection: result.direction, flightStatus: result.status, originAirportIata: result.origin.iata, destinationAirportIata: result.destination.iata } })
+}
+const canGoToAirport = computed(() => {
+  const departureAirport = flightLookup.value?.origin
+  if (!departureAirport || departureAirport.latitude === null || departureAirport.longitude === null) return false
+  return Boolean(findLocalRegion(departureAirport.latitude, departureAirport.longitude))
+})
+const closeFlightLookup = () => { flightLookup.value = null }
+const confirmFlightDirection = (direction: 'to-airport' | 'from-airport') => {
+  if (!flightLookup.value) return
+  if (direction === 'to-airport' && !canGoToAirport.value) {
+    uni.showToast({ title: '目前出發地不在服務範圍，只能選擇從機場出發', icon: 'none' })
     return
   }
+  const result = flightLookup.value
+  const airport = direction === 'to-airport' ? result.origin : result.destination
+  const selection = (value: FlightLookupResult['origin']): AddressSelection => {
+    const detectedRegion = value.latitude !== null && value.longitude !== null ? findLocalRegion(value.latitude, value.longitude)?.region : undefined
+    const region: AddressSelection['region'] = detectedRegion === '香港' ? '香港' : detectedRegion === '澳門' ? '澳門' : detectedRegion === '中國內地' ? '大陸' : null
+    return { region, name: value.name === value.iata ? (airportDisplayMetadata[value.iata]?.name || value.name) : value.name, address: airportSummary(value), city: value.city === value.iata ? (airportDisplayMetadata[value.iata]?.city || value.city) : value.city, latitude: value.latitude ?? undefined, longitude: value.longitude ?? undefined }
+  }
+  const airportValue = selection(airport)
+  if (direction === 'to-airport') {
+    destinationSelection.value = airportValue
+    destination.value = airportValue.address
+    selectedCoordinates.value.destination = airportValue.latitude !== undefined && airportValue.longitude !== undefined ? { latitude: airportValue.latitude, longitude: airportValue.longitude } : undefined
+    originSelection.value = null
+    origin.value = ''
+    originIsCurrent.value = false
+    departureTime.value = ''
+    selectedCoordinates.value.origin = undefined
+  } else {
+    originSelection.value = airportValue
+    origin.value = airportValue.address
+    destinationSelection.value = null
+    destination.value = ''
+    departureTime.value = ''
+    selectedCoordinates.value.origin = airportValue.latitude !== undefined && airportValue.longitude !== undefined ? { latitude: airportValue.latitude, longitude: airportValue.longitude } : undefined
+    selectedCoordinates.value.destination = undefined
+  }
+  tripStore.updateActiveDraft({ route: { ...tripStore.activeDraft.route, flightNumber: result.flightNumber, flightDirection: result.direction, flightStatus: result.status, originAirportIata: result.origin.iata, destinationAirportIata: result.destination.iata } })
+  closeFlightLookup()
+  bookingTimePicker.value = false
+  if (direction === 'from-airport') {
+    uni.showToast({ title: '請選擇目的地及預約時間', icon: 'none' })
+    return
+  }
+  uni.showToast({ title: '已定位目的地機場，請填寫出發地及預約時間', icon: 'none' })
+}
+const confirmDepartureTime = async (value: string) => {
   departureTime.value = value
-  tripStore.setRoute(origin.value, destination.value)
+  tripStore.setRoute(origin.value, destination.value, {
+    originRegion: originSelection.value?.region || undefined,
+    originCity: originSelection.value?.city || undefined,
+    destinationRegion: destinationSelection.value?.region || undefined,
+    destinationCity: destinationSelection.value?.city || undefined,
+    originLatitude: selectedCoordinates.value.origin?.latitude,
+    originLongitude: selectedCoordinates.value.origin?.longitude,
+    destinationLatitude: selectedCoordinates.value.destination?.latitude,
+    destinationLongitude: selectedCoordinates.value.destination?.longitude
+  })
   tripStore.setDepartureTime(value)
   bookingTimePicker.value = false
+  if (travelMode.value === 'airport' && (!origin.value || !destination.value)) {
+    uni.showToast({ title: '請先填寫出發地及目的地', icon: 'none' })
+    return
+  }
   openCachedPage('/pages/vehicles/select')
 }
-
 const handleMapLocation = () => {
   const destinationCoordinate = selectedCoordinates.value.destination
   if (mapPolyline.value.length > 0 && destinationCoordinate) {
@@ -560,8 +719,8 @@ const showComingSoon = (name: string) => uni.showToast({ title: `${name}功能�
 </script>
 
 <style scoped>
-:global(html),:global(body),:global(#app){width:100%;min-width:0;height:100%;margin:0;overflow:hidden;overscroll-behavior:none}.page{position:fixed;top:0;left:0;width:430px;height:var(--mobile-height, 932px);min-height:0;margin:0;overflow:hidden;background:#fff;border-radius:35px;box-sizing:border-box;color:#38434a;font-family:'Noto Sans TC',sans-serif;transform:scale(var(--mobile-scale, 1));transform-origin:top left center}.page-content{position:absolute;inset:0;width:430px;height:932px}.canvas{position:relative;width:430px;height:932px;min-height:932px}.nav-layer{position:absolute;inset:0;z-index:10;pointer-events:none}.nav-layer :deep(.bottom-nav){pointer-events:auto}.accessible-values{position:absolute;width:1px;height:1px;overflow:hidden;opacity:0}
-@media (max-width:599px){.page{top:0;left:0;height:var(--mobile-height,100dvh);border-radius:0;transform:scale(var(--mobile-scale, 1));transform-origin:top left}.page-content{bottom:102px;height:auto;overflow:hidden}.canvas{height:100%;min-height:0}.canvas :deep(.map-layer){bottom:205px;height:auto}.canvas :deep(.map-tool){top:auto;bottom:245px}.canvas :deep(.route-panel){top:auto;bottom:-87px;width:430px;height:331px}.canvas :deep(.panel-surface){top:0;bottom:auto;width:430px;height:331px}.business-scroll{height:auto;bottom:102px}.nav-layer :deep(.bottom-nav){bottom:0}}
+:global(html),:global(body),:global(#app){width:100%;min-width:0;height:100%;margin:0;overflow:hidden;overscroll-behavior:none}.page{position:fixed;top:0;left:0;width:430px;height:var(--mobile-height, 932px);min-height:0;margin:0;overflow:hidden;background:#fff;border-radius:35px;box-sizing:border-box;color:#38434a;font-family:'Noto Sans TC',sans-serif;transform:scale(var(--mobile-scale, 1));transform-origin:top left center}.page-content{position:absolute;inset:0;width:430px;height:932px}.canvas{position:relative;width:430px;height:932px;min-height:932px}.nav-layer{position:absolute;inset:0;z-index:10;pointer-events:none}.nav-layer :deep(.bottom-nav){pointer-events:auto} .flight-modal{position:fixed;inset:0;z-index:1000;display:flex;align-items:flex-end;justify-content:center}.flight-modal-mask{position:absolute;inset:0;background:rgba(29,38,43,.42)}.flight-modal-card{position:relative;width:min(430px,100%);padding:28px 24px calc(24px + env(safe-area-inset-bottom));box-sizing:border-box;border-radius:28px 28px 0 0;background:#fff;color:#38434a;box-shadow:0 -8px 30px rgba(28,39,45,.16);text-align:center}.flight-modal-title{font-size:15px;font-weight:600;color:#778187}.flight-modal-number{margin-top:7px;font-size:28px;font-weight:700;letter-spacing:1px}.flight-modal-status{margin-top:5px;font-size:13px;color:#8a9499}.flight-modal-route{display:flex;align-items:center;gap:12px;margin:24px 0;padding:16px 12px;border-radius:16px;background:#f5f8f9}.flight-modal-airport{display:flex;flex:1;min-width:0;flex-direction:column;gap:5px;text-align:left;font-size:12px;color:#79858b}.flight-modal-airport--right{text-align:right}.flight-modal-label{font-size:12px;font-weight:600;color:#5ab8a5}.flight-modal-iata{font-size:22px;font-weight:700;color:#38434a}.flight-modal-arrow{font-size:24px;color:#9aa6aa}.flight-modal-question{margin-bottom:14px;font-size:15px;font-weight:600}.flight-modal-actions{display:flex;gap:12px}.flight-modal-notice{margin:0 0 14px;padding:10px 12px;border-radius:10px;background:#fff7e6;color:#b06a00;font-size:13px;line-height:1.5}.flight-modal-action{flex:1;height:48px;margin:0;border:1px solid #d8e0e3;border-radius:14px;background:#fff;color:#526168;font-size:15px;line-height:48px}.flight-modal-action--disabled{border-color:#e3e7e8;background:#f1f3f4;color:#aeb7ba;opacity:1}.flight-modal-action--primary{border-color:#5ab8a5;background:#5ab8a5;color:#fff}.flight-modal-cancel{display:block;margin-top:17px;font-size:13px;color:#9aa4a8}
+@media (max-width:599px){.page{top:0;left:0;height:var(--mobile-height,100dvh);border-radius:0;transform:scale(var(--mobile-scale, 1));transform-origin:top left}.page-content{bottom:102px;height:auto}.canvas{height:100%;min-height:0}.canvas :deep(.map-layer){bottom:205px;height:auto}.canvas :deep(.map-tool){top:auto;bottom:245px}.canvas :deep(.route-panel){top:auto;bottom:-87px;width:430px;height:331px}.canvas :deep(.panel-surface){top:0;bottom:auto;width:430px;height:331px}.business-scroll{height:auto;bottom:102px}.nav-layer :deep(.bottom-nav){bottom:0}}
 /* #ifdef APP-PLUS */
 .page{top:50%;left:50%;width:430px;height:932px;border-radius:35px;transform:translate(-50%,-50%) scale(min(1,calc(100vw / 430px),calc(100dvh / 932px)));transform-origin:center center}.page-content{inset:0;width:430px;height:932px}.canvas{width:430px;height:932px;min-height:932px}.canvas :deep(.route-panel){top:586px;bottom:auto;width:430px;height:331px}.canvas :deep(.panel-surface){top:auto;bottom:0;width:430px;height:331px}.nav-layer :deep(.bottom-nav){bottom:0}
 /* #endif */
