@@ -84,7 +84,8 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
               ),
             )
           else if (_error != null)
-            Center(child: Padding(
+            Center(
+                child: Padding(
               padding: EdgeInsets.symmetric(vertical: DriverSpacing.xl),
               child: Text(_error!),
             ))
@@ -126,7 +127,7 @@ class _Header extends StatelessWidget {
   Widget build(BuildContext context) => Row(
         children: [
           Material(
-            color: Colors.white,
+            color: DriverColors.surface,
             borderRadius: BorderRadius.circular(18),
             child: InkWell(
               onTap: onBack,
@@ -187,7 +188,7 @@ class _HistoryTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Material(
-        color: Colors.white,
+        color: DriverColors.surface,
         borderRadius: BorderRadius.circular(DriverRadii.input),
         child: InkWell(
           onTap: onTap,
@@ -235,7 +236,7 @@ class _HistoryCard extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-            color: Colors.white,
+            color: DriverColors.surface,
             border: Border.all(color: DriverColors.border),
             borderRadius: BorderRadius.circular(DriverRadii.card)),
         child: Column(

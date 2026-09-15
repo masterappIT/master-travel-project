@@ -134,7 +134,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
 ButtonStyle _secondaryButtonStyle() => OutlinedButton.styleFrom(
       minimumSize: const Size.fromHeight(56),
       foregroundColor: DriverColors.text,
-      backgroundColor: Colors.white,
+      backgroundColor: DriverColors.surface,
       side: const BorderSide(color: DriverColors.divider),
       shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(DriverRadii.card)),
@@ -144,7 +144,7 @@ ButtonStyle _secondaryButtonStyle() => OutlinedButton.styleFrom(
 
 ButtonStyle _primaryButtonStyle() => ElevatedButton.styleFrom(
       minimumSize: const Size.fromHeight(56),
-      foregroundColor: Colors.white,
+      foregroundColor: DriverColors.surface,
       backgroundColor: DriverColors.activeBlue,
       elevation: 0,
       shape: RoundedRectangleBorder(
@@ -163,7 +163,7 @@ class _MapPreview extends StatelessWidget {
             borderRadius: BorderRadius.circular(DriverRadii.card),
             boxShadow: const [
               BoxShadow(
-                  color: Color(0x1a000000),
+                  color: Color(0x1f38434a),
                   blurRadius: 24,
                   offset: Offset(0, 8))
             ]),
@@ -179,7 +179,7 @@ class _MapPreview extends StatelessWidget {
                 style: TextStyle(
                     fontSize: DriverTypography.bodyLarge,
                     fontWeight: FontWeight.w700,
-                    color: Colors.white))
+                    color: DriverColors.surface))
           ])),
           Positioned(top: 16, left: 16, child: _MapLabel('起點')),
           Positioned(top: 16, right: 16, child: _MapLabel('終點')),
@@ -198,7 +198,8 @@ class _MapLabel extends StatelessWidget {
           borderRadius: BorderRadius.circular(DriverRadii.pill)),
       child: Text(label,
           style: const TextStyle(
-              fontSize: DriverTypography.caption, color: Colors.white)));
+              fontSize: DriverTypography.caption,
+              color: DriverColors.surface)));
 }
 
 class _OrderInfoCard extends StatelessWidget {
@@ -207,12 +208,12 @@ class _OrderInfoCard extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-            color: Colors.white,
+            color: DriverColors.surface,
             border: Border.all(color: DriverColors.divider),
             borderRadius: BorderRadius.circular(DriverRadii.card),
             boxShadow: const [
               BoxShadow(
-                  color: Color(0x0a000000), blurRadius: 4, offset: Offset(0, 2))
+                  color: Color(0x1238434a), blurRadius: 4, offset: Offset(0, 2))
             ]),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(
@@ -316,7 +317,7 @@ class _VehicleCard extends StatelessWidget {
             height: 116,
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-                color: Colors.white,
+                color: DriverColors.surface,
                 border: Border.all(
                     color: selected
                         ? DriverColors.activeBlue
@@ -369,7 +370,9 @@ class _VehicleCard extends StatelessWidget {
                       width: 20,
                       height: 20,
                       decoration: BoxDecoration(
-                          color: selected ? DriverColors.primary : Colors.white,
+                          color: selected
+                              ? DriverColors.primary
+                              : DriverColors.surface,
                           border: selected
                               ? null
                               : Border.all(color: DriverColors.border),

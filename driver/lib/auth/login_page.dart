@@ -30,25 +30,6 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
-  Future<void> _testLogin() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    try {
-      final result = await _api.requestPhoneCode(
-          countryCode: '+852', phoneNumber: '99998880');
-      await _api.verifyPhoneCode(
-          challengeId: result['challengeId'] as String, code: '0000');
-      if (!mounted) return;
-      DriverNavigation.replace(context, DriverRouteNames.home);
-    } on DriverApiException catch (error) {
-      if (mounted) setState(() => _error = error.message);
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
   Future<void> _requestCode() async {
     final phone = _phoneController.text.trim();
     if (phone.isEmpty) {
@@ -125,14 +106,6 @@ class _LoginPageState extends State<LoginPage> {
                       Text(_error!,
                           style: const TextStyle(color: Colors.red),
                           textAlign: TextAlign.center),
-                    ],
-                    if (_testLoginEnabled) ...[
-                      const SizedBox(height: DriverSpacing.md),
-                      _PrimaryButton(
-                          label: '測試登入（跳過驗證碼）',
-                          fontSize: DriverTypography.body,
-                          fullWidth: true,
-                          onPressed: _loading ? null : _testLogin),
                     ],
                     const SizedBox(height: DriverSpacing.xl),
                     _ActionCard(onLogin: _verify, loading: _loading),
@@ -231,7 +204,7 @@ class _VerificationCard extends StatelessWidget {
                   child: TextField(
                       controller: codeController,
                       keyboardType: TextInputType.number,
-                      decoration: _inputDecoration('請輸入 6 位數簡訊驗證碼')));
+                      decoration: _inputDecoration('請輸入 5 位數簡訊驗證碼')));
               final compact = constraints.maxWidth < 350;
               final button = _PrimaryButton(
                   label: loading ? '處理中' : '獲取驗證碼',
@@ -325,13 +298,10 @@ class _Card extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-            color: Colors.white,
+            color: DriverColors.surface,
             border: Border.all(color: DriverColors.divider),
             borderRadius: BorderRadius.circular(DriverRadii.card),
-            boxShadow: const [
-              BoxShadow(
-                  color: Color(0x0a000000), blurRadius: 4, offset: Offset(0, 2))
-            ]),
+            boxShadow: DriverShadows.card),
         child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch, children: children),
       );
@@ -365,9 +335,9 @@ class _PrimaryButton extends StatelessWidget {
         child: ElevatedButton(
           onPressed: onPressed ?? () {},
           style: ElevatedButton.styleFrom(
-            backgroundColor: DriverColors.activeBlue,
-            foregroundColor: Colors.white,
-            elevation: 8,
+            backgroundColor: DriverColors.primary,
+            foregroundColor: DriverColors.onPrimary,
+            elevation: 2,
             shadowColor: const Color(0x33285cfc),
             shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(DriverRadii.card)),
@@ -398,7 +368,7 @@ class _SocialButton extends StatelessWidget {
           onPressed: onPressed,
           style: ElevatedButton.styleFrom(
             backgroundColor: color,
-            foregroundColor: Colors.white,
+            foregroundColor: DriverColors.surface,
             elevation: 0,
             shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(DriverRadii.card)),
@@ -420,7 +390,7 @@ class _SocialButton extends StatelessWidget {
 }
 
 BoxDecoration _fieldDecoration() => BoxDecoration(
-    color: Colors.white,
+    color: DriverColors.surface,
     border: Border.all(color: DriverColors.border),
     borderRadius: BorderRadius.circular(DriverRadii.input));
 

@@ -143,7 +143,7 @@ class _RouteText extends StatelessWidget {
               style: TextStyle(
                   fontSize: DriverTypography.bodyLarge,
                   fontWeight: FontWeight.w700,
-                  color: Colors.white)),
+                  color: DriverColors.surface)),
         ]),
         const SizedBox(height: DriverSpacing.xs),
         const Text('│',
@@ -158,7 +158,7 @@ class _RouteText extends StatelessWidget {
               style: TextStyle(
                   fontSize: DriverTypography.bodyLarge,
                   fontWeight: FontWeight.w700,
-                  color: Colors.white)),
+                  color: DriverColors.surface)),
         ]),
       ]);
 }
@@ -174,7 +174,8 @@ class _MapLabel extends StatelessWidget {
           borderRadius: BorderRadius.circular(DriverRadii.pill)),
       child: Text(label,
           style: const TextStyle(
-              fontSize: DriverTypography.caption, color: Colors.white)));
+              fontSize: DriverTypography.caption,
+              color: DriverColors.surface)));
 }
 
 class _PassengerCard extends StatelessWidget {
@@ -303,12 +304,12 @@ class _Panel extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         padding: EdgeInsets.all(padding),
         decoration: BoxDecoration(
-            color: Colors.white,
+            color: DriverColors.surface,
             border: Border.all(color: DriverColors.divider),
             borderRadius: BorderRadius.circular(DriverRadii.card),
             boxShadow: const [
               BoxShadow(
-                  color: Color(0x0a000000), blurRadius: 4, offset: Offset(0, 2))
+                  color: Color(0x1238434a), blurRadius: 4, offset: Offset(0, 2))
             ]),
         child:
             Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -323,7 +324,7 @@ class _Panel extends StatelessWidget {
 
 ButtonStyle _completeStyle() => ElevatedButton.styleFrom(
       minimumSize: const Size.fromHeight(56),
-      foregroundColor: Colors.white,
+      foregroundColor: DriverColors.surface,
       backgroundColor: DriverColors.activeBlue,
       elevation: 0,
       shape: RoundedRectangleBorder(

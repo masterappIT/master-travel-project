@@ -131,7 +131,8 @@ class _ProfilePageState extends State<ProfilePage> {
               ),
             )
           else if (_error != null)
-            Center(child: Padding(
+            Center(
+                child: Padding(
               padding: EdgeInsets.symmetric(vertical: DriverSpacing.xl),
               child: Text(_error!),
             ))
@@ -446,12 +447,12 @@ class _CardShell extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-            color: Colors.white,
+            color: DriverColors.surface,
             border: Border.all(color: DriverColors.divider),
             borderRadius: BorderRadius.circular(DriverRadii.card),
             boxShadow: const [
               BoxShadow(
-                  color: Color(0x0a000000), blurRadius: 4, offset: Offset(0, 2))
+                  color: Color(0x1238434a), blurRadius: 4, offset: Offset(0, 2))
             ]),
         child: child,
       );

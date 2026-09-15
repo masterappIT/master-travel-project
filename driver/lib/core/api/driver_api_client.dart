@@ -1,6 +1,9 @@
 import 'dart:convert';
+import 'dart:html' as html;
 
 import 'package:http/http.dart' as http;
+
+import '../state/driver_status.dart';
 
 class DriverApiException implements Exception {
   DriverApiException(this.statusCode, this.message);
@@ -37,13 +40,33 @@ class DriverApiClient {
 
   static final DriverApiClient instance = DriverApiClient();
 
+  static const _tokenStorageKey = 'driver_session_token';
+
   final String baseUrl;
   final http.Client _client;
-  String? token;
+  String? _token;
+
+  String? get token => _token;
+
+  Future<void> restoreSession() async {
+    final storedToken = html.window.localStorage[_tokenStorageKey];
+    if (storedToken == null || storedToken.isEmpty) return;
+    _token = storedToken;
+    try {
+      await me();
+    } on DriverApiException {
+      clearSession();
+    }
+  }
+
+  void clearSession() {
+    _token = null;
+    html.window.localStorage.remove(_tokenStorageKey);
+  }
 
   Map<String, String> get _headers => {
         'Content-Type': 'application/json',
-        if (token != null) 'Authorization': 'Bearer ' + token!,
+        if (_token != null) 'Authorization': 'Bearer ' + _token!,
       };
 
   Future<Map<String, dynamic>> requestPhoneCode(
@@ -60,15 +83,31 @@ class DriverApiClient {
         Uri.parse('$baseUrl/driver/auth/phone/verify'),
         headers: _headers,
         body: jsonEncode({'challengeId': challengeId, 'code': code}))));
-    token = session.token;
+    _token = session.token;
+    html.window.localStorage[_tokenStorageKey] = session.token;
     return session;
   }
 
-  Future<Map<String, dynamic>> me() async => _decode(await _client
-      .get(Uri.parse('$baseUrl/driver/auth/me'), headers: _headers));
-  Future<Map<String, dynamic>> updateStatus(bool isOnline) async =>
-      _decode(await _client.post(Uri.parse('$baseUrl/driver/auth/status'),
-          headers: _headers, body: jsonEncode({'isOnline': isOnline})));
+  Future<Map<String, dynamic>> me() async {
+    final result = _decode(await _client
+        .get(Uri.parse('$baseUrl/driver/auth/me'), headers: _headers));
+    final driver = result['driver'];
+    if (driver is Map && driver.containsKey('isOnline')) {
+      DriverStatusController.instance.isOnline.value =
+          driver['isOnline'] == true;
+    }
+    return result;
+  }
+
+  Future<Map<String, dynamic>> updateStatus(bool isOnline) async {
+    final result = _decode(await _client.post(
+        Uri.parse('$baseUrl/driver/auth/status'),
+        headers: _headers,
+        body: jsonEncode({'isOnline': isOnline})));
+    DriverStatusController.instance.isOnline.value = isOnline;
+    return result;
+  }
+
   Future<Map<String, dynamic>> updateProfile(
           Map<String, dynamic> fields) async =>
       _decode(await _client.patch(Uri.parse('$baseUrl/driver/auth/me'),
@@ -107,11 +146,11 @@ class DriverApiClient {
           headers: _headers));
 
   Future<void> logout() async {
-    if (token != null) {
+    if (_token != null) {
       await _client.post(Uri.parse('$baseUrl/driver/auth/logout'),
           headers: _headers);
     }
-    token = null;
+    clearSession();
   }
 
   Map<String, dynamic> _decode(http.Response response) {

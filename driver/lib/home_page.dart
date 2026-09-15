@@ -5,6 +5,7 @@ import 'app/route_names.dart';
 import 'core/api/driver_api_client.dart';
 import 'core/layout/driver_page_shell.dart';
 import 'core/navigation/driver_navigation.dart';
+import 'core/state/driver_status.dart';
 
 import 'package:driver_web/core/tokens/driver_tokens.dart';
 
@@ -36,6 +37,7 @@ class _HomePageState extends State<HomePage> {
       setState(() {
         _driver = driver;
         _isOnline = driver['isOnline'] == true;
+        DriverStatusController.instance.isOnline.value = _isOnline;
         _loading = false;
       });
     } on DriverApiException catch (error) {
@@ -51,6 +53,7 @@ class _HomePageState extends State<HomePage> {
   Future<void> _toggleOnline(bool value) async {
     final previous = _isOnline;
     setState(() => _isOnline = value);
+    DriverStatusController.instance.isOnline.value = value;
     try {
       final result = await _api.updateStatus(value);
       if (mounted) setState(() => _driver = Map<String, dynamic>.from(result));
@@ -58,6 +61,7 @@ class _HomePageState extends State<HomePage> {
       if (mounted) {
         setState(() {
           _isOnline = previous;
+          DriverStatusController.instance.isOnline.value = previous;
           _error = error.message;
         });
       }
@@ -160,7 +164,7 @@ class _ProfileHeader extends StatelessWidget {
                 height: 40,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: DriverColors.surface,
                     border: Border.all(color: DriverColors.divider),
                     borderRadius: BorderRadius.circular(20)),
                 child: SvgPicture.asset('assets/home-bell.svg',
@@ -184,15 +188,11 @@ class _StatusCard extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border.all(color: DriverColors.divider),
-              borderRadius: BorderRadius.circular(DriverRadii.card),
-              boxShadow: const [
-                BoxShadow(
-                    color: Color(0x0a000000),
-                    blurRadius: 4,
-                    offset: Offset(0, 2))
-              ]),
+            color: DriverColors.surface,
+            border: Border.all(color: DriverColors.divider),
+            borderRadius: BorderRadius.circular(DriverRadii.card),
+            boxShadow: DriverShadows.card,
+          ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -214,8 +214,16 @@ class _StatusCard extends StatelessWidget {
               Semantics(
                 toggled: isOnline,
                 label: '在線接單切換',
-                child: SvgPicture.asset('assets/home-toggle.svg',
-                    width: 52, height: 30),
+                child: Switch(
+                  value: isOnline,
+                  onChanged: onChanged,
+                  activeColor: DriverColors.onPrimary,
+                  activeTrackColor: DriverColors.primary,
+                  inactiveThumbColor: DriverColors.mutedText,
+                  inactiveTrackColor: DriverColors.divider,
+                  trackOutlineColor:
+                      WidgetStateProperty.all(DriverColors.border),
+                ),
               ),
             ],
           ),
@@ -452,12 +460,10 @@ class _Card extends StatelessWidget {
   Widget build(BuildContext context) => Container(
       padding: EdgeInsets.all(padding),
       decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border.all(color: DriverColors.divider),
-          borderRadius: BorderRadius.circular(DriverRadii.card),
-          boxShadow: const [
-            BoxShadow(
-                color: Color(0x0a000000), blurRadius: 4, offset: Offset(0, 2))
-          ]),
+        color: DriverColors.surface,
+        border: Border.all(color: DriverColors.divider),
+        borderRadius: BorderRadius.circular(DriverRadii.card),
+        boxShadow: DriverShadows.card,
+      ),
       child: child);
 }

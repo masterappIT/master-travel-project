@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 abstract final class DriverColors {
   static const background = Color(0xfff0f2f5);
+  static const surface = Color(0xffffffff);
+  static const elevatedSurface = Color(0xffffffff);
   static const text = Color(0xff1c1c2e);
   static const secondaryText = Color(0xff56657e);
   static const mutedText = Color(0xff80808c);
@@ -9,7 +11,10 @@ abstract final class DriverColors {
   static const border = Color(0xffd9d9d9);
   static const divider = Color(0xffe5e7eb);
   static const primary = Color(0xff4a6cf7);
+  static const primaryDark = Color(0xff285cfc);
+  static const onPrimary = Color(0xffffffff);
   static const activeBlue = Color(0xff285cfc);
+  static const accent = Color(0xff4cd964);
   static const success = Color(0xff4cd964);
   static const successBackground = Color(0xffebf9f1);
   static const warningBackground = Color(0xfffff5eb);
@@ -18,6 +23,24 @@ abstract final class DriverColors {
   static const darkGreen = Color(0xff2b7a42);
   static const navInactive = Color(0xff9999a1);
   static const navActive = Color(0xff295cfc);
+}
+
+abstract final class DriverShadows {
+  static const floating = [
+    BoxShadow(
+      color: Color(0x1f000000),
+      blurRadius: 24,
+      offset: Offset(0, 10),
+    ),
+  ];
+
+  static const card = [
+    BoxShadow(
+      color: Color(0x14000000),
+      blurRadius: 18,
+      offset: Offset(0, 8),
+    ),
+  ];
 }
 
 abstract final class DriverSpacing {

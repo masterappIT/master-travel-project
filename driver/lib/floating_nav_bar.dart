@@ -16,35 +16,31 @@ class FloatingNavBar extends StatelessWidget {
   final VoidCallback? onProfileTap;
 
   @override
-  Widget build(BuildContext context) => Material(
-        color: Colors.white,
-        elevation: 8,
-        shadowColor: const Color(0x1a000000),
-        borderRadius: BorderRadius.circular(30),
-        child: SizedBox(
-          height: 60,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _NavItem(
-                    label: '首頁',
-                    asset: 'assets/icon-home.svg',
-                    selected: selectedIndex == 0,
-                    onTap: onHomeTap),
-                _NavItem(
-                    label: '接單',
-                    selected: selectedIndex == 1,
-                    onTap: onOrderTap),
-                _NavItem(
-                    label: '我的',
-                    asset: 'assets/icon-person.svg',
-                    selected: selectedIndex == 2,
-                    onTap: onProfileTap),
-              ],
-            ),
-          ),
+  Widget build(BuildContext context) => Container(
+        height: 76,
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        decoration: BoxDecoration(
+          color: DriverColors.surface,
+          borderRadius: BorderRadius.circular(DriverRadii.card),
+          border: Border.all(color: DriverColors.divider),
+          boxShadow: DriverShadows.floating,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            _NavItem(
+                label: '首頁',
+                asset: 'assets/icon-home.svg',
+                selected: selectedIndex == 0,
+                onTap: onHomeTap),
+            _NavItem(
+                label: '接單', selected: selectedIndex == 1, onTap: onOrderTap),
+            _NavItem(
+                label: '我的',
+                asset: 'assets/icon-person.svg',
+                selected: selectedIndex == 2,
+                onTap: onProfileTap),
+          ],
         ),
       );
 }

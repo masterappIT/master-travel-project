@@ -113,7 +113,7 @@ class _DriverProfilePageState extends State<DriverProfilePage> {
             child: Row(
               children: [
                 Material(
-                  color: Colors.white,
+                  color: DriverColors.surface,
                   borderRadius: BorderRadius.circular(18),
                   child: InkWell(
                     onTap: () => Navigator.of(context).maybePop(),
@@ -234,7 +234,7 @@ class _DriverProfilePageState extends State<DriverProfilePage> {
                       onPressed: _isSaving ? null : _saveProfile,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: DriverColors.activeBlue,
-                        foregroundColor: Colors.white,
+                        foregroundColor: DriverColors.surface,
                       ),
                       child: Text(_isSaving ? '儲存中…' : '儲存'),
                     ),
@@ -306,12 +306,12 @@ class _SectionCard extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: DriverColors.surface,
           border: Border.all(color: DriverColors.divider),
           borderRadius: BorderRadius.circular(DriverRadii.card),
           boxShadow: const [
             BoxShadow(
-              color: Color(0x0a000000),
+              color: Color(0x1238434a),
               blurRadius: 4,
               offset: Offset(0, 2),
             ),
@@ -481,7 +481,7 @@ class _ProfilePhoneField extends StatelessWidget {
       );
 
   BoxDecoration _profileFieldDecoration() => BoxDecoration(
-        color: Colors.white,
+        color: DriverColors.surface,
         border: Border.all(color: DriverColors.border),
         borderRadius: BorderRadius.circular(DriverRadii.input),
       );

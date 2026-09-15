@@ -55,7 +55,7 @@ class VehiclePage extends StatelessWidget {
                 DriverNavigation.push(context, DriverRouteNames.addVehicle),
             style: OutlinedButton.styleFrom(
                 foregroundColor: DriverColors.activeBlue,
-                backgroundColor: Colors.white,
+                backgroundColor: DriverColors.surface,
                 side: const BorderSide(
                     color: DriverColors.activeBlue, width: 1.5),
                 shape: RoundedRectangleBorder(
@@ -79,7 +79,7 @@ class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Row(children: [
         Material(
-            color: Colors.white,
+            color: DriverColors.surface,
             borderRadius: BorderRadius.circular(18),
             child: InkWell(
                 onTap: onBack,
@@ -123,12 +123,12 @@ class _VehicleCard extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(DriverSpacing.lg),
           decoration: BoxDecoration(
-              color: Colors.white,
+              color: DriverColors.surface,
               border: Border.all(color: DriverColors.divider),
               borderRadius: BorderRadius.circular(DriverRadii.card),
               boxShadow: const [
                 BoxShadow(
-                    color: Color(0x0a000000),
+                    color: Color(0x1238434a),
                     blurRadius: 4,
                     offset: Offset(0, 2))
               ]),

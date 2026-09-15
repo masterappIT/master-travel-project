@@ -123,12 +123,12 @@ class _RegistrationCardState extends State<_RegistrationCard> {
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: DriverColors.surface,
           border: Border.all(color: DriverColors.divider),
           borderRadius: BorderRadius.circular(DriverRadii.card),
           boxShadow: const [
             BoxShadow(
-                color: Color(0x0a000000), blurRadius: 4, offset: Offset(0, 2))
+                color: Color(0x1238434a), blurRadius: 4, offset: Offset(0, 2))
           ],
         ),
         child: Column(
@@ -287,7 +287,8 @@ class _ChoiceChip extends StatelessWidget {
             style: TextStyle(
                 fontSize: DriverTypography.body,
                 fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
-                color: selected ? Colors.white : DriverColors.labelText)),
+                color:
+                    selected ? DriverColors.surface : DriverColors.labelText)),
       );
 }
 
@@ -530,7 +531,7 @@ class _VehiclePhotoSection extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
             decoration: BoxDecoration(
-                color: Colors.white,
+                color: DriverColors.surface,
                 border: Border.all(
                     color: DriverColors.primary, style: BorderStyle.none),
                 borderRadius: BorderRadius.circular(DriverRadii.input)),
@@ -601,7 +602,7 @@ InputDecoration _registrationInputDecoration({
       hintStyle:
           const TextStyle(fontSize: 15, color: DriverColors.secondaryText),
       filled: true,
-      fillColor: Colors.white,
+      fillColor: DriverColors.surface,
       contentPadding: contentPadding ??
           const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       border: OutlineInputBorder(
@@ -619,6 +620,6 @@ InputDecoration _registrationInputDecoration({
     );
 
 BoxDecoration _registrationFieldDecoration() => BoxDecoration(
-    color: Colors.white,
+    color: DriverColors.surface,
     border: Border.all(color: DriverColors.border),
     borderRadius: BorderRadius.circular(DriverRadii.input));

@@ -167,13 +167,13 @@ class _AddVehiclePageState extends State<AddVehiclePage> {
                   color: DriverColors.text)),
           const SizedBox(height: DriverSpacing.md),
           InkWell(
-            onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('車輛相片上傳功能尚未開放'))),
+            onTap: () => ScaffoldMessenger.of(context)
+                .showSnackBar(const SnackBar(content: Text('車輛相片上傳功能尚未開放'))),
             borderRadius: BorderRadius.circular(DriverRadii.input),
             child: Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: DriverColors.surface,
                   border: Border.all(
                       color: DriverColors.activeBlue, style: BorderStyle.solid),
                   borderRadius: BorderRadius.circular(DriverRadii.input)),
@@ -205,7 +205,7 @@ class _AddVehiclePageState extends State<AddVehiclePage> {
               onPressed: () => Navigator.of(context).pop(),
               style: ElevatedButton.styleFrom(
                   backgroundColor: DriverColors.activeBlue,
-                  foregroundColor: Colors.white,
+                  foregroundColor: DriverColors.surface,
                   padding:
                       const EdgeInsets.symmetric(vertical: DriverSpacing.lg),
                   shape: RoundedRectangleBorder(
@@ -246,7 +246,7 @@ class _BackButton extends StatelessWidget {
   final VoidCallback onTap;
   @override
   Widget build(BuildContext context) => Material(
-        color: Colors.white,
+        color: DriverColors.surface,
         borderRadius: BorderRadius.circular(18),
         child: InkWell(
           onTap: onTap,
@@ -307,7 +307,9 @@ class _ChoiceField extends StatelessWidget {
                     labelStyle: TextStyle(
                         fontSize: DriverTypography.body,
                         fontWeight: active ? FontWeight.w700 : FontWeight.w400,
-                        color: active ? Colors.white : DriverColors.labelText),
+                        color: active
+                            ? DriverColors.surface
+                            : DriverColors.labelText),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(DriverRadii.pill)));
               }).toList()),
@@ -367,7 +369,7 @@ class _TextField extends StatelessWidget {
                       padding: const EdgeInsets.all(16),
                       child: SvgPicture.asset(icon!, width: 16, height: 16)),
               filled: true,
-              fillColor: Colors.white,
+              fillColor: DriverColors.surface,
               contentPadding: const EdgeInsets.all(16),
               border: border,
               enabledBorder: border,

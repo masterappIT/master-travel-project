@@ -35,12 +35,13 @@ class VehicleLegacyPage extends StatelessWidget {
                       SizedBox(
                         height: 56,
                         child: ElevatedButton(
-                          onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
+                          onPressed: () =>
+                              ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(content: Text('編輯功能請由個人資料頁開啟')),
                           ),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: DriverColors.activeBlue,
-                            foregroundColor: Colors.white,
+                            foregroundColor: DriverColors.surface,
                             elevation: 0,
                             shape: RoundedRectangleBorder(
                               borderRadius:
@@ -81,7 +82,7 @@ class _VehicleHeader extends StatelessWidget {
   Widget build(BuildContext context) => Row(
         children: [
           Material(
-            color: Colors.white,
+            color: DriverColors.surface,
             borderRadius: BorderRadius.circular(18),
             child: InkWell(
               onTap: onBack,
@@ -126,12 +127,12 @@ class _VehicleCard extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: DriverColors.surface,
           border: Border.all(color: DriverColors.divider),
           borderRadius: BorderRadius.circular(DriverRadii.card),
           boxShadow: const [
             BoxShadow(
-              color: Color(0x0a000000),
+              color: Color(0x1238434a),
               blurRadius: 4,
               offset: Offset(0, 2),
             ),

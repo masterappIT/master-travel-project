@@ -4,6 +4,7 @@ import 'app/route_names.dart';
 import 'core/api/driver_api_client.dart';
 import 'core/layout/driver_page_shell.dart';
 import 'core/navigation/driver_navigation.dart';
+import 'core/state/driver_status.dart';
 
 import 'package:driver_web/core/tokens/driver_tokens.dart';
 
@@ -59,87 +60,99 @@ class _OrderHallPageState extends State<OrderHallPage> {
 
   @override
   Widget build(BuildContext context) {
-    return DriverPageShell(
-      selectedIndex: 1,
-      bottomPadding: 104,
-      onHomeTap: () => DriverNavigation.replace(context, DriverRouteNames.home),
-      onProfileTap: () =>
-          DriverNavigation.replace(context, DriverRouteNames.profile),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: const [
-                Text('接單大廳',
-                    style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w700,
-                        color: DriverColors.text)),
-                _OnlineBadge()
-              ]),
-          const SizedBox(height: DriverSpacing.xl),
-          _OrderTabs(
-              selectedIndex: _selectedTab,
-              onChanged: (index) => setState(() => _selectedTab = index)),
-          const SizedBox(height: DriverSpacing.md),
-          if (_loading)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.symmetric(vertical: DriverSpacing.xl),
-                child: CircularProgressIndicator(),
-              ),
-            )
-          else if (_error != null)
-            Center(child: Padding(
-              padding: EdgeInsets.symmetric(vertical: DriverSpacing.xl),
-              child: Text(_error!),
-            ))
-          else if (_selectedTab == 0)
-            ..._available.map((trip) {
-              final item = Map<String, dynamic>.from(trip as Map);
-              return Padding(
-                padding: const EdgeInsets.only(bottom: DriverSpacing.md),
-                child: _OrderCard(
-                  passenger: item['passengerName']?.toString() ??
-                      item['user']?['name']?.toString() ??
-                      '乘客',
-                  time: _formatTripTime(item['scheduledAt']),
-                  price: item['price'] != null ? '\$${item['price']}' : '待確認',
-                  origin: item['pickupAddress']?.toString() ??
-                      item['origin']?.toString() ??
-                      '起點待確認',
-                  destination: item['dropoffAddress']?.toString() ??
-                      item['destination']?.toString() ??
-                      '終點待確認',
-                  estimatedTime: '預估行程',
-                  onTap: () => _openOrderDetail(item['id'].toString()),
-                ),
-              );
-            })
-          else if (_accepted.isEmpty)
-            const _EmptyAcceptedOrders()
-          else
-            ..._accepted.map((trip) {
-              final item = Map<String, dynamic>.from(trip as Map);
-              return Padding(
-                padding: const EdgeInsets.only(bottom: DriverSpacing.md),
-                child: _OrderCard(
-                  passenger: item['user']?['name']?.toString() ??
-                      item['passengerName']?.toString() ??
-                      '乘客',
-                  time: _formatTripTime(item['scheduledAt']),
-                  price: item['price'] != null ? '\$${item['price']}' : '待確認',
-                  origin: item['pickupAddress']?.toString() ?? '起點待確認',
-                  destination: item['dropoffAddress']?.toString() ?? '終點待確認',
-                  estimatedTime: '已成功接單',
-                  onTap: () => _openOrderDetail(item['id'].toString()),
-                ),
-              );
-            }),
-        ],
-      ),
-    );
+    return ValueListenableBuilder<bool?>(
+        valueListenable: DriverStatusController.instance.isOnline,
+        builder: (context, onlineOverride, _) {
+          final online = onlineOverride ?? true;
+          return DriverPageShell(
+            selectedIndex: 1,
+            bottomPadding: 104,
+            onHomeTap: () =>
+                DriverNavigation.replace(context, DriverRouteNames.home),
+            onProfileTap: () =>
+                DriverNavigation.replace(context, DriverRouteNames.profile),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('接單大廳',
+                          style: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.w700,
+                              color: DriverColors.text)),
+                      _OnlineBadge(isOnline: online)
+                    ]),
+                const SizedBox(height: DriverSpacing.xl),
+                _OrderTabs(
+                    selectedIndex: _selectedTab,
+                    onChanged: (index) => setState(() => _selectedTab = index)),
+                const SizedBox(height: DriverSpacing.md),
+                if (_loading)
+                  const Center(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(vertical: DriverSpacing.xl),
+                      child: CircularProgressIndicator(),
+                    ),
+                  )
+                else if (_error != null)
+                  Center(
+                      child: Padding(
+                    padding: EdgeInsets.symmetric(vertical: DriverSpacing.xl),
+                    child: Text(_error!),
+                  ))
+                else if (_selectedTab == 0)
+                  ..._available.map((trip) {
+                    final item = Map<String, dynamic>.from(trip as Map);
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: DriverSpacing.md),
+                      child: _OrderCard(
+                        passenger: item['passengerName']?.toString() ??
+                            item['user']?['name']?.toString() ??
+                            '乘客',
+                        time: _formatTripTime(item['scheduledAt']),
+                        price: item['price'] != null
+                            ? '\$${item['price']}'
+                            : '待確認',
+                        origin: item['pickupAddress']?.toString() ??
+                            item['origin']?.toString() ??
+                            '起點待確認',
+                        destination: item['dropoffAddress']?.toString() ??
+                            item['destination']?.toString() ??
+                            '終點待確認',
+                        estimatedTime: '預估行程',
+                        onTap: () => _openOrderDetail(item['id'].toString()),
+                      ),
+                    );
+                  })
+                else if (_accepted.isEmpty)
+                  const _EmptyAcceptedOrders()
+                else
+                  ..._accepted.map((trip) {
+                    final item = Map<String, dynamic>.from(trip as Map);
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: DriverSpacing.md),
+                      child: _OrderCard(
+                        passenger: item['user']?['name']?.toString() ??
+                            item['passengerName']?.toString() ??
+                            '乘客',
+                        time: _formatTripTime(item['scheduledAt']),
+                        price: item['price'] != null
+                            ? '\$${item['price']}'
+                            : '待確認',
+                        origin: item['pickupAddress']?.toString() ?? '起點待確認',
+                        destination:
+                            item['dropoffAddress']?.toString() ?? '終點待確認',
+                        estimatedTime: '已成功接單',
+                        onTap: () => _openOrderDetail(item['id'].toString()),
+                      ),
+                    );
+                  }),
+              ],
+            ),
+          );
+        });
   }
 }
 
@@ -151,19 +164,25 @@ String _formatTripTime(dynamic value) {
 }
 
 class _OnlineBadge extends StatelessWidget {
-  const _OnlineBadge();
+  const _OnlineBadge({required this.isOnline});
+
+  final bool isOnline;
 
   @override
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
         decoration: BoxDecoration(
-            color: DriverColors.activeBlue,
+            color: isOnline
+                ? DriverColors.activeBlue
+                : DriverColors.warningBackground,
             borderRadius: BorderRadius.circular(DriverRadii.pill)),
-        child: const Text('線上接單中',
+        child: Text(isOnline ? '線上接單中' : '目前離線',
             style: TextStyle(
                 fontSize: DriverTypography.caption,
                 fontWeight: FontWeight.w700,
-                color: Colors.white)),
+                color: isOnline
+                    ? DriverColors.onPrimary
+                    : DriverColors.warningText)),
       );
 }
 
@@ -208,7 +227,7 @@ class _OrderTab extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: DriverColors.surface,
                 border: Border.all(
                     color:
                         selected ? DriverColors.primary : DriverColors.border),
@@ -251,12 +270,12 @@ class _OrderCard extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: DriverColors.surface,
             border: Border.all(color: DriverColors.divider),
             borderRadius: BorderRadius.circular(DriverRadii.card),
             boxShadow: const [
               BoxShadow(
-                  color: Color(0x0a000000), blurRadius: 4, offset: Offset(0, 2))
+                  color: Color(0x1238434a), blurRadius: 4, offset: Offset(0, 2))
             ],
           ),
           child: Column(
@@ -317,7 +336,7 @@ class _OrderCard extends StatelessWidget {
                   onPressed: onTap,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: DriverColors.activeBlue,
-                    foregroundColor: Colors.white,
+                    foregroundColor: DriverColors.surface,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(DriverRadii.card)),
@@ -362,7 +381,7 @@ class _EmptyAcceptedOrders extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-            color: Colors.white,
+            color: DriverColors.surface,
             border: Border.all(color: DriverColors.divider),
             borderRadius: BorderRadius.circular(DriverRadii.card)),
         child: const Text('暫無成功接單',
