@@ -35,6 +35,8 @@ jobs:
         with:
           node-version: 20
       - run: npm ci
+      - if: matrix.area == 'api'
+        run: npm --prefix backend ci
       - if: matrix.area == 'admin'
         run: npm --prefix admin ci
       - if: matrix.area == 'brand'
