@@ -11,8 +11,11 @@ This repository contains separate product surfaces. Keep changes inside the owni
 - `brand/`: brand website
 - `shared/`: shared contracts and types
 - `prisma/`: database schema and migrations
+- `config/`、`scripts/`、`.github/`、`.vscode/`、根 manifest 與 workspace 設定：cross-cutting platform ownership
 
-Run `npm run check:scope -- --scope passenger` (or `api`, `admin`, `driver`, `brand`, `cross-cutting`) before opening a focused change. Changes under `shared/`, `prisma/`, deployment, root configuration, or CI are cross-cutting and require all affected verification.
+每個主要目錄的 reviewer ownership 定義於 `.github/CODEOWNERS`。目前由 `@masterappIT` 作為明確 fallback owner；未來可直接替換為對應 GitHub teams，不需改變目錄邊界或 CI 流程。
+
+執行 focused change 前，請先執行 `npm run check:scope -- --scope passenger`（或 `api`、`admin`、`driver`、`brand`、`cross-cutting`）。修改 manifest 或 import 時，另外執行 `npm run check:dependencies`。`shared/`、`prisma/`、部署、根設定或 CI 的變更屬於 cross-cutting，必須完成所有受影響端別的驗證。
 
 ## Verification and Definition of Done
 

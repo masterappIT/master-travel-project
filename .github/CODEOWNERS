@@ -1,0 +1,22 @@
+# Repository-wide fallback owner.
+* @masterappIT
+
+# Product-area ownership. Replace the repository owner with dedicated GitHub teams
+# when team handles are available; keeping an explicit owner prevents unreviewed
+# changes while the repository is operated by a single maintainer.
+/src/ @masterappIT
+/backend/ @masterappIT
+/admin/ @masterappIT
+/driver/ @masterappIT
+/brand/ @masterappIT
+
+# Cross-cutting contracts and delivery safeguards.
+/shared/ @masterappIT
+/prisma/ @masterappIT
+/.github/ @masterappIT
+/.vscode/ @masterappIT
+/config/ @masterappIT
+/scripts/ @masterappIT
+/package.json @masterappIT
+/package-lock.json @masterappIT
+/master-travel.code-workspace @masterappIT

@@ -39,6 +39,7 @@
     "build:quickapp-webview-huawei": "uni build -p quickapp-webview-huawei",
     "build:quickapp-webview-union": "uni build -p quickapp-webview-union",
     "check:scope": "node scripts/check-scope.mjs",
+    "check:dependencies": "node scripts/check-dependency-boundaries.mjs",
     "verify:passenger": "npm run build:h5 && npm run build:mp-weixin && npx uni build -p app-plus",
     "verify:api": "npm run build:api && npx prisma validate",
     "verify:admin": "npm --prefix admin run build",

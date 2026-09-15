@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "productAreas": ["passenger", "api", "admin", "driver", "brand"],
+  "forbiddenRootDependencies": [
+    "@nestjs/common",
+    "@nestjs/core",
+    "@nestjs/platform-express",
+    "reflect-metadata",
+    "rxjs"
+  ],
+  "manifests": {
+    "package.json": "passenger",
+    "backend/package.json": "api",
+    "admin/package.json": "admin",
+    "brand/package.json": "brand"
+  },
+  "forbiddenSourceReferences": {
+    "src/": ["backend/", "admin/", "driver/", "brand/"],
+    "backend/": ["src/", "admin/", "driver/", "brand/"],
+    "admin/": ["src/", "backend/", "driver/", "brand/"],
+    "driver/": ["src/", "backend/", "admin/", "brand/"],
+    "brand/": ["src/", "backend/", "admin/", "driver/"]
+  },
+  "allowedSharedDirectories": ["shared/"]
+}
