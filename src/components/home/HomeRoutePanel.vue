@@ -10,7 +10,7 @@
       <image class="ride-tab-icon" :src="mode === 'cross-border' ? '/static/home/route/cross-active.svg' : '/static/home/route/cross-inactive.svg'" mode="scaleToFill" />
       <text>{{ '跨境出行' }}</text>
     </view>
-    <view class="ride-tab airport" @tap="$emit('update:mode', 'airport')">
+    <view class="ride-tab airport" @tap="selectAirportMode">
       <image class="ride-tab-icon" :src="mode === 'airport' ? '/static/home/route/airport-active.svg' : '/static/home/route/airport-inactive.svg'" mode="scaleToFill" />
       <text>{{ '接送機' }}</text>
     </view>
@@ -33,7 +33,7 @@
     <view v-else class="airport-fields">
       <view class="route-field flight-field">
         <image class="flight-icon" src="/static/home/route/flight.svg" mode="scaleToFill" />
-        <input class="flight-input" :value="flightNumber" type="text" placeholder="航班號" maxlength="8" confirm-type="done" @input="handleFlightInput" />
+        <input class="flight-input" :value="flightNumber" type="text" placeholder="航班號" maxlength="8" confirm-type="done" @input="handleFlightInput" @confirm="handleFlightConfirm" @blur="handleFlightBlur" />
       </view>
       <view class="route-field airport-origin-field" @tap="$emit('origin')">
         <image class="origin-icon" src="/static/home/route/airport-origin.svg" mode="scaleToFill" />
@@ -77,6 +77,8 @@ const emit = defineEmits<{
   destination: []
   'departure-time': []
   'update:flight-number': [value: string]
+  'flight-confirm': []
+  'flight-blur': []
 }>()
 
 const formattedDepartureTime = computed(() => {
@@ -92,6 +94,18 @@ const formatRouteValue = (value: string | undefined, placeholder: string) => {
   const characters = Array.from(value)
   if (characters.length <= maxLength) return value
   return `${characters.slice(0, maxLength - 3).join('')}...`
+}
+
+const selectAirportMode = () => {
+  emit('update:mode', 'airport')
+}
+
+const handleFlightConfirm = () => {
+  emit('flight-confirm')
+}
+
+const handleFlightBlur = () => {
+  emit('flight-blur')
 }
 
 const handleFlightInput = (event: { detail: { value: string } }) => {

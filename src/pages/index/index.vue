@@ -2,20 +2,27 @@
   <view v-show="activePagePath === '/pages/index/index'" class="page" :style="pageStyle">
     <view v-if="rideMode === 'cross-border'" class="page-content">
       <view class="canvas">
+        <!-- #ifndef APP-PLUS -->
         <HomeMap v-if="activePagePath === '/pages/index/index'" map-id="home-main-map" :latitude="mapLatitude" :longitude="mapLongitude" :scale="mapScale" :markers="mapMarkers" :polyline="mapPolyline" :center-trigger="mapCenterTrigger" :booking-picker-open="bookingTimePicker" :pickup-label="origin" :destination-label="destination" :route-summary="routeSummary" />
+        <!-- #endif -->
         <HomeHeader :location-label="locationLabel" />
         <HomeTravelModeSwitch :mode="rideMode" @update:mode="switchRideMode" />
+        <!-- #ifndef APP-PLUS -->
         <HomeMapActions @location="handleMapLocation" />
+        <!-- #endif -->
         <HomeRoutePanel
-          v-model:mode="travelMode"
+          :mode="travelMode"
           :origin="origin"
           :destination="destination"
           :departure-time="departureTime"
           :flight-number="flightNumber"
+          @update:mode="switchTravelMode"
           @origin="chooseOrigin"
           @destination="chooseDestination"
           @departure-time="chooseDepartureTime"
           @update:flight-number="handleFlightNumberInput"
+          @flight-confirm="handleFlightConfirm"
+          @flight-blur="handleFlightBlur"
         />
         <view v-if="origin || destination" class="accessible-values">{{ [origin, destination].filter(Boolean).join(' · ') }}</view>
         <AddressPicker
@@ -66,6 +73,17 @@
            <text class="flight-modal-cancel" @tap="closeFlightLookup">返回修改</text>
          </view>
        </view>
+       <!-- #ifdef H5 || APP-PLUS || MP-WEIXIN -->
+       <view v-if="airportModeHintVisible" class="airport-hint-modal" role="dialog" aria-label="接送機功能提示">
+         <view class="airport-hint-mask" @tap="closeAirportModeHint" />
+         <view class="airport-hint-card">
+           <view class="airport-hint-icon">✈</view>
+           <view class="airport-hint-title">接送機服務</view>
+           <view class="airport-hint-content">輸入航班號後，系統會自動定位出發機場、到達機場及航班時間。</view>
+           <button class="airport-hint-button" @tap="closeAirportModeHint">知道了</button>
+         </view>
+       </view>
+       <!-- #endif -->
      </view>
     </view>
     <template v-else>
@@ -156,9 +174,11 @@ import { useTripStore } from '../../stores/trip'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 // #endif
 import HomeHeader from '../../components/home/HomeHeader.vue'
-import HomeMap from '../../components/home/HomeMap.vue'
 import HomeTravelModeSwitch from '../../components/home/HomeTravelModeSwitch.vue'
+// #ifndef APP-PLUS
+import HomeMap from '../../components/home/HomeMap.vue'
 import HomeMapActions from '../../components/home/HomeMapActions.vue'
+// #endif
 import HomeRoutePanel from '../../components/home/HomeRoutePanel.vue'
 import BusinessCharterPanel from '../../components/home/BusinessCharterPanel.vue'
 import HomeBottomNav from '../../components/home/HomeBottomNav.vue'
@@ -256,6 +276,7 @@ const mapCenterTrigger = ref(0)
 const locationLabel = ref('香港 · 油尖旺區')
 const detailedAddress = ref('香港九龍站附近')
 const bookingTimePicker = ref(false)
+const airportModeHintVisible = ref(false)
 let hasShown = false
 const switchRideMode = (mode: RideMode) => {
   if (mode === rideMode.value) return
@@ -460,11 +481,18 @@ const handleFlightNumberInput = (value: string) => {
   if (travelMode.value !== 'airport' || value.length < 3) return
   void lookupFlightForDate(value)
 }
+const handleFlightConfirm = () => {
+  uni.hideKeyboard()
+}
+const handleFlightBlur = () => {
+  uni.hideKeyboard()
+}
 const lookupFlightForDate = async (value: string) => {
   const date = new Date().toISOString().slice(0, 10)
   try {
     const result = await lookupFlight(value, date)
     if (value !== flightNumber.value) return
+    uni.hideKeyboard()
     flightLookup.value = result
     if (result.scheduledTime) departureTime.value = `${date}T${result.scheduledTime}:00`
   } catch (error) {
@@ -536,6 +564,23 @@ const canGoToAirport = computed(() => {
   if (!departureAirport || departureAirport.latitude === null || departureAirport.longitude === null) return false
   return Boolean(findLocalRegion(departureAirport.latitude, departureAirport.longitude))
 })
+const showAirportModeHint = () => {
+  // #ifdef H5 || APP-PLUS || MP-WEIXIN
+  airportModeHintVisible.value = true
+  // #endif
+}
+
+const switchTravelMode = (mode: TravelMode) => {
+  travelMode.value = mode
+  if (mode === 'airport') {
+    showAirportModeHint()
+  }
+}
+
+const closeAirportModeHint = () => {
+  airportModeHintVisible.value = false
+}
+
 const closeFlightLookup = () => { flightLookup.value = null }
 const confirmFlightDirection = (direction: 'to-airport' | 'from-airport') => {
   if (!flightLookup.value) return
@@ -720,6 +765,9 @@ const showComingSoon = (name: string) => uni.showToast({ title: `${name}功能�
 
 <style scoped>
 :global(html),:global(body),:global(#app){width:100%;min-width:0;height:100%;margin:0;overflow:hidden;overscroll-behavior:none}.page{position:fixed;top:0;left:0;width:430px;height:var(--mobile-height, 932px);min-height:0;margin:0;overflow:hidden;background:#fff;border-radius:35px;box-sizing:border-box;color:#38434a;font-family:'Noto Sans TC',sans-serif;transform:scale(var(--mobile-scale, 1));transform-origin:top left center}.page-content{position:absolute;inset:0;width:430px;height:932px}.canvas{position:relative;width:430px;height:932px;min-height:932px}.nav-layer{position:absolute;inset:0;z-index:10;pointer-events:none}.nav-layer :deep(.bottom-nav){pointer-events:auto} .flight-modal{position:fixed;inset:0;z-index:1000;display:flex;align-items:flex-end;justify-content:center}.flight-modal-mask{position:absolute;inset:0;background:rgba(29,38,43,.42)}.flight-modal-card{position:relative;width:min(430px,100%);padding:28px 24px calc(24px + env(safe-area-inset-bottom));box-sizing:border-box;border-radius:28px 28px 0 0;background:#fff;color:#38434a;box-shadow:0 -8px 30px rgba(28,39,45,.16);text-align:center}.flight-modal-title{font-size:15px;font-weight:600;color:#778187}.flight-modal-number{margin-top:7px;font-size:28px;font-weight:700;letter-spacing:1px}.flight-modal-status{margin-top:5px;font-size:13px;color:#8a9499}.flight-modal-route{display:flex;align-items:center;gap:12px;margin:24px 0;padding:16px 12px;border-radius:16px;background:#f5f8f9}.flight-modal-airport{display:flex;flex:1;min-width:0;flex-direction:column;gap:5px;text-align:left;font-size:12px;color:#79858b}.flight-modal-airport--right{text-align:right}.flight-modal-label{font-size:12px;font-weight:600;color:#5ab8a5}.flight-modal-iata{font-size:22px;font-weight:700;color:#38434a}.flight-modal-arrow{font-size:24px;color:#9aa6aa}.flight-modal-question{margin-bottom:14px;font-size:15px;font-weight:600}.flight-modal-actions{display:flex;gap:12px}.flight-modal-notice{margin:0 0 14px;padding:10px 12px;border-radius:10px;background:#fff7e6;color:#b06a00;font-size:13px;line-height:1.5}.flight-modal-action{flex:1;height:48px;margin:0;border:1px solid #d8e0e3;border-radius:14px;background:#fff;color:#526168;font-size:15px;line-height:48px}.flight-modal-action--disabled{border-color:#e3e7e8;background:#f1f3f4;color:#aeb7ba;opacity:1}.flight-modal-action--primary{border-color:#5ab8a5;background:#5ab8a5;color:#fff}.flight-modal-cancel{display:block;margin-top:17px;font-size:13px;color:#9aa4a8}
+/* #ifdef H5 || APP-PLUS || MP-WEIXIN */
+.airport-hint-modal{position:fixed;inset:0;z-index:1100;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box}.airport-hint-mask{position:absolute;inset:0;background:rgba(24,35,41,.55)}.airport-hint-card{position:relative;width:min(360px,100%);padding:28px 24px 22px;border:1px solid rgba(255,255,255,.7);border-radius:24px;background:#fff;box-shadow:0 18px 50px rgba(18,31,38,.28);box-sizing:border-box;text-align:center}.airport-hint-icon{width:48px;height:48px;margin:0 auto 12px;border-radius:16px;background:#e7f7f3;color:#4eaf9d;font-size:25px;line-height:48px}.airport-hint-title{font-size:19px;font-weight:700;color:#38434a}.airport-hint-content{margin-top:12px;color:#66747b;font-size:14px;line-height:1.75}.airport-hint-button{width:100%;height:46px;margin-top:22px;border:0;border-radius:14px;background:#5ab8a5;color:#fff;font-size:15px;line-height:46px}
+/* #endif */
 @media (max-width:599px){.page{top:0;left:0;height:var(--mobile-height,100dvh);border-radius:0;transform:scale(var(--mobile-scale, 1));transform-origin:top left}.page-content{bottom:102px;height:auto}.canvas{height:100%;min-height:0}.canvas :deep(.map-layer){bottom:205px;height:auto}.canvas :deep(.map-tool){top:auto;bottom:245px}.canvas :deep(.route-panel){top:auto;bottom:-87px;width:430px;height:331px}.canvas :deep(.panel-surface){top:0;bottom:auto;width:430px;height:331px}.business-scroll{height:auto;bottom:102px}.nav-layer :deep(.bottom-nav){bottom:0}}
 /* #ifdef APP-PLUS */
 .page{top:50%;left:50%;width:430px;height:932px;border-radius:35px;transform:translate(-50%,-50%) scale(min(1,calc(100vw / 430px),calc(100dvh / 932px)));transform-origin:center center}.page-content{inset:0;width:430px;height:932px}.canvas{width:430px;height:932px;min-height:932px}.canvas :deep(.route-panel){top:586px;bottom:auto;width:430px;height:331px}.canvas :deep(.panel-surface){top:auto;bottom:0;width:430px;height:331px}.nav-layer :deep(.bottom-nav){bottom:0}

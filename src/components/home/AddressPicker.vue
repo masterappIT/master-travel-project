@@ -5,7 +5,7 @@
       <text class="title">地址選擇</text>
       <view class="city-search">
         <view class="region-trigger" @tap.stop="handleRegionTriggerTap"><text class="city">{{ selectedCityLabel || selectedRegion || '城市' }}</text><image class="city-location" :class="{ 'city-location--open': !selectedRegion && regionMenuOpen }" :src="selectedRegion || selectedCity ? '/static/home/address/region-clear.svg' : '/static/home/address/city-location.svg'" mode="aspectFit" /></view>
-        <view class="search-box"><image class="search-icon" src="/static/home/address/search.svg" mode="aspectFit" /><input v-model="keyword" class="search-input" placeholder="搜尋地點" confirm-type="search" @confirm="runSearch" /></view><text class="search-action" @tap="runSearch">{{ searching ? '搜尋中' : '搜索' }}</text>
+        <view class="search-box"><image class="search-icon" src="/static/home/address/search.svg" mode="aspectFit" /><input v-model="keyword" class="search-input" placeholder="搜尋地點" confirm-type="search" @confirm="runSearch" @blur="hideKeyboard" /></view><text class="search-action" @tap="runSearch">{{ searching ? '搜尋中' : '搜索' }}</text>
       </view>
     </view>
     <scroll-view class="address-scroll" scroll-y :show-scrollbar="false">
@@ -90,7 +90,9 @@ const filteredPlaces = computed(() => {
   return places
 })
 const validCoordinate = (latitude?: number, longitude?: number) => Number.isFinite(latitude) && Number.isFinite(longitude) && Math.abs(latitude as number) <= 90 && Math.abs(longitude as number) <= 180
+const hideKeyboard = () => uni.hideKeyboard()
 const runSearch = async () => {
+  hideKeyboard()
   const value = keyword.value.trim()
   if (!value || searching.value) return
   searching.value = true
