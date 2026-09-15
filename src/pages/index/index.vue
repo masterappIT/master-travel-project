@@ -17,7 +17,7 @@
           @departure-time="chooseDepartureTime"
           @update:flight-number="flightNumber = $event"
         />
-        <view class="accessible-values">{{ origin }} · {{ destination }}</view>
+        <view v-if="origin || destination" class="accessible-values">{{ [origin, destination].filter(Boolean).join(' · ') }}</view>
         <AddressPicker
           v-if="addressPicker"
           :selecting="addressPicker"
@@ -124,7 +124,7 @@
 import { ref, computed } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useTripStore } from '../../stores/trip'
-// #ifdef MP-WEIXIN || MP-TOUTIAO
+// #ifdef H5 || MP-WEIXIN || MP-TOUTIAO
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 // #endif
 import HomeHeader from '../../components/home/HomeHeader.vue'
@@ -140,11 +140,11 @@ import { activateEmbeddedPageHost, cachedPagePath, visitedPages, openCachedPage 
 import { planDrivingRoute, reverseGeocode, type Coordinate } from '../../services/api'
 import { findLocalRegion } from '../../utils/localRegions'
 
-// #ifdef MP-WEIXIN || MP-TOUTIAO
+// #ifdef H5 || MP-WEIXIN || MP-TOUTIAO
 const { responsiveStyle } = useResponsiveCanvas()
 // #endif
 const pageStyle = computed(() => {
-  // #ifdef MP-WEIXIN || MP-TOUTIAO
+  // #ifdef H5 || MP-WEIXIN || MP-TOUTIAO
   return responsiveStyle.value
   // #endif
   return {}
