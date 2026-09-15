@@ -1,0 +1,11 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    { "label": "Verify: affected", "type": "shell", "command": "npm run verify:affected", "options": { "cwd": "${workspaceFolder:Shared and Infra}" }, "group": "test", "problemMatcher": [] },
+    { "label": "Verify: passenger", "type": "shell", "command": "npm run verify:passenger", "options": { "cwd": "${workspaceFolder:Shared and Infra}" }, "group": "build", "problemMatcher": [] },
+    { "label": "Verify: API", "type": "shell", "command": "npm run verify:api", "options": { "cwd": "${workspaceFolder:Shared and Infra}" }, "group": "build", "problemMatcher": ["$tsc"] },
+    { "label": "Verify: admin", "type": "shell", "command": "npm run verify:admin", "options": { "cwd": "${workspaceFolder:Shared and Infra}" }, "group": "build", "problemMatcher": [] },
+    { "label": "Verify: driver", "type": "shell", "command": "npm run verify:driver", "options": { "cwd": "${workspaceFolder:Shared and Infra}" }, "group": "test", "problemMatcher": [] },
+    { "label": "Verify: brand", "type": "shell", "command": "npm run verify:brand", "options": { "cwd": "${workspaceFolder:Shared and Infra}" }, "group": "build", "problemMatcher": [] }
+  ]
+}

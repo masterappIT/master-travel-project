@@ -1,0 +1,18 @@
+{
+  "folders": [
+    { "name": "Passenger", "path": "src" },
+    { "name": "API", "path": "backend" },
+    { "name": "Admin", "path": "admin" },
+    { "name": "Driver", "path": "driver" },
+    { "name": "Brand", "path": "brand" },
+    { "name": "Shared and Infra", "path": "." }
+  ],
+  "settings": {
+    "files.exclude": {
+      "**/node_modules": true,
+      "**/dist": true,
+      "**/build": true,
+      "**/.dart_tool": true
+    }
+  }
+}

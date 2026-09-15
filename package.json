@@ -37,7 +37,14 @@
     "build:api": "tsc -p backend/tsconfig.json",
     "start:api": "node backend/dist/main.js",
     "build:quickapp-webview-huawei": "uni build -p quickapp-webview-huawei",
-    "build:quickapp-webview-union": "uni build -p quickapp-webview-union"
+    "build:quickapp-webview-union": "uni build -p quickapp-webview-union",
+    "check:scope": "node scripts/check-scope.mjs",
+    "verify:passenger": "npm run build:h5 && npm run build:mp-weixin && npx uni build -p app-plus",
+    "verify:api": "npm run build:api && npx prisma validate",
+    "verify:admin": "npm --prefix admin run build",
+    "verify:driver": "node scripts/check-driver-analyze.mjs && node scripts/check-driver-tests.mjs && cd driver && flutter build web",
+    "verify:brand": "npm --prefix brand run build",
+    "verify:affected": "node scripts/verify-affected.mjs"
   },
   "dependencies": {
     "@dcloudio/uni-app": "3.0.0-5020420260813003",

@@ -1,6 +1,36 @@
 # Master Travel Project
 
-跨境出行的 uni-app 客戶端、NestJS API、Vue 管理後台與品牌網站。
+## Workspace boundaries
+
+This repository contains separate product surfaces. Keep changes inside the owning area unless the change is explicitly cross-cutting:
+
+- `src/`: passenger uni-app client
+- `backend/`: API
+- `admin/`: admin console
+- `driver/`: driver Flutter Web UI
+- `brand/`: brand website
+- `shared/`: shared contracts and types
+- `prisma/`: database schema and migrations
+
+Run `npm run check:scope -- --scope passenger` (or `api`, `admin`, `driver`, `brand`, `cross-cutting`) before opening a focused change. Changes under `shared/`, `prisma/`, deployment, root configuration, or CI are cross-cutting and require all affected verification.
+
+## Verification and Definition of Done
+
+Use the smallest affected verification command locally, or `npm run verify:affected` when the change spans areas:
+
+| Area | Required gate |
+| --- | --- |
+| Passenger | `npm run verify:passenger` (H5, WeChat mini-program, App Plus builds) |
+| API | `npm run verify:api` |
+| Admin | `npm run verify:admin` |
+| Driver | `npm run verify:driver` (analyzer and test regression baselines, Web build) |
+| Brand | `npm run verify:brand` |
+| Cross-cutting | `npm run verify:affected` plus every affected area |
+
+A change is complete only when the relevant gate passes, scope impact is declared, acceptance criteria are checked, and any unverified target or rollback plan is recorded in the PR description. UI changes must also include the required visual/platform inspection evidence documented in `.github/instructions/`.
+
+Driver currently has checked-in analyzer and widget-test debt baselines under `config/`. The Driver gate rejects any new diagnostic or failing test and reports resolved baseline entries for removal; a passing regression gate does not mean the existing debt is resolved.
+
 
 ## 專案結構
 

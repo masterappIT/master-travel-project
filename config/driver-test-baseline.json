@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "failingTests": [
+    "opens completed page from in-progress action",
+    "opens order details and selects a vehicle",
+    "opens order history from profile menu",
+    "opens profile from the bottom navigation",
+    "opens vehicle preview from the profile menu",
+    "renders order history page content",
+    "renders the driver home page and toggles online status",
+    "renders the driver profile page and navigation",
+    "switches between available and accepted orders"
+  ]
+}

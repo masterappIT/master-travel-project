@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "diagnostics": {
+    "INFO|CURLY_BRACES_IN_FLOW_CONTROL_STRUCTURES|lib/core/api/driver_api_client.dart|Statements in an if should be enclosed in a block.": 1,
+    "INFO|CURLY_BRACES_IN_FLOW_CONTROL_STRUCTURES|lib/home_page.dart|Statements in an if should be enclosed in a block.": 2,
+    "INFO|CURLY_BRACES_IN_FLOW_CONTROL_STRUCTURES|lib/order_accepted_page.dart|Statements in an if should be enclosed in a block.": 3,
+    "INFO|CURLY_BRACES_IN_FLOW_CONTROL_STRUCTURES|lib/order_detail_page.dart|Statements in an if should be enclosed in a block.": 2,
+    "INFO|CURLY_BRACES_IN_FLOW_CONTROL_STRUCTURES|lib/order_hall_page.dart|Statements in an if should be enclosed in a block.": 1,
+    "INFO|CURLY_BRACES_IN_FLOW_CONTROL_STRUCTURES|lib/order_history_page.dart|Statements in an if should be enclosed in a block.": 2,
+    "INFO|CURLY_BRACES_IN_FLOW_CONTROL_STRUCTURES|lib/order_in_progress_page.dart|Statements in an if should be enclosed in a block.": 3,
+    "INFO|CURLY_BRACES_IN_FLOW_CONTROL_STRUCTURES|lib/profile_page.dart|Statements in an if should be enclosed in a block.": 3,
+    "INFO|PREFER_INTERPOLATION_TO_COMPOSE_STRINGS|lib/add_vehicle_page.dart|Use interpolation to compose strings and values.": 4,
+    "INFO|PREFER_INTERPOLATION_TO_COMPOSE_STRINGS|lib/core/api/driver_api_client.dart|Use interpolation to compose strings and values.": 1,
+    "INFO|USE_BUILD_CONTEXT_SYNCHRONOUSLY|lib/profile_page.dart|Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check.": 1,
+    "WARNING|UNUSED_ELEMENT|lib/order_history_page.dart|The declaration '_historyEntries' isn't referenced.": 1
+  }
+}

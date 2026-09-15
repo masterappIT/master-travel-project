@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "areas": {
+    "passenger": ["src/", "vite.config.js", "index.html", "shims-uni.d.ts", "project.config.json", ".hbuilderx/"],
+    "api": ["backend/"],
+    "admin": ["admin/"],
+    "driver": ["driver/"],
+    "brand": ["brand/"],
+    "cross-cutting": ["shared/", "prisma/", "docker-compose.yml", "deploy/", ".github/", ".vscode/", "config/", "scripts/", "package.json", "package-lock.json", "tsconfig.json", "README.md", ".gitignore", ".env.example", "master-travel.code-workspace"]
+  },
+  "shared": ["shared/", "prisma/", "docker-compose.yml", "deploy/", ".github/", ".vscode/", "config/", "scripts/", "package.json", "package-lock.json", "tsconfig.json", "README.md", ".gitignore", ".env.example", "master-travel.code-workspace"]
+}

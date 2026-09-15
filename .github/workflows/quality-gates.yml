@@ -1,0 +1,51 @@
+name: Pull Request Gates
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  scope:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npm run check:scope -- --scope cross-cutting --base "${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}"
+
+  verify:
+    needs: scope
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/master_travel_project?schema=public
+    strategy:
+      fail-fast: false
+      matrix:
+        area: [passenger, api, admin, driver, brand]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - if: matrix.area == 'admin'
+        run: npm --prefix admin ci
+      - if: matrix.area == 'brand'
+        run: npm --prefix brand ci
+      - if: matrix.area == 'driver'
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.4'
+          channel: stable
+          cache: true
+      - if: matrix.area == 'driver'
+        run: flutter pub get
+        working-directory: driver
+      - run: npm run verify:affected -- --area "${{ matrix.area }}" --base "${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}"
