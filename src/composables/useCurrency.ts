@@ -15,7 +15,11 @@ if (legacyStoredCurrency !== undefined && storedCurrency === null) uni.removeSto
 const storedRate = uni.getStorageSync('exchange-rate')
 const exchangeRate = ref(Number(storedRate) > 0 ? Number(storedRate) : 0.92)
 if (storedRate !== undefined && !(Number(storedRate) > 0)) uni.removeStorageSync('exchange-rate')
+// #ifdef MP-WEIXIN
+const currency = ref<Currency>('RMB')
+// #else
 const currency = ref<Currency>(storedCurrency || 'HKD')
+// #endif
 let loaded = false
 
 export function useCurrency() {
