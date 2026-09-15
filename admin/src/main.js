@@ -12,7 +12,13 @@ import { createOperationsStorage } from './utils/operations-storage.js'
 import { createFeedbackController } from './utils/feedback.js'
 import { createErrorDisplay } from './utils/error-display.js'
 import { generateRandomCouponCodeStr, createTimeOptions, createOperationsDisplay } from './utils/entry-helpers.js'
-import { filterStoredDrivers } from './utils/drivers.js'
+import { createAdminFormState } from './utils/admin-form-state.js'
+import { createAdminSettingsState } from './utils/admin-settings-state.js'
+import { createAdminSessionState } from './utils/admin-session-state.js'
+import { createAdminShellState } from './utils/admin-shell-state.js'
+import { createAdminResourceState } from './utils/admin-resource-state.js'
+import { createAdminAuxiliaryState } from './utils/admin-auxiliary-state.js'
+import { createAdminInteractionState } from './utils/admin-interaction-state.js'
 import { createLocalization } from './utils/localization.js'
 import { createAdminSessionActions } from './utils/admin-session.js'
 import { createPromotionDisplay } from './utils/promotion-display.js'
@@ -55,72 +61,25 @@ import { createCharterActions } from './pages/charters/charters.actions.js'
 import './style.css'
 
 const API = import.meta.env.VITE_API_URL || '/api'
-const token = ref(import.meta.env.DEV ? 'dev-bypass' : (localStorage.getItem('admin_token') || ''))
-const locale = ref(localStorage.getItem('admin_locale') || 'en')
+const { token, locale, username, password, currentAdministrator } = createAdminSessionState()
 const { t, translateRegion, translateStatus, formatDate, toggleLocale } = createLocalization(locale)
 const displayError = createErrorDisplay({ locale, t })
-const view = ref('dashboard')
-const mobileNavOpen = ref(false)
+const { view, mobileNavOpen, loading, error, dashboard } = createAdminShellState()
 const vehiclesPageState = createVehiclesPageState()
 const vehicleTab = vehiclesPageState.tab
 const extraSortId = vehiclesPageState.extraSortId
-const loading = ref(false)
 let loadRequestId = 0
-const error = ref('')
-const dashboard = ref(null)
-const exchangeRate = ref(0.92)
-const pricingCurrency = ref('RMB')
-const severeWeatherEnabled = ref(false)
-const adminLogo = ref('')
-const users = ref([])
-const selectedUser = ref(null)
-const walletTransactions = ref([])
-const topUpWithdrawalHistory = ref([])
-const trips = ref([])
-const charterOrders = ref([])
-const addresses = ref([])
-const mainlandCities = ref([])
-const mainlandCityForm = ref(null)
-const addressSearchKeyword = ref('')
-const addressSearchResults = ref([])
-const addressSearching = ref(false)
-const categories = ref([])
-const vehicles = ref([])
-const extras = ref([])
-const distancePricing = ref([])
-const routeMinimumFares = ref([])
-const routeMinimumFareForm = ref(null)
-const membershipPlans = ref([])
-const promotions = ref([])
-const promotionForm = ref(null)
-const promotionSaving = ref(false)
-const promotionDeletingId = ref('')
-const promotionTogglingId = ref('')
+const { exchangeRate, pricingCurrency, severeWeatherEnabled, adminLogo, paymentSettings } = createAdminSettingsState()
+const { users, selectedUser, walletTransactions, topUpWithdrawalHistory, trips, charterOrders, addresses, mainlandCities, addressSearchKeyword, addressSearchResults, addressSearching, categories, vehicles, extras, distancePricing, routeMinimumFares, routeMinimumFareForm, membershipPlans, promotions, promotionForm, promotionSaving, promotionDeletingId, promotionTogglingId } = createAdminResourceState()
+const { administrators, auditLogs, notifications, notificationUsers, notificationDrivers, personnel, entryItems, drivers, selectedDriver, expenseItems } = createAdminAuxiliaryState()
+const { orderUrls, createdOrderUrl, tripCatalog, tripQuote, vehicleCategories, tripBookingStep, tripPaymentMethod, tripUseFareBalance, tripUseCashBalance, tripLocationKeyword, tripLocationResults, tripLocationSearching, tripLocationTarget } = createAdminInteractionState()
 const { toasts, confirmDialog, dismissToast, notify, requestConfirmation, resolveConfirmation } = createFeedbackController()
-const membershipForm = ref(null)
-const categoryForm = ref(null)
-const vehicleForm = ref(null)
-const extraForm = ref(null)
-const paymentSettings = ref({
-  driverRaceEnabled: false,
-  fareBalancePayEnabled: true,
-  cashBalancePayEnabled: true,
-  wechatPayEnabled: true,
-  alipayPayEnabled: true,
-  bankCardPayEnabled: true,
-  sandboxMode: false
-})
 const paymentsPageState = createPaymentsPageState()
 const paymentSettingsSaved = paymentsPageState.saved
 const driverRaceSaving = paymentsPageState.raceSaving
-const notifications = ref([])
-const notificationForm = ref(null)
-const notificationUsers = ref([])
-const notificationDrivers = ref([])
 const notificationPageState = createNotificationsPageState(notificationUsers, notificationDrivers)
 const notificationRecipientSearch = notificationPageState.recipientSearch
-const addressForm = ref({ id: '', region: '香港', city: '', name: '', address: '', latitude: null, longitude: null, enabled: true, order: 1 })
-const userForm = ref(null)
+const { addressForm, userForm, walletAdjustment, tripForm, selectedTrip, dispatchForm, orderUrlForm, charterForm, administratorForm, notificationForm, mainlandCityForm, membershipForm, categoryForm, vehicleForm, extraForm, personnelForm, driverForm, settlementForm, entryForm, expenseForm } = createAdminFormState()
 const usersPageState = createUsersPageState(users, 10)
 const addressesPageState = createAddressesPageState(addresses)
 const addressRegionFilter = addressesPageState.regionFilter
@@ -139,24 +98,6 @@ const filteredUsers = usersPageState.filtered
 const userPageCount = usersPageState.pageCount
 const pagedUsers = usersPageState.paged
 const goToUserPage = usersPageState.goToPage
-const walletAdjustment = ref(null)
-const tripForm = ref(null)
-const selectedTrip = ref(null)
-const dispatchForm = ref(null)
-const orderUrlForm = ref(null)
-const orderUrls = ref([])
-const createdOrderUrl = ref('')
-const tripCatalog = ref({ categories: [], data: [], extras: [] })
-const tripQuote = ref(null)
-const vehicleCategories = ref([])
-const tripBookingStep = ref('details')
-const tripPaymentMethod = ref('sandbox')
-const tripUseFareBalance = ref(false)
-const tripUseCashBalance = ref(false)
-const tripLocationKeyword = ref('')
-const tripLocationResults = ref([])
-const tripLocationSearching = ref(false)
-const tripLocationTarget = ref('origin')
 const tripsPageState = createTripsPageState(trips, 10)
 const tripSearchQuery = tripsPageState.searchQuery
 const tripStatusFilter = tripsPageState.statusFilter
@@ -173,37 +114,12 @@ const tripDateDay = tripsPageState.dateDay
 const tripDateYears = tripsPageState.dateYears
 const tripDateDays = tripsPageState.dateDays
 const clearTripDateFilter = tripsPageState.clearDateFilter
-const charterForm = ref(null)
-const username = ref('')
-const password = ref('')
-const currentAdministrator = ref(null)
-const administrators = ref([])
-const auditLogs = ref([])
-const administratorForm = ref(null)
-const readStoredList = (key) => {
-  try {
-    const value = JSON.parse(localStorage.getItem(key) || '[]')
-    return Array.isArray(value) ? value : []
-  } catch {
-    return []
-  }
-}
-const personnel = ref(readStoredList('admin_personnel'))
-const entryItems = ref(readStoredList('admin_entry_items'))
-const drivers = ref(filterStoredDrivers(readStoredList('admin_drivers')))
-const personnelForm = ref(null)
-const driverForm = ref(null)
-const selectedDriver = ref(null)
-const settlementForm = ref(null)
 const driversPageState = createDriversPageState(drivers)
 const driverFilter = driversPageState.statusFilter
 const driverTypeFilter = driversPageState.typeFilter
 const driverSearch = driversPageState.searchQuery
 const driverFiltersActive = driversPageState.hasActiveFilters
 const resetDriverFilters = driversPageState.resetFilters
-const entryForm = ref(null)
-const expenseItems = ref(JSON.parse(localStorage.getItem('admin_expenses') || '[]'))
-const expenseForm = ref(null)
 const operationsPageState = createOperationsPageState(personnel, entryItems, expenseItems)
 const personnelFilter = operationsPageState.personnelFilter
 const entryFilter = operationsPageState.entryFilter
