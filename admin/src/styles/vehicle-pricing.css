@@ -1,5 +1,27 @@
 @import './tokens.css';
 
+.shell .vehicle-admin { display: grid; gap: 18px; }
+.shell .admin-toolbar { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px 0; }
+.shell .admin-toolbar h2 { margin: 0; color: #12243b; font-size: 18px; }
+.shell .vehicle-record-form { grid-template-columns: repeat(4, minmax(120px, 1fr)); }
+.shell .vehicle-thumb { width: 96px; height: 54px; object-fit: contain; }
+.shell .admin-toolbar button { border: 0; border-radius: var(--radius-control); padding: 9px 12px; color: #fff; background: var(--color-primary); font-weight: 700; }
+.shell .pricing-form { padding: 18px 20px; }
+.shell .pricing-settings { display: flex; gap: 18px; margin-bottom: 14px; }
+.shell .pricing-settings label { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; }
+.shell .pricing-form input { width: 130px; border: 1px solid #ccd8e7; border-radius: 10px; padding: 9px 11px; background: #f8fafd; }
+.shell .pricing-form input[readonly] { color: #64748b; background: #edf2f7; }
+.shell .pricing-form table { min-width: 560px; }
+.shell .pricing-form th, .shell .pricing-form td { padding: 12px; }
+.shell .pricing-actions { display: flex; align-items: center; gap: 14px; margin-top: 16px; }
+.shell .pricing-actions button { height: 44px; min-height: 44px; }
+.shell .currency-switcher { display: flex; align-items: center; justify-content: space-between; padding: 18px 20px; }
+.shell .currency-switcher h2 { margin: 0 0 5px; color: #12243b; font-size: 18px; }
+.shell .currency-switcher-actions { display: flex; align-items: center; gap: 10px; }
+.shell .currency-switcher select { height: 44px; min-height: 44px; border: 1px solid #ccd8e7; border-radius: 10px; padding: 9px 11px; background: #f8fafd; }
+.shell .currency-switcher button { height: 44px; min-height: 44px; border: 0; border-radius: 9px; padding: 10px 14px; color: #fff; background: #1769e0; font-weight: 700; }
+.shell .vehicle-tabs { display: none; }
+
 /* Desktop vehicle and pricing workspace: intentionally separate from mobile rules. */
 @media (min-width: 701px) {
   .shell .vehicle-admin button,

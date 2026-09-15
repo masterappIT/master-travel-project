@@ -3,7 +3,7 @@ import { inject } from 'vue'
 export const NotificationsPage = {
   name: 'NotificationsPage',
   setup() {
-    return inject('adminContext')
+    return inject('adminNotificationsContext')
   },
   template: String.raw`<section v-if="view==='notifications'" class="editor-section notifications-page">
     <div class="notification-page-heading">

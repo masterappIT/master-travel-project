@@ -56,6 +56,15 @@
 }
 .shell nav button:hover { color: #fff; background: rgba(255,255,255,.09); }
 .shell nav button.active { color: #fff; background: #3c76c5; border-color: rgba(255,255,255,.18); box-shadow: 0 8px 18px rgba(0,0,0,.12); }
+.shell nav .nav-group { margin: 4px 0; }
+.shell nav .nav-group-toggle { display: flex !important; align-items: center; justify-content: space-between; width: 100%; color: #dce8f7 !important; }
+.shell nav .nav-group-toggle span { font-size: 14px; }
+.shell nav .nav-group-toggle.active { color: #fff !important; background: rgba(255,255,255,.09) !important; }
+.shell nav .nav-group-items { display: grid; gap: 2px; margin: 3px 0 6px 14px; }
+.shell nav .nav-group-items button { padding: 9px 12px !important; color: #9fb3cd !important; font-size: 12px !important; text-align: left; }
+@media (max-width: 700px) {
+  .shell nav .nav-group-items { margin-left: 0; }
+}
 .admin-identity { position: relative; z-index: 1; display: grid; gap: 2px; margin-top: auto; padding: 12px 15px; color: #fff; font-size: 12px; }
 .admin-identity span { color: #b9c8da; font-size: 10px; }
 .readonly-badge { border-radius: 999px; padding: 8px 12px; color: #8b6200; background: #fff3cc; font-size: 12px; font-weight: 750; }

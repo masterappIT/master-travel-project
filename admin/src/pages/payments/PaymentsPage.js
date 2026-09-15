@@ -2,7 +2,7 @@ import { inject } from 'vue'
 
 export const PaymentsPage = {
   name: 'PaymentsPage',
-  setup() { return inject('adminContext') },
+  setup() { return inject('adminPaymentsContext') },
   template: String.raw`<section v-if="view==='payments'" class="payment-settings-admin panel">
   <div class="payment-settings-header">
     <span class="eyebrow">PAYMENT GATEWAYS & WALLET</span>

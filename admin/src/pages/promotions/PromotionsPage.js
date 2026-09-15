@@ -3,7 +3,7 @@ import { inject } from 'vue'
 export const PromotionsPage = {
   name: 'PromotionsPage',
   setup() {
-    return inject('adminContext')
+    return inject('adminPromotionsContext')
   },
   template: String.raw`<section v-if="view==='promotions'" class="promotion-admin">
   <div class="promotion-page-heading">
