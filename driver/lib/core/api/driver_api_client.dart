@@ -43,7 +43,7 @@ class DriverApiClient {
 
   Map<String, String> get _headers => {
         'Content-Type': 'application/json',
-        if (token != null) 'Authorization': 'Bearer ${token!}',
+        if (token != null) 'Authorization': 'Bearer ' + token!,
       };
 
   Future<Map<String, dynamic>> requestPhoneCode(
