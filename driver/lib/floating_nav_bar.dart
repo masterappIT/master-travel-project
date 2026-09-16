@@ -18,7 +18,7 @@ class FloatingNavBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
         height: 76,
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
           color: DriverColors.surface,
           borderRadius: BorderRadius.circular(DriverRadii.card),
@@ -62,42 +62,50 @@ class _NavItem extends StatelessWidget {
           child: InkWell(
             onTap: onTap,
             borderRadius: BorderRadius.circular(22),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: asset == null
-                      ? Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: List.generate(
-                            3,
-                            (_) => Container(
-                              margin: const EdgeInsets.symmetric(vertical: 2),
-                              width: 15,
-                              height: 2,
-                              decoration: BoxDecoration(
-                                color: selected
-                                    ? DriverColors.navActive
-                                    : DriverColors.navInactive,
-                                borderRadius: BorderRadius.circular(1),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color:
+                    selected ? DriverColors.infoBackground : Colors.transparent,
+                borderRadius: BorderRadius.circular(DriverRadii.input),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: asset == null
+                        ? Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: List.generate(
+                              3,
+                              (_) => Container(
+                                margin: const EdgeInsets.symmetric(vertical: 2),
+                                width: 15,
+                                height: 2,
+                                decoration: BoxDecoration(
+                                  color: selected
+                                      ? DriverColors.navActive
+                                      : DriverColors.navInactive,
+                                  borderRadius: BorderRadius.circular(1),
+                                ),
                               ),
                             ),
-                          ),
-                        )
-                      : SvgPicture.asset(asset!, width: 22, height: 22),
-                ),
-                const SizedBox(height: 3),
-                Text(label,
-                    style: TextStyle(
-                        fontSize: 11,
-                        fontWeight:
-                            selected ? FontWeight.w700 : FontWeight.w400,
-                        color: selected
-                            ? DriverColors.navActive
-                            : DriverColors.navInactive)),
-              ],
+                          )
+                        : SvgPicture.asset(asset!, width: 22, height: 22),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(label,
+                      style: TextStyle(
+                          fontSize: 11,
+                          fontWeight:
+                              selected ? FontWeight.w700 : FontWeight.w400,
+                          color: selected
+                              ? DriverColors.navActive
+                              : DriverColors.navInactive)),
+                ],
+              ),
             ),
           ),
         ),

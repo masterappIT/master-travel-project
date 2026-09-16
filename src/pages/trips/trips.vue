@@ -29,9 +29,9 @@ import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { openCachedPage, setOrderReturnTarget } from '../../utils/navigation'
 
 const { responsiveStyle } = useResponsiveCanvas()
-import { ref } from 'vue'
+import { onUnmounted, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
-import { isAuthenticated } from '../../utils/auth'
+import { isAuthenticated, getAuthUser, subscribeAuthUser } from '../../utils/auth'
 import ProfileHeader from '../../components/profile/ProfileHeader.vue'
 import UpgradeCard from '../../components/profile/UpgradeCard.vue'
 import WalletCard from '../../components/profile/WalletCard.vue'
@@ -46,16 +46,24 @@ const avatarUrl = ref('')
 const displayName = ref('John')
 const walletBalance = ref(0)
 const authenticated = ref(false)
+let profilePollTimer: ReturnType<typeof setInterval> | undefined
+const avatarWithCacheBust = (url: string | null | undefined) => {
+  if (!url) return ''
+  return `${url}${url.includes('?') ? '&' : '?'}v=${encodeURIComponent(url)}`
+}
 
 const refreshProfile = async () => {
   authenticated.value = isAuthenticated()
   const profile = uni.getStorageSync('account-profile')
-  avatarUrl.value = profile?.avatarUrl || ''
-  displayName.value = profile?.displayName || 'John'
+  const authUser = getAuthUser()
+  avatarUrl.value = profile?.avatarUrl || authUser?.avatarUrl || ''
+  displayName.value = profile?.displayName || profile?.name || authUser?.displayName || authUser?.name || 'John'
   if (authenticated.value) {
     try {
       const remote = await getClientProfile()
-      displayName.value = remote.name || displayName.value
+      displayName.value = remote.displayName || remote.name || displayName.value
+      avatarUrl.value = avatarWithCacheBust(remote.avatarUrl)
+      uni.setStorageSync('account-profile', { ...profile, displayName: displayName.value, avatarUrl: remote.avatarUrl || '' })
       uni.setStorageSync('client-auth-user', remote)
     } catch { /* keep cached profile when offline */ }
   }
@@ -67,9 +75,21 @@ const refreshProfile = async () => {
 }
 
 void refreshProfile()
+const unsubscribeAuthUser = subscribeAuthUser((user) => {
+  displayName.value = user.displayName || user.name || displayName.value
+  avatarUrl.value = user.avatarUrl || ''
+  uni.setStorageSync('client-auth-user', user)
+})
+onUnmounted(unsubscribeAuthUser)
 
 onShow(() => {
   void refreshProfile()
+  if (profilePollTimer) clearInterval(profilePollTimer)
+  if (isAuthenticated()) profilePollTimer = setInterval(() => { void refreshProfile() }, 15000)
+})
+
+onUnmounted(() => {
+  if (profilePollTimer) clearInterval(profilePollTimer)
 })
 
 const goHome = () => openCachedPage('/pages/index/index')

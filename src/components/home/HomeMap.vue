@@ -69,8 +69,8 @@ const nativeMarkers = computed<MapMarker[]>(() => (props.markers || [])
       : ''
   const sizedMarker = {
     ...marker,
-    width: marker.width || (marker.id === 2 ? 24 : 20),
-    height: marker.height || 36
+    width: marker.width || (marker.id === 2 ? 10 : 10),
+    height: marker.height || (marker.id === 2 ? 15 : 18)
   }
   return content
     ? { ...sizedMarker, callout: { content, display: 'ALWAYS', color: '#263238', fontSize: 14, borderRadius: 8, bgColor: '#FFFFFF', padding: 10, textAlign: 'center' } }

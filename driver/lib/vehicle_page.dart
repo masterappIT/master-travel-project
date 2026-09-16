@@ -171,7 +171,7 @@ class _StatusPill extends StatelessWidget {
   Widget build(BuildContext context) => DecoratedBox(
       decoration: BoxDecoration(
           color:
-              active ? DriverColors.successBackground : const Color(0xfff3f4f6),
+              ? DriverColors.successBackground : DriverColors.warningBackground,
           borderRadius: BorderRadius.circular(DriverRadii.pill)),
       child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -180,8 +180,8 @@ class _StatusPill extends StatelessWidget {
                   fontSize: DriverTypography.caption,
                   fontWeight: FontWeight.w700,
                   color: active
-                      ? DriverColors.darkGreen
-                      : const Color(0xff6b7280)))));
+                      ? DriverColors.primary
+                      : DriverColors.secondaryText)))));
 }
 
 class _InfoRow extends StatelessWidget {

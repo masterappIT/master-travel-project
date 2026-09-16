@@ -6,7 +6,7 @@ export function createApiClient({ baseUrl, getToken, onUnauthorized }) {
         ...options,
         headers: {
           'Content-Type': 'application/json',
-          ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}),
+          ...(getToken() ? { Authorization: 'Bearer ' + getToken() } : {}),
           ...(options.headers || {})
         }
       })

@@ -1,7 +1,7 @@
 import type { CrossBorderTrip } from '../../shared/types/trip'
 import { clearAuthentication, getAuthToken, type AuthUser } from '../utils/auth'
 
-let API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:3010'
+let API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://192.168.0.185:3010'
 // #ifdef H5
 API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api'
 // #endif
@@ -44,7 +44,6 @@ export async function markNotificationRead(id: string): Promise<void> {
 export type PhoneAuthChallenge = {
   challengeId: string
   expiresAt: string
-  developmentCode?: string
 }
 
 export type AuthResult = {
@@ -68,11 +67,11 @@ export async function requestPhoneVerificationCode(countryCode: string, phoneNum
   return response.data as PhoneAuthChallenge
 }
 
-export async function verifyPhoneVerificationCode(challengeId: string, code = '', developmentCode?: string): Promise<AuthResult> {
+export async function verifyPhoneVerificationCode(challengeId: string, code = ''): Promise<AuthResult> {
   const response = await uni.request({
     url: `${API_BASE_URL}/auth/phone/verify`,
     method: 'POST',
-    data: { challengeId, code, developmentCode }
+    data: { challengeId, code }
   })
   if (response.statusCode >= 400) throw apiError(response, '驗證碼錯誤或已過期')
   return response.data as AuthResult
@@ -93,7 +92,7 @@ export async function logoutClient(): Promise<void> {
   if (response.statusCode >= 400) throw apiError(response, '登出失敗')
 }
 
-export type ClientProfile = AuthUser & { displayName: string | null; email: string | null; gender: string | null; region: string | null; birthday: string | null; cashBalance: number; fareBalance: number; membershipLevel?: string | null }
+export type ClientProfile = AuthUser & { avatarUrl: string | null; displayName: string | null; email: string | null; gender: string | null; region: string | null; birthday: string | null; cashBalance: number; fareBalance: number; membershipLevel?: string | null }
 
 export async function getClientProfile(): Promise<ClientProfile> {
   const response = await uni.request({ url: `${API_BASE_URL}/client/me`, header: authHeaders() })
@@ -132,7 +131,27 @@ export async function unlinkClientProvider(provider: 'wechat' | 'apple'): Promis
   return response.data as ClientSecurity
 }
 
-export type ClientProfileUpdate = Pick<ClientProfile, 'name' | 'displayName' | 'email' | 'gender' | 'region' | 'birthday'> & { countryCode?: string; phoneNumber?: string }
+export async function uploadClientAvatar(filePath: string): Promise<ClientProfile> {
+  // #ifdef H5
+  const source = await fetch(filePath)
+  const blob = await source.blob()
+  const form = new FormData()
+  form.append('file', blob, 'avatar.jpg')
+  const response = await fetch(`${API_BASE_URL}/client/me/avatar`, { method: 'POST', headers: authHeaders(), body: form })
+  if (!response.ok) throw new Error(`頭像上傳失敗（HTTP ${response.status}）`)
+  return await response.json() as ClientProfile
+  // #endif
+  // #ifndef H5
+  return new Promise((resolve, reject) => {
+    uni.uploadFile({ url: `${API_BASE_URL}/client/me/avatar`, filePath, name: 'file', header: authHeaders(), success: (response) => {
+      if (response.statusCode >= 400) { reject(new Error(`頭像上傳失敗（HTTP ${response.statusCode}）`)); return }
+      try { resolve(JSON.parse(response.data) as ClientProfile) } catch { reject(new Error('頭像回應格式錯誤')) }
+    }, fail: reject })
+  })
+  // #endif
+}
+
+export type ClientProfileUpdate = Pick<ClientProfile, 'name' | 'displayName' | 'avatarUrl' | 'email' | 'gender' | 'region' | 'birthday'> & { countryCode?: string; phoneNumber?: string }
 
 export async function updateClientProfile(profile: ClientProfileUpdate): Promise<ClientProfile> {
   const response = await uni.request({ url: `${API_BASE_URL}/client/me`, method: 'PATCH' as UniApp.RequestOptions['method'], header: authHeaders(), data: profile })

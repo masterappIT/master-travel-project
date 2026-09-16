@@ -390,8 +390,8 @@ const updateRoute = async () => {
   try {
     const route = await planDrivingRoute(originCoordinate, destinationCoordinate)
     mapMarkers.value = [
-      { id: 1, ...originCoordinate, title: '出發地', iconPath: '/static/home/route/origin.svg', width: 20, height: 36 },
-      { id: 2, ...destinationCoordinate, title: '目的地', iconPath: '/static/home/route/destination.svg', width: 24, height: 36 }
+      { id: 1, ...originCoordinate, title: '出發地', iconPath: '/static/home/route/origin.svg', width: 10, height: 18 },
+      { id: 2, ...destinationCoordinate, title: '目的地', iconPath: '/static/home/route/destination.svg', width: 10, height: 15 }
     ]
     mapPolyline.value = [{ points: route.points, color: '#285CFC', width: 6, arrowLine: true }]
       const distanceKm = route.distance / 1000

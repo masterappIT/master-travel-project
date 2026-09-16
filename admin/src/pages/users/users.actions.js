@@ -8,7 +8,7 @@ export function createUsersActions({ usersApi, users, selectedUser, userForm, wa
   const reset = () => {
     selectedUser.value = null
     walletAdjustment.value = null
-    userForm.value = { id: '', name: '', countryCode: '+852', phoneNumber: '' }
+    userForm.value = { id: '', name: '', displayName: '', countryCode: '+852', phoneNumber: '', email: '', gender: '', region: '', birthday: '' }
   }
 
   const select = async item => {

@@ -68,12 +68,18 @@ class _CheckBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-            color: DriverColors.successBackground,
-            borderRadius: BorderRadius.circular(DriverRadii.pill)),
-        child: SvgPicture.asset('assets/completed-check.svg',
-            width: 24, height: 24),
+        width: 80,
+        height: 80,
+        alignment: Alignment.center,
+        decoration: const BoxDecoration(
+          color: DriverColors.primary,
+          shape: BoxShape.circle,
+        ),
+        child: const Icon(
+          Icons.check_rounded,
+          size: 42,
+          color: DriverColors.onPrimary,
+        ),
       );
 }
 
@@ -114,7 +120,8 @@ class _CompletedRouteText extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Column(children: [
         Row(mainAxisSize: MainAxisSize.min, children: [
-          SvgPicture.asset('assets/completed-origin.svg', width: 8, height: 8),
+          const Icon(Icons.radio_button_checked_rounded,
+              size: 8, color: DriverColors.primary),
           const SizedBox(width: DriverSpacing.sm),
           const Text('香港中環',
               style: TextStyle(
@@ -128,8 +135,8 @@ class _CompletedRouteText extends StatelessWidget {
                 fontSize: DriverTypography.caption, color: Color(0xff80a0ff))),
         const SizedBox(height: 2),
         Row(mainAxisSize: MainAxisSize.min, children: [
-          SvgPicture.asset('assets/completed-destination.svg',
-              width: 8, height: 8),
+          const Icon(Icons.location_on_rounded,
+              size: 8, color: DriverColors.primary),
           const SizedBox(width: DriverSpacing.sm),
           const Text('深圳',
               style: TextStyle(

@@ -58,7 +58,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { goHome } from '../../utils/navigation'
 import { authenticateThirdParty, requestPhoneVerificationCode, verifyPhoneVerificationCode } from '../../services/api'
@@ -68,15 +68,13 @@ const { responsiveStyle } = useResponsiveCanvas()
 const countryOptions = ['香港 +852', '澳門 +853', '內地 +86']
 const countryCodes = ['+852', '+853', '+86']
 const countryPhoneLengths = [8, 8, 11]
-// Explicit developer-only switch. Do not remove or change this bypass without a direct instruction.
-// It requires VITE_ENABLE_DEV_LOGIN=true and is intended only for local development builds.
-const developmentLoginEnabled = import.meta.env.VITE_ENABLE_DEV_LOGIN === 'true' && import.meta.env.MODE !== 'production'
+// 預填本地測試帳號，但仍需由使用者完成同意、發送驗證碼及輸入驗證碼流程。
 const developmentCountryCode = import.meta.env.VITE_DEV_LOGIN_COUNTRY_CODE || '+852'
 const developmentPhone = import.meta.env.VITE_DEV_LOGIN_PHONE || '66996688'
 const developmentCountryIndex = countryCodes.indexOf(developmentCountryCode)
-const countryIndex = ref(developmentLoginEnabled && developmentCountryIndex >= 0 ? developmentCountryIndex : 0)
+const countryIndex = ref(developmentCountryIndex >= 0 ? developmentCountryIndex : 0)
 const countryCode = ref(countryCodes[countryIndex.value])
-const phone = ref(developmentLoginEnabled ? developmentPhone : '')
+const phone = ref(developmentPhone)
 const agreed = ref(false)
 const loginSubmitting = ref(false)
 const phoneMaxLength = computed(() => countryPhoneLengths[countryIndex.value])
@@ -94,25 +92,17 @@ const handleBack = () => {
 
 const handleLogin = async () => {
   if (loginSubmitting.value) return
-  if (!agreed.value && !developmentLoginEnabled) {
+  if (!agreed.value) {
     uni.showToast({ title: '請先同意私隱協議及使用條款', icon: 'none' })
     return
   }
-  if (!developmentLoginEnabled && !new RegExp(`^\\d{${phoneMaxLength.value}}$`).test(phone.value)) {
+  if (!new RegExp(`^\\d{${phoneMaxLength.value}}$`).test(phone.value)) {
     uni.showToast({ title: `請輸入${phoneMaxLength.value}位手機號碼`, icon: 'none' })
     return
   }
   loginSubmitting.value = true
   try {
-    const loginCountryCode = developmentLoginEnabled ? developmentCountryCode : countryCode.value
-    const loginPhone = developmentLoginEnabled ? developmentPhone : phone.value
-    const challenge = await requestPhoneVerificationCode(loginCountryCode, loginPhone)
-    if (developmentLoginEnabled) {
-      const result = await verifyPhoneVerificationCode(challenge.challengeId, '', challenge.developmentCode)
-      setAuthenticated(result.token, result.user)
-      goHome()
-      return
-    }
+    const challenge = await requestPhoneVerificationCode(countryCode.value, phone.value)
     const query = `challengeId=${encodeURIComponent(challenge.challengeId)}&phone=${encodeURIComponent(`${countryCode.value}-${phone.value}`)}`
     uni.navigateTo({ url: `/pages/login/verify?${query}`, animationType: 'none', animationDuration: 0 })
   } catch (error) {
@@ -121,10 +111,6 @@ const handleLogin = async () => {
     loginSubmitting.value = false
   }
 }
-
-onMounted(() => {
-  if (developmentLoginEnabled) void handleLogin()
-})
 
 const handleThirdPartyLogin = async (provider: 'wechat' | 'apple') => {
   try {

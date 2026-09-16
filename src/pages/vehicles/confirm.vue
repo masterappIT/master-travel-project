@@ -308,8 +308,8 @@ const updateConfirmMap = async () => {
   const origin = { latitude: route.originLatitude, longitude: route.originLongitude }
   const destination = { latitude: route.destinationLatitude, longitude: route.destinationLongitude }
   mapMarkers.value = [
-    { id: 1, ...origin, title: '出發地', iconPath: '/static/home/route/origin.svg', width: 20, height: 36 },
-    { id: 2, ...destination, title: '目的地', iconPath: '/static/home/route/destination.svg', width: 24, height: 36 }
+    { id: 1, ...origin, title: '出發地', iconPath: '/static/home/route/origin.svg', width: 10, height: 18 },
+    { id: 2, ...destination, title: '目的地', iconPath: '/static/home/route/destination.svg', width: 10, height: 15 }
   ]
   try {
     const routeResult = await planDrivingRoute(origin, destination)
@@ -357,8 +357,8 @@ const saveTripChanges = async (origin: string, destination: string, departureTim
     const route = await planDrivingRoute(originCoordinate, destinationCoordinate)
     tripStore.setRouteDistance(route.distance, route.duration)
     mapMarkers.value = [
-      { id: 1, ...originCoordinate, title: '出發地', iconPath: '/static/home/route/origin.svg', width: 20, height: 36 },
-      { id: 2, ...destinationCoordinate, title: '目的地', iconPath: '/static/home/route/destination.svg', width: 24, height: 36 }
+      { id: 1, ...originCoordinate, title: '出發地', iconPath: '/static/home/route/origin.svg', width: 10, height: 18 },
+      { id: 2, ...destinationCoordinate, title: '目的地', iconPath: '/static/home/route/destination.svg', width: 10, height: 15 }
     ]
     mapPolyline.value = [{ points: route.points, color: '#285CFC', width: 6, arrowLine: true }]
     const distanceKm = route.distance / 1000

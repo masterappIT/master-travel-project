@@ -39,31 +39,41 @@ class DriverPageShell extends StatelessWidget {
             constraints: const BoxConstraints(
               maxWidth: DriverDimensions.maxContentWidth,
             ),
-            child: SizedBox.expand(
-              child: Stack(
-                children: [
-                  SingleChildScrollView(
-                    padding: EdgeInsets.fromLTRB(
-                      horizontalPadding,
-                      topPadding,
-                      horizontalPadding,
-                      bottomPadding,
-                    ),
-                    child: child,
-                  ),
-                  if (showBottomNavigation)
-                    Positioned(
-                      left: navHorizontalPadding,
-                      right: navHorizontalPadding,
-                      bottom: DriverDimensions.navBottomInset,
-                      child: FloatingNavBar(
-                        selectedIndex: selectedIndex,
-                        onHomeTap: onHomeTap,
-                        onOrderTap: onOrderTap,
-                        onProfileTap: onProfileTap,
+            child: Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [DriverColors.shellAccent, DriverColors.background],
+                  stops: [0.0, 0.26],
+                ),
+              ),
+              child: SizedBox.expand(
+                child: Stack(
+                  children: [
+                    SingleChildScrollView(
+                      padding: EdgeInsets.fromLTRB(
+                        horizontalPadding,
+                        topPadding,
+                        horizontalPadding,
+                        bottomPadding,
                       ),
+                      child: child,
                     ),
-                ],
+                    if (showBottomNavigation)
+                      Positioned(
+                        left: navHorizontalPadding,
+                        right: navHorizontalPadding,
+                        bottom: DriverDimensions.navBottomInset,
+                        child: FloatingNavBar(
+                          selectedIndex: selectedIndex,
+                          onHomeTap: onHomeTap,
+                          onOrderTap: onOrderTap,
+                          onProfileTap: onProfileTap,
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
           ),

@@ -30,6 +30,7 @@ model User {
   phoneNumber        String
   name               String?
   displayName        String?
+  avatarUrl          String?
   email              String?
   passwordHash       String?
   gender             String?
@@ -47,6 +48,7 @@ model User {
   payments           Payment[]
   authIdentities     AuthIdentity[]
   clientSessions     ClientSession[]
+  verificationCodes  VerificationCode[]
   notifications      Notification[]
 
   @@unique([countryCode, phoneNumber])
@@ -76,6 +78,25 @@ model AuthIdentity {
   @@unique([provider, providerId])
   @@unique([provider, userId])
   @@index([userId])
+}
+
+model VerificationCode {
+  id           String    @id @default(cuid())
+  userId       String?
+  countryCode  String
+  phoneNumber  String
+  purpose      String    @default("LOGIN")
+  status       String    @default("ISSUED")
+  codeHash     String
+  attempts     Int       @default(0)
+  expiresAt    DateTime
+  consumedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  user         User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([countryCode, phoneNumber, createdAt])
+  @@index([status, expiresAt])
 }
 
 model WalletTransaction {

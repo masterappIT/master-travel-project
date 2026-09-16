@@ -1,28 +1,30 @@
 import 'package:flutter/material.dart';
 
 abstract final class DriverColors {
-  static const background = Color(0xfff0f2f5);
+  static const background = Color(0xfff4f7fb);
   static const surface = Color(0xffffffff);
   static const elevatedSurface = Color(0xffffffff);
-  static const text = Color(0xff1c1c2e);
-  static const secondaryText = Color(0xff56657e);
-  static const mutedText = Color(0xff80808c);
-  static const labelText = Color(0xff38434a);
-  static const border = Color(0xffd9d9d9);
-  static const divider = Color(0xffe5e7eb);
-  static const primary = Color(0xff4a6cf7);
-  static const primaryDark = Color(0xff285cfc);
+  static const text = Color(0xff17233d);
+  static const secondaryText = Color(0xff65738b);
+  static const mutedText = Color(0xff98a3b5);
+  static const labelText = Color(0xff41506a);
+  static const border = Color(0xffdbe3ef);
+  static const divider = Color(0xffe8edf4);
+  static const primary = Color(0xff3568e8);
+  static const primaryDark = Color(0xff1e4fc7);
   static const onPrimary = Color(0xffffffff);
-  static const activeBlue = Color(0xff285cfc);
-  static const accent = Color(0xff4cd964);
-  static const success = Color(0xff4cd964);
-  static const successBackground = Color(0xffebf9f1);
-  static const warningBackground = Color(0xfffff5eb);
-  static const warningText = Color(0xff6b7280);
-  static const infoBackground = Color(0xffeaf0ff);
-  static const darkGreen = Color(0xff2b7a42);
-  static const navInactive = Color(0xff9999a1);
-  static const navActive = Color(0xff295cfc);
+  static const activeBlue = Color(0xff3568e8);
+  static const accent = Color(0xff3568e8);
+  static const success = Color(0xff3568e8);
+  static const successBackground = Color(0xffe8f0ff);
+  static const warningBackground = Color(0xffeef3fa);
+  static const warningText = Color(0xff65738b);
+  static const infoBackground = Color(0xffe8f0ff);
+  static const darkGreen = Color(0xff245bd6);
+  static const navInactive = Color(0xff8793a8);
+  static const navActive = Color(0xff245bd6);
+  static const panelTint = Color(0xffe8f0ff);
+  static const shellAccent = Color(0xffe8f0ff);
 }
 
 abstract final class DriverShadows {

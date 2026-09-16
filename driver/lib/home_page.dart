@@ -84,20 +84,32 @@ class _HomePageState extends State<HomePage> {
               : Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _ProfileHeader(
-                        name: (_driver?['name'] as String?) ?? '司機',
-                        onNotificationTap: () => DriverNavigation.push(
-                            context, DriverRouteNames.profile)),
-                    const SizedBox(height: 20),
+                    Container(
+                      padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
+                      decoration: BoxDecoration(
+                        color: DriverColors.panelTint,
+                        borderRadius: BorderRadius.circular(DriverRadii.card),
+                        border: Border.all(color: DriverColors.infoBackground),
+                      ),
+                      child: _ProfileHeader(
+                          name: (_driver?['name'] as String?) ?? '司機',
+                          onNotificationTap: () => DriverNavigation.push(
+                              context, DriverRouteNames.profile)),
+                    ),
+                    const SizedBox(height: DriverSpacing.xl),
+                    const _SectionEyebrow('工作台總覽'),
+                    const SizedBox(height: DriverSpacing.sm),
                     _StatusCard(
                       isOnline: _isOnline,
                       onChanged: _toggleOnline,
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: DriverSpacing.xl),
+                    const _SectionEyebrow('收入與表現'),
+                    const SizedBox(height: DriverSpacing.sm),
                     const _EarningsCard(),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: DriverSpacing.lg),
                     const _QuickStatsRow(),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: DriverSpacing.xl),
                     const _RecentOrdersSection(),
                   ],
                 ),
@@ -186,10 +198,12 @@ class _StatusCard extends StatelessWidget {
         onTap: () => onChanged(!isOnline),
         borderRadius: BorderRadius.circular(DriverRadii.card),
         child: Container(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
           decoration: BoxDecoration(
-            color: DriverColors.surface,
-            border: Border.all(color: DriverColors.divider),
+            color:
+                isOnline ? DriverColors.infoBackground : DriverColors.surface,
+            border: Border.all(
+                color: isOnline ? DriverColors.primary : DriverColors.divider),
             borderRadius: BorderRadius.circular(DriverRadii.card),
             boxShadow: DriverShadows.card,
           ),
@@ -229,6 +243,20 @@ class _StatusCard extends StatelessWidget {
           ),
         ),
       );
+}
+
+class _SectionEyebrow extends StatelessWidget {
+  const _SectionEyebrow(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Text(label,
+      style: const TextStyle(
+          fontSize: DriverTypography.label,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.4,
+          color: DriverColors.secondaryText));
 }
 
 class _EarningsCard extends StatelessWidget {

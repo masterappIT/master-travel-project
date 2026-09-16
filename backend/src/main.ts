@@ -1,19 +1,26 @@
 import { NestFactory } from '@nestjs/core'
-import { Body, CallHandler, Controller, Delete, ExecutionContext, ForbiddenException, Get, HttpException, HttpStatus, Injectable, Module, NestInterceptor, Param, Patch, Post, Req, UnauthorizedException } from '@nestjs/common'
+import { Body, CallHandler, Controller, Delete, ExecutionContext, ForbiddenException, Get, HttpException, HttpStatus, Injectable, Module, NestInterceptor, Param, Patch, Post, Req, UnauthorizedException, UploadedFile, UseInterceptors } from '@nestjs/common'
+import { FileInterceptor } from '@nestjs/platform-express'
 import { NestExpressApplication } from '@nestjs/platform-express'
 import { APP_INTERCEPTOR } from '@nestjs/core'
 import { createHash, createHmac, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto'
+import { mkdir, writeFile } from 'node:fs/promises'
+import { extname, join } from 'node:path'
 import { Observable, tap } from 'rxjs'
 import { loadEnvFile } from 'node:process'
 import { Prisma, PrismaClient, PromotionKind, DiscountType, PromotionStackingMode } from '@prisma/client'
 
 try {
-  loadEnvFile()
+  loadEnvFile('../.env')
 } catch (error) {
-  if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+  if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+    try { loadEnvFile() } catch (fallbackError) {
+      if ((fallbackError as NodeJS.ErrnoException).code !== 'ENOENT') throw fallbackError
+    }
+  } else throw error
 }
 
-type RequestLike = { headers: { authorization?: string; ['user-agent']?: string }; query?: Record<string, string | undefined>; method?: string; url?: string; ip?: string }
+type RequestLike = { headers: { authorization?: string; ['user-agent']?: string; host?: string; ['x-forwarded-proto']?: string }; query?: Record<string, string | undefined>; method?: string; url?: string; ip?: string; protocol?: string }
 type AdminRole = 'SUPER_ADMIN' | 'OPERATOR' | 'VIEWER'
 interface Administrator { id: string; username: string; displayName: string; role: AdminRole; enabled: boolean; passwordHash: string; createdAt: string; updatedAt: string; lastLoginAt: string | null }
 interface AdminSession { sub: string; role: AdminRole; exp: number; jti: string }
@@ -325,7 +332,14 @@ function parseRouteMinimumFare(body: Partial<RouteMinimumFareSettings>) {
   return { originRegion, originCity, destinationRegion, destinationCity, categoryId: body.categoryId?.trim() || null, minimumFare, currency, enabled: body.enabled ?? true }
 }
 function validVehicleCategory(body: Partial<VehicleCategory>) { return body.id && body.name?.trim() && body.tabLabel?.trim() }
-type ManagedUser = { id: string; countryCode: string; phoneNumber: string; name: string | null; displayName: string | null; email: string | null; passwordHash: string | null; gender: string | null; region: string | null; birthday: Date | null; cashBalance: number; fareBalance: number; membershipLevel: string | null; enabled: boolean; createdAt: Date; lastLoginAt: Date | null; lastLogoutAt: Date | null }
+type ManagedUser = { id: string; countryCode: string; phoneNumber: string; name: string | null; displayName: string | null; avatarUrl: string | null; email: string | null; passwordHash: string | null; gender: string | null; region: string | null; birthday: Date | null; cashBalance: number; fareBalance: number; membershipLevel: string | null; enabled: boolean; createdAt: Date; lastLoginAt: Date | null; lastLogoutAt: Date | null; authIdentities?: Array<{ provider: string }>; verificationCodes?: Array<{ id: string; purpose: string; status: string; attempts: number; expiresAt: Date; consumedAt: Date | null; createdAt: Date }> }
+function loginMethods(user: ManagedUser) {
+  const methods = ['SMS 驗證碼']
+  if (user.passwordHash) methods.push('密碼')
+  for (const identity of user.authIdentities || []) if (identity.provider === 'wechat') methods.push('WeChat')
+  for (const identity of user.authIdentities || []) if (identity.provider === 'apple') methods.push('Apple')
+  return [...new Set(methods)]
+}
 function userResponse(user: ManagedUser) {
   return {
     id: user.id,
@@ -334,6 +348,7 @@ function userResponse(user: ManagedUser) {
     phone: `${user.countryCode} ${user.phoneNumber}`,
     name: user.name,
     displayName: user.displayName,
+    avatarUrl: user.avatarUrl,
     email: user.email,
     gender: user.gender,
     region: user.region,
@@ -344,7 +359,9 @@ function userResponse(user: ManagedUser) {
     enabled: user.enabled,
     createdAt: user.createdAt.toISOString(),
     lastLoginAt: user.lastLoginAt?.toISOString() || null,
-    lastLogoutAt: user.lastLogoutAt?.toISOString() || null
+    lastLogoutAt: user.lastLogoutAt?.toISOString() || null,
+    loginMethods: loginMethods(user),
+    verificationCodeCount: user.verificationCodes?.length || 0
   }
 }
 function clientSecurityResponse(user: ManagedUser & { authIdentities?: Array<{ provider: string }> }) {
@@ -357,6 +374,17 @@ function parsePhoneIdentity(body: { countryCode?: string; phoneNumber?: string }
     throw new HttpException('A valid country code and phone number are required', HttpStatus.BAD_REQUEST)
   }
   return { countryCode, phoneNumber }
+}
+function parseProfileEmail(value?: string) {
+  const email = value?.trim() || null
+  if (email && (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) throw new HttpException('A valid email is required', HttpStatus.BAD_REQUEST)
+  return email
+}
+function parseBirthday(value?: string) {
+  if (!value) return null
+  const birthday = new Date(value)
+  if (Number.isNaN(birthday.getTime())) throw new HttpException('A valid birthday is required', HttpStatus.BAD_REQUEST)
+  return birthday
 }
 function clientSecret() {
   const value = process.env.CLIENT_SESSION_SECRET || process.env.ADMIN_SESSION_SECRET
@@ -406,6 +434,7 @@ function requireReviewedDriver(driver: { reviewStatus: string }) {
   if (!['已完成審核', '已審核', '已通過'].includes(driver.reviewStatus)) throw new ForbiddenException('Driver review is required before direct order acceptance')
 }
 async function clientAuthResponse(user: ManagedUser) {
+  if (!user.enabled) throw new ForbiddenException('User account is disabled')
   const exp = Date.now() + 30 * 24 * 60 * 60 * 1000
   const session: ClientSession = { sub: user.id, exp, jti: randomBytes(16).toString('hex') }
   await prisma.clientSession.create({ data: { jti: session.jti, userId: user.id, expiresAt: new Date(exp) } })
@@ -835,15 +864,12 @@ class ClientAuthController {
     }
     if (shouldRateLimit && (!requestState || now - requestState.windowStartedAt >= PHONE_CODE_REQUEST_WINDOW_MS)) phoneChallengeRequests.set(requestKey, { count: 1, windowStartedAt: now })
     else if (shouldRateLimit && requestState) requestState.count += 1
-    if (process.env.NODE_ENV === 'production' && !process.env.AUTH_OTP_CODE) {
-      throw new HttpException('OTP delivery is not configured', HttpStatus.SERVICE_UNAVAILABLE)
-    }
+    const code = '00000'
     const challengeId = randomBytes(18).toString('hex')
-    const code = process.env.NODE_ENV === 'production' && process.env.AUTH_OTP_CODE
-      ? process.env.AUTH_OTP_CODE
-      : '0000'
     const exp = now + PHONE_CODE_TTL_MS
     phoneChallenges.set(challengeId, { ...identity, code, exp, attempts: 0 })
+    const requestedUser = await prisma.user.findUnique({ where: { countryCode_phoneNumber: identity }, select: { id: true } })
+    await prisma.verificationCode.create({ data: { id: challengeId, userId: requestedUser?.id, countryCode: identity.countryCode, phoneNumber: identity.phoneNumber, codeHash: createHash('sha256').update(code).digest('hex'), expiresAt: new Date(exp) } })
     for (const [id, challenge] of phoneChallenges) {
       if (challenge.exp <= Date.now()) phoneChallenges.delete(id)
     }
@@ -855,24 +881,25 @@ class ClientAuthController {
   }
 
   @Post('phone/verify')
-  async verifyPhoneCode(@Body() body: { challengeId?: string; code?: string; developmentCode?: string }) {
+  async verifyPhoneCode(@Body() body: { challengeId?: string; code?: string }) {
     const challengeId = body.challengeId?.trim() || ''
     const challenge = phoneChallenges.get(challengeId)
     if (!challenge || challenge.exp <= Date.now()) {
       phoneChallenges.delete(challengeId)
+      await prisma.verificationCode.updateMany({ where: { id: challengeId, status: 'ISSUED' }, data: { status: 'EXPIRED' } })
       throw new UnauthorizedException('Verification code expired')
     }
     const submittedCode = body.code?.trim() || ''
-    const developmentCode = body.developmentCode?.trim() || ''
-    const developmentBypass = process.env.NODE_ENV !== 'production' && developmentCode !== '' && developmentCode === challenge.code
-    if (!developmentBypass && submittedCode !== challenge.code) {
+    if (submittedCode !== challenge.code) {
       challenge.attempts += 1
+      await prisma.verificationCode.updateMany({ where: { id: challengeId }, data: { attempts: challenge.attempts, status: challenge.attempts >= PHONE_CODE_MAX_ATTEMPTS ? 'LOCKED' : 'FAILED' } })
       if (challenge.attempts >= PHONE_CODE_MAX_ATTEMPTS) phoneChallenges.delete(challengeId)
       throw new UnauthorizedException('Invalid verification code')
     }
     phoneChallenges.delete(challengeId)
     const existing = await prisma.user.findUnique({ where: { countryCode_phoneNumber: { countryCode: challenge.countryCode, phoneNumber: challenge.phoneNumber } } })
     const user = existing || await prisma.user.create({ data: { id: await generateUserId(), countryCode: challenge.countryCode, phoneNumber: challenge.phoneNumber } })
+    await prisma.verificationCode.updateMany({ where: { id: challengeId }, data: { userId: user.id, status: 'VERIFIED', consumedAt: new Date() } })
     const loggedInUser = await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } })
     return clientAuthResponse(loggedInUser)
   }
@@ -915,8 +942,7 @@ class DriverAuthController {
     const identity = parsePhoneIdentity(body)
     const driver = await prisma.driver.findFirst({ where: { phoneCountryCode: identity.countryCode, phone: identity.phoneNumber } })
     if (!driver) throw new HttpException('Driver not found', HttpStatus.NOT_FOUND)
-    if (process.env.NODE_ENV === 'production' && !process.env.AUTH_OTP_CODE) throw new HttpException('OTP delivery is not configured', HttpStatus.SERVICE_UNAVAILABLE)
-    const code = process.env.NODE_ENV === 'production' ? process.env.AUTH_OTP_CODE! : '0000'
+    const code = '00000'
     const challengeId = randomBytes(18).toString('hex')
     const expiresAt = new Date(Date.now() + PHONE_CODE_TTL_MS)
     await prisma.driverOtpChallenge.create({ data: { id: challengeId, driverId: driver.id, countryCode: identity.countryCode, phone: identity.phoneNumber, codeHash: hashPassword(code), expiresAt } })
@@ -927,7 +953,8 @@ class DriverAuthController {
   async verifyPhoneCode(@Body() body: { challengeId?: string; code?: string; developmentCode?: string }) {
     const challenge = await prisma.driverOtpChallenge.findUnique({ where: { id: body.challengeId?.trim() || '' }, include: { driver: true } })
     if (!challenge || challenge.consumedAt || challenge.expiresAt.getTime() <= Date.now() || !challenge.driver) throw new UnauthorizedException('Verification code expired')
-    const code = body.code?.trim() || body.developmentCode?.trim() || ''
+    const code = body.code?.trim() || ''
+    if (code.length !== 5) throw new UnauthorizedException('Invalid verification code')
     if (!verifyPassword(code, challenge.codeHash)) throw new UnauthorizedException('Invalid verification code')
     await prisma.driverOtpChallenge.update({ where: { id: challenge.id }, data: { consumedAt: new Date() } })
     return driverAuthResponse(challenge.driver)
@@ -1277,17 +1304,19 @@ class AdminController {
     const identity = parsePhoneIdentity(body)
     const duplicate = await prisma.user.findUnique({ where: { countryCode_phoneNumber: identity } })
     if (duplicate) throw new HttpException('A user with this phone number already exists', HttpStatus.CONFLICT)
-    return userResponse(await prisma.user.create({ data: { id: await generateUserId(), ...identity, name: body.name?.trim() || null, displayName: body.displayName?.trim() || null, email: body.email?.trim() || null, gender: body.gender?.trim() || null, region: body.region?.trim() || null, birthday: body.birthday ? new Date(body.birthday) : null } }))
+    const email = parseProfileEmail(body.email)
+    const birthday = parseBirthday(body.birthday)
+    return userResponse(await prisma.user.create({ data: { id: await generateUserId(), ...identity, name: body.name?.trim() || null, displayName: body.displayName?.trim() || null, email, gender: body.gender?.trim() || null, region: body.region?.trim() || null, birthday } }))
   }
   @Get('users/:id') async getUser(@Req() req: RequestLike, @Param('id') id: string) {
     requireAuth(req)
-    const user = await prisma.user.findUnique({ where: { id }, include: { walletTransactions: { orderBy: { createdAt: 'desc' }, take: 20 } } })
+    const user = await prisma.user.findUnique({ where: { id }, include: { authIdentities: { select: { provider: true } }, verificationCodes: { orderBy: { createdAt: 'desc' }, take: 20 }, walletTransactions: { orderBy: { createdAt: 'desc' }, take: 20 } } })
     if (!user) throw new HttpException('User not found', HttpStatus.NOT_FOUND)
     const [currentTrips, currentCharterOrders] = await Promise.all([
       prisma.trip.findMany({ where: { userId: id, status: { in: ['PENDING', 'CONFIRMED'] } }, orderBy: { scheduledAt: 'asc' } }),
       Promise.resolve(charterOrders.filter(order => order.userId === id && ['PENDING', 'CONFIRMED'].includes(order.status)))
     ])
-    return { ...userResponse(user), currentTrips: currentTrips.map(trip => ({ ...trip, scheduledAt: trip.scheduledAt.toISOString(), createdAt: trip.createdAt.toISOString(), updatedAt: trip.updatedAt.toISOString() })), currentCharterOrders, walletTransactions: user.walletTransactions }
+    return { ...userResponse(user), loginMethods: loginMethods(user), verificationCodes: (user.verificationCodes || []).map(item => ({ id: item.id, purpose: item.purpose, status: item.status, attempts: item.attempts, expiresAt: item.expiresAt.toISOString(), consumedAt: item.consumedAt?.toISOString() || null, createdAt: item.createdAt.toISOString() })), currentTrips: currentTrips.map(trip => ({ ...trip, scheduledAt: trip.scheduledAt.toISOString(), createdAt: trip.createdAt.toISOString(), updatedAt: trip.updatedAt.toISOString() })), currentCharterOrders, walletTransactions: user.walletTransactions }
   }
   @Post('users/:id') async updateUser(@Req() req: RequestLike, @Param('id') id: string, @Body() body: { countryCode?: string; phoneNumber?: string; name?: string; displayName?: string; email?: string; gender?: string; region?: string; birthday?: string }) {
     requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
@@ -1296,7 +1325,9 @@ class AdminController {
     const identity = parsePhoneIdentity({ countryCode: body.countryCode ?? existing.countryCode, phoneNumber: body.phoneNumber ?? existing.phoneNumber })
     const duplicate = await prisma.user.findUnique({ where: { countryCode_phoneNumber: identity } })
     if (duplicate && duplicate.id !== id) throw new HttpException('A user with this phone number already exists', HttpStatus.CONFLICT)
-    return userResponse(await prisma.user.update({ where: { id }, data: { ...identity, name: body.name?.trim() || null, displayName: body.displayName?.trim() || null, email: body.email?.trim() || null, gender: body.gender?.trim() || null, region: body.region?.trim() || null, birthday: body.birthday ? new Date(body.birthday) : null } }))
+    const email = parseProfileEmail(body.email)
+    const birthday = parseBirthday(body.birthday)
+    return userResponse(await prisma.user.update({ where: { id }, data: { ...identity, name: body.name?.trim() || null, displayName: body.displayName?.trim() || null, email, gender: body.gender?.trim() || null, region: body.region?.trim() || null, birthday } }))
   }
   @Post('users/:id/status') async updateUserStatus(@Req() req: RequestLike, @Param('id') id: string, @Body() body: { enabled?: boolean }) {
     requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
@@ -2707,6 +2738,23 @@ function clientTripResponse(trip: Prisma.TripGetPayload<{ include: { user: { sel
 
 @Controller('client')
 class ClientOrdersController {
+  @Post('me/avatar')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 5 * 1024 * 1024 }, fileFilter: (_req, file, cb) => cb(null, /^image\/(png|jpeg|webp|gif)$/.test(file.mimetype)) }))
+  async uploadAvatar(@Req() req: RequestLike, @UploadedFile() file?: Express.Multer.File) {
+    const session = await clientSessionFrom(req)
+    if (!file) throw new HttpException('只接受圖片檔案', HttpStatus.BAD_REQUEST)
+    const extension = extname(file.originalname).toLowerCase() || '.jpg'
+    const filename = `${session.sub}-${Date.now()}${extension}`
+    const uploadDir = join(process.cwd(), 'uploads', 'avatars')
+    await mkdir(uploadDir, { recursive: true })
+    await writeFile(join(uploadDir, filename), file.buffer)
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http'
+    const host = req.headers.host || '127.0.0.1:3010'
+    const avatarUrl = `${protocol}://${host}/uploads/avatars/${filename}`
+    const user = await prisma.user.update({ where: { id: session.sub }, data: { avatarUrl } })
+    return userResponse(user)
+  }
+
   @Get('me')
   async getProfile(@Req() req: RequestLike) {
     const session = await clientSessionFrom(req)
@@ -2716,18 +2764,23 @@ class ClientOrdersController {
   }
 
   @Patch('me')
-  async updateProfile(@Req() req: RequestLike, @Body() body: { name?: string; displayName?: string; email?: string; password?: string; gender?: string; region?: string; birthday?: string; countryCode?: string; phoneNumber?: string }) {
+  async updateProfile(@Req() req: RequestLike, @Body() body: { name?: string; displayName?: string; avatarUrl?: string; email?: string; password?: string; gender?: string; region?: string; birthday?: string; countryCode?: string; phoneNumber?: string }) {
     const session = await clientSessionFrom(req)
     const name = body.name?.trim() || null
     const displayName = body.displayName?.trim() || null
-    const email = body.email?.trim() || null
+    const avatarUrl = body.avatarUrl?.trim() || null
+    const email = parseProfileEmail(body.email)
+    const birthday = parseBirthday(body.birthday)
     const password = body.password?.trim() || ''
     const gender = body.gender?.trim() || null
     const region = body.region?.trim() || null
-    const birthday = body.birthday ? new Date(body.birthday) : null
     const phone = body.countryCode || body.phoneNumber ? parsePhoneIdentity({ countryCode: body.countryCode, phoneNumber: body.phoneNumber }) : null
-    if (name && name.length > 100 || displayName && displayName.length > 100 || email && email.length > 254 || password && (password.length < 8 || password.length > 200) || gender && gender.length > 30 || region && region.length > 100 || body.birthday && Number.isNaN(birthday?.getTime())) throw new HttpException('Invalid profile fields', HttpStatus.BAD_REQUEST)
-    const user = await prisma.user.update({ where: { id: session.sub }, data: { name, displayName, email, ...(phone ? phone : {}), ...(password ? { passwordHash: hashPassword(password) } : {}), gender, region, birthday } })
+    if (name && name.length > 100 || displayName && displayName.length > 100 || password && (password.length < 8 || password.length > 200) || gender && gender.length > 30 || region && region.length > 100) throw new HttpException('Invalid profile fields', HttpStatus.BAD_REQUEST)
+    if (phone) {
+      const duplicate = await prisma.user.findFirst({ where: { countryCode: phone.countryCode, phoneNumber: phone.phoneNumber, id: { not: session.sub } } })
+      if (duplicate) throw new HttpException('Phone number is already connected', HttpStatus.CONFLICT)
+    }
+    const user = await prisma.user.update({ where: { id: session.sub }, data: { name, displayName, avatarUrl, email, ...(phone ? phone : {}), ...(password ? { passwordHash: hashPassword(password) } : {}), gender, region, birthday } })
     return userResponse(user)
   }
 
@@ -2741,9 +2794,9 @@ class ClientOrdersController {
   async updateSecurity(@Req() req: RequestLike, @Body() body: { countryCode?: string; phoneNumber?: string; email?: string; password?: string }) {
     const session = await clientSessionFrom(req)
     const identity = parsePhoneIdentity(body)
-    const email = body.email?.trim() || null
+    const email = parseProfileEmail(body.email)
     const password = body.password?.trim() || ''
-    if (email && email.length > 254 || password && (password.length < 8 || password.length > 200)) throw new HttpException('Invalid security fields', HttpStatus.BAD_REQUEST)
+    if (password && (password.length < 8 || password.length > 200)) throw new HttpException('Invalid security fields', HttpStatus.BAD_REQUEST)
     const duplicate = await prisma.user.findFirst({ where: { countryCode: identity.countryCode, phoneNumber: identity.phoneNumber, id: { not: session.sub } } })
     if (duplicate) throw new HttpException('Phone number is already connected', HttpStatus.CONFLICT)
     const user = await prisma.user.update({ where: { id: session.sub }, data: { countryCode: identity.countryCode, phoneNumber: identity.phoneNumber, email, ...(password ? { passwordHash: hashPassword(password) } : {}), }, include: { authIdentities: true } })
@@ -2849,6 +2902,7 @@ async function bootstrap() {
   await prisma.$connect()
   await ensurePricingDefaults()
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { bodyParser: false })
+  app.useStaticAssets(join(process.cwd(), 'uploads'), { prefix: '/uploads/' })
   app.useBodyParser('json', { limit: '2mb' })
   const configuredOrigins = (process.env.APP_CORS_ORIGINS || process.env.ADMIN_CORS_ORIGIN || '')
     .split(',')

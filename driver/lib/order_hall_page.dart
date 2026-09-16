@@ -74,20 +74,63 @@ class _OrderHallPageState extends State<OrderHallPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Row(
+                Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: DriverColors.surface,
+                    borderRadius: BorderRadius.circular(DriverRadii.card),
+                    border: Border.all(color: DriverColors.divider),
+                  ),
+                  child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('接單大廳',
-                          style: TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.w700,
-                              color: DriverColors.text)),
-                      _OnlineBadge(isOnline: online)
-                    ]),
-                const SizedBox(height: DriverSpacing.xl),
-                _OrderTabs(
-                    selectedIndex: _selectedTab,
-                    onChanged: (index) => setState(() => _selectedTab = index)),
+                      const Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('接單大廳',
+                              style: TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w800,
+                                  color: DriverColors.text)),
+                          SizedBox(height: DriverSpacing.xs),
+                          Text('掌握可接行程與目前工作',
+                              style: TextStyle(
+                                  fontSize: DriverTypography.label,
+                                  color: DriverColors.secondaryText)),
+                        ],
+                      ),
+                      _OnlineBadge(isOnline: online),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: DriverSpacing.lg),
+                Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: DriverColors.panelTint,
+                    borderRadius: BorderRadius.circular(DriverRadii.input),
+                  ),
+                  child: _OrderTabs(
+                      selectedIndex: _selectedTab,
+                      onChanged: (index) =>
+                          setState(() => _selectedTab = index)),
+                ),
+                const SizedBox(height: DriverSpacing.lg),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(_selectedTab == 0 ? '可接行程' : '進行中行程',
+                        style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            color: DriverColors.text)),
+                    Text(
+                        '${_selectedTab == 0 ? _available.length : _accepted.length} 筆',
+                        style: const TextStyle(
+                            fontSize: DriverTypography.label,
+                            color: DriverColors.secondaryText)),
+                  ],
+                ),
                 const SizedBox(height: DriverSpacing.md),
                 if (_loading)
                   const Center(
@@ -225,12 +268,14 @@ class _OrderTab extends StatelessWidget {
             borderRadius: BorderRadius.circular(DriverRadii.input),
             onTap: onTap,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               decoration: BoxDecoration(
-                color: DriverColors.surface,
+                color: selected
+                    ? DriverColors.infoBackground
+                    : DriverColors.surface,
                 border: Border.all(
                     color:
-                        selected ? DriverColors.primary : DriverColors.border),
+                        selected ? DriverColors.primary : DriverColors.divider),
                 borderRadius: BorderRadius.circular(DriverRadii.input),
               ),
               child: Text(label,
@@ -268,15 +313,12 @@ class _OrderCard extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(DriverRadii.card),
         child: Container(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
           decoration: BoxDecoration(
             color: DriverColors.surface,
             border: Border.all(color: DriverColors.divider),
             borderRadius: BorderRadius.circular(DriverRadii.card),
-            boxShadow: const [
-              BoxShadow(
-                  color: Color(0x1238434a), blurRadius: 4, offset: Offset(0, 2))
-            ],
+            boxShadow: DriverShadows.card,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,

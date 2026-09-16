@@ -43,8 +43,10 @@ import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { closeCachedPage } from '../../utils/navigation'
 
 const { responsiveStyle } = useResponsiveCanvas()
+import { onShow } from '@dcloudio/uni-app'
 import { reactive, ref, onMounted } from 'vue'
-import { getClientProfile, updateClientProfile, getClientSecurity, updateClientSecurity, linkClientProvider, unlinkClientProvider } from '../../services/api'
+import { setAuthenticated } from '../../utils/auth'
+import { getClientProfile, updateClientProfile, uploadClientAvatar, getClientSecurity, updateClientSecurity, linkClientProvider, unlinkClientProvider } from '../../services/api'
 type Provider = 'apple' | 'wechat'
 const stored = uni.getStorageSync('account-profile') || {}
 const storedSecurity = uni.getStorageSync('account-security') || {}
@@ -82,7 +84,19 @@ const toggleProvider = async (provider: Provider) => {
 }
 const chooseRegion = () => uni.showActionSheet({ itemList: ['香港', '澳門', '中國內地'], success: ({ tapIndex }) => { form.region = ['香港', '澳門', '中國內地'][tapIndex] } })
 const changeBirthday = (event: { detail: { value: string } }) => { form.birthday = event.detail.value }
-const chooseAvatar = () => uni.chooseImage({ count: 1, sizeType: ['compressed'], sourceType: ['album', 'camera'], success: ({ tempFilePaths }) => { avatarUrl.value = tempFilePaths[0] } })
+const chooseAvatar = () => uni.chooseImage({ count: 1, sizeType: ['compressed'], sourceType: ['album', 'camera'], success: async ({ tempFilePaths }) => {
+  const filePath = tempFilePaths[0]
+  if (!filePath) return
+  try {
+    const user = await uploadClientAvatar(filePath)
+    avatarUrl.value = user.avatarUrl || ''
+    uni.setStorageSync('account-profile', { ...form, avatarUrl: avatarUrl.value })
+    setAuthenticated(undefined, user)
+    uni.showToast({ title: '頭像已更新', icon: 'success' })
+  } catch (error) {
+    uni.showToast({ title: error instanceof Error ? error.message : '頭像上傳失敗', icon: 'none' })
+  }
+} })
 const save = async () => {
   try {
     const user = await updateClientProfile({ ...form, email: security.email })
@@ -91,12 +105,13 @@ const save = async () => {
     form.gender = user.gender || ''
     form.region = user.region || ''
     form.birthday = user.birthday || ''
+    avatarUrl.value = user.avatarUrl || ''
     security.email = user.email || ''
     countryCode.value = user.countryCode || countryCode.value
     phoneNumber.value = user.phoneNumber || phoneNumber.value
     security.phone = `${countryCode.value} ${phoneNumber.value}`
     uni.setStorageSync('account-profile', { ...form, avatarUrl: avatarUrl.value })
-    uni.setStorageSync('client-auth-user', user)
+    setAuthenticated(undefined, user)
     uni.showToast({ title: '已保存', icon: 'success' })
   } catch {
     uni.showToast({ title: '保存失敗，請稍後再試', icon: 'none' })
@@ -126,6 +141,7 @@ onMounted(async () => {
     form.gender = user.gender || form.gender
     form.region = user.region || form.region
     form.birthday = user.birthday || form.birthday
+    avatarUrl.value = user.avatarUrl || ''
     security.email = user.email || security.email
     countryCode.value = user.countryCode || countryCode.value
     phoneNumber.value = user.phoneNumber || phoneNumber.value
@@ -136,6 +152,15 @@ onMounted(async () => {
   } catch {
     // Keep cached profile values when the API is unavailable.
   }
+})
+
+onShow(() => {
+  void getClientProfile().then((user) => {
+    avatarUrl.value = user.avatarUrl || ''
+    form.name = user.name || ''
+    form.displayName = user.displayName || ''
+    uni.setStorageSync('account-profile', { ...form, avatarUrl: avatarUrl.value })
+  }).catch(() => undefined)
 })
 </script>
 <style scoped>

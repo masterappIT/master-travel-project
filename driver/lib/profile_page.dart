@@ -146,20 +146,20 @@ class _ProfilePageState extends State<ProfilePage> {
                 _MenuItem(
                   '個人資料',
                   'assets/profile-user.svg',
-                  _IconTone.blue,
+                  _IconTone.neutral,
                   onTap: _openProfileEditor,
                 ),
                 _MenuItem(
                   '車輛資料',
                   'assets/profile-vehicle.svg',
-                  _IconTone.green,
+                  _IconTone.neutral,
                   onTap: () =>
                       DriverNavigation.push(context, DriverRouteNames.vehicle),
                 ),
                 _MenuItem(
                   '接單紀錄',
                   'assets/profile-clipboard.svg',
-                  _IconTone.purple,
+                  _IconTone.neutral,
                   onTap: () => DriverNavigation.push(
                       context, DriverRouteNames.orderHistory),
                 ),
@@ -169,13 +169,15 @@ class _ProfilePageState extends State<ProfilePage> {
             _MenuCard(
               title: '收款設定',
               items: [
-                _MenuItem('收款幣種', 'assets/profile-fps.svg', _IconTone.orange,
+                _MenuItem('收款幣種', 'assets/profile-fps.svg', _IconTone.warning,
                     detail: '港幣 HKD、人民幣 CNY'),
-                _MenuItem('微信支付', 'assets/profile-wechat.svg', _IconTone.green,
+                _MenuItem(
+                    '微信支付', 'assets/profile-wechat.svg', _IconTone.success,
                     detail: '已綁定：$_name'),
-                _MenuItem('支付寶', 'assets/profile-fps.svg', _IconTone.blue,
+                _MenuItem('支付寶', 'assets/profile-fps.svg', _IconTone.neutral,
                     detail: '未綁定'),
-                _MenuItem('FPS 轉數快', 'assets/profile-fps.svg', _IconTone.green,
+                _MenuItem(
+                    'FPS 轉數快', 'assets/profile-fps.svg', _IconTone.success,
                     detail: '已綁定：$_name'),
               ],
             ),
@@ -183,20 +185,20 @@ class _ProfilePageState extends State<ProfilePage> {
             _MenuCard(
               title: '設定',
               items: [
-                _MenuItem('通知設定', 'assets/profile-bell.svg', _IconTone.blue),
-                _MenuItem('語言設定', 'assets/profile-fps.svg', _IconTone.purple),
-                _MenuItem('自動結算', 'assets/profile-fps.svg', _IconTone.orange,
+                _MenuItem('通知設定', 'assets/profile-bell.svg', _IconTone.neutral),
+                _MenuItem('語言設定', 'assets/profile-fps.svg', _IconTone.neutral),
+                _MenuItem('自動結算', 'assets/profile-fps.svg', _IconTone.neutral,
                     toggle: true),
-                _MenuItem('結算方式', 'assets/profile-fps.svg', _IconTone.green),
+                _MenuItem('結算方式', 'assets/profile-fps.svg', _IconTone.neutral),
               ],
             ),
             const SizedBox(height: DriverSpacing.xl),
             _MenuCard(
               title: '其他',
               items: [
-                _MenuItem('關於我們', 'assets/profile-fps.svg', _IconTone.blue),
+                _MenuItem('關於我們', 'assets/profile-fps.svg', _IconTone.neutral),
                 _MenuItem(
-                    '聯繫客服', 'assets/profile-headphones.svg', _IconTone.purple),
+                    '聯繫客服', 'assets/profile-headphones.svg', _IconTone.neutral),
               ],
             ),
             const SizedBox(height: DriverSpacing.lg),
@@ -261,7 +263,7 @@ class _ProfileHeader extends StatelessWidget {
         const Text('香港 · 兩地牌 · 轎車',
             style: TextStyle(
                 fontSize: DriverTypography.body,
-                color: DriverColors.warningText)),
+                color: DriverColors.secondaryText)),
       ],
     );
   }
@@ -286,17 +288,17 @@ class _BalanceCard extends StatelessWidget {
                   child: _BalanceTile(
                       label: '已結算',
                       value: '\$12,680',
-                      background: Color(0xffedfaf0),
-                      labelColor: Color(0xff338040),
-                      valueColor: Color(0xff29a140))),
+                      background: DriverColors.infoBackground,
+                      labelColor: DriverColors.primary,
+                      valueColor: DriverColors.primary)),
               const SizedBox(width: DriverSpacing.md),
               const Expanded(
                   child: _BalanceTile(
                       label: '未結算',
                       value: '\$3,420',
                       background: DriverColors.warningBackground,
-                      labelColor: Color(0xff99591a),
-                      valueColor: Color(0xffd9801a))),
+                      labelColor: DriverColors.secondaryText,
+                      valueColor: DriverColors.primary)),
             ]),
           ],
         ),
@@ -343,7 +345,7 @@ class _BalanceTile extends StatelessWidget {
       );
 }
 
-enum _IconTone { blue, green, purple, orange }
+enum _IconTone { neutral, success, warning }
 
 class _MenuItem {
   const _MenuItem(this.label, this.asset, this.tone,
@@ -389,13 +391,34 @@ class _MenuRow extends StatelessWidget {
   final _MenuItem item;
 
   Color get _background => switch (item.tone) {
-        _IconTone.blue => DriverColors.infoBackground,
-        _IconTone.green => const Color(0xffecfdf3),
-        _IconTone.purple => const Color(0xfff2edff),
-        _IconTone.orange => DriverColors.warningBackground,
+        _IconTone.neutral => DriverColors.infoBackground,
+        _IconTone.success => DriverColors.successBackground,
+        _IconTone.warning => DriverColors.warningBackground,
       };
 
-  @override
+  Color get _iconColor => switch (item.tone) {
+        _IconTone.neutral => DriverColors.primary,
+        _IconTone.success => DriverColors.darkGreen,
+        _IconTone.warning => DriverColors.warningText,
+      };
+
+  IconData get _icon => switch (item.label) {
+        '個人資料' => Icons.person_outline_rounded,
+        '車輛資料' => Icons.directions_car_outlined,
+        '接單紀錄' => Icons.receipt_long_outlined,
+        '收款幣種' => Icons.currency_exchange_rounded,
+        '微信支付' => Icons.chat_bubble_outline_rounded,
+        '支付寶' => Icons.account_balance_wallet_outlined,
+        'FPS 轉數快' => Icons.bolt_rounded,
+        '通知設定' => Icons.notifications_none_rounded,
+        '語言設定' => Icons.translate_rounded,
+        '自動結算' => Icons.autorenew_rounded,
+        '結算方式' => Icons.payments_outlined,
+        '關於我們' => Icons.info_outline_rounded,
+        '聯繫客服' => Icons.headset_mic_outlined,
+        _ => Icons.tune_rounded,
+      };
+
   Widget build(BuildContext context) => Semantics(
         button: true,
         label: item.label,
@@ -411,7 +434,11 @@ class _MenuRow extends StatelessWidget {
                   decoration: BoxDecoration(
                       color: _background,
                       borderRadius: BorderRadius.circular(18)),
-                  child: SvgPicture.asset(item.asset, width: 18, height: 18)),
+                  child: Icon(
+                    _icon,
+                    size: 20,
+                    color: _iconColor,
+                  )),
               const SizedBox(width: DriverSpacing.md),
               Expanded(
                   child: Column(

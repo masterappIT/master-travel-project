@@ -7,7 +7,6 @@
     "dev:h5": "uni --host 127.0.0.1 --port 5173 --strictPort",
     "dev:h5:ssr": "uni --ssr",
     "dev:mp-alipay": "uni -p mp-alipay",
-    "dev:mp-baidu": "uni -p mp-baidu",
     "dev:mp-jd": "uni -p mp-jd",
     "dev:mp-kuaishou": "uni -p mp-kuaishou",
     "dev:mp-lark": "uni -p mp-lark",
