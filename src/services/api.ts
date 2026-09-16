@@ -104,6 +104,7 @@ export type ClientSecurity = {
   countryCode: string
   phoneNumber: string
   email: string | null
+  passwordSet: boolean
   linkedProviders: Array<'apple' | 'wechat'>
 }
 

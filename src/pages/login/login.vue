@@ -60,21 +60,16 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
-import { goHome } from '../../utils/navigation'
 import { authenticateThirdParty, requestPhoneVerificationCode, verifyPhoneVerificationCode } from '../../services/api'
 import { setAuthenticated } from '../../utils/auth'
 
 const { responsiveStyle } = useResponsiveCanvas()
-const countryOptions = ['香港 +852', '澳門 +853', '內地 +86']
-const countryCodes = ['+852', '+853', '+86']
-const countryPhoneLengths = [8, 8, 11]
-// 預填本地測試帳號，但仍需由使用者完成同意、發送驗證碼及輸入驗證碼流程。
-const developmentCountryCode = import.meta.env.VITE_DEV_LOGIN_COUNTRY_CODE || '+852'
-const developmentPhone = import.meta.env.VITE_DEV_LOGIN_PHONE || '66996688'
-const developmentCountryIndex = countryCodes.indexOf(developmentCountryCode)
-const countryIndex = ref(developmentCountryIndex >= 0 ? developmentCountryIndex : 0)
+const countryOptions = ['香港 +852', '澳門 +853', '內地 +86', '美國/加拿大 +1', '英國 +44']
+const countryCodes = ['+852', '+853', '+86', '+1', '+44']
+const countryPhoneLengths = [8, 8, 11, 15, 15]
+const countryIndex = ref(0)
 const countryCode = ref(countryCodes[countryIndex.value])
-const phone = ref(developmentPhone)
+const phone = ref('')
 const agreed = ref(false)
 const loginSubmitting = ref(false)
 const phoneMaxLength = computed(() => countryPhoneLengths[countryIndex.value])
@@ -87,7 +82,7 @@ const handleCountryChange = (event: { detail: { value: string | number } }) => {
 }
 
 const handleBack = () => {
-  goHome()
+  uni.reLaunch({ url: '/pages/index/index', animationType: 'none', animationDuration: 0 })
 }
 
 const handleLogin = async () => {
