@@ -8,6 +8,7 @@ abstract final class DriverRouteNames {
   static const profile = '/profile';
   static const profileEdit = '/profile/edit';
   static const vehicle = '/profile/vehicle';
+  static const flightQuery = '/profile/flight-query';
   static const addVehicle = '/profile/vehicle/add';
   static const vehicleLegacy = '/profile/vehicle-legacy';
   static const orderAccepted = '/orders/accepted';

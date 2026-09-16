@@ -90,26 +90,35 @@ class _LoginPageState extends State<LoginPage> {
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 430),
               child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const _Header(),
-                    const SizedBox(height: DriverSpacing.xl),
-                    _VerificationCard(
-                        phoneController: _phoneController,
-                        codeController: _codeController,
-                        onRequestCode: _requestCode,
-                        loading: _loading),
-                    if (_error != null) ...[
-                      const SizedBox(height: DriverSpacing.sm),
-                      Text(_error!,
-                          style: const TextStyle(color: Colors.red),
-                          textAlign: TextAlign.center),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minHeight: constraints.maxHeight > 32
+                        ? constraints.maxHeight - 32
+                        : 0,
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const _Header(),
+                      const SizedBox(height: DriverSpacing.xl),
+                      _VerificationCard(
+                          phoneController: _phoneController,
+                          codeController: _codeController,
+                          onRequestCode: _requestCode,
+                          loading: _loading),
+                      if (_error != null) ...[
+                        const SizedBox(height: DriverSpacing.sm),
+                        Text(_error!,
+                            style: const TextStyle(color: Colors.red),
+                            textAlign: TextAlign.center),
+                      ],
+                      const SizedBox(height: DriverSpacing.xl),
+                      _ActionCard(onLogin: _verify, loading: _loading),
                     ],
-                    const SizedBox(height: DriverSpacing.xl),
-                    _ActionCard(onLogin: _verify, loading: _loading),
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -124,32 +133,70 @@ class _Header extends StatelessWidget {
   const _Header();
 
   @override
-  Widget build(BuildContext context) => Column(
-        children: [
-          Container(
-            width: 72,
-            height: 72,
-            decoration: BoxDecoration(
-              color: DriverColors.primary,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            alignment: Alignment.center,
-            child: SvgPicture.asset('assets/car.svg', width: 32, height: 32),
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [DriverColors.primaryDark, DriverColors.primary],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
           ),
-          const SizedBox(height: DriverSpacing.lg),
-          const Text('跨境出行',
-              style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.w700,
-                  color: DriverColors.text),
-              textAlign: TextAlign.center),
-          const SizedBox(height: DriverSpacing.lg),
-          const Text('司機端登入 / 註冊',
-              style: TextStyle(
-                  fontSize: DriverTypography.body,
-                  color: DriverColors.secondaryText),
-              textAlign: TextAlign.center),
-        ],
+          borderRadius: BorderRadius.circular(DriverRadii.card),
+          boxShadow: DriverShadows.floating,
+        ),
+        child: Stack(
+          children: [
+            Positioned(
+              top: -42,
+              right: -34,
+              child: Container(
+                width: 128,
+                height: 128,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: DriverColors.onPrimary.withValues(alpha: .10),
+                ),
+              ),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Image.asset(
+                  'assets/master-app-logo.png',
+                  width: 220,
+                  height: 68,
+                  fit: BoxFit.contain,
+                  alignment: Alignment.centerLeft,
+                  semanticLabel: 'Master App',
+                ),
+                const SizedBox(height: DriverSpacing.lg),
+                Text('司機工作台 · 安全接送每一程',
+                    style: TextStyle(
+                        fontSize: DriverTypography.body,
+                        color: DriverColors.onPrimary.withValues(alpha: .78))),
+                const SizedBox(height: DriverSpacing.lg),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: DriverColors.onPrimary.withValues(alpha: .12),
+                    borderRadius: BorderRadius.circular(DriverRadii.pill),
+                  ),
+                  child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(Icons.verified_user_outlined,
+                        size: 16, color: DriverColors.onPrimary),
+                    SizedBox(width: DriverSpacing.sm),
+                    Text('專業司機專用入口',
+                        style: TextStyle(
+                            fontSize: DriverTypography.caption,
+                            fontWeight: FontWeight.w700,
+                            color: DriverColors.onPrimary)),
+                  ]),
+                ),
+              ],
+            ),
+          ],
+        ),
       );
 }
 
@@ -274,19 +321,23 @@ class _ActionCard extends StatelessWidget {
             const Expanded(child: Divider(color: DriverColors.border)),
           ]),
           const SizedBox(height: DriverSpacing.lg),
-          _SocialButton(
-              color: DriverColors.success,
-              asset: 'assets/circle-x.svg',
-              label: '微信登入',
-              onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('此登入方式尚未開放，請使用手機驗證碼登入')))),
-          const SizedBox(height: DriverSpacing.lg),
-          _SocialButton(
-              color: const Color(0xff1a1a1a),
-              asset: 'assets/apple.svg',
-              label: '以 Apple 登入',
-              onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('此登入方式尚未開放，請使用手機驗證碼登入')))),
+          Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            _SocialLogo(
+                asset: 'assets/login-wechat.svg',
+                width: 45,
+                height: 45,
+                semanticLabel: '微信登入',
+                onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('此登入方式尚未開放，請使用手機驗證碼登入')))),
+            const SizedBox(width: DriverSpacing.xl),
+            _SocialLogo(
+                asset: 'assets/login-apple.svg',
+                width: 40,
+                height: 40,
+                semanticLabel: '以 Apple 登入',
+                onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('此登入方式尚未開放，請使用手機驗證碼登入')))),
+          ]),
         ],
       );
 }
@@ -331,59 +382,76 @@ class _PrimaryButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) => SizedBox(
         width: fullWidth ? double.infinity : null,
-        height: 52,
+        height: 56,
         child: ElevatedButton(
-          onPressed: onPressed ?? () {},
+          onPressed: onPressed,
           style: ElevatedButton.styleFrom(
             backgroundColor: DriverColors.primary,
+            disabledBackgroundColor:
+                DriverColors.primary.withValues(alpha: .42),
             foregroundColor: DriverColors.onPrimary,
-            elevation: 2,
-            shadowColor: const Color(0x33285cfc),
+            disabledForegroundColor:
+                DriverColors.onPrimary.withValues(alpha: .78),
+            elevation: 0,
+            shadowColor: Colors.transparent,
             shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(DriverRadii.card)),
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                borderRadius: BorderRadius.circular(DriverRadii.input)),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          ).copyWith(
+            overlayColor: WidgetStatePropertyAll(
+                DriverColors.onPrimary.withValues(alpha: .12)),
           ),
-          child: Text(label,
-              style:
-                  TextStyle(fontSize: fontSize, fontWeight: FontWeight.w700)),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (onPressed == null)
+                const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: DriverColors.onPrimary,
+                  ),
+                ),
+              if (onPressed == null) const SizedBox(width: DriverSpacing.sm),
+              Text(label,
+                  style: TextStyle(
+                      fontSize: fontSize, fontWeight: FontWeight.w700)),
+            ],
+          ),
         ),
       );
 }
 
-class _SocialButton extends StatelessWidget {
-  const _SocialButton(
-      {required this.color,
-      required this.asset,
-      required this.label,
-      required this.onPressed});
-  final Color color;
+class _SocialLogo extends StatelessWidget {
+  const _SocialLogo({
+    required this.asset,
+    required this.width,
+    required this.height,
+    required this.semanticLabel,
+    required this.onPressed,
+  });
   final String asset;
-  final String label;
+  final double width;
+  final double height;
+  final String semanticLabel;
   final VoidCallback onPressed;
+
   @override
-  Widget build(BuildContext context) => SizedBox(
-        height: 52,
-        width: double.infinity,
-        child: ElevatedButton(
-          onPressed: onPressed,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: color,
-            foregroundColor: DriverColors.surface,
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(DriverRadii.card)),
-            padding: EdgeInsets.zero,
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SvgPicture.asset(asset, width: 20, height: 20),
-              const SizedBox(width: DriverSpacing.md),
-              Text(label,
-                  style: const TextStyle(
-                      fontSize: DriverTypography.bodyLarge,
-                      fontWeight: FontWeight.w700)),
-            ],
+  Widget build(BuildContext context) => Semantics(
+        button: true,
+        label: semanticLabel,
+        child: InkWell(
+          onTap: onPressed,
+          customBorder: const CircleBorder(),
+          child: Padding(
+            padding: const EdgeInsets.all(8),
+            child: SvgPicture.asset(
+              asset,
+              width: width,
+              height: height,
+              semanticsLabel: semanticLabel,
+            ),
           ),
         ),
       );

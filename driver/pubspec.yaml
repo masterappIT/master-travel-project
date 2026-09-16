@@ -36,6 +36,9 @@ flutter:
     - assets/in-progress-route.svg
     - assets/in-progress-divider.svg
     - assets/car.svg
+    - assets/master-app-logo.png
+    - assets/login-wechat.svg
+    - assets/login-apple.svg
     - assets/circle-x.svg
     - assets/apple.svg
     - assets/chevron-down.svg

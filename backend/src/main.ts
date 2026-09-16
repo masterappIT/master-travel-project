@@ -2174,6 +2174,33 @@ class LocationController {
     return data
   }
 
+  @Get('flight-information')
+  async flightInformation(@Req() req: RequestLike) {
+    const date = req.query?.date || ''
+    const arrival = req.query?.arrival === 'true'
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      throw new HttpException('Valid date is required', HttpStatus.BAD_REQUEST)
+    }
+    const url = `https://www.hongkongairport.com/flightinfo-rest/rest/flights/past?date=${encodeURIComponent(date)}&lang=en&cargo=false&arrival=${arrival}`
+    const response = await fetch(url)
+    if (!response.ok) {
+      throw new HttpException('Unable to query HKIA flight information', HttpStatus.BAD_GATEWAY)
+    }
+    const payload = await response.json() as Array<{ list?: Array<Record<string, unknown>> }>
+    return payload.flatMap(day => (day.list || []).map(item => ({
+      time: item.time || '--:--',
+      status: item.status || 'Status unavailable',
+      flight: item.flight || [],
+      destination: item.destination || [],
+      origin: item.origin || [],
+      baggage: item.baggage || null,
+      hall: item.hall || null,
+      stand: item.stand || null,
+      terminal: item.terminal || '',
+      gate: item.gate || ''
+    })))
+  }
+
   @Get('flight-information/lookup')
   async lookupFlight(@Req() req: RequestLike) {
     const flightNumber = (req.query?.flightNumber || '').replace(/\s+/g, '').toUpperCase()

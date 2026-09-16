@@ -290,7 +290,7 @@ class _HistoryCard extends StatelessWidget {
                   decoration: BoxDecoration(
                       color: entry.settled
                           ? DriverColors.successBackground
-                                                 : DriverColors.warningBackground,
+                          : DriverColors.warningBackground,
                       borderRadius: BorderRadius.circular(4)),
                   child: Text(entry.settled ? '已結算' : '未結算',
                       style: TextStyle(
@@ -298,7 +298,7 @@ class _HistoryCard extends StatelessWidget {
                           fontWeight: FontWeight.w700,
                           color: entry.settled
                               ? DriverColors.primary
-                              : DriverColors.secondaryText))),
+                              : DriverColors.secondaryText)),
                 ),
               ],
             ),

@@ -4,6 +4,7 @@ import '../add_vehicle_page.dart';
 import '../auth/login_page.dart';
 import '../driver_profile_page.dart';
 import '../home_page.dart';
+import '../flight_query_page.dart';
 import '../order_accepted_page.dart';
 import '../order_completed_page.dart';
 import '../order_detail_page.dart';
@@ -22,8 +23,9 @@ abstract final class DriverRouter {
         DriverRouteNames.registration: (_) => const RegistrationPage(),
         DriverRouteNames.home: (_) => const HomePage(),
         DriverRouteNames.orders: (_) => const OrderHallPage(),
-        DriverRouteNames.profile: (_) => const ProfilePage(),
         DriverRouteNames.orderHistory: (_) => const OrderHistoryPage(),
+        DriverRouteNames.profile: (_) => const ProfilePage(),
+        DriverRouteNames.flightQuery: (_) => const FlightQueryPage(),
         DriverRouteNames.vehicle: (_) => const VehiclePage(),
         DriverRouteNames.addVehicle: (context) {
           final arguments = ModalRoute.of(context)?.settings.arguments;
