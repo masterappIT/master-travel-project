@@ -4,9 +4,9 @@
       <image class="back" src="/static/messages/back.svg" mode="aspectFit" @tap="goBack" />
       <text class="header-title">設定</text>
     </view>
-    <view class="setting-row"><text>語言</text><picker class="setting-picker" mode="selector" :range="languages" :value="languageIndex" @change="changeLanguage"><view class="setting-value"><text>{{ language }}</text><text class="chevron">›</text></view></picker></view>
-    <view class="setting-row"><text>地區</text><picker class="setting-picker" mode="selector" :range="regions" :value="regionIndex" @change="changeRegion"><view class="setting-value"><text>{{ region }}</text><text class="chevron">›</text></view></picker></view>
-    <view class="setting-row"><text>貨幣</text><picker class="setting-picker" mode="selector" :range="currencies" :value="currencyIndex" @change="changeCurrency"><view class="setting-value"><text>{{ currency }}</text><text class="chevron">›</text></view></picker></view>
+    <view class="setting-row"><text>語言</text><view class="setting-picker" @tap="openLanguagePicker"><view class="setting-value"><text>{{ language }}</text><text class="chevron">›</text></view></view></view>
+    <view class="setting-row"><text>地區</text><view class="setting-picker" @tap="openRegionPicker"><view class="setting-value"><text>{{ region }}</text><text class="chevron">›</text></view></view></view>
+    <view class="setting-row"><text>貨幣</text><view class="setting-picker" @tap="openCurrencyPicker"><view class="setting-value"><text>{{ currency }}</text><text class="chevron">›</text></view></view></view>
     <view class="setting-row font-row"><text>字體大小</text><view class="font-options"><text class="large">A</text><text class="medium">A</text><text class="small">A</text></view></view>
     <view class="setting-row" @tap="comingSoon('條款')"><text>條款</text></view>
     <view class="logout" @tap="handleAuthAction"><text>{{ authenticated ? '登出' : '登入' }}</text></view>
@@ -36,9 +36,15 @@ const currencyIndex = ref(0)
 const authenticated = ref(false)
 const persistSettings = () => { uni.setStorageSync('display-currency', selectedCurrency.value) }
 
-const changeLanguage = (event: { detail: { value: number } }) => { languageIndex.value = Number(event.detail.value); language.value = languages[languageIndex.value] }
-const changeRegion = (event: { detail: { value: number } }) => { regionIndex.value = Number(event.detail.value); region.value = regions[regionIndex.value] }
-const changeCurrency = (event: { detail: { value: number } }) => { currencyIndex.value = Number(event.detail.value); currency.value = currencies[currencyIndex.value]; setCurrency(currencyCodes[currencyIndex.value]); persistSettings() }
+const changeLanguage = (index: number) => { languageIndex.value = index; language.value = languages[index] }
+const changeRegion = (index: number) => { regionIndex.value = index; region.value = regions[index] }
+const changeCurrency = (index: number) => { currencyIndex.value = index; currency.value = currencies[index]; setCurrency(currencyCodes[index]); persistSettings() }
+const openSelector = (_title: string, options: string[], onSelect: (index: number) => void) => {
+  uni.showActionSheet({ itemList: options, success: ({ tapIndex }) => onSelect(tapIndex) })
+}
+const openLanguagePicker = () => openSelector('語言', languages, changeLanguage)
+const openRegionPicker = () => openSelector('地區', regions, changeRegion)
+const openCurrencyPicker = () => openSelector('貨幣', currencies, changeCurrency)
 onMounted(() => {
   authenticated.value = isAuthenticated()
   const savedCurrencyIndex = currencyCodes.indexOf(selectedCurrency.value)
