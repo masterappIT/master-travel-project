@@ -63,6 +63,41 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  Future<void> _showNotifications() async {
+    try {
+      final items = await _api.notifications();
+      if (!mounted) return;
+      await showModalBottomSheet<void>(
+        context: context,
+        builder: (context) => SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            padding: const EdgeInsets.all(24),
+            children: [
+              const Text('通知', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 12),
+              if (items.isEmpty) const Text('目前沒有通知'),
+              ...items.map((item) {
+                final notification = Map<String, dynamic>.from(item as Map);
+                final id = notification['id']?.toString();
+                return ListTile(
+                  title: Text(notification['title']?.toString() ?? '通知'),
+                  subtitle: Text(notification['message']?.toString() ?? ''),
+                  onTap: id == null ? null : () async {
+                    await _api.readNotification(id);
+                    if (context.mounted) Navigator.of(context).pop();
+                  },
+                );
+              }),
+            ],
+          ),
+        ),
+      );
+    } on DriverApiException catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.message)));
+    }
+  }
+
   Future<void> _toggleOnline(bool value) async {
     final previous = _isOnline;
     setState(() => _isOnline = value);
@@ -106,8 +141,7 @@ class _HomePageState extends State<HomePage> {
                       ),
                       child: _ProfileHeader(
                           name: (_driver?['name'] as String?) ?? '司機',
-                          onNotificationTap: () => DriverNavigation.push(
-                              context, DriverRouteNames.profile)),
+                          onNotificationTap: _showNotifications),
                     ),
                     const SizedBox(height: DriverSpacing.xl),
                     const _SectionEyebrow('工作台總覽'),
