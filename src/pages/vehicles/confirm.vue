@@ -91,7 +91,7 @@ import { computed, onMounted, ref, nextTick } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { useTripStore } from '../../stores/trip'
-import { createFareQuote, planDrivingRoute, getSettings, getWalletMe, payTrip, createPendingTrip, type AppSettings } from '../../services/api'
+import { createFareQuote, planDrivingRoute, getSettings, getWalletMe, payTrip, createPendingTrip, getClientProfile, updateClientProfile, listCommonPassengers, type AppSettings, type TripPassenger, type CommonPassenger } from '../../services/api'
 import type { Coordinate } from '../../services/api'
 import type { AddressSelection } from '../../components/home/AddressPicker.vue'
 import { cachedPagePath, closeCachedPage, openCachedPage } from '../../utils/navigation'
@@ -128,6 +128,8 @@ const paymentSuccessOpen = ref(false)
 const paidTripId = ref('')
 const selectedPayment = ref<'wechat' | 'alipay' | 'bank'>('wechat')
 const countdownSeconds = ref(300)
+const passenger = ref<TripPassenger | null>(null)
+let passengerCheckTask: Promise<boolean> | null = null
 let countdownTimer: ReturnType<typeof setInterval> | null = null
 
 const formattedCountdown = computed(() => {
@@ -136,6 +138,38 @@ const formattedCountdown = computed(() => {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
 })
 
+const ensurePassenger = async (): Promise<boolean> => {
+  if (passenger.value) return true
+  if (passengerCheckTask) return passengerCheckTask
+  passengerCheckTask = (async () => {
+    try {
+      const profile = await getClientProfile()
+      if (!profile.name?.trim()) {
+        const input = await new Promise<string | null>((resolve) => uni.showModal({ title: '請填寫姓名', editable: true, placeholderText: '乘車人姓名', success: (result) => resolve(result.confirm ? result.content?.trim() || null : null) }))
+        if (!input) return false
+        try { await updateClientProfile({ name: input }) } catch { uni.showToast({ title: '姓名保存失敗，請重試', icon: 'none' }); return false }
+        passenger.value = { name: input, phone: profile.phoneNumber, phoneRegion: profile.countryCode, gender: profile.gender }
+      } else {
+        passenger.value = { name: profile.name.trim(), phone: profile.phoneNumber, phoneRegion: profile.countryCode, gender: profile.gender }
+      }
+      let passengers: CommonPassenger[] = []
+      try { passengers = await listCommonPassengers() } catch { passengers = [] }
+      if (passengers.length) {
+        const labels = passengers.map((item) => `${item.isDefault ? '預設 · ' : ''}${item.name} ${item.phone}`)
+        const selected = await new Promise<number | null>((resolve) => uni.showActionSheet({ itemList: ['使用我的資料', ...labels], success: (result) => resolve(result.tapIndex), fail: () => resolve(null) }))
+        if (selected !== null && selected > 0) {
+          const chosen = passengers[selected - 1]
+          passenger.value = { name: chosen.name, phone: chosen.phone, phoneRegion: chosen.phoneRegion, gender: chosen.gender, documentType: chosen.documentType, passportCountry: chosen.passportCountry }
+        }
+      }
+      return true
+    } catch (error) {
+      uni.showToast({ title: error instanceof Error ? error.message : '無法載入個人資料', icon: 'none' })
+      return false
+    }
+  })()
+  try { return await passengerCheckTask } finally { passengerCheckTask = null }
+}
 const startCountdown = (expiresAt?: string | null) => {
   if (countdownTimer) clearInterval(countdownTimer)
   const expiry = expiresAt ? new Date(expiresAt).getTime() : NaN
@@ -340,9 +374,11 @@ const loadSettingsAndWallet = async () => {
 onMounted(() => {
   void validateConfirmation()
   void loadSettingsAndWallet()
+  void ensurePassenger()
 })
 onShow(() => {
   void validateConfirmation()
+  void ensurePassenger()
 })
 const returnToVehicleSelection = () => openCachedPage('/pages/vehicles/select')
 const saveTripChanges = async (origin: string, destination: string, departureTime: string, nextOriginSelection: AddressSelection | null, nextDestinationSelection: AddressSelection | null) => {
@@ -371,7 +407,8 @@ const saveTripChanges = async (origin: string, destination: string, departureTim
 }
 const goBack = () => closeCachedPage('/pages/vehicles/selected')
 const openCoupons = () => openCachedPage('/pages/coupons/coupons')
-const payNow = () => {
+const payNow = async () => {
+  if (!await ensurePassenger()) return
   if (!selectedFareQuote.value) {
     uni.showToast({ title: '報價暫時無法取得', icon: 'none' })
     return
@@ -403,8 +440,8 @@ const closePayment = async () => {
       origin: tripStore.activeDraft.route.origin || originLabel.value,
       destination: tripStore.activeDraft.route.destination || destinationLabel.value,
       scheduledAt: tripStore.departureTime || undefined,
-      durationSeconds: selectedFareQuote.value.durationSeconds
-    })
+      durationSeconds: selectedFareQuote.value.durationSeconds,
+      passenger: passenger.value || undefined    })
     paymentOpen.value = false
     stopCountdown()
     openCachedPage('/pages/orders/orders')
@@ -417,6 +454,7 @@ const closePayment = async () => {
 }
 const toggleWallet = (type: 'fare' | 'cash') => { walletSelections[type] = !walletSelections[type] }
 const confirmPayment = async () => {
+  if (!await ensurePassenger()) return
   if (!selectedFareQuote.value) {
     uni.showToast({ title: '報價暫時無法取得', icon: 'none' })
     return
@@ -437,8 +475,8 @@ const confirmPayment = async () => {
       scheduledAt: tripStore.departureTime || undefined,
       useFareBalance: walletSelections.fare,
       useCashBalance: walletSelections.cash,
-      externalPaymentMethod: extChannel
-    })
+      externalPaymentMethod: extChannel,
+      passenger: passenger.value || undefined    })
 
     if (res && res.paidSummary) {
       wallet.fare = res.user.fareBalance

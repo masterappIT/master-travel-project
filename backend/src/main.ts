@@ -375,6 +375,13 @@ function parsePhoneIdentity(body: { countryCode?: string; phoneNumber?: string }
   }
   return { countryCode, phoneNumber }
 }
+function validateCommonPassenger(body: { name?: string; phone?: string; phoneRegion?: string; gender?: string; documentType?: string; passportCountry?: string; isDefault?: boolean }, fallback?: { name: string; phone: string; phoneRegion: string; gender: string; documentType: string; passportCountry: string | null; isDefault: boolean }) {
+  const value = {
+    name: body.name?.trim() ?? fallback?.name ?? '', phone: body.phone?.trim() ?? fallback?.phone ?? '', phoneRegion: body.phoneRegion?.trim() ?? fallback?.phoneRegion ?? '+852', gender: body.gender?.trim() ?? fallback?.gender ?? '先生', documentType: body.documentType?.trim() ?? fallback?.documentType ?? '港澳通行證', passportCountry: body.passportCountry?.trim() || fallback?.passportCountry || null, isDefault: body.isDefault ?? fallback?.isDefault ?? false
+  }
+  if (!value.name || value.name.length > 100 || !value.phone || !/^[0-9\s-]{4,30}$/.test(value.phone) || !['先生', '女士'].includes(value.gender) || !['港澳通行證', '香港身分證', '澳門身分證', '護照'].includes(value.documentType) || value.documentType === '護照' && !value.passportCountry) throw new HttpException('Invalid common passenger fields', HttpStatus.BAD_REQUEST)
+  return value
+}
 function parseProfileEmail(value?: string) {
   const email = value?.trim() || null
   if (email && (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) throw new HttpException('A valid email is required', HttpStatus.BAD_REQUEST)
@@ -2430,6 +2437,7 @@ class PaymentsController {
     origin?: string
     destination?: string
     scheduledAt?: string
+    passenger?: { name?: string; phone?: string; phoneRegion?: string; gender?: string; documentType?: string; passportCountry?: string | null }
   }) {
     const quoteId = typeof body.quoteId === 'string' ? body.quoteId.trim() : ''
     if (!quoteId) throw new HttpException('quoteId is required', HttpStatus.BAD_REQUEST)
@@ -2450,6 +2458,9 @@ class PaymentsController {
 
     const scheduledAt = body.scheduledAt ? new Date(body.scheduledAt) : new Date(Date.now() + 3600000)
     await prisma.fareQuote.update({ where: { id: quoteId }, data: { expiresAt: pendingExpiresAt } })
+    const passengerData = body.passenger?.name?.trim() && body.passenger.phone?.trim()
+      ? { passengerName: body.passenger.name.trim(), passengerPhone: body.passenger.phone.trim(), passengerPhoneRegion: body.passenger.phoneRegion?.trim() || null, passengerGender: body.passenger.gender?.trim() || null, passengerDocumentType: body.passenger.documentType?.trim() || null, passengerPassportCountry: body.passenger.passportCountry?.trim() || null }
+      : {}
     const trip = await prisma.trip.create({
       data: {
         userId: session.sub,
@@ -2459,7 +2470,8 @@ class PaymentsController {
         region: 'GUANGDONG',
         scheduledAt: Number.isNaN(scheduledAt.getTime()) ? new Date(Date.now() + 3600000) : scheduledAt,
         estimatedArrivalAt: new Date((Number.isNaN(scheduledAt.getTime()) ? new Date(Date.now() + 3600000) : scheduledAt).getTime() + (quote.durationSeconds || 0) * 1000),
-        status: 'PENDING'
+        status: 'PENDING',
+        ...passengerData
       }
     })
     return { ok: true, tripId: trip.id, quoteId, status: trip.status }
@@ -2475,6 +2487,7 @@ class PaymentsController {
     origin?: string
     destination?: string
     scheduledAt?: string
+    passenger?: { name?: string; phone?: string; phoneRegion?: string; gender?: string; documentType?: string; passportCountry?: string | null }
   }) {
     const quoteId = typeof body.quoteId === 'string' ? body.quoteId.trim() : ''
     if (!quoteId) throw new HttpException('quoteId is required', HttpStatus.BAD_REQUEST)
@@ -2600,6 +2613,9 @@ class PaymentsController {
       const origin = body.origin || quote.pricing?.routeOriginCity || '香港'
       const destination = body.destination || quote.pricing?.routeDestinationCity || '深圳'
       const scheduledAt = body.scheduledAt ? new Date(body.scheduledAt) : new Date(Date.now() + 3600000)
+      const passengerData = body.passenger?.name?.trim() && body.passenger.phone?.trim()
+        ? { passengerName: body.passenger.name.trim(), passengerPhone: body.passenger.phone.trim(), passengerPhoneRegion: body.passenger.phoneRegion?.trim() || null, passengerGender: body.passenger.gender?.trim() || null, passengerDocumentType: body.passenger.documentType?.trim() || null, passengerPassportCountry: body.passenger.passportCountry?.trim() || null }
+        : {}
 
       const trip = existingPendingTrip
         ? await tx.trip.update({
@@ -2610,6 +2626,7 @@ class PaymentsController {
               scheduledAt: Number.isNaN(scheduledAt.getTime()) ? existingPendingTrip.scheduledAt : scheduledAt,
               estimatedArrivalAt: new Date((Number.isNaN(scheduledAt.getTime()) ? existingPendingTrip.scheduledAt : scheduledAt).getTime() + (quote.durationSeconds || 0) * 1000),
               status: 'CONFIRMED',
+              ...passengerData,
               fareBalancePaid: farePaid,
               cashBalancePaid: cashPaid,
               externalPaid,
@@ -2626,6 +2643,7 @@ class PaymentsController {
               scheduledAt: Number.isNaN(scheduledAt.getTime()) ? new Date() : scheduledAt,
               estimatedArrivalAt: new Date((Number.isNaN(scheduledAt.getTime()) ? new Date() : scheduledAt).getTime() + (quote.durationSeconds || 0) * 1000),
               status: 'CONFIRMED',
+              ...passengerData,
               fareBalancePaid: farePaid,
               cashBalancePaid: cashPaid,
               externalPaid,
@@ -2677,8 +2695,9 @@ function clientTripResponse(trip: Prisma.TripGetPayload<{ include: { user: { sel
   const paymentExpiresAt = trip.status === 'PENDING' ? trip.quote?.expiresAt || null : null
   const vehicle = trip.quote?.vehicle
   const vehicleCategoryName = trip.quote?.pricing?.categoryName || null
-  const rawName = (trip.user.displayName || trip.user.name || '').trim()
-  const passengerName = rawName ? rawName.slice(0, 1) : '—'
+  const rawName = (trip.passengerName || trip.user.displayName || trip.user.name || '').trim()
+  const passengerName = rawName || '—'
+  const passengerPhone = trip.passengerPhone || trip.user.phoneNumber
   return {
     id: trip.id,
     quoteId: trip.quoteId,
@@ -2689,9 +2708,9 @@ function clientTripResponse(trip: Prisma.TripGetPayload<{ include: { user: { sel
     estimatedArrivalAt: trip.estimatedArrivalAt?.toISOString() || null,
     passenger: {
       name: passengerName,
-      gender: trip.user.gender || null,
-      countryCode: trip.user.countryCode,
-      phoneNumber: trip.user.phoneNumber
+      gender: trip.passengerGender || trip.user.gender || null,
+      countryCode: trip.passengerPhoneRegion || trip.user.countryCode,
+      phoneNumber: passengerPhone
     },
     paymentExpiresAt: paymentExpiresAt?.toISOString() || null,
     quote: trip.quote ? {
@@ -2784,7 +2803,44 @@ class ClientOrdersController {
     return userResponse(user)
   }
 
-  @Get('security')
+  @Get('common-passengers')
+  async listCommonPassengers(@Req() req: RequestLike) {
+    const session = await clientSessionFrom(req)
+    return { data: await prisma.commonPassenger.findMany({ where: { userId: session.sub }, orderBy: [{ isDefault: 'desc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }] }) }
+  }
+
+  @Post('common-passengers')
+  async createCommonPassenger(@Req() req: RequestLike, @Body() body: { name?: string; phone?: string; phoneRegion?: string; gender?: string; documentType?: string; passportCountry?: string; isDefault?: boolean }) {
+    const session = await clientSessionFrom(req)
+    const value = validateCommonPassenger(body)
+    const count = await prisma.commonPassenger.count({ where: { userId: session.sub } })
+    if (value.isDefault || count === 0) await prisma.commonPassenger.updateMany({ where: { userId: session.sub }, data: { isDefault: false } })
+    return prisma.commonPassenger.create({ data: { ...value, userId: session.sub, isDefault: value.isDefault || count === 0, sortOrder: count } })
+  }
+
+  @Patch('common-passengers/:id')
+  async updateCommonPassenger(@Req() req: RequestLike, @Param('id') id: string, @Body() body: { name?: string; phone?: string; phoneRegion?: string; gender?: string; documentType?: string; passportCountry?: string; isDefault?: boolean }) {
+    const session = await clientSessionFrom(req)
+    const existing = await prisma.commonPassenger.findFirst({ where: { id, userId: session.sub } })
+    if (!existing) throw new HttpException('Common passenger not found', HttpStatus.NOT_FOUND)
+    const value = validateCommonPassenger(body, existing)
+    if (value.isDefault) await prisma.commonPassenger.updateMany({ where: { userId: session.sub, id: { not: id } }, data: { isDefault: false } })
+    return prisma.commonPassenger.update({ where: { id }, data: value })
+  }
+
+  @Delete('common-passengers/:id')
+  async deleteCommonPassenger(@Req() req: RequestLike, @Param('id') id: string) {
+    const session = await clientSessionFrom(req)
+    const existing = await prisma.commonPassenger.findFirst({ where: { id, userId: session.sub } })
+    if (!existing) throw new HttpException('Common passenger not found', HttpStatus.NOT_FOUND)
+    await prisma.commonPassenger.delete({ where: { id } })
+    if (existing.isDefault) {
+      const replacement = await prisma.commonPassenger.findFirst({ where: { userId: session.sub }, orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }] })
+      if (replacement) await prisma.commonPassenger.update({ where: { id: replacement.id }, data: { isDefault: true } })
+    }
+    return { ok: true }
+  }
+
   async getSecurity(@Req() req: RequestLike) {
     const session = await clientSessionFrom(req)
     return clientSecurityResponse(await prisma.user.findUniqueOrThrow({ where: { id: session.sub }, include: { authIdentities: true } }))

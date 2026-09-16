@@ -151,7 +151,50 @@ export async function uploadClientAvatar(filePath: string): Promise<ClientProfil
   // #endif
 }
 
-export type ClientProfileUpdate = Pick<ClientProfile, 'name' | 'displayName' | 'avatarUrl' | 'email' | 'gender' | 'region' | 'birthday'> & { countryCode?: string; phoneNumber?: string }
+export type CommonPassenger = {
+  id: string
+  name: string
+  phone: string
+  phoneRegion: string
+  gender: string
+  documentType: string
+  passportCountry: string | null
+  isDefault: boolean
+  sortOrder: number
+}
+
+export async function listCommonPassengers(): Promise<CommonPassenger[]> {
+  const response = await uni.request({ url: `${API_BASE_URL}/client/common-passengers`, header: authHeaders() })
+  if (response.statusCode >= 400) throw apiError(response, '常用資料載入失敗')
+  return (response.data as { data: CommonPassenger[] }).data
+}
+
+export async function createCommonPassenger(passenger: Partial<CommonPassenger>): Promise<CommonPassenger> {
+  const response = await uni.request({ url: `${API_BASE_URL}/client/common-passengers`, method: 'POST', header: authHeaders(), data: passenger })
+  if (response.statusCode >= 400) throw apiError(response, '常用資料保存失敗')
+  return response.data as CommonPassenger
+}
+
+export async function updateCommonPassenger(id: string, passenger: Partial<CommonPassenger>): Promise<CommonPassenger> {
+  const response = await uni.request({ url: `${API_BASE_URL}/client/common-passengers/${encodeURIComponent(id)}`, method: 'PATCH' as UniApp.RequestOptions['method'], header: authHeaders(), data: passenger })
+  if (response.statusCode >= 400) throw apiError(response, '常用資料更新失敗')
+  return response.data as CommonPassenger
+}
+
+export async function deleteCommonPassenger(id: string): Promise<void> {
+  const response = await uni.request({ url: `${API_BASE_URL}/client/common-passengers/${encodeURIComponent(id)}`, method: 'DELETE', header: authHeaders() })
+  if (response.statusCode >= 400) throw apiError(response, '常用資料刪除失敗')
+}
+
+
+export type ClientProfileUpdate = {
+  name?: string
+  displayName?: string
+  gender?: string
+  region?: string
+  birthday?: string | null
+  email?: string | null
+}
 
 export async function updateClientProfile(profile: ClientProfileUpdate): Promise<ClientProfile> {
   const response = await uni.request({ url: `${API_BASE_URL}/client/me`, method: 'PATCH' as UniApp.RequestOptions['method'], header: authHeaders(), data: profile })
@@ -472,6 +515,15 @@ export async function topUpWallet(params: {
   return response.data as { ok: boolean; user: WalletInfo; transaction: unknown }
 }
 
+export type TripPassenger = {
+  name: string
+  phone: string
+  phoneRegion: string
+  gender?: string | null
+  documentType?: string | null
+  passportCountry?: string | null
+}
+
 export type TripPayRequest = {
   userId?: string
   quoteId: string
@@ -481,6 +533,7 @@ export type TripPayRequest = {
   origin?: string
   destination?: string
   scheduledAt?: string
+  passenger?: TripPassenger
 }
 
 export type TripPayResult = {
@@ -508,6 +561,7 @@ export type CreatePendingTripRequest = {
   destination?: string
   scheduledAt?: string
   durationSeconds?: number
+  passenger?: TripPassenger
 }
 
 export type CreatePendingTripResult = {

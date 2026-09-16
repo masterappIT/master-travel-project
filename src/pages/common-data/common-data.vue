@@ -4,26 +4,20 @@
     <scroll-view class="content" scroll-y>
       <view class="content-head"><text class="content-title">常用乘客</text><text class="add" @tap="addPassenger">＋ 新增</text></view>
       <view v-if="passengers.length === 0" class="empty">尚未建立常用乘客資料</view>
-      <view v-for="(passenger,index) in passengers" :key="index" class="passenger-card"><view class="card-head"><text class="name">{{ passenger.name }}</text><text class="edit" @tap="editPassenger(index)">編輯</text></view><text class="detail">{{ passenger.gender }} · {{ phoneRegionCode(passenger.phoneRegion) }} {{ passenger.phone }}</text><text class="detail">{{ passenger.documentType }}<template v-if="passenger.documentType === '護照'"> · {{ passenger.passportCountry }}</template></text><text class="remove" @tap="removePassenger(index)">刪除</text></view>
+      <view v-for="(passenger,index) in passengers" :key="passenger.id" class="passenger-card" @tap="setDefaultPassenger(index)"><view class="card-head"><text class="name">{{ passenger.name }}<template v-if="passenger.isDefault">（預設）</template></text><text class="edit" @tap.stop="editPassenger(index)">編輯</text></view><text class="detail">{{ passenger.gender }} · {{ phoneRegionCode(passenger.phoneRegion) }} {{ passenger.phone }}</text><text class="detail">{{ passenger.documentType }}<template v-if="passenger.documentType === '護照'"> · {{ passenger.passportCountry }}</template></text><text class="remove" @tap.stop="removePassenger(index)">刪除</text></view>
     </scroll-view>
     <view v-if="editing" class="form-mask" @tap.self="editing=false"><view class="form-sheet"><view class="form-head"><text class="form-title">{{ editingIndex === -1 ? '新增常用乘客' : '編輯常用乘客' }}</text><text class="cancel" @tap="editing=false">取消</text></view><input v-model="form.name" placeholder="姓名" /><view class="phone-row"><picker class="region-picker" mode="selector" :range="phoneRegions" range-key="label" :value="phoneRegionIndex" @change="changePhoneRegion"><view class="region-select">{{ phoneRegionCode(form.phoneRegion) }}</view></picker><input v-model="form.phone" class="phone-input" type="number" placeholder="電話" /></view><picker mode="selector" :range="genders" :value="genders.indexOf(form.gender)" @change="form.gender=genders[Number($event.detail.value)]"><view class="select">性別：{{ form.gender }}</view></picker><picker mode="selector" :range="documentTypes" :value="documentTypes.indexOf(form.documentType)" @change="changeDocument"><view class="select">證件類型：{{ form.documentType }}</view></picker><picker v-if="form.documentType === '護照'" mode="selector" :range="passportCountries" :value="passportCountries.indexOf(form.passportCountry)" @change="form.passportCountry=passportCountries[Number($event.detail.value)]"><view class="select">護照國家：{{ form.passportCountry || '請選擇' }}</view></picker><button @tap="savePassenger">保存</button></view></view>
   </view>
 </template>
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { closeCachedPage } from '../../utils/navigation'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
+import { createCommonPassenger, deleteCommonPassenger, listCommonPassengers, updateCommonPassenger, type CommonPassenger } from '../../services/api'
 
 const { responsiveStyle } = useResponsiveCanvas()
 
-type Passenger = {
-  name: string
-  phone: string
-  phoneRegion: string
-  gender: string
-  documentType: string
-  passportCountry: string
-}
+type Passenger = CommonPassenger
 
 const genders = ['先生', '女士']
 const phoneRegions = [
@@ -37,13 +31,22 @@ const passportCountries = ['中國', '香港', '澳門', '台灣', '日本', '�
 const phoneRegionCode = (region: string) =>
   phoneRegions.find((item) => item.label === region || item.code === region)?.code || '+852'
 
-const storedPassengers = uni.getStorageSync('common-passengers') || []
-const passengers = ref<Passenger[]>(
-  storedPassengers.map((passenger: Partial<Passenger>) => ({
-    ...passenger,
-    phoneRegion: passenger.phoneRegion || phoneRegions[0].label,
-  })),
-)
+const passengers = ref<Passenger[]>([])
+const loadPassengers = async () => {
+  const storedPassengers = uni.getStorageSync('common-passengers') || []
+  try {
+    passengers.value = await listCommonPassengers()
+    uni.setStorageSync('common-passengers', passengers.value)
+  } catch {
+    passengers.value = storedPassengers.map((passenger: Partial<Passenger>) => ({
+      id: passenger.id || `local-${Date.now()}-${Math.random()}`,
+      name: passenger.name || '', phone: passenger.phone || '',
+      phoneRegion: passenger.phoneRegion || phoneRegions[0].label,
+      gender: passenger.gender || '先生', documentType: passenger.documentType || '港澳通行證',
+      passportCountry: passenger.passportCountry || null, isDefault: passenger.isDefault || false, sortOrder: passenger.sortOrder || 0,
+    }))
+  }
+}
 const editing = ref(false)
 const editingIndex = ref(-1)
 const phoneRegionIndex = computed(() =>
@@ -92,19 +95,55 @@ const changeDocument = (event: { detail: { value: number | string } }) => {
   if (form.documentType !== '護照') form.passportCountry = ''
 }
 
-const savePassenger = () => {
-  if (!form.name.trim() || !form.phone.trim() || (form.documentType === '護照' && !form.passportCountry)) return
-  const value = { ...form, name: form.name.trim(), phone: form.phone.trim() }
-  if (editingIndex.value === -1) passengers.value.push(value)
-  else passengers.value[editingIndex.value] = value
-  uni.setStorageSync('common-passengers', passengers.value)
-  editing.value = false
+const savePassenger = async () => {
+  if (!form.name.trim() || !form.phone.trim() || (form.documentType === '護照' && !form.passportCountry)) {
+    uni.showToast({ title: '請完善乘客資料', icon: 'none' })
+    return
+  }
+  const value = { ...form, name: form.name.trim(), phone: form.phone.trim(), phoneRegion: phoneRegionCode(form.phoneRegion), passportCountry: form.passportCountry || null }
+  try {
+    const saved = editingIndex.value === -1
+      ? await createCommonPassenger(value)
+      : await updateCommonPassenger(passengers.value[editingIndex.value].id, value)
+    if (editingIndex.value === -1) passengers.value.push(saved)
+    else passengers.value[editingIndex.value] = saved
+    uni.setStorageSync('common-passengers', passengers.value)
+    editing.value = false
+  } catch (error) {
+    uni.showToast({ title: error instanceof Error ? error.message : '常用資料保存失敗', icon: 'none' })
+  }
 }
 
 const removePassenger = (index: number) => {
-  passengers.value.splice(index, 1)
-  uni.setStorageSync('common-passengers', passengers.value)
+  const passenger = passengers.value[index]
+  uni.showModal({ title: '刪除常用資料', content: `確定刪除 ${passenger.name}？`, success: async ({ confirm }) => {
+    if (!confirm) return
+    try {
+      if (!passenger.id.startsWith('local-')) await deleteCommonPassenger(passenger.id)
+      passengers.value.splice(index, 1)
+      uni.setStorageSync('common-passengers', passengers.value)
+    } catch (error) {
+      uni.showToast({ title: error instanceof Error ? error.message : '刪除失敗', icon: 'none' })
+    }
+  } })
 }
+
+const setDefaultPassenger = async (index: number) => {
+  const passenger = passengers.value[index]
+  if (passenger.isDefault) return
+  try {
+    const updated = passenger.id.startsWith('local-')
+      ? { ...passenger, isDefault: true }
+      : await updateCommonPassenger(passenger.id, { isDefault: true })
+    passengers.value = passengers.value.map((item) => item.id === updated.id ? updated : { ...item, isDefault: false })
+    uni.setStorageSync('common-passengers', passengers.value)
+    uni.showToast({ title: '已設為預設乘客', icon: 'none' })
+  } catch (error) {
+    uni.showToast({ title: error instanceof Error ? error.message : '設定預設失敗', icon: 'none' })
+  }
+}
+
+onMounted(() => { void loadPassengers() })
 
 const goBack = () => closeCachedPage('/pages/trips/trips')
 </script>
