@@ -31,6 +31,7 @@ type SupportSession = { conversationId: string; riderId: string; exp: number }
 type ClientSession = { sub: string; exp: number; jti: string }
 type DriverSessionToken = { sub: string; exp: number; jti: string }
 type PhoneChallenge = { countryCode: string; phoneNumber: string; code: string; exp: number; attempts: number }
+type ClientPhoneChangeChallenge = PhoneChallenge & { userId: string }
 
 type User = { id: string; countryCode: string; phoneNumber: string; name: string | null; cashBalance: number; fareBalance: number; createdAt: string; lastLoginAt: string | null; lastLogoutAt: string | null }
 interface Trip { id: string; userId: string; origin: string; destination: string; region: string; scheduledAt: string; status: string; createdAt: string }
@@ -160,6 +161,7 @@ const users: User[] = [
   { id: '719604', countryCode: '+86', phoneNumber: '13800000202', name: 'Alex Chen', cashBalance: 0, fareBalance: 200, createdAt: '2026-08-27T14:10:00.000Z', lastLoginAt: null, lastLogoutAt: null },
 ]
 const phoneChallenges = new Map<string, PhoneChallenge>()
+const clientPhoneChangeChallenges = new Map<string, ClientPhoneChangeChallenge>()
 const phoneChallengeRequests = new Map<string, { count: number; windowStartedAt: number }>()
 const PHONE_CODE_TTL_MS = 5 * 60 * 1000
 const PHONE_CODE_MAX_ATTEMPTS = 5
@@ -1022,8 +1024,57 @@ class DriverAuthController {
   async updateStatus(@Req() req: RequestLike, @Body() body: { isOnline?: unknown }) {
     const session = await driverSessionFrom(req)
     if (typeof body.isOnline !== 'boolean') throw new HttpException('isOnline must be a boolean', HttpStatus.BAD_REQUEST)
+    const now = new Date()
+    const current = await prisma.driver.findUnique({ where: { id: session.sub }, select: { isOnline: true } })
+    if (!current) throw new UnauthorizedException('Driver not found')
+    if (current.isOnline !== body.isOnline) {
+      if (body.isOnline) {
+        await prisma.driverOnlineSession.create({ data: { driverId: session.sub, startedAt: now } })
+      } else {
+        await prisma.driverOnlineSession.updateMany({ where: { driverId: session.sub, endedAt: null }, data: { endedAt: now } })
+      }
+    }
     const driver = await prisma.driver.update({ where: { id: session.sub }, data: { isOnline: body.isOnline } })
     return driverResponse(driver)
+  }
+
+  @Get('statistics')
+  async statistics(@Req() req: RequestLike) {
+    const session = await driverSessionFrom(req)
+    const now = new Date()
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+    const trips = await prisma.trip.findMany({
+      where: { driverId: session.sub, status: 'COMPLETED', completedAt: { not: null } },
+      include: { payment: true },
+      orderBy: { completedAt: 'desc' }
+    })
+    const onlineSessions = await prisma.driverOnlineSession.findMany({ where: { driverId: session.sub, startedAt: { lt: now } } })
+    const durationMs = onlineSessions.reduce((total, item) => {
+      const start = item.startedAt > todayStart ? item.startedAt : todayStart
+      const end = item.endedAt && item.endedAt < now ? item.endedAt : now
+      return total + Math.max(0, end.getTime() - start.getTime())
+    }, 0)
+    const todayTrips = trips.filter(item => item.completedAt! >= todayStart)
+    const monthTrips = trips.filter(item => item.completedAt! >= monthStart)
+    const sum = (items: typeof trips) => items.reduce((total, item) => total + (item.payment?.total ?? item.fareBalancePaid + item.cashBalancePaid + item.externalPaid), 0)
+    const ratings = await prisma.driverRating.findMany({ where: { driverId: session.sub }, select: { score: true } })
+    const ratingTotal = ratings.reduce((total, item) => total + item.score, 0)
+    const recentOrders = trips.slice(0, 3).map(item => ({
+      id: item.id,
+      completedAt: item.completedAt!.toISOString(),
+      price: item.payment?.total ?? item.fareBalancePaid + item.cashBalancePaid + item.externalPaid,
+      currency: item.payment?.currency ?? 'HKD',
+      origin: item.origin,
+      destination: item.destination,
+      passenger: item.passengerName
+    }))
+    return {
+      today: { earnings: sum(todayTrips), completedTrips: todayTrips.length, onlineHours: durationMs / 3600000 },
+      month: { earnings: sum(monthTrips) },
+      rating: { average: ratings.length ? ratingTotal / ratings.length : null, count: ratings.length },
+      recentOrders
+    }
   }
 
   @Get('trips')
@@ -2873,16 +2924,48 @@ class ClientOrdersController {
     return clientSecurityResponse(await prisma.user.findUniqueOrThrow({ where: { id: session.sub }, include: { authIdentities: true } }))
   }
 
-  @Patch('security')
-  async updateSecurity(@Req() req: RequestLike, @Body() body: { countryCode?: string; phoneNumber?: string; email?: string; password?: string }) {
+  @Post('security/phone/request')
+  async requestPhoneChange(@Req() req: RequestLike, @Body() body: { countryCode?: string; phoneNumber?: string }) {
     const session = await clientSessionFrom(req)
     const identity = parsePhoneIdentity(body)
+    const duplicate = await prisma.user.findFirst({ where: { countryCode: identity.countryCode, phoneNumber: identity.phoneNumber, id: { not: session.sub } }, select: { id: true } })
+    if (duplicate) throw new HttpException('Phone number is already connected', HttpStatus.CONFLICT)
+    const code = '00000'
+    const challengeId = randomBytes(18).toString('hex')
+    const exp = Date.now() + PHONE_CODE_TTL_MS
+    clientPhoneChangeChallenges.set(challengeId, { ...identity, code, exp, attempts: 0, userId: session.sub })
+    await prisma.verificationCode.create({ data: { id: challengeId, userId: session.sub, countryCode: identity.countryCode, phoneNumber: identity.phoneNumber, codeHash: createHash('sha256').update(code).digest('hex'), expiresAt: new Date(exp), purpose: 'PHONE_CHANGE' } })
+    return { challengeId, expiresAt: new Date(exp).toISOString(), ...(process.env.NODE_ENV !== 'production' ? { developmentCode: code } : {}) }
+  }
+
+  @Post('security/phone/verify')
+  async verifyPhoneChange(@Req() req: RequestLike, @Body() body: { challengeId?: string; code?: string }) {
+    const session = await clientSessionFrom(req)
+    const challengeId = body.challengeId?.trim() || ''
+    const challenge = clientPhoneChangeChallenges.get(challengeId)
+    if (!challenge || challenge.userId !== session.sub || challenge.exp <= Date.now()) {
+      clientPhoneChangeChallenges.delete(challengeId)
+      throw new UnauthorizedException('Verification code expired')
+    }
+    if ((body.code?.trim() || '') !== challenge.code) {
+      challenge.attempts += 1
+      if (challenge.attempts >= PHONE_CODE_MAX_ATTEMPTS) clientPhoneChangeChallenges.delete(challengeId)
+      throw new UnauthorizedException('Invalid verification code')
+    }
+    const duplicate = await prisma.user.findFirst({ where: { countryCode: challenge.countryCode, phoneNumber: challenge.phoneNumber, id: { not: session.sub } } })
+    if (duplicate) throw new HttpException('Phone number is already connected', HttpStatus.CONFLICT)
+    clientPhoneChangeChallenges.delete(challengeId)
+    await prisma.verificationCode.updateMany({ where: { id: challengeId }, data: { status: 'VERIFIED', consumedAt: new Date() } })
+    const user = await prisma.user.update({ where: { id: session.sub }, data: { countryCode: challenge.countryCode, phoneNumber: challenge.phoneNumber }, include: { authIdentities: true } })
+    return clientSecurityResponse(user)
+  }
+  @Patch('security')
+  async updateSecurity(@Req() req: RequestLike, @Body() body: { email?: string; password?: string }) {
+    const session = await clientSessionFrom(req)
     const email = parseProfileEmail(body.email)
     const password = body.password?.trim() || ''
     if (password && (password.length < 8 || password.length > 200)) throw new HttpException('Invalid security fields', HttpStatus.BAD_REQUEST)
-    const duplicate = await prisma.user.findFirst({ where: { countryCode: identity.countryCode, phoneNumber: identity.phoneNumber, id: { not: session.sub } } })
-    if (duplicate) throw new HttpException('Phone number is already connected', HttpStatus.CONFLICT)
-    const user = await prisma.user.update({ where: { id: session.sub }, data: { countryCode: identity.countryCode, phoneNumber: identity.phoneNumber, email, ...(password ? { passwordHash: hashPassword(password) } : {}), }, include: { authIdentities: true } })
+    const user = await prisma.user.update({ where: { id: session.sub }, data: { email, ...(password ? { passwordHash: hashPassword(password) } : {}) }, include: { authIdentities: true } })
     return clientSecurityResponse(user)
   }
 

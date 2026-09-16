@@ -113,11 +113,30 @@ export async function getClientSecurity(): Promise<ClientSecurity> {
   return response.data as ClientSecurity
 }
 
-export async function updateClientSecurity(security: { countryCode: string; phoneNumber: string; email: string; password?: string }): Promise<ClientSecurity> {
+export async function updateClientSecurity(security: { email: string; password?: string }): Promise<ClientSecurity> {
   const response = await uni.request({ url: `${API_BASE_URL}/client/security`, method: 'PATCH' as UniApp.RequestOptions['method'], header: authHeaders(), data: security })
   if (response.statusCode >= 400) throw apiError(response, '安全設定保存失敗')
   return response.data as ClientSecurity
 }
+
+export type PhoneChangeChallenge = {
+  challengeId: string
+  expiresAt: string
+  developmentCode?: string
+}
+
+export async function requestClientPhoneChange(countryCode: string, phoneNumber: string): Promise<PhoneChangeChallenge> {
+  const response = await uni.request({ url: `${API_BASE_URL}/client/security/phone/request`, method: 'POST', header: authHeaders(), data: { countryCode, phoneNumber } })
+  if (response.statusCode >= 400) throw apiError(response, '驗證碼發送失敗')
+  return response.data as PhoneChangeChallenge
+}
+
+export async function verifyClientPhoneChange(challengeId: string, code: string): Promise<ClientSecurity> {
+  const response = await uni.request({ url: `${API_BASE_URL}/client/security/phone/verify`, method: 'POST', header: authHeaders(), data: { challengeId, code } })
+  if (response.statusCode >= 400) throw apiError(response, '驗證碼錯誤或已過期')
+  return response.data as ClientSecurity
+}
+
 
 export async function linkClientProvider(provider: 'wechat' | 'apple', providerToken = `${provider}-dev-account`): Promise<ClientSecurity> {
   const response = await uni.request({ url: `${API_BASE_URL}/client/security/providers`, method: 'POST', header: authHeaders(), data: { provider, providerToken } })

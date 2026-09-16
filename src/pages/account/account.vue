@@ -14,11 +14,11 @@
     <template v-if="activeTab === 'profile'">
       <view class="avatar-wrap" @tap="chooseAvatar"><image class="avatar" :src="avatarUrl || '/static/account/avatar.svg'" mode="aspectFill" /></view>
       <view class="form-card">
-        <view class="field"><image src="/static/account/name.svg" mode="aspectFit" /><text>姓名</text><input class="value-input" v-model="form.name" /></view>
-        <view class="field"><image src="/static/account/display-name.svg" mode="aspectFit" /><text>顯示名稱</text><input class="value-input" v-model="form.displayName" /></view>
-        <view class="field"><image src="/static/account/gender.svg" mode="aspectFit" /><text>性別</text><view class="gender"><text :class="{ selected: form.gender === '先生' }" @tap="form.gender = '先生'">先生</text><text :class="{ selected: form.gender === '女士' }" @tap="form.gender = '女士'">女士</text></view></view>
-        <view class="field" @tap="chooseRegion"><image src="/static/account/region.svg" mode="aspectFit" /><text>地區</text><text class="value">{{ form.region }}</text></view>
-        <picker mode="date" :value="form.birthday" @change="changeBirthday"><view class="field"><image src="/static/account/birthday.svg" mode="aspectFit" /><text>生日</text><text class="value">{{ form.birthday }}</text></view></picker>
+        <view class="field"><image src="/static/account/name.svg" mode="aspectFit" /><text>姓名</text><input class="value-input" :class="{ filled: !!form.name.trim(), empty: !form.name.trim() }" v-model="form.name" /></view>
+        <view class="field"><image src="/static/account/display-name.svg" mode="aspectFit" /><text>顯示名稱</text><input class="value-input" :class="{ filled: !!form.displayName.trim(), empty: !form.displayName.trim() }" v-model="form.displayName" /></view>
+        <view class="field"><image src="/static/account/gender.svg" mode="aspectFit" /><text>性別</text><view class="gender"><text :class="{ selected: form.gender === '先生', empty: !form.gender }" @tap="form.gender = '先生'">先生</text><text :class="{ selected: form.gender === '女士', empty: !form.gender }" @tap="form.gender = '女士'">女士</text></view></view>
+        <view class="field" @tap="chooseRegion"><image src="/static/account/region.svg" mode="aspectFit" /><text>地區</text><text class="value" :class="{ filled: !!form.region, empty: !form.region }">{{ form.region || '請選擇' }}</text></view>
+        <picker mode="date" :value="form.birthday" @change="changeBirthday"><view class="field"><image src="/static/account/birthday.svg" mode="aspectFit" /><text>生日</text><text class="value" :class="{ filled: !!form.birthday, empty: !form.birthday }">{{ form.birthday || '請選擇' }}</text></view></picker>
       </view>
       <view class="save" @tap="save"><text>保存</text></view>
     </template>
@@ -46,7 +46,7 @@ const { responsiveStyle } = useResponsiveCanvas()
 import { onShow } from '@dcloudio/uni-app'
 import { reactive, ref, onMounted } from 'vue'
 import { setAuthenticated } from '../../utils/auth'
-import { getClientProfile, updateClientProfile, uploadClientAvatar, getClientSecurity, updateClientSecurity, linkClientProvider, unlinkClientProvider } from '../../services/api'
+import { getClientProfile, updateClientProfile, uploadClientAvatar, getClientSecurity, updateClientSecurity, requestClientPhoneChange, verifyClientPhoneChange, linkClientProvider, unlinkClientProvider } from '../../services/api'
 type Provider = 'apple' | 'wechat'
 const stored = uni.getStorageSync('account-profile') || {}
 const storedSecurity = uni.getStorageSync('account-security') || {}
@@ -61,7 +61,7 @@ const countryCodeIndex = ref(Math.max(0, countryCodes.indexOf(countryCode.value)
 const phoneNumber = ref(phoneParts.slice(1).join(' ') || security.phone)
 const persistSecurity = async () => {
   try {
-    const result = await updateClientSecurity({ countryCode: countryCode.value, phoneNumber: phoneNumber.value, email: security.email, password: security.password || undefined })
+    const result = await updateClientSecurity({ email: security.email, password: security.password || undefined })
     security.email = result.email || ''
     security.password = ''
     security.appleLinked = result.linkedProviders.includes('apple')
@@ -70,8 +70,25 @@ const persistSecurity = async () => {
     uni.setStorageSync('account-security', { ...security })
   } catch { uni.showToast({ title: '安全設定保存失敗', icon: 'none' }) }
 }
-const savePhone = () => { security.phone = `${countryCode.value} ${phoneNumber.value.trim()}`.trim(); void persistSecurity() }
-const changeCountryCode = (event: { detail: { value: number } }) => { countryCodeIndex.value = Number(event.detail.value); countryCode.value = countryCodes[countryCodeIndex.value]; savePhone() }
+const savePhone = async () => {
+  const nextPhone = phoneNumber.value.trim()
+  const currentParts = security.phone.split(' ')
+  if (!nextPhone || (countryCode.value === currentParts[0] && nextPhone === currentParts.slice(1).join(' '))) return
+  const confirmed = await new Promise<boolean>((resolve) => uni.showModal({ title: '修改登入電話', content: '修改電話後需要重新接收驗證碼，驗證成功後才會完成更新。是否繼續？', success: (result) => resolve(result.confirm) }))
+  if (!confirmed) return
+  try {
+    const challenge = await requestClientPhoneChange(countryCode.value, nextPhone)
+    const code = challenge.developmentCode || await new Promise<string | null>((resolve) => uni.showModal({ title: '輸入驗證碼', editable: true, placeholderText: '請輸入短信驗證碼', success: (result) => resolve(result.confirm ? result.content?.trim() || null : null) }))
+    if (!code) return
+    const result = await verifyClientPhoneChange(challenge.challengeId, code)
+    security.phone = `${result.countryCode} ${result.phoneNumber}`
+    countryCode.value = result.countryCode
+    phoneNumber.value = result.phoneNumber
+    uni.setStorageSync('account-security', { ...security })
+    uni.showToast({ title: '電話已更新', icon: 'success' })
+  } catch (error) { uni.showToast({ title: error instanceof Error ? error.message : '電話驗證失敗', icon: 'none' }) }
+}
+const changeCountryCode = (event: { detail: { value: number } }) => { countryCodeIndex.value = Number(event.detail.value); countryCode.value = countryCodes[countryCodeIndex.value] }
 const toggleProvider = async (provider: Provider) => {
   const key = `${provider}Linked` as 'appleLinked' | 'wechatLinked'
   try {
@@ -164,9 +181,9 @@ onShow(() => {
 })
 </script>
 <style scoped>
-.value-input{margin-left:auto;margin-right:30px;width:190px;height:22px;box-sizing:border-box;padding:0;border:0;background:transparent;color:#285CFC;font-size:14px;font-weight:600;text-align:right;line-height:22px}.value-input:focus{outline:none}
+.value-input{margin-left:auto;margin-right:30px;width:190px;height:22px;box-sizing:border-box;padding:0;border:0;background:transparent;color:#285CFC;font-size:14px;font-weight:600;text-align:right;line-height:22px}.value-input.empty{color:#9AA4B2}.value-input.filled{color:#285CFC}.value-input:focus{outline:none}
 .security-input{margin-left:28px;width:150px;height:24px;box-sizing:border-box;padding:0;border:0;background:transparent;color:#38434A;font-size:15px;font-weight:400;line-height:24px}.security-input:focus{outline:none}.phone-row .security-input{margin-left:8px;width:108px}.country-picker{margin-left:8px}.country-code{width:42px;color:#285CFC;font-size:14px;font-weight:500}.phone-row .verified{left:277px}.password-input{margin-left:32px}.email-input{margin-left:28px;width:170px}
-:global(html),:global(body),:global(#app){width:100%;min-width:0;height:100%;margin:0;overflow:hidden;overscroll-behavior:none}.page{position:fixed;top:0;left:0;width:430px;height:var(--mobile-height, 932px);overflow:hidden;border-radius:35px;background:#F0F2F5;color:#38434A;font-family:'Noto Sans TC',sans-serif;transform:scale(var(--mobile-scale, 1));transform-origin:top left;}.header{position:absolute;top:0;left:0;width:430px;height:155px;overflow:hidden;border-radius:25px;background:#fff}.back{position:absolute;top:53px;left:26px;width:26px;height:39px;padding:7px;box-sizing:border-box}.header-title{position:absolute;top:56px;left:50%;transform:translateX(-50%);font-size:18px;font-weight:500}.tabs{position:absolute;bottom:0;left:37px;width:356px;height:33px;display:flex;justify-content:space-between}.tab{font-size:16px;font-weight:700}.tab.active{color:#285CFC}.active-line{position:absolute;bottom:0;width:32px;height:2px;background:#285CFC;transition:left .2s}.active-line.profile{left:0;width:64px}.active-line.security{left:154px}.avatar-wrap{position:absolute;top:175px;left:175px;width:80px;height:80px;border-radius:50%;overflow:hidden}.avatar{width:80px;height:80px}.form-card{position:absolute;top:275px;left:15px;width:400px;height:250px;overflow:hidden;border-radius:10px;background:#fff}.field{display:flex;height:50px;align-items:center;border-bottom:1px solid #D9D9D9;box-sizing:border-box}.field:last-child{border-bottom:0}.field image{width:20px;height:20px;margin-left:30px;margin-right:10px}.field>text:not(.value){font-size:16px;font-weight:500}.value{margin-left:auto;margin-right:30px;color:#285CFC;font-size:14px!important;font-weight:600!important}.gender{display:flex;gap:20px;margin-left:auto;margin-right:30px;font-size:14px;font-weight:700}.gender .selected{color:#285CFC}.save{position:absolute;top:679px;left:36px;width:357px;height:50px;display:flex;align-items:center;justify-content:center;border-radius:10px;background:#285CFC;color:#fff;font-size:16px;font-weight:500}
+:global(html),:global(body),:global(#app){width:100%;min-width:0;height:100%;margin:0;overflow:hidden;overscroll-behavior:none}.page{position:fixed;top:0;left:0;width:430px;height:var(--mobile-height, 932px);overflow:hidden;border-radius:35px;background:#F0F2F5;color:#38434A;font-family:'Noto Sans TC',sans-serif;transform:scale(var(--mobile-scale, 1));transform-origin:top left;}.header{position:absolute;top:0;left:0;width:430px;height:155px;overflow:hidden;border-radius:25px;background:#fff}.back{position:absolute;top:53px;left:26px;width:26px;height:39px;padding:7px;box-sizing:border-box}.header-title{position:absolute;top:56px;left:50%;transform:translateX(-50%);font-size:18px;font-weight:500}.tabs{position:absolute;bottom:0;left:37px;width:356px;height:33px;display:flex;justify-content:space-between}.tab{font-size:16px;font-weight:700}.tab.active{color:#285CFC}.active-line{position:absolute;bottom:0;width:32px;height:2px;background:#285CFC;transition:left .2s}.active-line.profile{left:0;width:64px}.active-line.security{left:154px}.avatar-wrap{position:absolute;top:175px;left:175px;width:80px;height:80px;border-radius:50%;overflow:hidden}.avatar{width:80px;height:80px}.form-card{position:absolute;top:275px;left:15px;width:400px;height:250px;overflow:hidden;border-radius:10px;background:#fff}.field{display:flex;height:50px;align-items:center;border-bottom:1px solid #D9D9D9;box-sizing:border-box}.field:last-child{border-bottom:0}.field image{width:20px;height:20px;margin-left:30px;margin-right:10px}.field>text:not(.value){font-size:16px;font-weight:500}.value{margin-left:auto;margin-right:30px;color:#285CFC;font-size:14px!important;font-weight:600!important}.value.filled{color:#285CFC}.value.empty{color:#9AA4B2}.gender{display:flex;gap:20px;margin-left:auto;margin-right:30px;font-size:14px;font-weight:700}.gender .selected{color:#285CFC}.gender .empty{color:#9AA4B2}.save{position:absolute;top:679px;left:36px;width:357px;height:50px;display:flex;align-items:center;justify-content:center;border-radius:10px;background:#285CFC;color:#fff;font-size:16px;font-weight:500}
 .security-card,.third-party-card{position:absolute;left:15px;width:400px;overflow:hidden;border-radius:10px;background:#fff}.security-card{top:165px;height:150px}.security-row{position:relative;height:50px;display:flex;align-items:center;border-bottom:1px solid #d9d9d9;box-sizing:border-box;font-size:15px}.security-row:last-child{border-bottom:0}.security-icon{margin-left:13px;margin-right:10px;flex:none}.security-icon.phone{width:15px;height:15px}.security-icon.password{width:15px;height:18px}.security-icon.email{width:16px;height:13px}.security-label{font-weight:500;white-space:nowrap}.security-value{margin-left:28px;font-weight:400;white-space:nowrap}.phone-value{margin-left:29px}.password-value{margin-left:32px}.chevron{position:absolute;right:12px;width:20px;height:20px}.verified{position:absolute;left:277px;display:flex;align-items:center;gap:1px;color:#285CFC;font-size:8px;font-weight:500;white-space:nowrap}.verified image{width:15px;height:15px;flex:none}.third-party-card{top:335px;height:150px}.third-party-title{display:flex;height:50px;align-items:center;padding-left:10px;border-bottom:1px solid #d9d9d9;box-sizing:border-box;font-size:15px;font-weight:700}.provider-row{position:relative;height:50px;display:flex;align-items:center;border-bottom:1px solid #d9d9d9;box-sizing:border-box;color:#000;font-size:15px}.provider-row:last-child{border-bottom:0}.provider-icon{margin-left:11px;margin-right:10px;flex:none}.provider-icon.apple{width:30px;height:30px}.provider-icon.wechat{width:25px;height:25px;margin-left:15px;margin-right:10px}.link-button{position:absolute;right:40px;width:50px;height:20px;display:flex;align-items:center;justify-content:center;border-radius:10px;background:#285CFC;color:#fff;font-size:12px}.link-button.linked{width:80px;right:10px;border:1px solid #285CFC;box-sizing:border-box;background:#fff;color:#285CFC}
 
 @media (max-width:599px){.page{top:0;left:0;height:var(--mobile-height,100dvh);border-radius:0;transform:scale(var(--mobile-scale, 1));transform-origin:top left}.save{top:auto;bottom:24px}}
