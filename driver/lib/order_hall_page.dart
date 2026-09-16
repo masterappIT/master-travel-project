@@ -66,7 +66,8 @@ class _OrderHallPageState extends State<OrderHallPage> {
           final online = onlineOverride ?? true;
           return DriverPageShell(
             selectedIndex: 1,
-            bottomPadding: 104,
+            bottomPadding: DriverDimensions.bottomNavigationPadding,
+            navHorizontalPadding: DriverDimensions.navHorizontalPadding,
             onHomeTap: () =>
                 DriverNavigation.replace(context, DriverRouteNames.home),
             onProfileTap: () =>

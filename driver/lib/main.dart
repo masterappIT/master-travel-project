@@ -16,6 +16,21 @@ Future<void> main() async {
   ));
 }
 
+class _NoPageTransitionBuilder extends PageTransitionsBuilder {
+  const _NoPageTransitionBuilder();
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    return child;
+  }
+}
+
 class DriverApp extends StatelessWidget {
   const DriverApp({super.key, required this.initialRoute});
 
@@ -42,6 +57,16 @@ class DriverApp extends StatelessWidget {
             borderRadius: BorderRadius.circular(DriverRadii.card),
             side: const BorderSide(color: DriverColors.divider),
           ),
+        ),
+        pageTransitionsTheme: const PageTransitionsTheme(
+          builders: {
+            TargetPlatform.android: _NoPageTransitionBuilder(),
+            TargetPlatform.iOS: _NoPageTransitionBuilder(),
+            TargetPlatform.macOS: _NoPageTransitionBuilder(),
+            TargetPlatform.windows: _NoPageTransitionBuilder(),
+            TargetPlatform.linux: _NoPageTransitionBuilder(),
+            TargetPlatform.fuchsia: _NoPageTransitionBuilder(),
+          },
         ),
       ),
       routes: DriverRouter.builders,

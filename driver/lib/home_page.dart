@@ -36,9 +36,17 @@ class _HomePageState extends State<HomePage> {
   Future<void> _loadStatistics() async {
     try {
       final result = await _api.statistics();
-      if (mounted) setState(() { _statistics = result; _statsLoading = false; });
+      if (mounted)
+        setState(() {
+          _statistics = result;
+          _statsLoading = false;
+        });
     } on DriverApiException catch (error) {
-      if (mounted) setState(() { _statsError = error.message; _statsLoading = false; });
+      if (mounted)
+        setState(() {
+          _statsError = error.message;
+          _statsLoading = false;
+        });
     }
   }
 
@@ -46,7 +54,8 @@ class _HomePageState extends State<HomePage> {
     try {
       final result = await _api.me();
       if (!mounted) return;
-      final driver = Map<String, dynamic>.from(result);
+      final driver = Map<String, dynamic>.from(
+          result['driver'] is Map ? result['driver'] as Map : result);
       setState(() {
         _driver = driver;
         _isOnline = driver['isOnline'] == true;
@@ -74,7 +83,8 @@ class _HomePageState extends State<HomePage> {
             shrinkWrap: true,
             padding: const EdgeInsets.all(24),
             children: [
-              const Text('通知', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+              const Text('通知',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
               const SizedBox(height: 12),
               if (items.isEmpty) const Text('目前沒有通知'),
               ...items.map((item) {
@@ -83,10 +93,12 @@ class _HomePageState extends State<HomePage> {
                 return ListTile(
                   title: Text(notification['title']?.toString() ?? '通知'),
                   subtitle: Text(notification['message']?.toString() ?? ''),
-                  onTap: id == null ? null : () async {
-                    await _api.readNotification(id);
-                    if (context.mounted) Navigator.of(context).pop();
-                  },
+                  onTap: id == null
+                      ? null
+                      : () async {
+                          await _api.readNotification(id);
+                          if (context.mounted) Navigator.of(context).pop();
+                        },
                 );
               }),
             ],
@@ -94,7 +106,9 @@ class _HomePageState extends State<HomePage> {
         ),
       );
     } on DriverApiException catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.message)));
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error.message)));
     }
   }
 
@@ -116,6 +130,16 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  String _vehicleSummary(Map<String, dynamic>? driver) {
+    final plateType = driver?['plateType']?.toString().trim();
+    final category = driver?['vehicleCategory']?.toString().trim();
+    return [
+      '香港',
+      if (plateType != null && plateType.isNotEmpty) plateType,
+      if (category != null && category.isNotEmpty) category,
+    ].join(' · ');
+  }
+
   @override
   Widget build(BuildContext context) {
     return DriverPageShell(
@@ -125,57 +149,71 @@ class _HomePageState extends State<HomePage> {
       onOrderTap: () => DriverNavigation.push(context, DriverRouteNames.orders),
       onProfileTap: () =>
           DriverNavigation.push(context, DriverRouteNames.profile),
-      child: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
-              ? Center(child: Text(_error!))
-              : Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
-                      decoration: BoxDecoration(
-                        color: DriverColors.panelTint,
-                        borderRadius: BorderRadius.circular(DriverRadii.card),
-                        border: Border.all(color: DriverColors.infoBackground),
-                      ),
-                      child: _ProfileHeader(
-                          name: (_driver?['name'] as String?) ?? '司機',
-                          onNotificationTap: _showNotifications),
-                    ),
-                    const SizedBox(height: DriverSpacing.xl),
-                    const _SectionEyebrow('工作台總覽'),
-                    const SizedBox(height: DriverSpacing.sm),
-                    _StatusCard(
-                      isOnline: _isOnline,
-                      onChanged: _toggleOnline,
-                    ),
-                    const SizedBox(height: DriverSpacing.xl),
-                    const _SectionEyebrow('收入與表現'),
-                    const SizedBox(height: DriverSpacing.sm),
-                    _EarningsCard(statistics: _statistics, loading: _statsLoading, error: _statsError),
-                    const SizedBox(height: DriverSpacing.lg),
-                    _QuickStatsRow(statistics: _statistics, loading: _statsLoading, error: _statsError),
-                    const SizedBox(height: DriverSpacing.xl),
-                    _RecentOrdersSection(
-                        orders: (_statistics?['recentOrders'] as List?)
-                                ?.map((item) => Map<String, dynamic>.from(item as Map))
-                                .toList() ??
-                            const [],
-                        loading: _statsLoading,
-                        error: _statsError),
-                  ],
-                ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
+            decoration: BoxDecoration(
+              color: DriverColors.panelTint,
+              borderRadius: BorderRadius.circular(DriverRadii.card),
+              border: Border.all(color: DriverColors.infoBackground),
+            ),
+            child: _ProfileHeader(
+              name: (_driver?['name'] as String?) ?? (_loading ? '載入中…' : '司機'),
+              vehicleSummary: _vehicleSummary(_driver),
+              onNotificationTap: _showNotifications,
+            ),
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: DriverSpacing.sm),
+            Text(_error!,
+                style: const TextStyle(color: DriverColors.warningText)),
+          ],
+          const SizedBox(height: DriverSpacing.xl),
+          const _SectionEyebrow('工作台總覽'),
+          const SizedBox(height: DriverSpacing.sm),
+          _StatusCard(
+            isOnline: _isOnline,
+            onChanged: _toggleOnline,
+          ),
+          const SizedBox(height: DriverSpacing.xl),
+          const _SectionEyebrow('收入與表現'),
+          const SizedBox(height: DriverSpacing.sm),
+          _EarningsCard(
+              statistics: _statistics,
+              loading: _statsLoading,
+              error: _statsError),
+          const SizedBox(height: DriverSpacing.lg),
+          _QuickStatsRow(
+              statistics: _statistics,
+              loading: _statsLoading,
+              error: _statsError),
+          const SizedBox(height: DriverSpacing.xl),
+          _RecentOrdersSection(
+              orders: (_statistics?['recentOrders'] as List?)
+                      ?.map((item) => Map<String, dynamic>.from(item as Map))
+                      .toList() ??
+                  const [],
+              loading: _statsLoading,
+              error: _statsError,
+              onViewAll: () => DriverNavigation.push(
+                  context, DriverRouteNames.orderHistory)),
+        ],
+      ),
     );
   }
 }
 
 class _ProfileHeader extends StatelessWidget {
-  const _ProfileHeader({required this.name, required this.onNotificationTap});
+  const _ProfileHeader(
+      {required this.name,
+      required this.vehicleSummary,
+      required this.onNotificationTap});
   final String name;
+  final String vehicleSummary;
   final VoidCallback onNotificationTap;
 
-  @override
   Widget build(BuildContext context) => Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
@@ -211,7 +249,7 @@ class _ProfileHeader extends StatelessWidget {
                   ],
                 ),
                 SizedBox(height: 4),
-                Text('兩地牌 · 轎車',
+                Text(vehicleSummary,
                     style: TextStyle(
                         fontSize: DriverTypography.label,
                         color: DriverColors.secondaryText)),
@@ -313,12 +351,14 @@ class _SectionEyebrow extends StatelessWidget {
 }
 
 class _EarningsCard extends StatelessWidget {
-  const _EarningsCard({required this.statistics, required this.loading, this.error});
+  const _EarningsCard(
+      {required this.statistics, required this.loading, this.error});
   final Map<String, dynamic>? statistics;
   final bool loading;
   final String? error;
 
-  String _money(dynamic value) => value is num ? '\$${value.toStringAsFixed(2)}' : '—';
+  String _money(dynamic value) =>
+      value is num ? '\$${value.toStringAsFixed(2)}' : '—';
   String _number(dynamic value) => value is num ? value.toString() : '—';
 
   @override
@@ -327,29 +367,49 @@ class _EarningsCard extends StatelessWidget {
     return _Card(
         padding: 20,
         child: loading
-            ? const SizedBox(height: 150, child: Center(child: CircularProgressIndicator()))
+            ? const SizedBox(
+                height: 150, child: Center(child: CircularProgressIndicator()))
             : error != null
-                ? Text(error!, style: const TextStyle(color: DriverColors.primary))
+                ? Text(error!,
+                    style: const TextStyle(color: DriverColors.primary))
                 : Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-            const Text('今日收入', style: TextStyle(fontSize: DriverTypography.body, color: DriverColors.secondaryText)),
-            const SizedBox(height: DriverSpacing.xs),
-            Text(_money(today?['earnings']), style: const TextStyle(fontSize: 36, fontWeight: FontWeight.w800, color: DriverColors.text)),
-            const SizedBox(height: DriverSpacing.lg),
-            SvgPicture.asset('assets/home-divider.svg', width: double.infinity, height: 1),
-            const SizedBox(height: DriverSpacing.lg),
-            Row(children: [
-              Expanded(child: _Stat(label: '今日接單', value: '${_number(today?['completedTrips'])} 單')),
-              Expanded(child: _Stat(label: '在線時數', value: today?['onlineHours'] is num ? '${(today!['onlineHours'] as num).toStringAsFixed(1)} 小時' : '—')),
-            ]),
-          ],
-        ));
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('今日收入',
+                          style: TextStyle(
+                              fontSize: DriverTypography.body,
+                              color: DriverColors.secondaryText)),
+                      const SizedBox(height: DriverSpacing.xs),
+                      Text(_money(today?['earnings']),
+                          style: const TextStyle(
+                              fontSize: 36,
+                              fontWeight: FontWeight.w800,
+                              color: DriverColors.text)),
+                      const SizedBox(height: DriverSpacing.lg),
+                      SvgPicture.asset('assets/home-divider.svg',
+                          width: double.infinity, height: 1),
+                      const SizedBox(height: DriverSpacing.lg),
+                      Row(children: [
+                        Expanded(
+                            child: _Stat(
+                                label: '今日接單',
+                                value:
+                                    '${_number(today?['completedTrips'])} 單')),
+                        Expanded(
+                            child: _Stat(
+                                label: '在線時數',
+                                value: today?['onlineHours'] is num
+                                    ? '${(today!['onlineHours'] as num).toStringAsFixed(1)} 小時'
+                                    : '—')),
+                      ]),
+                    ],
+                  ));
   }
 }
 
 class _QuickStatsRow extends StatelessWidget {
-  const _QuickStatsRow({required this.statistics, required this.loading, this.error});
+  const _QuickStatsRow(
+      {required this.statistics, required this.loading, this.error});
   final Map<String, dynamic>? statistics;
   final bool loading;
   final String? error;
@@ -358,24 +418,56 @@ class _QuickStatsRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final month = statistics?['month'] as Map<String, dynamic>?;
     final rating = statistics?['rating'] as Map<String, dynamic>?;
-    final monthValue = month?['earnings'] is num ? '\$${(month!['earnings'] as num).toStringAsFixed(2)}' : '—';
-    final ratingValue = rating?['average'] is num ? '${(rating!['average'] as num).toStringAsFixed(1)} / 5.0' : '尚無評分';
-    if (loading) return const Row(children: [Expanded(child: _Card(padding: 16, child: Center(child: CircularProgressIndicator()))), SizedBox(width: 16), Expanded(child: _Card(padding: 16, child: Center(child: CircularProgressIndicator()))) ]);
-    return Row(
-      children: [
-       Expanded(child: _Card(padding: 16, child: _Stat(label: '本月收入', value: error == null ? monthValue : '—', valueSize: 20))),
-       const SizedBox(width: 16),
-       Expanded(child: _Card(padding: 16, child: _RatingStat(value: error == null ? ratingValue : '—'))),
-      ],
+    final monthValue = month?['earnings'] is num
+        ? '\$${(month!['earnings'] as num).toStringAsFixed(2)}'
+        : '—';
+    final ratingValue = rating?['average'] is num
+        ? '${(rating!['average'] as num).toStringAsFixed(1)} / 5.0'
+        : '尚無評分';
+    if (loading)
+      return const Row(children: [
+        Expanded(
+            child: _Card(
+                padding: 16,
+                child: Center(child: CircularProgressIndicator()))),
+        SizedBox(width: 16),
+        Expanded(
+            child: _Card(
+                padding: 16, child: Center(child: CircularProgressIndicator())))
+      ]);
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+              child: _Card(
+                  padding: 16,
+                  child: _Stat(
+                      label: '本月收入',
+                      value: error == null ? monthValue : '—',
+                      valueSize: 20))),
+          const SizedBox(width: 16),
+          Expanded(
+              child: _Card(
+                  padding: 16,
+                  child:
+                      _RatingStat(value: error == null ? ratingValue : '—'))),
+        ],
+      ),
     );
   }
 }
 
 class _RecentOrdersSection extends StatelessWidget {
-  const _RecentOrdersSection({required this.orders, required this.loading, this.error});
+  const _RecentOrdersSection(
+      {required this.orders,
+      required this.loading,
+      required this.onViewAll,
+      this.error});
   final List<Map<String, dynamic>> orders;
   final bool loading;
   final String? error;
+  final VoidCallback onViewAll;
 
   @override
   Widget build(BuildContext context) {
@@ -385,23 +477,38 @@ class _RecentOrdersSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-       const Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-         Text('最近訂單', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: DriverColors.text)),
-         Text('查看全部', style: TextStyle(fontSize: DriverTypography.body, fontWeight: FontWeight.w500, color: DriverColors.activeBlue)),
-       ]),
-       const SizedBox(height: 12),
-       ...orders.map((order) => Padding(
-         padding: const EdgeInsets.only(bottom: 12),
-         child: _RecentOrderCard(
-           time: order['completedAt']?.toString() ?? '—',
-           price: order['price'] is num ? '\$${(order['price'] as num).toStringAsFixed(2)}' : '—',
-           origin: order['origin']?.toString() ?? '—',
-           destination: order['destination']?.toString() ?? '—',
-           passenger: order['passenger']?.toString() ?? '—',
-           settlementStatus: order['settlementStatus'] == 'SETTLED' ? '已結算' : '未結算',
-           settlementMethod: order['settlementMethod']?.toString() ?? '未設定',
-         ),
-       )),
+        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          const Text('最近訂單',
+              style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: DriverColors.text)),
+          TextButton(
+            onPressed: onViewAll,
+            child: const Text('查看全部',
+                style: TextStyle(
+                    fontSize: DriverTypography.body,
+                    fontWeight: FontWeight.w500,
+                    color: DriverColors.activeBlue)),
+          ),
+        ]),
+        const SizedBox(height: 12),
+        ...orders.map((order) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _RecentOrderCard(
+                time: order['completedAt']?.toString() ?? '—',
+                price: order['price'] is num
+                    ? '\$${(order['price'] as num).toStringAsFixed(2)}'
+                    : '—',
+                origin: order['origin']?.toString() ?? '—',
+                destination: order['destination']?.toString() ?? '—',
+                passenger: order['passenger']?.toString() ?? '—',
+                settlementStatus:
+                    order['settlementStatus'] == 'SETTLED' ? '已結算' : '未結算',
+                settlementMethod:
+                    order['settlementMethod']?.toString() ?? '未設定',
+              ),
+            )),
       ],
     );
   }
@@ -416,7 +523,13 @@ class _RecentOrderCard extends StatelessWidget {
       required this.passenger,
       required this.settlementStatus,
       required this.settlementMethod});
-  final String time, price, origin, destination, passenger, settlementStatus, settlementMethod;
+  final String time,
+      price,
+      origin,
+      destination,
+      passenger,
+      settlementStatus,
+      settlementMethod;
 
   @override
   Widget build(BuildContext context) => _Card(
@@ -473,12 +586,19 @@ class _RecentOrderCard extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         textAlign: TextAlign.end,
-                        style: TextStyle(fontSize: DriverTypography.label, fontWeight: FontWeight.w700, color: settlementStatus == '已結算' ? DriverColors.primary : DriverColors.secondaryText)),
+                        style: TextStyle(
+                            fontSize: DriverTypography.label,
+                            fontWeight: FontWeight.w700,
+                            color: settlementStatus == '已結算'
+                                ? DriverColors.primary
+                                : DriverColors.secondaryText)),
                     Text('結算方式：$settlementMethod',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         textAlign: TextAlign.end,
-                        style: const TextStyle(fontSize: DriverTypography.label, color: DriverColors.secondaryText)),
+                        style: const TextStyle(
+                            fontSize: DriverTypography.label,
+                            color: DriverColors.secondaryText)),
                   ],
                 ),
               ),
@@ -546,8 +666,8 @@ class _RatingStat extends StatelessWidget {
             child: Text(value,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
+                    fontSize: DriverTypography.body,
+                    fontWeight: FontWeight.w600,
                     color: DriverColors.text)),
           )
         ])

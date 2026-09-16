@@ -19,7 +19,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
   final int _selectedTab = 0;
   int _selectedHistoryTab = 0;
   final _api = DriverApiClient.instance;
-  List<dynamic> _trips = [];
+  List<Map<String, dynamic>> _trips = [];
   bool _loading = true;
   String? _error;
 
@@ -29,10 +29,28 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
     _loadTrips();
   }
 
-  List<Map<String, dynamic>> get _visibleTrips => _trips
-      .where((trip) => (trip is Map ? trip['settlement'] != null : false) == (_selectedHistoryTab == 0))
-      .map((trip) => Map<String, dynamic>.from(trip as Map))
-      .toList();
+  List<Map<String, dynamic>> get _visibleTrips {
+    if (_selectedHistoryTab == 0) return _trips;
+    final settled = _selectedHistoryTab == 1;
+    return _trips
+        .where((trip) => (trip['settlement'] != null) == settled)
+        .toList();
+  }
+
+  Map<String, List<Map<String, dynamic>>> get _tripsByDate {
+    final groups = <String, List<Map<String, dynamic>>>{};
+    for (final trip in _visibleTrips) {
+      final date = DateTime.tryParse(trip['completedAt']?.toString() ??
+          trip['scheduledAt']?.toString() ??
+          '');
+      final key = date == null ? '日期待確認' : _formatDateGroup(date);
+      groups.putIfAbsent(key, () => []).add(trip);
+    }
+    return groups;
+  }
+
+  String _formatDateGroup(DateTime date) =>
+      '${date.year}年${date.month}月${date.day}日';
   Future<void> _loadTrips() async {
     try {
       final trips = await _api.trips();
@@ -40,6 +58,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
         setState(() {
           _trips = trips
               .where((trip) => trip is Map && trip['completedAt'] != null)
+              .map((trip) => Map<String, dynamic>.from(trip as Map))
               .toList();
           _loading = false;
         });
@@ -74,12 +93,6 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
             onChanged: (index) => setState(() => _selectedHistoryTab = index),
           ),
           const SizedBox(height: DriverSpacing.lg),
-          const Text('2024年3月',
-              style: TextStyle(
-                  fontSize: DriverTypography.body,
-                  fontWeight: FontWeight.w700,
-                  color: DriverColors.secondaryText)),
-          const SizedBox(height: DriverSpacing.sm),
           if (_loading)
             const Center(
               child: Padding(
@@ -101,22 +114,38 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
               ),
             )
           else
-            ..._visibleTrips.map((item) {
-              final date = DateTime.tryParse(item['completedAt']?.toString() ??
-                  item['scheduledAt']?.toString() ??
-                  '');
-              final entry = _HistoryEntry(
-                  date: date?.toString() ?? '日期待確認',
-                  price: item['price']?.toString() ?? '待確認',
-                  origin: item['pickupAddress']?.toString() ?? '起點待確認',
-                  destination: item['dropoffAddress']?.toString() ?? '終點待確認',
-                  passenger: item['user']?['name']?.toString() ?? item['passengerName']?.toString() ?? '乘客',
-                  settled: item['settlement'] != null,
-                  settlementMethod: item['settlement']?['method']?.toString() ?? '未設定');
-              return Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: _HistoryCard(entry: entry));
-            }),
+            ..._tripsByDate.entries.expand((group) => [
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: DriverSpacing.sm),
+                    child: Text(group.key,
+                        style: const TextStyle(
+                            fontSize: DriverTypography.body,
+                            fontWeight: FontWeight.w700,
+                            color: DriverColors.secondaryText)),
+                  ),
+                  ...group.value.map((item) {
+                    final date = DateTime.tryParse(
+                        item['completedAt']?.toString() ??
+                            item['scheduledAt']?.toString() ??
+                            '');
+                    final entry = _HistoryEntry(
+                        date: date?.toString() ?? '日期待確認',
+                        price: item['price']?.toString() ?? '待確認',
+                        origin: item['pickupAddress']?.toString() ?? '起點待確認',
+                        destination:
+                            item['dropoffAddress']?.toString() ?? '終點待確認',
+                        passenger: item['user']?['name']?.toString() ??
+                            item['passengerName']?.toString() ??
+                            '乘客',
+                        settled: item['settlement'] != null,
+                        settlementMethod:
+                            item['settlement']?['method']?.toString() ?? '未設定');
+                    return Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: _HistoryCard(entry: entry));
+                  }),
+                  const SizedBox(height: DriverSpacing.sm),
+                ]),
         ],
       ),
     );
@@ -171,14 +200,19 @@ class _HistoryTabs extends StatelessWidget {
   Widget build(BuildContext context) => Row(
         children: [
           _HistoryTab(
-              label: '已結算',
+              label: '全部',
               selected: selectedIndex == 0,
               onTap: () => onChanged(0)),
           const SizedBox(width: DriverSpacing.md),
           _HistoryTab(
-              label: '未結算',
+              label: '已結算',
               selected: selectedIndex == 1,
               onTap: () => onChanged(1)),
+          const SizedBox(width: DriverSpacing.md),
+          _HistoryTab(
+              label: '未結算',
+              selected: selectedIndex == 2,
+              onTap: () => onChanged(2)),
         ],
       );
 }

@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../about_page.dart';
 import '../add_vehicle_page.dart';
 import '../auth/login_page.dart';
+import '../contact_support_page.dart';
+import '../currency_page.dart';
 import '../driver_profile_page.dart';
 import '../home_page.dart';
 import '../flight_query_page.dart';
@@ -15,6 +18,9 @@ import '../profile_page.dart';
 import '../registration_page.dart';
 import '../vehicle_legacy_page.dart';
 import '../vehicle_page.dart';
+import '../settlement_overview_page.dart';
+import '../language_settings_page.dart';
+import '../notification_settings_page.dart';
 import 'route_names.dart';
 
 abstract final class DriverRouter {
@@ -26,7 +32,15 @@ abstract final class DriverRouter {
         DriverRouteNames.orderHistory: (_) => const OrderHistoryPage(),
         DriverRouteNames.profile: (_) => const ProfilePage(),
         DriverRouteNames.flightQuery: (_) => const FlightQueryPage(),
+        DriverRouteNames.currency: (_) => const CurrencyPage(),
+        DriverRouteNames.settlementOverview: (_) =>
+            const SettlementOverviewPage(),
+        DriverRouteNames.about: (_) => const AboutPage(),
+        DriverRouteNames.contactSupport: (_) => const ContactSupportPage(),
         DriverRouteNames.vehicle: (_) => const VehiclePage(),
+        DriverRouteNames.notificationSettings: (_) =>
+            const NotificationSettingsPage(),
+        DriverRouteNames.languageSettings: (_) => const LanguageSettingsPage(),
         DriverRouteNames.addVehicle: (context) {
           final arguments = ModalRoute.of(context)?.settings.arguments;
           return AddVehiclePage(

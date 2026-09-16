@@ -3,25 +3,84 @@ import 'package:flutter_svg/flutter_svg.dart';
 
 import 'add_vehicle_page.dart';
 import 'app/route_names.dart';
+import 'core/api/driver_api_client.dart';
 import 'core/layout/driver_page_shell.dart';
 import 'core/navigation/driver_navigation.dart';
 import 'core/tokens/driver_tokens.dart';
 
-class VehiclePage extends StatelessWidget {
+class VehiclePage extends StatefulWidget {
   const VehiclePage({super.key});
 
-  static const _primaryVehicle = VehicleFormData(
-    ownership: '香港',
-    plateType: '兩地牌',
-    category: '轎車',
-    hongKongPlate: 'AB 1234',
-    macauPlate: '',
-    mainlandPlate: 'CD 5678 粵Z',
-    color: '白色',
-  );
+  @override
+  State<VehiclePage> createState() => _VehiclePageState();
+}
+
+class _VehiclePageState extends State<VehiclePage> {
+  final _api = DriverApiClient.instance;
+  Map<String, dynamic>? _driver;
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadVehicle();
+  }
+
+  Future<void> _loadVehicle() async {
+    try {
+      final result = await _api.getVehicleProfile();
+      if (!mounted) return;
+      setState(() {
+        _driver = Map<String, dynamic>.from(
+            result['driver'] is Map ? result['driver'] as Map : result);
+        _loading = false;
+      });
+    } on DriverApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _error = error.message;
+        _loading = false;
+      });
+    }
+  }
+
+  VehicleFormData _vehicleData() => VehicleFormData(
+        ownership: '香港',
+        plateType: _driver?['plateType']?.toString() ?? '兩地牌',
+        category: _driver?['vehicleCategory']?.toString() ?? '',
+        hongKongPlate: _driver?['hkPlate']?.toString() ?? '',
+        macauPlate: '',
+        mainlandPlate: _driver?['mainlandPlate']?.toString() ?? '',
+        color: _driver?['vehicleColor']?.toString() ?? '',
+      );
+
+  Future<void> _openVehicleEditor({VehicleFormData? data}) async {
+    final updated = await DriverNavigation.push(
+      context,
+      DriverRouteNames.addVehicle,
+      arguments: data,
+    );
+    if (updated == true && mounted) _loadVehicle();
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (_loading) {
+      return const DriverPageShell(
+        selectedIndex: 2,
+        showBottomNavigation: false,
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (_error != null) {
+      return DriverPageShell(
+        selectedIndex: 2,
+        showBottomNavigation: false,
+        child: Center(child: Text(_error!)),
+      );
+    }
+    final data = _vehicleData();
     return DriverPageShell(
       selectedIndex: 2,
       showBottomNavigation: false,
@@ -32,27 +91,14 @@ class VehiclePage extends StatelessWidget {
           _Header(onBack: () => Navigator.of(context).maybePop()),
           const SizedBox(height: DriverSpacing.lg),
           _VehicleCard(
-              data: _primaryVehicle,
-              title: '兩地牌轎車',
+              data: data,
+              title: data.category.isEmpty ? '車輛' : data.category,
               status: '使用中',
-              active: true),
-          const SizedBox(height: DriverSpacing.lg),
-          _VehicleCard(
-              data: const VehicleFormData(
-                  ownership: '香港',
-                  plateType: '兩地牌',
-                  category: 'MPV',
-                  hongKongPlate: 'EF 9012',
-                  macauPlate: '',
-                  mainlandPlate: 'GH 3456 粵Z',
-                  color: '黑色'),
-              title: '兩地牌 MPV',
-              status: '閒置',
-              active: false),
+              active: true,
+              onEdit: () => _openVehicleEditor(data: data)),
           const SizedBox(height: DriverSpacing.lg),
           OutlinedButton(
-            onPressed: () =>
-                DriverNavigation.push(context, DriverRouteNames.addVehicle),
+            onPressed: () => _openVehicleEditor(),
             style: OutlinedButton.styleFrom(
                 foregroundColor: DriverColors.activeBlue,
                 backgroundColor: DriverColors.surface,
@@ -111,14 +157,15 @@ class _VehicleCard extends StatelessWidget {
       {required this.data,
       required this.title,
       required this.status,
-      required this.active});
+      required this.active,
+      required this.onEdit});
   final VehicleFormData data;
   final String title, status;
   final bool active;
+  final VoidCallback onEdit;
   @override
   Widget build(BuildContext context) => InkWell(
-        onTap: () => DriverNavigation.push(context, DriverRouteNames.addVehicle,
-            arguments: data),
+        onTap: onEdit,
         borderRadius: BorderRadius.circular(DriverRadii.card),
         child: Container(
           padding: const EdgeInsets.all(DriverSpacing.lg),

@@ -20,9 +20,10 @@ class FloatingNavBar extends StatelessWidget {
         height: 76,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: DriverColors.surface,
+          color: DriverColors.surface.withAlpha(224),
+          backgroundBlendMode: BlendMode.srcOver,
           borderRadius: BorderRadius.circular(DriverRadii.card),
-          border: Border.all(color: DriverColors.divider),
+          border: Border.all(color: DriverColors.surface.withAlpha(180)),
           boxShadow: DriverShadows.floating,
         ),
         child: Row(
@@ -65,8 +66,9 @@ class _NavItem extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color:
-                    selected ? DriverColors.infoBackground : Colors.transparent,
+                color: selected
+                    ? DriverColors.infoBackground.withAlpha(220)
+                    : Colors.transparent,
                 borderRadius: BorderRadius.circular(DriverRadii.input),
               ),
               child: Column(

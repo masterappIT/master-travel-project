@@ -304,7 +304,7 @@ class _SectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
         decoration: BoxDecoration(
           color: DriverColors.surface,
           border: Border.all(color: DriverColors.divider),
@@ -328,7 +328,7 @@ class _SectionCard extends StatelessWidget {
                 color: DriverColors.text,
               ),
             ),
-            const SizedBox(height: DriverSpacing.sm),
+            const SizedBox(height: DriverSpacing.md),
             ...children,
           ],
         ),
@@ -391,7 +391,7 @@ class _ProfilePhoneField extends StatelessWidget {
                 fontSize: DriverTypography.body,
                 fontWeight: FontWeight.w500,
                 color: DriverColors.text)),
-        const SizedBox(height: DriverSpacing.sm),
+        const SizedBox(height: DriverSpacing.md),
         Row(
           children: [
             SizedBox(
@@ -522,7 +522,7 @@ class _ProfileField extends StatelessWidget {
           );
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
+      padding: const EdgeInsets.symmetric(vertical: 14),
       child: Row(
         crossAxisAlignment:
             editing ? CrossAxisAlignment.start : CrossAxisAlignment.center,

@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import 'about_page.dart';
 import 'app/route_names.dart';
+import 'contact_support_page.dart';
 import 'core/api/driver_api_client.dart';
 import 'core/layout/driver_page_shell.dart';
+import 'core/state/driver_currency_preference.dart';
 import 'core/navigation/driver_navigation.dart';
 
 import 'package:driver_web/core/tokens/driver_tokens.dart';
@@ -20,10 +23,11 @@ class _ProfilePageState extends State<ProfilePage> {
   bool _loading = true;
   String? _error;
   String _name = '陳大文';
+  String _vehicleSummary = '香港 · 兩地牌 · 車輛';
   String _hongKongMacauPhone = '+852 9123 4567';
   String _mainlandPhone = '+86 未填寫';
-  String _settledAmount = '\$0';
-  String _unsettledAmount = '\$0';
+  String _settledAmount = '0';
+  String _unsettledAmount = '0';
 
   @override
   void initState() {
@@ -33,12 +37,14 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Future<void> _loadProfile() async {
     try {
-      final results = await Future.wait<dynamic>([_api.me(), _api.statistics()]);
+      final results =
+          await Future.wait<dynamic>([_api.me(), _api.statistics()]);
       final driver = Map<String, dynamic>.from(results[0] as Map);
       final statistics = Map<String, dynamic>.from(results[1] as Map);
       if (!mounted) return;
       setState(() {
         _name = driver['name']?.toString() ?? _name;
+        _vehicleSummary = _vehicleSummaryFrom(driver);
         _hongKongMacauPhone =
             '${driver['phoneCountryCode'] ?? '+852'} ${driver['phone'] ?? ''}'
                 .trim();
@@ -60,11 +66,24 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
+  String _vehicleSummaryFrom(Map<String, dynamic> driver) {
+    final plateType = driver['plateType']?.toString().trim();
+    final category = driver['vehicleCategory']?.toString().trim();
+    final region = (driver['hkPlate']?.toString().trim().isNotEmpty ?? false)
+        ? '香港'
+        : '香港';
+    return [
+      region,
+      if (plateType != null && plateType.isNotEmpty) plateType,
+      if (category != null && category.isNotEmpty) category,
+    ].join(' · ');
+  }
+
   String _formatAmount(dynamic value) {
     final amount = value is num ? value : num.tryParse(value?.toString() ?? '');
-    if (amount == null) return '\$0';
+    if (amount == null) return '0';
     final digits = amount == amount.roundToDouble() ? 0 : 2;
-    return '\$${amount.toStringAsFixed(digits)}';
+    return amount.toStringAsFixed(digits);
   }
 
   Future<void> _showNotifications() async {
@@ -138,7 +157,10 @@ class _ProfilePageState extends State<ProfilePage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _ProfileHeader(name: _name, onNotification: _showNotifications),
+          _ProfileHeader(
+              name: _name,
+              vehicleSummary: _vehicleSummary,
+              onNotification: _showNotifications),
           if (_loading)
             const Center(
               child: Padding(
@@ -154,9 +176,16 @@ class _ProfilePageState extends State<ProfilePage> {
             ))
           else ...[
             const SizedBox(height: DriverSpacing.xl),
-            _BalanceCard(
+            ValueListenableBuilder<String>(
+              valueListenable: DriverCurrencyPreference.instance,
+              builder: (context, currency, _) => _BalanceCard(
                 settledAmount: _settledAmount,
-                unsettledAmount: _unsettledAmount),
+                unsettledAmount: _unsettledAmount,
+                currency: currency,
+                onTap: () => DriverNavigation.push(
+                    context, DriverRouteNames.settlementOverview),
+              ),
+            ),
             const SizedBox(height: DriverSpacing.xl),
             _MenuCard(
               title: '主要功能',
@@ -196,7 +225,9 @@ class _ProfilePageState extends State<ProfilePage> {
               title: '收款設定',
               items: [
                 _MenuItem('收款幣種', 'assets/profile-fps.svg', _IconTone.warning,
-                    detail: '港幣 HKD、人民幣 CNY'),
+                    detail: '港幣 HKD、人民幣 CNY',
+                    onTap: () => DriverNavigation.push(
+                        context, DriverRouteNames.currency)),
                 _MenuItem(
                     '微信支付', 'assets/profile-wechat.svg', _IconTone.success,
                     detail: '已綁定：$_name'),
@@ -211,8 +242,12 @@ class _ProfilePageState extends State<ProfilePage> {
             _MenuCard(
               title: '設定',
               items: [
-                _MenuItem('通知設定', 'assets/profile-bell.svg', _IconTone.neutral),
-                _MenuItem('語言設定', 'assets/profile-fps.svg', _IconTone.neutral),
+                _MenuItem('通知設定', 'assets/profile-bell.svg', _IconTone.neutral,
+                    onTap: () => DriverNavigation.push(
+                        context, DriverRouteNames.notificationSettings)),
+                _MenuItem('語言設定', 'assets/profile-fps.svg', _IconTone.neutral,
+                    onTap: () => DriverNavigation.push(
+                        context, DriverRouteNames.languageSettings)),
                 _MenuItem('自動結算', 'assets/profile-fps.svg', _IconTone.neutral,
                     toggle: true),
                 _MenuItem('結算方式', 'assets/profile-fps.svg', _IconTone.neutral),
@@ -222,9 +257,13 @@ class _ProfilePageState extends State<ProfilePage> {
             _MenuCard(
               title: '其他',
               items: [
-                _MenuItem('關於我們', 'assets/profile-fps.svg', _IconTone.neutral),
+                _MenuItem('關於我們', 'assets/profile-fps.svg', _IconTone.neutral,
+                    onTap: () =>
+                        DriverNavigation.push(context, DriverRouteNames.about)),
                 _MenuItem(
-                    '聯繫客服', 'assets/profile-headphones.svg', _IconTone.neutral),
+                    '聯繫客服', 'assets/profile-headphones.svg', _IconTone.neutral,
+                    onTap: () => DriverNavigation.push(
+                        context, DriverRouteNames.contactSupport)),
               ],
             ),
             const SizedBox(height: DriverSpacing.lg),
@@ -243,9 +282,13 @@ class _ProfilePageState extends State<ProfilePage> {
 }
 
 class _ProfileHeader extends StatelessWidget {
-  const _ProfileHeader({required this.name, required this.onNotification});
+  const _ProfileHeader(
+      {required this.name,
+      required this.vehicleSummary,
+      required this.onNotification});
 
   final String name;
+  final String vehicleSummary;
   final VoidCallback onNotification;
 
   @override
@@ -296,7 +339,7 @@ class _ProfileHeader extends StatelessWidget {
                   color: DriverColors.darkGreen)),
         ),
         const SizedBox(height: DriverSpacing.sm),
-        const Text('香港 · 兩地牌 · 轎車',
+        Text(vehicleSummary,
             style: TextStyle(
                 fontSize: DriverTypography.body,
                 color: DriverColors.secondaryText)),
@@ -306,40 +349,56 @@ class _ProfileHeader extends StatelessWidget {
 }
 
 class _BalanceCard extends StatelessWidget {
-  const _BalanceCard({required this.settledAmount, required this.unsettledAmount});
+  const _BalanceCard(
+      {required this.settledAmount,
+      required this.unsettledAmount,
+      required this.currency,
+      required this.onTap});
 
   final String settledAmount;
   final String unsettledAmount;
+  final String currency;
+  final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => _CardShell(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text('結算概覽',
-                style: TextStyle(
-                    fontSize: DriverTypography.bodyLarge,
-                    fontWeight: FontWeight.w700,
-                    color: DriverColors.text)),
-            const SizedBox(height: DriverSpacing.md),
-            Row(children: [
-              Expanded(
-                  child: _BalanceTile(
-                      label: '已結算',
-                      value: settledAmount,
-                      background: DriverColors.infoBackground,
-                      labelColor: DriverColors.primary,
-                      valueColor: DriverColors.primary)),
-              const SizedBox(width: DriverSpacing.md),
-              Expanded(
-                  child: _BalanceTile(
-                      label: '未結算',
-                      value: unsettledAmount,
-                      background: DriverColors.warningBackground,
-                      labelColor: DriverColors.secondaryText,
-                      valueColor: DriverColors.primary)),
-            ]),
-          ],
+  Widget build(BuildContext context) => Semantics(
+        button: true,
+        label: '結算概覽',
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(DriverRadii.card),
+          child: _CardShell(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text('結算概覽',
+                    style: TextStyle(
+                        fontSize: DriverTypography.bodyLarge,
+                        fontWeight: FontWeight.w700,
+                        color: DriverColors.text)),
+                const SizedBox(height: DriverSpacing.md),
+                Row(children: [
+                  Expanded(
+                      child: _BalanceTile(
+                          label: '已結算',
+                          value: settledAmount,
+                          background: DriverColors.infoBackground,
+                          labelColor: DriverColors.primary,
+                          valueColor: DriverColors.primary,
+                          currency: currency)),
+                  const SizedBox(width: DriverSpacing.md),
+                  Expanded(
+                      child: _BalanceTile(
+                          label: '未結算',
+                          value: unsettledAmount,
+                          background: DriverColors.warningBackground,
+                          labelColor: DriverColors.secondaryText,
+                          valueColor: DriverColors.primary,
+                          currency: currency)),
+                ]),
+              ],
+            ),
+          ),
         ),
       );
 }
@@ -350,12 +409,14 @@ class _BalanceTile extends StatelessWidget {
       required this.value,
       required this.background,
       required this.labelColor,
-      required this.valueColor});
+      required this.valueColor,
+      required this.currency});
   final String label;
   final String value;
   final Color background;
   final Color labelColor;
   final Color valueColor;
+  final String currency;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -377,7 +438,7 @@ class _BalanceTile extends StatelessWidget {
                       fontWeight: FontWeight.w700,
                       color: valueColor))),
           const SizedBox(height: 2),
-          Text('HKD',
+          Text(currency,
               style: TextStyle(
                   fontSize: 11, color: labelColor.withValues(alpha: .6))),
         ]),

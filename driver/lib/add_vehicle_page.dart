@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import 'core/api/driver_api_client.dart';
 import 'core/layout/driver_page_shell.dart';
 import 'core/tokens/driver_tokens.dart';
 
@@ -45,6 +46,10 @@ class _AddVehiclePageState extends State<AddVehiclePage> {
   final _mainlandPlate = TextEditingController();
   final _color = TextEditingController();
 
+  List<String> _categoryOptions = const [];
+  bool _loadingCategories = true;
+  bool _isSaving = false;
+
   @override
   void initState() {
     super.initState();
@@ -58,10 +63,36 @@ class _AddVehiclePageState extends State<AddVehiclePage> {
       _mainlandPlate.text = data.mainlandPlate;
       _color.text = data.color;
     }
+    _loadCategories();
+  }
+
+  Future<void> _loadCategories() async {
+    try {
+      final result = await DriverApiClient.instance.listVehicleCatalog();
+      final categories = result['categories'];
+      if (!mounted) return;
+      setState(() {
+        _categoryOptions = categories is List
+            ? categories
+                .whereType<Map>()
+                .where((item) => item['enabled'] != false)
+                .map((item) => item['name']?.toString() ?? '')
+                .where((name) => name.isNotEmpty)
+                .toList()
+            : const [];
+        _loadingCategories = false;
+      });
+    } on DriverApiException {
+      if (mounted) setState(() => _loadingCategories = false);
+    }
   }
 
   List<String> get _availablePlateTypes =>
       _ownership == '中國內地' ? const ['兩地牌'] : _plateTypeOptions;
+
+  List<String> get _categoryChoices => _categoryOptions.isNotEmpty
+      ? _categoryOptions
+      : const ['轎車', 'MPV', '貨車'];
 
   List<_PlateInput> get _plateInputs {
     if (_plateType == '三地牌') {
@@ -103,6 +134,31 @@ class _AddVehiclePageState extends State<AddVehiclePage> {
     });
   }
 
+  Future<void> _save() async {
+    if (_category == null || _category!.trim().isEmpty) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('請選擇車輛類別')));
+      return;
+    }
+    setState(() => _isSaving = true);
+    try {
+      await DriverApiClient.instance.updateProfile({
+        'plateType': _plateType,
+        'hkPlate': _hkPlate.text.trim(),
+        'mainlandPlate': _mainlandPlate.text.trim(),
+        'vehicleCategory': _category,
+        'vehicleColor': _color.text.trim(),
+      });
+      if (!mounted) return;
+      Navigator.of(context).pop(true);
+    } on DriverApiException catch (error) {
+      if (!mounted) return;
+      setState(() => _isSaving = false);
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(error.message)));
+    }
+  }
+
   @override
   void dispose() {
     _hkPlate.dispose();
@@ -125,8 +181,8 @@ class _AddVehiclePageState extends State<AddVehiclePage> {
           Row(children: [
             _BackButton(onTap: () => Navigator.of(context).pop()),
             const SizedBox(width: DriverSpacing.lg),
-            const Text('新增車輛',
-                style: TextStyle(
+            Text(widget.initialData == null ? '新增車輛' : '修改車輛資料',
+                style: const TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.w700,
                     color: DriverColors.text)),
@@ -202,7 +258,7 @@ class _AddVehiclePageState extends State<AddVehiclePage> {
           ),
           const SizedBox(height: DriverSpacing.lg),
           ElevatedButton(
-              onPressed: () => Navigator.of(context).pop(),
+              onPressed: _isSaving ? null : _save,
               style: ElevatedButton.styleFrom(
                   backgroundColor: DriverColors.activeBlue,
                   foregroundColor: DriverColors.surface,
@@ -210,10 +266,16 @@ class _AddVehiclePageState extends State<AddVehiclePage> {
                       const EdgeInsets.symmetric(vertical: DriverSpacing.lg),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(DriverRadii.input))),
-              child: const Text('儲存',
-                  style: TextStyle(
-                      fontSize: DriverTypography.bodyLarge,
-                      fontWeight: FontWeight.w700))),
+              child: _isSaving
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('儲存',
+                      style: TextStyle(
+                          fontSize: DriverTypography.bodyLarge,
+                          fontWeight: FontWeight.w700))),
         ],
       ),
     );
@@ -225,7 +287,7 @@ class _AddVehiclePageState extends State<AddVehiclePage> {
         builder: (context) => SafeArea(
             child: Column(
                 mainAxisSize: MainAxisSize.min,
-                children: ['轎車', 'MPV', '貨車']
+                children: _categoryChoices
                     .map((item) => ListTile(
                         title: Text(item),
                         onTap: () => Navigator.pop(context, item)))

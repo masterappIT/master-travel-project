@@ -7,10 +7,16 @@ abstract final class DriverRouteNames {
   static const orderHistory = '/orders/history';
   static const profile = '/profile';
   static const profileEdit = '/profile/edit';
+  static const about = '/profile/about';
+  static const contactSupport = '/profile/contact-support';
   static const vehicle = '/profile/vehicle';
   static const flightQuery = '/profile/flight-query';
+  static const currency = '/profile/currency';
+  static const settlementOverview = '/profile/settlement';
   static const addVehicle = '/profile/vehicle/add';
   static const vehicleLegacy = '/profile/vehicle-legacy';
+  static const languageSettings = '/profile/language';
+  static const notificationSettings = '/profile/notifications';
   static const orderAccepted = '/orders/accepted';
   static const orderInProgress = '/orders/in-progress';
   static const orderCompleted = '/orders/completed';

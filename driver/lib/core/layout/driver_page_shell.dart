@@ -17,6 +17,7 @@ class DriverPageShell extends StatelessWidget {
     this.bottomPadding = DriverDimensions.bottomNavigationPadding,
     this.showBottomNavigation = true,
   });
+
   final Widget child;
   final int selectedIndex;
   final VoidCallback? onHomeTap;

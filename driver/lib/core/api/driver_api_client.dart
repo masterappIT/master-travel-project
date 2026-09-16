@@ -53,8 +53,8 @@ class DriverApiClient {
     if (storedToken == null || storedToken.isEmpty) return;
     _token = storedToken;
     try {
-      await me();
-    } on DriverApiException {
+      await me().timeout(const Duration(seconds: 8));
+    } on Object {
       clearSession();
     }
   }
@@ -113,8 +113,17 @@ class DriverApiClient {
       _decode(await _client.patch(Uri.parse('$baseUrl/driver/auth/me'),
           headers: _headers, body: jsonEncode(fields)));
 
-  Future<Map<String, dynamic>> statistics() async =>
-      _decode(await _client.get(Uri.parse('$baseUrl/driver/auth/statistics'), headers: _headers));
+  Future<Map<String, dynamic>> getVehicleProfile() async => me();
+
+  Future<Map<String, dynamic>> listVehicleCatalog() async => _decode(
+      await _client.get(Uri.parse('$baseUrl/vehicles'), headers: _headers));
+
+  Future<Map<String, dynamic>> settings() async => _decode(
+      await _client.get(Uri.parse('$baseUrl/settings'), headers: _headers));
+
+  Future<Map<String, dynamic>> statistics() async => _decode(await _client
+      .get(Uri.parse('$baseUrl/driver/auth/statistics'), headers: _headers));
+
   Future<List<dynamic>> availableTrips() async => _decodeList(await _client.get(
       Uri.parse('$baseUrl/driver/auth/trips/available'),
       headers: _headers));
