@@ -69,6 +69,36 @@ class DriverApiClient {
         if (_token != null) 'Authorization': 'Bearer ' + _token!,
       };
 
+  Future<DriverSession> registerDriver({
+    required String name,
+    required String affiliation,
+    required String plateType,
+    required String hkPlate,
+    String? mainlandPlate,
+    required String phoneCountryCode,
+    required String phone,
+    required String vehicleCategory,
+    required String vehicleColor,
+  }) async {
+    final session = DriverSession.fromJson(
+        _decode(await _client.post(Uri.parse('$baseUrl/driver/auth/register'),
+            headers: _headers,
+            body: jsonEncode({
+              'name': name,
+              'affiliation': affiliation,
+              'plateType': plateType,
+              'hkPlate': hkPlate,
+              'mainlandPlate': mainlandPlate,
+              'phoneCountryCode': phoneCountryCode,
+              'phone': phone,
+              'vehicleCategory': vehicleCategory,
+              'vehicleColor': vehicleColor,
+            }))));
+    _token = session.token;
+    html.window.localStorage[_tokenStorageKey] = session.token;
+    return session;
+  }
+
   Future<Map<String, dynamic>> requestPhoneCode(
           {required String countryCode, required String phoneNumber}) async =>
       _decode(await _client.post(

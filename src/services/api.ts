@@ -26,6 +26,9 @@ export type Notification = {
   title: string
   content: string
   audience: string
+  audience: string
+  templateType: string | null
+  important: boolean
   readAt: string | null
   createdAt: string
 }
@@ -96,8 +99,11 @@ export type ClientProfile = AuthUser & { avatarUrl: string | null; displayName: 
 
 export async function getClientProfile(): Promise<ClientProfile> {
   const response = await uni.request({ url: `${API_BASE_URL}/client/me`, header: authHeaders() })
-  if (response.statusCode >= 400) throw apiError(response, '無法獲取個人資料')
-  return response.data as ClientProfile
+  const profile = response.data as ClientProfile
+  // #ifdef H5
+  profile.avatarUrl = await resolveClientAvatarUrl(profile.avatarUrl)
+  // #endif
+  return profile
 }
 
 export type ClientSecurity = {
@@ -151,6 +157,18 @@ export async function unlinkClientProvider(provider: 'wechat' | 'apple'): Promis
   return response.data as ClientSecurity
 }
 
+export async function resolveClientAvatarUrl(url: string | null | undefined): Promise<string> {
+  if (!url) return ''
+  // #ifdef H5
+  if (url.startsWith('/client/me/avatar')) {
+    const response = await fetch(`${API_BASE_URL}${url}`, { headers: authHeaders() })
+    if (!response.ok) throw new Error(`頭像載入失敗（HTTP ${response.status}）`)
+    return URL.createObjectURL(await response.blob())
+  }
+  // #endif
+  return url
+}
+
 export async function uploadClientAvatar(filePath: string): Promise<ClientProfile> {
   // #ifdef H5
   const source = await fetch(filePath)
@@ -159,7 +177,9 @@ export async function uploadClientAvatar(filePath: string): Promise<ClientProfil
   form.append('file', blob, 'avatar.jpg')
   const response = await fetch(`${API_BASE_URL}/client/me/avatar`, { method: 'POST', headers: authHeaders(), body: form })
   if (!response.ok) throw new Error(`頭像上傳失敗（HTTP ${response.status}）`)
-  return await response.json() as ClientProfile
+  const profile = await response.json() as ClientProfile
+  profile.avatarUrl = await resolveClientAvatarUrl(profile.avatarUrl)
+  return profile
   // #endif
   // #ifndef H5
   return new Promise((resolve, reject) => {

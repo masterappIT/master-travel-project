@@ -11,6 +11,7 @@ export function createAdminFormState() {
   const charterForm = ref(null)
   const administratorForm = ref(null)
   const notificationForm = ref(null)
+  const notificationTemplateForm = ref(null)
   const mainlandCityForm = ref(null)
   const membershipForm = ref(null)
   const categoryForm = ref(null)
@@ -33,6 +34,7 @@ export function createAdminFormState() {
     charterForm,
     administratorForm,
     notificationForm,
+    notificationTemplateForm,
     mainlandCityForm,
     membershipForm,
     categoryForm,

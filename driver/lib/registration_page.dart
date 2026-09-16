@@ -1,14 +1,90 @@
 import 'package:flutter/material.dart';
 
 import 'app/route_names.dart';
+import 'core/api/driver_api_client.dart';
 import 'core/navigation/driver_navigation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import 'package:driver_web/core/tokens/driver_tokens.dart';
 
-class RegistrationPage extends StatelessWidget {
+class RegistrationPage extends StatefulWidget {
   const RegistrationPage({super.key});
+
+  @override
+  State<RegistrationPage> createState() => _RegistrationPageState();
+}
+
+class _RegistrationPageState extends State<RegistrationPage> {
+  final _nameController = TextEditingController();
+  final _affiliationController = TextEditingController();
+  final _hkPlateController = TextEditingController();
+  final _mainlandPlateController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _vehicleCategoryController = TextEditingController();
+  final _vehicleColorController = TextEditingController();
+  String _countryCode = '+852';
+  String _plateType = '兩地牌';
+  bool _loading = false;
+
+  @override
+  void dispose() {
+    for (final controller in [
+      _nameController,
+      _affiliationController,
+      _hkPlateController,
+      _mainlandPlateController,
+      _phoneController,
+      _vehicleCategoryController,
+      _vehicleColorController
+    ]) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final phone = _phoneController.text.trim();
+    final expectedLength = _countryCode == '+86' ? 11 : 8;
+    if (_nameController.text.trim().isEmpty ||
+        _affiliationController.text.trim().isEmpty ||
+        _hkPlateController.text.trim().isEmpty ||
+        _vehicleCategoryController.text.trim().isEmpty ||
+        _vehicleColorController.text.trim().isEmpty ||
+        (_plateType != '單牌' && _mainlandPlateController.text.trim().isEmpty)) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('請完成所有必填資料')));
+      return;
+    }
+    if (!RegExp(r'^\d+$').hasMatch(phone) || phone.length != expectedLength) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('請輸入 $expectedLength 位手機號碼')));
+      return;
+    }
+    setState(() => _loading = true);
+    try {
+      await DriverApiClient.instance.registerDriver(
+        name: _nameController.text.trim(),
+        affiliation: _affiliationController.text.trim(),
+        plateType: _plateType,
+        hkPlate: _hkPlateController.text.trim(),
+        mainlandPlate: _mainlandPlateController.text.trim().isEmpty
+            ? null
+            : _mainlandPlateController.text.trim(),
+        phoneCountryCode: _countryCode,
+        phone: phone,
+        vehicleCategory: _vehicleCategoryController.text.trim(),
+        vehicleColor: _vehicleColorController.text.trim(),
+      );
+      if (mounted) DriverNavigation.replace(context, DriverRouteNames.home);
+    } on DriverApiException catch (error) {
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error.message)));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -28,13 +104,25 @@ class RegistrationPage extends StatelessWidget {
                     _RegistrationHeader(
                         onBack: () => Navigator.of(context).maybePop()),
                     const SizedBox(height: DriverSpacing.xl),
-                    const _RegistrationCard(),
+                    _RegistrationCard(
+                      nameController: _nameController,
+                      affiliationController: _affiliationController,
+                      hkPlateController: _hkPlateController,
+                      mainlandPlateController: _mainlandPlateController,
+                      phoneController: _phoneController,
+                      vehicleCategoryController: _vehicleCategoryController,
+                      vehicleColorController: _vehicleColorController,
+                      countryCode: _countryCode,
+                      onCountryCodeChanged: (value) =>
+                          setState(() => _countryCode = value),
+                      onPlateTypeChanged: (value) =>
+                          setState(() => _plateType = value),
+                    ),
                     const SizedBox(height: DriverSpacing.xl),
                     SizedBox(
                       height: 56,
                       child: ElevatedButton(
-                        onPressed: () => DriverNavigation.push(
-                            context, DriverRouteNames.home),
+                        onPressed: _loading ? null : _submit,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: DriverColors.success,
                           foregroundColor: DriverColors.labelText,
@@ -103,7 +191,27 @@ class _RegistrationHeader extends StatelessWidget {
 }
 
 class _RegistrationCard extends StatefulWidget {
-  const _RegistrationCard();
+  const _RegistrationCard(
+      {required this.nameController,
+      required this.affiliationController,
+      required this.hkPlateController,
+      required this.mainlandPlateController,
+      required this.phoneController,
+      required this.vehicleCategoryController,
+      required this.vehicleColorController,
+      required this.countryCode,
+      required this.onCountryCodeChanged,
+      required this.onPlateTypeChanged});
+  final TextEditingController nameController,
+      affiliationController,
+      hkPlateController,
+      mainlandPlateController,
+      phoneController,
+      vehicleCategoryController,
+      vehicleColorController;
+  final String countryCode;
+  final ValueChanged<String> onCountryCodeChanged;
+  final ValueChanged<String> onPlateTypeChanged;
 
   @override
   State<_RegistrationCard> createState() => _RegistrationCardState();
@@ -134,36 +242,65 @@ class _RegistrationCardState extends State<_RegistrationCard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const _TextFieldSection(label: '姓名', hint: '請輸入司機姓名'),
+            _TextFieldSection(
+                label: '姓名',
+                hint: '請輸入司機姓名',
+                controller: widget.nameController),
+            _TextFieldSection(
+                label: '隸屬／地區',
+                hint: '請輸入隸屬或地區',
+                controller: widget.affiliationController),
             const SizedBox(height: DriverSpacing.lg),
             _ChoiceSection(
               label: '車輛歸屬地',
               options: _regions,
               selected: _regionIndex,
-              onChanged: (index) => setState(() {
-                _regionIndex = index;
-                if (!_availablePlateTypes.contains(_plateType)) {
-                  _plateType = '兩地牌';
-                }
-              }),
+              onChanged: (index) {
+                setState(() {
+                  _regionIndex = index;
+                  if (!_availablePlateTypes.contains(_plateType)) {
+                    _plateType = '兩地牌';
+                  }
+                });
+                widget.onCountryCodeChanged(index == 0
+                    ? '+852'
+                    : index == 1
+                        ? '+853'
+                        : '+86');
+              },
             ),
             const SizedBox(height: DriverSpacing.lg),
             _PlateSection(
               region: _regions[_regionIndex],
               plateType: _plateType,
               plateTypes: _availablePlateTypes,
-              onPlateTypeChanged: (index) =>
-                  setState(() => _plateType = _availablePlateTypes[index]),
+              hkPlateController: widget.hkPlateController,
+              mainlandPlateController: widget.mainlandPlateController,
+              onPlateTypeChanged: (index) {
+                final value = _availablePlateTypes[index];
+                setState(() => _plateType = value);
+                widget.onPlateTypeChanged(value);
+              },
             ),
             const SizedBox(height: DriverSpacing.lg),
-            const _PhoneSection(),
+            _PhoneSection(
+              controller: widget.phoneController,
+              countryCode: widget.countryCode,
+              onCountryCodeChanged: widget.onCountryCodeChanged,
+            ),
             const SizedBox(height: DriverSpacing.lg),
-            const _TextFieldSection(
-                label: '車輛類別',
-                hint: '請選擇車輛類別',
-                trailing: 'assets/chevron-down.svg'),
+            _TextFieldSection(
+              label: '車輛類別',
+              hint: '請選擇車輛類別',
+              trailing: 'assets/chevron-down.svg',
+              controller: widget.vehicleCategoryController,
+            ),
             const SizedBox(height: DriverSpacing.lg),
-            const _TextFieldSection(label: '車輛顏色', hint: '例如：白色'),
+            _TextFieldSection(
+              label: '車輛顏色',
+              hint: '例如：白色',
+              controller: widget.vehicleColorController,
+            ),
             const SizedBox(height: DriverSpacing.lg),
             const _VehiclePhotoSection(),
           ],
@@ -173,10 +310,16 @@ class _RegistrationCardState extends State<_RegistrationCard> {
 
 class _TextFieldSection extends StatelessWidget {
   const _TextFieldSection(
-      {required this.label, required this.hint, this.trailing});
+      {required this.label,
+      required this.hint,
+      this.trailing,
+      this.controller,
+      this.inputFormatters});
   final String label;
   final String hint;
   final String? trailing;
+  final TextEditingController? controller;
+  final List<TextInputFormatter>? inputFormatters;
 
   @override
   Widget build(BuildContext context) => Column(
@@ -192,6 +335,8 @@ class _TextFieldSection extends StatelessWidget {
             height: 50,
             decoration: _registrationFieldDecoration(),
             child: TextField(
+              controller: controller,
+              inputFormatters: inputFormatters,
               readOnly: trailing != null,
               decoration: InputDecoration(
                 hintText: hint,
@@ -297,11 +442,14 @@ class _PlateSection extends StatelessWidget {
     required this.region,
     required this.plateType,
     required this.plateTypes,
+    required this.hkPlateController,
+    required this.mainlandPlateController,
     required this.onPlateTypeChanged,
   });
   final String region;
   final String plateType;
   final List<String> plateTypes;
+  final TextEditingController hkPlateController, mainlandPlateController;
   final ValueChanged<int> onPlateTypeChanged;
 
   List<String> _plateLabels() {
@@ -317,7 +465,13 @@ class _PlateSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final fields = [
       for (final label in _plateLabels())
-        _TextFieldSection(label: label, hint: '請輸入$label號碼'),
+        _TextFieldSection(
+          label: label,
+          hint: '請輸入$label號碼',
+          controller: label.contains('內地')
+              ? mainlandPlateController
+              : hkPlateController,
+        ),
     ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -352,65 +506,54 @@ class _PlateSection extends StatelessWidget {
       ];
 }
 
-class _PhoneSection extends StatefulWidget {
-  const _PhoneSection();
+class _PhoneSection extends StatelessWidget {
+  const _PhoneSection(
+      {required this.controller,
+      required this.countryCode,
+      required this.onCountryCodeChanged});
+  final TextEditingController controller;
+  final String countryCode;
+  final ValueChanged<String> onCountryCodeChanged;
 
   @override
-  State<_PhoneSection> createState() => _PhoneSectionState();
-}
-
-class _PhoneSectionState extends State<_PhoneSection> {
-  String _region = '香港';
-
-  @override
-  Widget build(BuildContext context) => Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Text('聯繫電話',
-              style: TextStyle(
-                  fontSize: DriverTypography.body,
-                  fontWeight: FontWeight.w500,
-                  color: DriverColors.text)),
-          const SizedBox(height: DriverSpacing.md),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final fields = [
-                _PhoneField(
-                  label: '香港/澳門號碼',
-                  prefix: _region == '香港' ? '+852' : '+853',
-                  regionOptions: const {'香港': '+852', '澳門': '+853'},
-                  selectedRegion: _region,
-                  onRegionChanged: (region) => setState(() => _region = region),
-                ),
-                const _PhoneField(label: '中國內地號碼', prefix: '+86'),
-              ];
-              return constraints.maxWidth < 370
-                  ? Column(children: [
-                      fields[0],
-                      const SizedBox(height: DriverSpacing.md),
-                      fields[1]
-                    ])
-                  : Row(children: [
-                      Expanded(child: fields[0]),
-                      const SizedBox(width: DriverSpacing.md),
-                      Expanded(child: fields[1])
-                    ]);
-            },
-          ),
-        ],
-      );
+  Widget build(BuildContext context) {
+    final isMainland = countryCode == '+86';
+    final region = countryCode == '+853' ? '澳門' : '香港';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Text('聯繫電話',
+            style: TextStyle(
+                fontSize: DriverTypography.body,
+                fontWeight: FontWeight.w500,
+                color: DriverColors.text)),
+        const SizedBox(height: DriverSpacing.md),
+        _PhoneField(
+          label: isMainland ? '中國內地號碼' : '香港/澳門號碼',
+          prefix: countryCode,
+          controller: controller,
+          regionOptions: isMainland ? null : const {'香港': '+852', '澳門': '+853'},
+          selectedRegion: isMainland ? null : region,
+          onRegionChanged: (value) =>
+              onCountryCodeChanged(value == '澳門' ? '+853' : '+852'),
+        ),
+      ],
+    );
+  }
 }
 
 class _PhoneField extends StatelessWidget {
   const _PhoneField({
     required this.label,
     required this.prefix,
+    required this.controller,
     this.regionOptions,
     this.selectedRegion,
     this.onRegionChanged,
   });
   final String label;
   final String prefix;
+  final TextEditingController controller;
   final Map<String, String>? regionOptions;
   final String? selectedRegion;
   final ValueChanged<String>? onRegionChanged;
@@ -498,13 +641,13 @@ class _PhoneField extends StatelessWidget {
               child: SizedBox(
                 height: 50,
                 child: TextField(
-                  keyboardType: TextInputType.number,
+                  controller: controller,
                   inputFormatters: [
                     FilteringTextInputFormatter.digitsOnly,
-                    LengthLimitingTextInputFormatter(8),
+                    LengthLimitingTextInputFormatter(prefix == '+86' ? 11 : 8),
                   ],
                   decoration: _registrationInputDecoration(
-                    hintText: '8位電話號碼',
+                    hintText: prefix == '+86' ? '11位電話號碼' : '8位電話號碼',
                     contentPadding: const EdgeInsets.symmetric(
                         horizontal: 12, vertical: 14),
                   ),

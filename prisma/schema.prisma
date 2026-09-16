@@ -8,21 +8,41 @@ datasource db {
 }
 
 model Notification {
-  id        String    @id @default(cuid())
-  title     String
-  content   String    @db.Text
-  audience  String
-  userId    String?
-  driverId  String?
-  readAt    DateTime?
-  createdAt DateTime  @default(now())
-  user      User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  driver    Driver?   @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  id           String    @id @default(cuid())
+  title        String
+  content      String    @db.Text
+  audience     String
+  templateType String?   @default("system")
+  important    Boolean   @default(false)
+  userId       String?
+  driverId     String?
+  readAt       DateTime?
+  createdAt    DateTime  @default(now())
+  user         User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  driver       Driver?   @relation(fields: [driverId], references: [id], onDelete: Cascade)
 
   @@index([userId, readAt, createdAt])
   @@index([driverId, readAt, createdAt])
   @@index([audience, createdAt])
+  @@index([important, createdAt])
 }
+
+model NotificationTemplate {
+  id           String   @id @default(cuid())
+  name         String
+  type         String
+  title        String
+  content      String   @db.Text
+  audience     String   @default("ALL_USERS")
+  important    Boolean  @default(false)
+  enabled      Boolean  @default(true)
+  builtIn      Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([type, enabled])
+}
+
 
 model User {
   id                 String              @id
@@ -31,6 +51,8 @@ model User {
   name               String?
   displayName        String?
   avatarUrl          String?
+  avatarData         Bytes?
+  avatarMimeType     String?
   email              String?
   passwordHash       String?
   gender             String?

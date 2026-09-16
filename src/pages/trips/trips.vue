@@ -38,10 +38,9 @@ import WalletCard from '../../components/profile/WalletCard.vue'
 import OrdersCard from '../../components/profile/OrdersCard.vue'
 import CommonActions from '../../components/profile/CommonActions.vue'
 import ProfileBottomNav from '../../components/profile/ProfileBottomNav.vue'
-import { getClientProfile, listClientTrips } from '../../services/api'
+import { getClientProfile, listNotifications, listClientTrips } from '../../services/api'
 
-const totalMessages = 4
-const unreadCount = ref(totalMessages)
+const unreadCount = ref(0)
 const avatarUrl = ref('')
 const displayName = ref('John')
 const walletBalance = ref(0)
@@ -67,9 +66,11 @@ const refreshProfile = async () => {
       uni.setStorageSync('client-auth-user', remote)
     } catch { /* keep cached profile when offline */ }
   }
-  const saved = uni.getStorageSync('read-message-types')
-  const readCount = Array.isArray(saved) ? new Set(saved).size : 0
-  unreadCount.value = Math.max(0, totalMessages - readCount)
+  try {
+    unreadCount.value = (await listNotifications()).unread
+  } catch {
+    unreadCount.value = 0
+  }
   const wallet = uni.getStorageSync('wallet-state')
   walletBalance.value = Number(wallet?.withdrawable) || 0
 }

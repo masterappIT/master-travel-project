@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../app/route_names.dart';
@@ -19,6 +20,7 @@ class _LoginPageState extends State<LoginPage> {
   final _phoneController = TextEditingController();
   final _codeController = TextEditingController();
   final _api = DriverApiClient.instance;
+  String _countryCode = '+852';
   String? _challengeId;
   String? _error;
   bool _loading = false;
@@ -31,9 +33,10 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> _requestCode() async {
-    final phone = _phoneController.text.trim();
-    if (phone.isEmpty) {
-      setState(() => _error = '請輸入手機號碼');
+    final phone = _phoneController.text.replaceAll(RegExp(r'[\s-]'), '');
+    final expectedLength = _countryCode == '+86' ? 11 : 8;
+    if (!RegExp(r'^\d+$').hasMatch(phone) || phone.length != expectedLength) {
+      setState(() => _error = '請輸入 $expectedLength 位手機號碼');
       return;
     }
     setState(() {
@@ -41,8 +44,8 @@ class _LoginPageState extends State<LoginPage> {
       _error = null;
     });
     try {
-      final result =
-          await _api.requestPhoneCode(countryCode: '+852', phoneNumber: phone);
+      final result = await _api.requestPhoneCode(
+          countryCode: _countryCode, phoneNumber: phone);
       if (!mounted) return;
       setState(() => _challengeId = result['challengeId'] as String?);
       ScaffoldMessenger.of(context)
@@ -107,6 +110,11 @@ class _LoginPageState extends State<LoginPage> {
                       _VerificationCard(
                           phoneController: _phoneController,
                           codeController: _codeController,
+                          countryCode: _countryCode,
+                          onCountryCodeChanged: (value) => setState(() {
+                                _countryCode = value;
+                                _phoneController.clear();
+                              }),
                           onRequestCode: _requestCode,
                           loading: _loading),
                       if (_error != null) ...[
@@ -204,10 +212,14 @@ class _VerificationCard extends StatelessWidget {
   const _VerificationCard(
       {required this.phoneController,
       required this.codeController,
+      required this.countryCode,
+      required this.onCountryCodeChanged,
       required this.onRequestCode,
       required this.loading});
   final TextEditingController phoneController;
   final TextEditingController codeController;
+  final String countryCode;
+  final ValueChanged<String> onCountryCodeChanged;
   final VoidCallback onRequestCode;
   final bool loading;
 
@@ -221,15 +233,44 @@ class _VerificationCard extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 16),
             decoration: _fieldDecoration(),
             child: Row(children: [
-              const Text('+852',
-                  style: TextStyle(
-                      fontSize: 15,
-                      color: DriverColors.text,
-                      fontWeight: FontWeight.w500)),
-              const SizedBox(width: DriverSpacing.xs),
-              const Text('▼',
-                  style:
-                      TextStyle(fontSize: 10, color: DriverColors.mutedText)),
+              InkWell(
+                onTap: loading
+                    ? null
+                    : () async {
+                        final selected = await showModalBottomSheet<String>(
+                          context: context,
+                          builder: (context) => SafeArea(
+                            child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  for (final entry in const {
+                                    '+852': '香港',
+                                    '+853': '澳門',
+                                    '+86': '中國內地'
+                                  }.entries)
+                                    ListTile(
+                                      title:
+                                          Text('${entry.value} ${entry.key}'),
+                                      onTap: () =>
+                                          Navigator.pop(context, entry.key),
+                                    ),
+                                ]),
+                          ),
+                        );
+                        if (selected != null) onCountryCodeChanged(selected);
+                      },
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Text(countryCode,
+                      style: const TextStyle(
+                          fontSize: 15,
+                          color: DriverColors.text,
+                          fontWeight: FontWeight.w500)),
+                  const SizedBox(width: DriverSpacing.xs),
+                  const Text('▼',
+                      style: TextStyle(
+                          fontSize: 10, color: DriverColors.mutedText)),
+                ]),
+              ),
               const SizedBox(width: DriverSpacing.md),
               Container(width: 1, height: 20, color: const Color(0xffd1d1d9)),
               const SizedBox(width: DriverSpacing.sm),
@@ -237,6 +278,7 @@ class _VerificationCard extends StatelessWidget {
                   child: TextField(
                       controller: phoneController,
                       keyboardType: TextInputType.phone,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                       decoration: const InputDecoration(
                           border: InputBorder.none, hintText: '請輸入手機號碼'))),
             ]),
@@ -251,6 +293,10 @@ class _VerificationCard extends StatelessWidget {
                   child: TextField(
                       controller: codeController,
                       keyboardType: TextInputType.number,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                        LengthLimitingTextInputFormatter(5),
+                      ],
                       decoration: _inputDecoration('請輸入 5 位數簡訊驗證碼')));
               final compact = constraints.maxWidth < 350;
               final button = _PrimaryButton(

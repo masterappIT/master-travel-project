@@ -32,13 +32,15 @@ export async function loadDispatchOrderUrls({ trips, tripsApi, orderUrls }) {
   }
 }
 
-export async function loadNotificationResources({ api, usersApi, driversApi, notifications, notificationUsers, notificationDrivers }) {
-  const [notificationResult, userResult, driverResult] = await Promise.all([
+export async function loadNotificationResources({ api, usersApi, driversApi, notifications, notificationTemplates, notificationUsers, notificationDrivers }) {
+  const [notificationResult, templateResult, userResult, driverResult] = await Promise.all([
     api('/admin/notifications'),
+    api('/admin/notification-templates'),
     usersApi.list(),
     driversApi.list()
   ])
   notifications.value = notificationResult.data
+  notificationTemplates.value = templateResult.data
   notificationUsers.value = userResult.data
   notificationDrivers.value = driverResult.data
 }

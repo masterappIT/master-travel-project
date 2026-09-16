@@ -11,6 +11,7 @@ export function createAdminAuxiliaryState() {
     administrators: ref([]),
     auditLogs: ref([]),
     notifications: ref([]),
+    notificationTemplates: ref([]),
     notificationUsers: ref([]),
     notificationDrivers: ref([]),
     personnel,

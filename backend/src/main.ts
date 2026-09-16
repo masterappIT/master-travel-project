@@ -1,13 +1,12 @@
 import { NestFactory } from '@nestjs/core'
-import { Body, CallHandler, Controller, Delete, ExecutionContext, ForbiddenException, Get, HttpException, HttpStatus, Injectable, Module, NestInterceptor, Param, Patch, Post, Req, UnauthorizedException, UploadedFile, UseInterceptors } from '@nestjs/common'
+import { Body, CallHandler, Controller, Delete, ExecutionContext, ForbiddenException, Get, HttpException, HttpStatus, Injectable, Module, NestInterceptor, Param, Patch, Post, Req, Res, UnauthorizedException, UploadedFile, UseInterceptors } from '@nestjs/common'
 import { FileInterceptor } from '@nestjs/platform-express'
 import { NestExpressApplication } from '@nestjs/platform-express'
+import { Response } from 'express'
 import { APP_INTERCEPTOR } from '@nestjs/core'
 import { createHash, createHmac, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto'
-import { mkdir, writeFile } from 'node:fs/promises'
-import { extname, join } from 'node:path'
-import { Observable, tap } from 'rxjs'
 import { loadEnvFile } from 'node:process'
+import { Observable, tap } from 'rxjs'
 import { Prisma, PrismaClient, PromotionKind, DiscountType, PromotionStackingMode } from '@prisma/client'
 
 try {
@@ -334,7 +333,7 @@ function parseRouteMinimumFare(body: Partial<RouteMinimumFareSettings>) {
   return { originRegion, originCity, destinationRegion, destinationCity, categoryId: body.categoryId?.trim() || null, minimumFare, currency, enabled: body.enabled ?? true }
 }
 function validVehicleCategory(body: Partial<VehicleCategory>) { return body.id && body.name?.trim() && body.tabLabel?.trim() }
-type ManagedUser = { id: string; countryCode: string; phoneNumber: string; name: string | null; displayName: string | null; avatarUrl: string | null; email: string | null; passwordHash: string | null; gender: string | null; region: string | null; birthday: Date | null; cashBalance: number; fareBalance: number; membershipLevel: string | null; enabled: boolean; createdAt: Date; lastLoginAt: Date | null; lastLogoutAt: Date | null; authIdentities?: Array<{ provider: string }>; verificationCodes?: Array<{ id: string; purpose: string; status: string; attempts: number; expiresAt: Date; consumedAt: Date | null; createdAt: Date }> }
+type ManagedUser = { id: string; countryCode: string; phoneNumber: string; name: string | null; displayName: string | null; avatarUrl: string | null; avatarData: Uint8Array | null; email: string | null; passwordHash: string | null; gender: string | null; region: string | null; birthday: Date | null; cashBalance: number; fareBalance: number; membershipLevel: string | null; enabled: boolean; createdAt: Date; lastLoginAt: Date | null; lastLogoutAt: Date | null; authIdentities?: Array<{ provider: string }>; verificationCodes?: Array<{ id: string; purpose: string; status: string; attempts: number; expiresAt: Date; consumedAt: Date | null; createdAt: Date }> }
 function loginMethods(user: ManagedUser) {
   const methods = ['SMS 驗證碼']
   if (user.passwordHash) methods.push('密碼')
@@ -350,7 +349,7 @@ function userResponse(user: ManagedUser) {
     phone: `${user.countryCode} ${user.phoneNumber}`,
     name: user.name,
     displayName: user.displayName,
-    avatarUrl: user.avatarUrl,
+    avatarUrl: user.avatarData ? '/client/me/avatar' : null,
     email: user.email,
     gender: user.gender,
     region: user.region,
@@ -960,6 +959,29 @@ class ClientAuthController {
 
 @Controller('driver/auth')
 class DriverAuthController {
+  @Post('register')
+  async register(@Body() body: { name?: unknown; affiliation?: unknown; plateType?: unknown; hkPlate?: unknown; mainlandPlate?: unknown; phoneCountryCode?: unknown; phone?: unknown; vehicleCategory?: unknown; vehicleColor?: unknown }) {
+    const name = typeof body.name === 'string' ? body.name.trim() : ''
+    const affiliation = typeof body.affiliation === 'string' ? body.affiliation.trim() : ''
+    const plateType = typeof body.plateType === 'string' ? body.plateType.trim() : ''
+    const hkPlate = typeof body.hkPlate === 'string' ? body.hkPlate.trim() : ''
+    const mainlandPlate = typeof body.mainlandPlate === 'string' ? body.mainlandPlate.trim() : ''
+    const vehicleCategory = typeof body.vehicleCategory === 'string' ? body.vehicleCategory.trim() : ''
+    const vehicleColor = typeof body.vehicleColor === 'string' ? body.vehicleColor.trim() : ''
+    if (!name || !affiliation || !vehicleCategory || !vehicleColor || !['單牌', '兩地牌', '三地牌'].includes(plateType) || !hkPlate || (plateType !== '單牌' && !mainlandPlate)) {
+      throw new HttpException('Valid driver registration fields are required', HttpStatus.BAD_REQUEST)
+    }
+    const identity = parsePhoneIdentity({ countryCode: typeof body.phoneCountryCode === 'string' ? body.phoneCountryCode : undefined, phoneNumber: typeof body.phone === 'string' ? body.phone : undefined })
+    const existing = await prisma.driver.findFirst({ where: { phoneCountryCode: identity.countryCode, phone: identity.phoneNumber } })
+    if (existing) throw new HttpException('Driver phone number is already registered', HttpStatus.CONFLICT)
+    const driver = await prisma.driver.create({ data: {
+      id: `driver-${Date.now()}-${randomBytes(4).toString('hex')}`, name, affiliation, plateType, hkPlate,
+      mainlandPlate: mainlandPlate || null, phoneCountryCode: identity.countryCode, phone: identity.phoneNumber,
+      vehicleCategory, vehicleColor, vehiclePhotos: [], reviewStatus: '待審核',
+    } })
+    return driverAuthResponse(driver)
+  }
+
   @Post('phone/request')
   async requestPhoneCode(@Body() body: { countryCode?: string; phoneNumber?: string }) {
     const identity = parsePhoneIdentity(body)
@@ -1296,11 +1318,31 @@ class AdminController {
   @Delete('administrators/:id') disableAdministrator(@Req() req: RequestLike, @Param('id') id: string) { const session = requireRole(req, ['SUPER_ADMIN']); if (session.sub === id) throw new HttpException('Cannot disable the current administrator', HttpStatus.BAD_REQUEST); const admin = administrators.find(item => item.id === id); if (!admin) throw new HttpException('Administrator not found', HttpStatus.NOT_FOUND); if (admin.role === 'SUPER_ADMIN' && admin.enabled && administrators.filter(item => item.role === 'SUPER_ADMIN' && item.enabled).length === 1) throw new HttpException('At least one enabled super administrator is required', HttpStatus.BAD_REQUEST); admin.enabled = false; admin.updatedAt = new Date().toISOString(); return { ok: true } }
   @Get('audit-logs') listAuditLogs(@Req() req: RequestLike) { requireRole(req, ['SUPER_ADMIN']); return { data: adminAuditLogs.slice(0, 300), total: adminAuditLogs.length } }
 
+  @Get('notification-templates') async listNotificationTemplates(@Req() req: RequestLike) {
+    requireAuth(req)
+    return { data: await prisma.notificationTemplate.findMany({ orderBy: [{ builtIn: 'desc' }, { createdAt: 'asc' }] }) }
+  }
+  @Post('notification-templates') async createNotificationTemplate(@Req() req: RequestLike, @Body() body: { name?: string; type?: string; title?: string; content?: string; audience?: string; important?: boolean; enabled?: boolean }) {
+    requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
+    const name = body.name?.trim()
+    const type = body.type?.trim()
+    const title = body.title?.trim()
+    const content = body.content?.trim()
+    if (!name || !type || !title || !content) throw new HttpException('Template name, type, title and content are required', HttpStatus.BAD_REQUEST)
+    return prisma.notificationTemplate.create({ data: { name, type, title, content, audience: body.audience === 'ALL_DRIVERS' ? 'ALL_DRIVERS' : 'ALL_USERS', important: Boolean(body.important), enabled: body.enabled !== false, builtIn: false } })
+  }
+  @Post('notification-templates/:id/preview') async previewNotificationTemplate(@Req() req: RequestLike, @Param('id') id: string, @Body() body: { title?: string; content?: string }) {
+    requireAuth(req)
+    const template = await prisma.notificationTemplate.findUnique({ where: { id } })
+    if (!template) throw new HttpException('Notification template not found', HttpStatus.NOT_FOUND)
+    return { data: { ...template, title: body.title?.trim() || template.title, content: body.content?.trim() || template.content } }
+  }
+
   @Get('notifications') async listNotifications(@Req() req: RequestLike) {
     requireAuth(req)
     return { data: await prisma.notification.findMany({ orderBy: { createdAt: 'desc' }, take: 300 }) }
   }
-  @Post('notifications') async createNotification(@Req() req: RequestLike, @Body() body: { title?: string; content?: string; audience?: string; userIds?: string[]; driverIds?: string[] }) {
+  @Post('notifications') async createNotification(@Req() req: RequestLike, @Body() body: { title?: string; content?: string; audience?: string; userIds?: string[]; driverIds?: string[]; templateType?: string; important?: boolean }) {
     requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
     const title = body.title?.trim()
     const content = body.content?.trim()
@@ -1318,9 +1360,11 @@ class AdminController {
       ])
       if (users.length !== userIds.length || drivers.length !== driverIds.length) throw new HttpException('One or more recipients were not found', HttpStatus.BAD_REQUEST)
     }
-    const records: Array<{ title: string; content: string; audience: string; userId?: string; driverId?: string }> = [
-      ...[...new Set(userIds)].map(userId => ({ title, content, audience: 'USER', userId })),
-      ...[...new Set(driverIds)].map(driverId => ({ title, content, audience: 'DRIVER', driverId }))
+    const templateType = body.templateType?.trim() || 'system'
+    const important = Boolean(body.important)
+    const records: Array<{ title: string; content: string; audience: string; templateType: string; important: boolean; userId?: string; driverId?: string }> = [
+      ...[...new Set(userIds)].map(userId => ({ title, content, audience: 'USER', templateType, important, userId })),
+      ...[...new Set(driverIds)].map(driverId => ({ title, content, audience: 'DRIVER', templateType, important, driverId }))
     ]
     await prisma.notification.createMany({ data: records })
     return { ok: true, count: records.length }
@@ -2878,20 +2922,20 @@ function clientTripResponse(trip: Prisma.TripGetPayload<{ include: { user: { sel
 @Controller('client')
 class ClientOrdersController {
   @Post('me/avatar')
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 5 * 1024 * 1024 }, fileFilter: (_req, file, cb) => cb(null, /^image\/(png|jpeg|webp|gif)$/.test(file.mimetype)) }))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 1024 * 1024 }, fileFilter: (_req, file, cb) => cb(null, /^image\/(png|jpeg|webp|gif)$/.test(file.mimetype)) }))
   async uploadAvatar(@Req() req: RequestLike, @UploadedFile() file?: Express.Multer.File) {
     const session = await clientSessionFrom(req)
     if (!file) throw new HttpException('只接受圖片檔案', HttpStatus.BAD_REQUEST)
-    const extension = extname(file.originalname).toLowerCase() || '.jpg'
-    const filename = `${session.sub}-${Date.now()}${extension}`
-    const uploadDir = join(process.cwd(), 'uploads', 'avatars')
-    await mkdir(uploadDir, { recursive: true })
-    await writeFile(join(uploadDir, filename), file.buffer)
-    const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http'
-    const host = req.headers.host || '127.0.0.1:3010'
-    const avatarUrl = `${protocol}://${host}/uploads/avatars/${filename}`
-    const user = await prisma.user.update({ where: { id: session.sub }, data: { avatarUrl } })
+    const user = await prisma.user.update({ where: { id: session.sub }, data: { avatarUrl: null, avatarData: new Uint8Array(file.buffer), avatarMimeType: file.mimetype } })
     return userResponse(user)
+  }
+
+  @Get('me/avatar')
+  async getAvatar(@Req() req: RequestLike, @Res() response: Response) {
+    const session = await clientSessionFrom(req)
+    const user = await prisma.user.findUnique({ where: { id: session.sub }, select: { avatarData: true, avatarMimeType: true } })
+    if (!user?.avatarData || !user.avatarMimeType) throw new HttpException('Avatar not found', HttpStatus.NOT_FOUND)
+    response.type(user.avatarMimeType).send(user.avatarData)
   }
 
   @Get('me')
@@ -3105,7 +3149,6 @@ async function bootstrap() {
   await prisma.$connect()
   await ensurePricingDefaults()
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { bodyParser: false })
-  app.useStaticAssets(join(process.cwd(), 'uploads'), { prefix: '/uploads/' })
   app.useBodyParser('json', { limit: '2mb' })
   const configuredOrigins = (process.env.APP_CORS_ORIGINS || process.env.ADMIN_CORS_ORIGIN || '')
     .split(',')

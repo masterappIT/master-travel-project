@@ -32,6 +32,11 @@ const removeHouseNumber = (value: string) => value
 
 export const formatOrderCardAddress = (value: string | undefined, fallback: string) => cityName(value?.trim() || '', fallback)
 
+export const formatOrderSummaryAddress = (value: string | undefined, fallbackCity: string) => {
+  const address = districtAndPlace(value?.trim() || '', fallbackCity)
+  return [address.city, address.district].filter(Boolean).join(' · ') || fallbackCity
+}
+
 export const formatOrderDetailAddress = (value: string | undefined, fallbackCity: string) => {
   const address = districtAndPlace(value?.trim() || '', fallbackCity)
   const cityAndDistrict = [address.city, address.district].filter(Boolean).join(' · ')

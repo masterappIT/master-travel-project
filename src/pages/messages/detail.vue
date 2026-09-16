@@ -10,7 +10,7 @@
         <image class="type-icon" :src="detail.icon" mode="aspectFit" />
         <text class="title">{{ detail.title }}</text>
         <text class="status">{{ detail.status }}</text>
-        <text class="time">2024年1月1日 10:30</text>
+        <text class="time">{{ detail.time }}</text>
       </view>
 
       <view class="detail-card">
@@ -35,7 +35,7 @@ import { closeCachedPage } from '../../utils/navigation'
 import { computed, ref } from 'vue'
 import { formatCurrencyAmount } from '../../composables/useCurrency'
 import { onLoad } from '@dcloudio/uni-app'
-import type { Notification } from '../../services/api'
+import { listNotifications, markNotificationRead, type Notification } from '../../services/api'
 
 type MessageType = 'order' | 'top-up' | 'withdrawal' | 'refund'
 
@@ -105,15 +105,21 @@ const detail = computed(() => notification.value ? {
   title: notification.value.title,
   status: notification.value.readAt ? '已讀' : '新消息',
   icon: '/static/messages/top-up.svg',
+  time: new Date(notification.value.createdAt).toLocaleString(),
   rows: [{ label: '受眾', value: notification.value.audience.includes('DRIVER') ? '司機端' : '用戶端' }, { label: '發送時間', value: new Date(notification.value.createdAt).toLocaleString() }],
   notice: notification.value.content
-} : details[type.value])
+} : { ...details[type.value], time: '2024年1月1日 10:30' })
 
-onLoad((options) => {
+onLoad(async (options) => {
   const stored = uni.getStorageSync('selected-notification')
   if (stored?.id) notification.value = stored as Notification
   const requestedType = options?.type as MessageType
   if (requestedType && requestedType in details) type.value = requestedType
+  if (notification.value?.id && !notification.value.readAt) {
+    await markNotificationRead(notification.value.id).catch(() => undefined)
+    notification.value.readAt = new Date().toISOString()
+    uni.setStorageSync('selected-notification', notification.value)
+  }
 })
 
 const goBack = () => closeCachedPage('/pages/messages/messages')
