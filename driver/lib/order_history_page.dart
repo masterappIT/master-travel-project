@@ -29,6 +29,10 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
     _loadTrips();
   }
 
+  List<Map<String, dynamic>> get _visibleTrips => _trips
+      .where((trip) => (trip is Map ? trip['settlement'] != null : false) == (_selectedHistoryTab == 0))
+      .map((trip) => Map<String, dynamic>.from(trip as Map))
+      .toList();
   Future<void> _loadTrips() async {
     try {
       final trips = await _api.trips();
@@ -89,7 +93,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
               padding: EdgeInsets.symmetric(vertical: DriverSpacing.xl),
               child: Text(_error!),
             ))
-          else if (_trips.isEmpty)
+          else if (_visibleTrips.isEmpty)
             const Center(
               child: Padding(
                 padding: EdgeInsets.symmetric(vertical: DriverSpacing.xl),
@@ -97,8 +101,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
               ),
             )
           else
-            ..._trips.map((trip) {
-              final item = Map<String, dynamic>.from(trip as Map);
+            ..._visibleTrips.map((item) {
               final date = DateTime.tryParse(item['completedAt']?.toString() ??
                   item['scheduledAt']?.toString() ??
                   '');
@@ -107,8 +110,9 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                   price: item['price']?.toString() ?? '待確認',
                   origin: item['pickupAddress']?.toString() ?? '起點待確認',
                   destination: item['dropoffAddress']?.toString() ?? '終點待確認',
-                  passenger: item['user']?['name']?.toString() ?? '乘客',
-                  settled: true);
+                  passenger: item['user']?['name']?.toString() ?? item['passengerName']?.toString() ?? '乘客',
+                  settled: item['settlement'] != null,
+                  settlementMethod: item['settlement']?['method']?.toString() ?? '未設定');
               return Padding(
                   padding: const EdgeInsets.only(bottom: 12),
                   child: _HistoryCard(entry: entry));
@@ -219,13 +223,15 @@ class _HistoryEntry {
       required this.origin,
       required this.destination,
       required this.passenger,
-      required this.settled});
+      required this.settled,
+      required this.settlementMethod});
   final String date;
   final String price;
   final String origin;
   final String destination;
   final String passenger;
   final bool settled;
+  final String settlementMethod;
 }
 
 class _HistoryCard extends StatelessWidget {
@@ -284,21 +290,40 @@ class _HistoryCard extends StatelessWidget {
                               color: DriverColors.secondaryText))),
                 ])),
                 const SizedBox(width: DriverSpacing.sm),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                      color: entry.settled
-                          ? DriverColors.successBackground
-                          : DriverColors.warningBackground,
-                      borderRadius: BorderRadius.circular(4)),
-                  child: Text(entry.settled ? '已結算' : '未結算',
-                      style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: entry.settled
-                              ? DriverColors.primary
-                              : DriverColors.secondaryText)),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                        color: entry.settled
+                            ? DriverColors.successBackground
+                            : DriverColors.warningBackground,
+                        borderRadius: BorderRadius.circular(4)),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(entry.settled ? '已結算' : '未結算',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.end,
+                            style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: entry.settled
+                                    ? DriverColors.primary
+                                    : DriverColors.secondaryText)),
+                        Text('結算方式：${entry.settlementMethod}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.end,
+                            style: const TextStyle(
+                                fontSize: 10,
+                                color: DriverColors.secondaryText)),
+                      ],
+                    ),
+                  ),
                 ),
               ],
             ),

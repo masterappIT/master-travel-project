@@ -22,6 +22,8 @@ class _ProfilePageState extends State<ProfilePage> {
   String _name = '陳大文';
   String _hongKongMacauPhone = '+852 9123 4567';
   String _mainlandPhone = '+86 未填寫';
+  String _settledAmount = '\$0';
+  String _unsettledAmount = '\$0';
 
   @override
   void initState() {
@@ -31,7 +33,9 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Future<void> _loadProfile() async {
     try {
-      final driver = await _api.me();
+      final results = await Future.wait<dynamic>([_api.me(), _api.statistics()]);
+      final driver = Map<String, dynamic>.from(results[0] as Map);
+      final statistics = Map<String, dynamic>.from(results[1] as Map);
       if (!mounted) return;
       setState(() {
         _name = driver['name']?.toString() ?? _name;
@@ -39,6 +43,11 @@ class _ProfilePageState extends State<ProfilePage> {
             '${driver['phoneCountryCode'] ?? '+852'} ${driver['phone'] ?? ''}'
                 .trim();
         _mainlandPhone = driver['mainlandPhone']?.toString() ?? _mainlandPhone;
+        final settlement = statistics['settlement'] is Map
+            ? Map<String, dynamic>.from(statistics['settlement'] as Map)
+            : <String, dynamic>{};
+        _settledAmount = _formatAmount(settlement['settledEarnings']);
+        _unsettledAmount = _formatAmount(settlement['unsettledEarnings']);
         _loading = false;
       });
     } on DriverApiException catch (error) {
@@ -49,6 +58,13 @@ class _ProfilePageState extends State<ProfilePage> {
         });
       }
     }
+  }
+
+  String _formatAmount(dynamic value) {
+    final amount = value is num ? value : num.tryParse(value?.toString() ?? '');
+    if (amount == null) return '\$0';
+    final digits = amount == amount.roundToDouble() ? 0 : 2;
+    return '\$${amount.toStringAsFixed(digits)}';
   }
 
   Future<void> _showNotifications() async {
@@ -138,7 +154,9 @@ class _ProfilePageState extends State<ProfilePage> {
             ))
           else ...[
             const SizedBox(height: DriverSpacing.xl),
-            const _BalanceCard(),
+            _BalanceCard(
+                settledAmount: _settledAmount,
+                unsettledAmount: _unsettledAmount),
             const SizedBox(height: DriverSpacing.xl),
             _MenuCard(
               title: '主要功能',
@@ -248,9 +266,19 @@ class _ProfileHeader extends StatelessWidget {
               label: '通知',
               child: InkWell(
                 onTap: onNotification,
-                borderRadius: BorderRadius.circular(DriverRadii.card),
-                child: SvgPicture.asset('assets/profile-bell.svg',
-                    width: 32, height: 32),
+                borderRadius: BorderRadius.circular(20),
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: DriverColors.surface,
+                    border: Border.all(color: DriverColors.divider),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: SvgPicture.asset('assets/home-bell.svg',
+                      width: 24, height: 24),
+                ),
               ),
             ),
           ],
@@ -278,7 +306,10 @@ class _ProfileHeader extends StatelessWidget {
 }
 
 class _BalanceCard extends StatelessWidget {
-  const _BalanceCard();
+  const _BalanceCard({required this.settledAmount, required this.unsettledAmount});
+
+  final String settledAmount;
+  final String unsettledAmount;
 
   @override
   Widget build(BuildContext context) => _CardShell(
@@ -292,18 +323,18 @@ class _BalanceCard extends StatelessWidget {
                     color: DriverColors.text)),
             const SizedBox(height: DriverSpacing.md),
             Row(children: [
-              const Expanded(
+              Expanded(
                   child: _BalanceTile(
                       label: '已結算',
-                      value: '\$12,680',
+                      value: settledAmount,
                       background: DriverColors.infoBackground,
                       labelColor: DriverColors.primary,
                       valueColor: DriverColors.primary)),
               const SizedBox(width: DriverSpacing.md),
-              const Expanded(
+              Expanded(
                   child: _BalanceTile(
                       label: '未結算',
-                      value: '\$3,420',
+                      value: unsettledAmount,
                       background: DriverColors.warningBackground,
                       labelColor: DriverColors.secondaryText,
                       valueColor: DriverColors.primary)),

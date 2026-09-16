@@ -367,13 +367,15 @@ function userResponse(user: ManagedUser) {
   }
 }
 function clientSecurityResponse(user: ManagedUser & { authIdentities?: Array<{ provider: string }> }) {
-  return { countryCode: user.countryCode, phoneNumber: user.phoneNumber, email: user.email, linkedProviders: (user.authIdentities || []).map(identity => identity.provider).filter((provider): provider is 'apple' | 'wechat' => provider === 'apple' || provider === 'wechat') }
+  return { countryCode: user.countryCode, phoneNumber: user.phoneNumber, email: user.email, passwordSet: !!user.passwordHash, linkedProviders: (user.authIdentities || []).map(identity => identity.provider).filter((provider): provider is 'apple' | 'wechat' => provider === 'apple' || provider === 'wechat') }
 }
 function parsePhoneIdentity(body: { countryCode?: string; phoneNumber?: string }) {
   const countryCode = body.countryCode?.trim() || ''
   const phoneNumber = body.phoneNumber?.replace(/[\s-]/g, '') || ''
-  if (!/^\+\d{1,4}$/.test(countryCode) || !/^\d{4,15}$/.test(phoneNumber)) {
-    throw new HttpException('A valid country code and phone number are required', HttpStatus.BAD_REQUEST)
+  const expectedLength = countryCode === '+852' || countryCode === '+853' ? 8 : countryCode === '+86' ? 11 : null
+  const validLength = expectedLength ? phoneNumber.length === expectedLength : phoneNumber.length >= 4 && phoneNumber.length <= 15
+  if (!/^\+\d{1,4}$/.test(countryCode) || !/^\d+$/.test(phoneNumber) || !validLength) {
+    throw new HttpException(expectedLength ? `Phone number must contain ${expectedLength} digits for ${countryCode}` : 'A valid country code and phone number are required', HttpStatus.BAD_REQUEST)
   }
   return { countryCode, phoneNumber }
 }
@@ -690,6 +692,12 @@ function tripResponse(trip: {
     createdAt: Date
     updatedAt: Date
   } | null
+  settlement?: {
+    id: string
+    driverId: string
+    method: string
+    settledAt: Date
+  } | null
   [key: string]: unknown
 }) {
   const { quote, ...data } = trip
@@ -712,6 +720,12 @@ function tripResponse(trip: {
       refundedAt: trip.payment.refundedAt?.toISOString() || null,
       createdAt: trip.payment.createdAt.toISOString(),
       updatedAt: trip.payment.updatedAt.toISOString()
+    } : null,
+    settlement: trip.settlement ? {
+      id: trip.settlement.id,
+      driverId: trip.settlement.driverId,
+      method: trip.settlement.method,
+      settledAt: trip.settlement.settledAt.toISOString()
     } : null,
     quote: quote ? quoteResponse(quote) : null
   }
@@ -1046,7 +1060,7 @@ class DriverAuthController {
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
     const trips = await prisma.trip.findMany({
       where: { driverId: session.sub, status: 'COMPLETED', completedAt: { not: null } },
-      include: { payment: true },
+      include: { payment: true, settlement: true },
       orderBy: { completedAt: 'desc' }
     })
     const onlineSessions = await prisma.driverOnlineSession.findMany({ where: { driverId: session.sub, startedAt: { lt: now } } })
@@ -1057,6 +1071,8 @@ class DriverAuthController {
     }, 0)
     const todayTrips = trips.filter(item => item.completedAt! >= todayStart)
     const monthTrips = trips.filter(item => item.completedAt! >= monthStart)
+    const settledTrips = trips.filter(item => item.settlement != null)
+    const unsettledTrips = trips.filter(item => item.settlement == null)
     const sum = (items: typeof trips) => items.reduce((total, item) => total + (item.payment?.total ?? item.fareBalancePaid + item.cashBalancePaid + item.externalPaid), 0)
     const ratings = await prisma.driverRating.findMany({ where: { driverId: session.sub }, select: { score: true } })
     const ratingTotal = ratings.reduce((total, item) => total + item.score, 0)
@@ -1067,11 +1083,19 @@ class DriverAuthController {
       currency: item.payment?.currency ?? 'HKD',
       origin: item.origin,
       destination: item.destination,
-      passenger: item.passengerName
+      passenger: item.passengerName,
+      settlementStatus: item.settlement ? 'SETTLED' : 'UNSETTLED',
+      settlementMethod: item.settlement?.method ?? null,
+      settledAt: item.settlement?.settledAt.toISOString() ?? null
     }))
     return {
       today: { earnings: sum(todayTrips), completedTrips: todayTrips.length, onlineHours: durationMs / 3600000 },
       month: { earnings: sum(monthTrips) },
+      settlement: {
+        settledEarnings: sum(settledTrips),
+        unsettledEarnings: sum(unsettledTrips),
+        currency: trips.find(item => item.payment?.currency)?.payment?.currency ?? 'HKD'
+      },
       rating: { average: ratings.length ? ratingTotal / ratings.length : null, count: ratings.length },
       recentOrders
     }
@@ -1080,7 +1104,7 @@ class DriverAuthController {
   @Get('trips')
   async history(@Req() req: RequestLike) {
     const session = await driverSessionFrom(req)
-    const trips = await prisma.trip.findMany({ where: { driverId: session.sub }, include: { user: true }, orderBy: { scheduledAt: 'desc' } })
+    const trips = await prisma.trip.findMany({ where: { driverId: session.sub }, include: { user: true, payment: true, settlement: true }, orderBy: { scheduledAt: 'desc' } })
     return trips.map(trip => tripResponse(trip))
   }
 
@@ -1446,6 +1470,7 @@ class AdminController {
          }
        },
        payment: true,
+       settlement: true,
        driver: true,
      },
      orderBy: { scheduledAt: 'asc' }
@@ -1496,6 +1521,23 @@ class AdminController {
      return tx.trip.update({ where: { id }, data: { userId: body.userId || existing.userId, origin, destination, region: region as any, scheduledAt, status: body.status as any, executionPhase: body.status === 'CONFIRMED' ? (body.executionPhase as any || existing.executionPhase || 'WAITING_DRIVER') : null, driverId: body.driverId ?? existing.driverId, driverName: body.driverName ?? existing.driverName, driverPhone: body.driverPhone ?? existing.driverPhone, vehiclePlate: body.vehiclePlate ?? existing.vehiclePlate }, include: { user: true } })
    })
    return { ...trip, scheduledAt: trip.scheduledAt.toISOString(), createdAt: trip.createdAt.toISOString(), updatedAt: trip.updatedAt.toISOString(), user: userResponse(trip.user) }
+  }
+  @Post('trips/:id/settlement') async settleTrip(@Req() req: RequestLike, @Param('id') id: string, @Body() body: { method?: string }) {
+   requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
+   const method = body.method?.trim()
+   if (!method) throw new HttpException('Settlement method is required', HttpStatus.BAD_REQUEST)
+   const trip = await prisma.trip.findUnique({ where: { id }, select: { id: true, driverId: true, status: true } })
+   if (!trip) throw new HttpException('Trip not found', HttpStatus.NOT_FOUND)
+   if (!trip.driverId || trip.status !== 'COMPLETED') throw new HttpException('Only completed trips assigned to a driver can be settled', HttpStatus.CONFLICT)
+   const settlement = await prisma.driverSettlement.upsert({ where: { tripId: id }, create: { id: `settlement-${Date.now()}-${randomBytes(4).toString('hex')}`, tripId: id, driverId: trip.driverId, method }, update: { driverId: trip.driverId, method, settledAt: new Date() } })
+   return { ...settlement, settledAt: settlement.settledAt.toISOString(), createdAt: settlement.createdAt.toISOString() }
+  }
+  @Post('trips/:id/settlement/unsettle') async unsettleTrip(@Req() req: RequestLike, @Param('id') id: string) {
+   requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
+   const settlement = await prisma.driverSettlement.findUnique({ where: { tripId: id } })
+   if (!settlement) throw new HttpException('Trip is already unsettled', HttpStatus.NOT_FOUND)
+   await prisma.driverSettlement.delete({ where: { tripId: id } })
+   return { ok: true }
   }
   @Post('trips/:id/dispatch') async dispatchTrip(@Req() req: RequestLike, @Param('id') id: string, @Body() body: { driverId?: string }) {
    requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
@@ -2861,7 +2903,7 @@ class ClientOrdersController {
   }
 
   @Patch('me')
-  async updateProfile(@Req() req: RequestLike, @Body() body: { name?: string; displayName?: string; avatarUrl?: string; email?: string; password?: string; gender?: string; region?: string; birthday?: string; countryCode?: string; phoneNumber?: string }) {
+  async updateProfile(@Req() req: RequestLike, @Body() body: { name?: string; displayName?: string; avatarUrl?: string; email?: string; password?: string; gender?: string; region?: string; birthday?: string }) {
     const session = await clientSessionFrom(req)
     const name = body.name?.trim() || null
     const displayName = body.displayName?.trim() || null
@@ -2871,13 +2913,8 @@ class ClientOrdersController {
     const password = body.password?.trim() || ''
     const gender = body.gender?.trim() || null
     const region = body.region?.trim() || null
-    const phone = body.countryCode || body.phoneNumber ? parsePhoneIdentity({ countryCode: body.countryCode, phoneNumber: body.phoneNumber }) : null
     if (name && name.length > 100 || displayName && displayName.length > 100 || password && (password.length < 8 || password.length > 200) || gender && gender.length > 30 || region && region.length > 100) throw new HttpException('Invalid profile fields', HttpStatus.BAD_REQUEST)
-    if (phone) {
-      const duplicate = await prisma.user.findFirst({ where: { countryCode: phone.countryCode, phoneNumber: phone.phoneNumber, id: { not: session.sub } } })
-      if (duplicate) throw new HttpException('Phone number is already connected', HttpStatus.CONFLICT)
-    }
-    const user = await prisma.user.update({ where: { id: session.sub }, data: { name, displayName, avatarUrl, email, ...(phone ? phone : {}), ...(password ? { passwordHash: hashPassword(password) } : {}), gender, region, birthday } })
+    const user = await prisma.user.update({ where: { id: session.sub }, data: { name, displayName, avatarUrl, email, ...(password ? { passwordHash: hashPassword(password) } : {}), gender, region, birthday } })
     return userResponse(user)
   }
 

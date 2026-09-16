@@ -1,4 +1,6 @@
 export function createTripsActions({ api, tripsApi, addressesApi, tripForm, selectedTrip, tripQuote, tripBookingStep, tripPaymentMethod, tripUseFareBalance, tripUseCashBalance, tripLocationKeyword, tripLocationResults, tripLocationSearching, tripLocationTarget, dispatchForm, orderUrlForm, createdOrderUrl, users, trips, error, load, displayError, canWrite, requestConfirmation, notify, tripCatalog, dateTimeInput }) {
+  async function settleTrip(item, method) { if (!canWrite.value || !item?.id || !method?.trim()) return; try { await tripsApi.settle(item.id, method.trim()); await load(); selectedTrip.value = trips.value.find(trip => trip.id === item.id) || null } catch (err) { error.value = displayError(err) } }
+  async function unsettleTrip(item) { if (!canWrite.value || !item?.id) return; try { await tripsApi.unsettle(item.id); await load(); selectedTrip.value = trips.value.find(trip => trip.id === item.id) || null } catch (err) { error.value = displayError(err) } }
   function clearTripLocationSearch() {
     tripLocationKeyword.value = ''
     tripLocationResults.value = []
@@ -75,5 +77,5 @@ export function createTripsActions({ api, tripsApi, addressesApi, tripForm, sele
   function closeCreatedOrderUrl() { createdOrderUrl.value = '' }
   async function copyOrderUrl() { if (!createdOrderUrl.value) return; try { await navigator.clipboard.writeText(createdOrderUrl.value) } catch { error.value = '複製 URL 失敗，請手動複製' } }
   async function revokeOrderUrl(item) { if (!await requestConfirmation({ title: '撤銷訂單 URL', message: '確定要撤銷此訂單 URL？', confirmLabel: '撤銷', danger: true })) return; try { await tripsApi.revokeOrderUrl(item.tripId, item.id); notify('訂單 URL 已撤銷'); await load() } catch (err) { error.value = displayError(err); notify(error.value, 'error') } }
-  return { editTrip, resetTrip, clearTripLocationSearch, searchTripLocation, selectTripLocation, handleTripRegionChange, showTrip, closeTrip, updateTripStatus, prepareTripQuote, calculateTripRoute, completeTripBooking, saveTrip, openDispatch, saveDispatch, openOrderUrlForm, createOrderUrl, closeCreatedOrderUrl, copyOrderUrl, revokeOrderUrl }
+  return { editTrip, resetTrip, clearTripLocationSearch, searchTripLocation, selectTripLocation, handleTripRegionChange, showTrip, closeTrip, updateTripStatus, settleTrip, unsettleTrip, prepareTripQuote, calculateTripRoute, completeTripBooking, saveTrip, openDispatch, saveDispatch, openOrderUrlForm, createOrderUrl, closeCreatedOrderUrl, copyOrderUrl, revokeOrderUrl }
 }

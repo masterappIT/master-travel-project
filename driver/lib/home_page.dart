@@ -22,11 +22,24 @@ class _HomePageState extends State<HomePage> {
   bool _loading = true;
   String? _error;
   Map<String, dynamic>? _driver;
+  Map<String, dynamic>? _statistics;
+  bool _statsLoading = true;
+  String? _statsError;
 
   @override
   void initState() {
     super.initState();
     _loadDriver();
+    _loadStatistics();
+  }
+
+  Future<void> _loadStatistics() async {
+    try {
+      final result = await _api.statistics();
+      if (mounted) setState(() { _statistics = result; _statsLoading = false; });
+    } on DriverApiException catch (error) {
+      if (mounted) setState(() { _statsError = error.message; _statsLoading = false; });
+    }
   }
 
   Future<void> _loadDriver() async {
@@ -106,11 +119,17 @@ class _HomePageState extends State<HomePage> {
                     const SizedBox(height: DriverSpacing.xl),
                     const _SectionEyebrow('收入與表現'),
                     const SizedBox(height: DriverSpacing.sm),
-                    const _EarningsCard(),
+                    _EarningsCard(statistics: _statistics, loading: _statsLoading, error: _statsError),
                     const SizedBox(height: DriverSpacing.lg),
-                    const _QuickStatsRow(),
+                    _QuickStatsRow(statistics: _statistics, loading: _statsLoading, error: _statsError),
                     const SizedBox(height: DriverSpacing.xl),
-                    const _RecentOrdersSection(),
+                    _RecentOrdersSection(
+                        orders: (_statistics?['recentOrders'] as List?)
+                                ?.map((item) => Map<String, dynamic>.from(item as Map))
+                                .toList() ??
+                            const [],
+                        loading: _statsLoading,
+                        error: _statsError),
                   ],
                 ),
     );
@@ -260,91 +279,98 @@ class _SectionEyebrow extends StatelessWidget {
 }
 
 class _EarningsCard extends StatelessWidget {
-  const _EarningsCard();
+  const _EarningsCard({required this.statistics, required this.loading, this.error});
+  final Map<String, dynamic>? statistics;
+  final bool loading;
+  final String? error;
+
+  String _money(dynamic value) => value is num ? '\$${value.toStringAsFixed(2)}' : '—';
+  String _number(dynamic value) => value is num ? value.toString() : '—';
 
   @override
-  Widget build(BuildContext context) => _Card(
+  Widget build(BuildContext context) {
+    final today = statistics?['today'] as Map<String, dynamic>?;
+    return _Card(
         padding: 20,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('今日收入',
-                style: TextStyle(
-                    fontSize: DriverTypography.body,
-                    color: DriverColors.secondaryText)),
+        child: loading
+            ? const SizedBox(height: 150, child: Center(child: CircularProgressIndicator()))
+            : error != null
+                ? Text(error!, style: const TextStyle(color: DriverColors.primary))
+                : Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+            const Text('今日收入', style: TextStyle(fontSize: DriverTypography.body, color: DriverColors.secondaryText)),
             const SizedBox(height: DriverSpacing.xs),
-            const Text('\$1,280.00',
-                style: TextStyle(
-                    fontSize: 36,
-                    fontWeight: FontWeight.w800,
-                    color: DriverColors.text)),
+            Text(_money(today?['earnings']), style: const TextStyle(fontSize: 36, fontWeight: FontWeight.w800, color: DriverColors.text)),
             const SizedBox(height: DriverSpacing.lg),
-            SvgPicture.asset('assets/home-divider.svg',
-                width: double.infinity, height: 1),
+            SvgPicture.asset('assets/home-divider.svg', width: double.infinity, height: 1),
             const SizedBox(height: DriverSpacing.lg),
-            const Row(children: [
-              Expanded(child: _Stat(label: '今日接單', value: '3 單')),
-              Expanded(child: _Stat(label: '在線時數', value: '4.5 小時')),
+            Row(children: [
+              Expanded(child: _Stat(label: '今日接單', value: '${_number(today?['completedTrips'])} 單')),
+              Expanded(child: _Stat(label: '在線時數', value: today?['onlineHours'] is num ? '${(today!['onlineHours'] as num).toStringAsFixed(1)} 小時' : '—')),
             ]),
           ],
-        ),
-      );
+        ));
+  }
 }
 
 class _QuickStatsRow extends StatelessWidget {
-  const _QuickStatsRow();
+  const _QuickStatsRow({required this.statistics, required this.loading, this.error});
+  final Map<String, dynamic>? statistics;
+  final bool loading;
+  final String? error;
 
   @override
-  Widget build(BuildContext context) => const Row(
-        children: [
-          Expanded(
-              child: _Card(
-                  padding: 16,
-                  child:
-                      _Stat(label: '本月收入', value: '\$12,680', valueSize: 20))),
-          SizedBox(width: 16),
-          Expanded(child: _Card(padding: 16, child: _RatingStat())),
-        ],
-      );
+  Widget build(BuildContext context) {
+    final month = statistics?['month'] as Map<String, dynamic>?;
+    final rating = statistics?['rating'] as Map<String, dynamic>?;
+    final monthValue = month?['earnings'] is num ? '\$${(month!['earnings'] as num).toStringAsFixed(2)}' : '—';
+    final ratingValue = rating?['average'] is num ? '${(rating!['average'] as num).toStringAsFixed(1)} / 5.0' : '尚無評分';
+    if (loading) return const Row(children: [Expanded(child: _Card(padding: 16, child: Center(child: CircularProgressIndicator()))), SizedBox(width: 16), Expanded(child: _Card(padding: 16, child: Center(child: CircularProgressIndicator()))) ]);
+    return Row(
+      children: [
+       Expanded(child: _Card(padding: 16, child: _Stat(label: '本月收入', value: error == null ? monthValue : '—', valueSize: 20))),
+       const SizedBox(width: 16),
+       Expanded(child: _Card(padding: 16, child: _RatingStat(value: error == null ? ratingValue : '—'))),
+      ],
+    );
+  }
 }
 
 class _RecentOrdersSection extends StatelessWidget {
-  const _RecentOrdersSection();
+  const _RecentOrdersSection({required this.orders, required this.loading, this.error});
+  final List<Map<String, dynamic>> orders;
+  final bool loading;
+  final String? error;
 
   @override
-  Widget build(BuildContext context) => const Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            Text('最近訂單',
-                style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: DriverColors.text)),
-            Text('查看全部',
-                style: TextStyle(
-                    fontSize: DriverTypography.body,
-                    fontWeight: FontWeight.w500,
-                    color: DriverColors.activeBlue)),
-          ]),
-          SizedBox(height: 12),
-          _RecentOrderCard(
-              time: '2024/03/15 14:00',
-              price: '\$280.00',
-              origin: '香港中環',
-              destination: '深圳',
-              passenger: '陳先生',
-              distance: '42.5 km · 50 分鐘'),
-          SizedBox(height: 12),
-          _RecentOrderCard(
-              time: '2024/03/15 11:30',
-              price: '\$420.00',
-              origin: '香港機場',
-              destination: '珠海',
-              passenger: '王小姐',
-              distance: '58.2 km · 65 分鐘'),
-        ],
-      );
+  Widget build(BuildContext context) {
+    if (loading) return const Center(child: CircularProgressIndicator());
+    if (error != null) return Text(error!);
+    if (orders.isEmpty) return const _Card(padding: 20, child: Text('暫無已完成訂單'));
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+       const Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+         Text('最近訂單', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: DriverColors.text)),
+         Text('查看全部', style: TextStyle(fontSize: DriverTypography.body, fontWeight: FontWeight.w500, color: DriverColors.activeBlue)),
+       ]),
+       const SizedBox(height: 12),
+       ...orders.map((order) => Padding(
+         padding: const EdgeInsets.only(bottom: 12),
+         child: _RecentOrderCard(
+           time: order['completedAt']?.toString() ?? '—',
+           price: order['price'] is num ? '\$${(order['price'] as num).toStringAsFixed(2)}' : '—',
+           origin: order['origin']?.toString() ?? '—',
+           destination: order['destination']?.toString() ?? '—',
+           passenger: order['passenger']?.toString() ?? '—',
+           settlementStatus: order['settlementStatus'] == 'SETTLED' ? '已結算' : '未結算',
+           settlementMethod: order['settlementMethod']?.toString() ?? '未設定',
+         ),
+       )),
+      ],
+    );
+  }
 }
 
 class _RecentOrderCard extends StatelessWidget {
@@ -354,8 +380,9 @@ class _RecentOrderCard extends StatelessWidget {
       required this.origin,
       required this.destination,
       required this.passenger,
-      required this.distance});
-  final String time, price, origin, destination, passenger, distance;
+      required this.settlementStatus,
+      required this.settlementMethod});
+  final String time, price, origin, destination, passenger, settlementStatus, settlementMethod;
 
   @override
   Widget build(BuildContext context) => _Card(
@@ -402,12 +429,25 @@ class _RecentOrderCard extends StatelessWidget {
             ),
             const SizedBox(width: DriverSpacing.sm),
             Flexible(
-              child: Text(distance,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.end,
-                  style: const TextStyle(
-                      fontSize: DriverTypography.label,
-                      color: DriverColors.secondaryText)),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(settlementStatus,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.end,
+                        style: TextStyle(fontSize: DriverTypography.label, fontWeight: FontWeight.w700, color: settlementStatus == '已結算' ? DriverColors.primary : DriverColors.secondaryText)),
+                    Text('結算方式：$settlementMethod',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.end,
+                        style: const TextStyle(fontSize: DriverTypography.label, color: DriverColors.secondaryText)),
+                  ],
+                ),
+              ),
             ),
           ]),
         ]),
@@ -454,7 +494,8 @@ class _Stat extends StatelessWidget {
 }
 
 class _RatingStat extends StatelessWidget {
-  const _RatingStat();
+  const _RatingStat({required this.value});
+  final String value;
 
   @override
   Widget build(BuildContext context) =>
@@ -468,7 +509,7 @@ class _RatingStat extends StatelessWidget {
           SvgPicture.asset('assets/home-star.svg', width: 16, height: 16),
           const SizedBox(width: DriverSpacing.xs),
           Flexible(
-            child: Text('4.9 / 5.0',
+            child: Text(value,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                     fontSize: 20,
