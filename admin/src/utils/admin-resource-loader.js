@@ -83,12 +83,7 @@ export async function loadCoreUsers({ usersApi, users }) {
 export async function loadDriversResources({ driversApi, vehicleCategories, drivers }) {
   const [categoryResult, driverResult] = await Promise.all([driversApi.categories(), driversApi.list()])
   vehicleCategories.value = categoryResult.data.filter(item => item.enabled !== false)
-  if (!driverResult.data.length && drivers.value.length) {
-    for (const driver of drivers.value) await driversApi.save(driver)
-    drivers.value = (await driversApi.list()).data
-  } else {
-    drivers.value = driverResult.data
-  }
+  drivers.value = driverResult.data
   localStorage.setItem('admin_drivers', JSON.stringify(drivers.value))
 }
 

@@ -336,6 +336,18 @@ const setRouteSelection = (target: 'origin' | 'destination', selection: RouteSel
   if (target === 'origin') originSelection.value = selection
   if (target === 'destination') destinationSelection.value = selection
 }
+const routeAddressFields = () => ({
+  originRegion: originSelection.value?.region || undefined,
+  originCity: originSelection.value?.city || undefined,
+  originDistrict: originSelection.value?.district || undefined,
+  originPlace: originSelection.value?.landmark || originSelection.value?.name || undefined,
+  originDetail: originSelection.value?.displayAddress || originSelection.value?.address || undefined,
+  destinationRegion: destinationSelection.value?.region || undefined,
+  destinationCity: destinationSelection.value?.city || undefined,
+  destinationDistrict: destinationSelection.value?.district || undefined,
+  destinationPlace: destinationSelection.value?.landmark || destinationSelection.value?.name || undefined,
+  destinationDetail: destinationSelection.value?.displayAddress || destinationSelection.value?.address || undefined
+})
 const parseBusinessLocation = (value: string): BusinessLocation => {
   const [region, ...placeParts] = value.split(' · ')
   return { region: placeParts.length ? region : '', place: placeParts.length ? placeParts.join(' · ') : region }
@@ -406,10 +418,7 @@ const updateRoute = async () => {
     const durationMinutes = Math.max(1, Math.round(route.duration / 60))
     routeSummary.value = `共 ${distanceKm < 10 ? distanceKm.toFixed(1) : Math.round(distanceKm)} 公里 · 約 ${durationMinutes >= 60 ? `${Math.floor(durationMinutes / 60)} 小時${durationMinutes % 60 ? ` ${durationMinutes % 60} 分鐘` : ''}` : `${durationMinutes} 分鐘`}`
     tripStore.setRoute(origin.value, destination.value, {
-      originRegion: originSelection.value?.region || undefined,
-      originCity: originSelection.value?.city || undefined,
-      destinationRegion: destinationSelection.value?.region || undefined,
-      destinationCity: destinationSelection.value?.city || undefined,
+      ...routeAddressFields(),
       originLatitude: originCoordinate.latitude,
       originLongitude: originCoordinate.longitude,
       destinationLatitude: destinationCoordinate.latitude,
@@ -441,10 +450,7 @@ const selectAddress = (value: string, selection?: AddressSelection) => {
       destinationSelection.value = selection ? { ...selection } : null
     }
     tripStore.setRoute(origin.value, destination.value, {
-      originRegion: originSelection.value?.region || undefined,
-      originCity: originSelection.value?.city || undefined,
-      destinationRegion: destinationSelection.value?.region || undefined,
-      destinationCity: destinationSelection.value?.city || undefined
+      ...routeAddressFields()
     })
   }
   if (target && selection?.latitude !== undefined && selection.longitude !== undefined) {
@@ -556,10 +562,7 @@ const applyFlightLookup = (result: FlightLookupResult) => {
   selectedCoordinates.value.origin = nextOrigin.latitude !== undefined && nextOrigin.longitude !== undefined ? { latitude: nextOrigin.latitude, longitude: nextOrigin.longitude } : undefined
   selectedCoordinates.value.destination = nextDestination.latitude !== undefined && nextDestination.longitude !== undefined ? { latitude: nextDestination.latitude, longitude: nextDestination.longitude } : undefined
   tripStore.setRoute(origin.value, destination.value, {
-    originRegion: nextOrigin.region || undefined,
-    originCity: nextOrigin.city,
-    destinationRegion: nextDestination.region || undefined,
-    destinationCity: nextDestination.city,
+    ...routeAddressFields(),
     originLatitude: nextOrigin.latitude,
     originLongitude: nextOrigin.longitude,
     destinationLatitude: nextDestination.latitude,
@@ -634,10 +637,7 @@ const confirmFlightDirection = (direction: 'to-airport' | 'from-airport') => {
 const confirmDepartureTime = async (value: string) => {
   departureTime.value = value
   tripStore.setRoute(origin.value, destination.value, {
-    originRegion: originSelection.value?.region || undefined,
-    originCity: originSelection.value?.city || undefined,
-    destinationRegion: destinationSelection.value?.region || undefined,
-    destinationCity: destinationSelection.value?.city || undefined,
+    ...routeAddressFields(),
     originLatitude: selectedCoordinates.value.origin?.latitude,
     originLongitude: selectedCoordinates.value.origin?.longitude,
     destinationLatitude: selectedCoordinates.value.destination?.latitude,

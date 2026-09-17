@@ -13,6 +13,7 @@ export const createUsersApi = api => ({
     method: 'POST',
     body: JSON.stringify({ enabled })
   }),
+  remove: id => api(`/admin/users/${id}`, { method: 'DELETE' }),
   adjustWallet: (id, payload) => api(`/admin/users/${id}/wallet-adjustments`, {
     method: 'POST',
     body: JSON.stringify(payload)

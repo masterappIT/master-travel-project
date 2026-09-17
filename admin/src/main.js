@@ -137,7 +137,8 @@ const usersActions = createUsersActions({
   requestConfirmation,
   canWrite,
   displayError,
-  error
+  error,
+  notify
 })
 const adminSessionActions = createAdminSessionActions({ api, token, username, password, currentAdministrator, error, exchangeRate, adminLogo, view, load, displayError })
 const { apiLogin, logout, saveExchangeRate, uploadAdminLogo, removeAdminLogo } = adminSessionActions
@@ -146,7 +147,7 @@ const { resetNotification, createTemplate, clearNotificationRecipients, toggleNo
 const paymentsActions = createPaymentsActions({ api, paymentSettings, paymentSettingsSaved, driverRaceSaving, error, displayError })
 const { savePaymentSettings } = paymentsActions
 const { updateCharterStatus, editCharter, saveCharter } = createCharterActions({ api, charterForm, load, error, displayError, dateTimeInput })
-const { edit: editUser, reset: resetUser, select: selectUser, save: saveUser, updateStatus: updateUserStatus, openWalletAdjustment, saveWalletAdjustment } = usersActions
+const { edit: editUser, reset: resetUser, select: selectUser, save: saveUser, updateStatus: updateUserStatus, remove: removeUser, openWalletAdjustment, saveWalletAdjustment } = usersActions
 const tripsActions = createTripsActions({ api, tripsApi, addressesApi, tripForm, selectedTrip, tripQuote, tripBookingStep, tripPaymentMethod, tripUseFareBalance, tripUseCashBalance, tripLocationKeyword, tripLocationResults, tripLocationSearching, tripLocationTarget, dispatchForm, orderUrlForm, createdOrderUrl, users, trips, error, load, displayError, canWrite, requestConfirmation, notify, tripCatalog, dateTimeInput })
 const { editTrip, resetTrip, clearTripLocationSearch, searchTripLocation, selectTripLocation, handleTripRegionChange, showTrip, closeTrip, updateTripStatus, settleTrip, unsettleTrip, prepareTripQuote, calculateTripRoute, completeTripBooking, saveTrip, confirmDispatch, openDispatch, saveDispatch, openOrderUrlForm, createOrderUrl, closeCreatedOrderUrl, copyOrderUrl, revokeOrderUrl } = tripsActions
 const membershipActions = createMembershipActions({ api, membershipForm, membershipPlans, load, error, displayError, requestConfirmation, notify, t })
@@ -163,7 +164,7 @@ const { editExtra, resetExtra, saveExtra, moveExtra, showOnlyExtra, toggleSevere
 const addressesActions = createAddressesActions({ addressesApi, addresses, addressForm, mainlandCities, mainlandCityForm, addressSearchKeyword, addressSearchResults, addressSearching, error, load, displayError, displayMainlandCity, apiMainlandCity, displayPlaceName, requestConfirmation, notify, t })
 const { editAddress, resetAddress, searchAddressPlaces, handleAddressRegionChange, handleAddressCityChange, selectAddressSearchResult, saveAddress, removeAddress, resetMainlandCity, editMainlandCity, saveMainlandCity, removeMainlandCity } = addressesActions
 const driverActions = createDriversActions({ driversApi, driverForm, selectedDriver, settlementForm, drivers, error, load, displayError, requestConfirmation, notify })
-const { reviewStatusLabel, resetDriver, editDriver, formatDriverHongKongPlate, formatDriverMacauPlate, formatDriverMainlandPlate, changeDriverOwnership, uploadDriverPhotos, removeDriverPhoto, saveDriver, removeDriver, openDriverDetail, previewDriver, closeDriverDetail, approveDriver, requestDriverRevision, rejectDriver, resetSettlement, saveSettlement } = driverActions
+const { reviewStatusLabel, resetDriver, editDriver, formatDriverHongKongPlate, formatDriverMacauPlate, formatDriverMainlandPlate, changeDriverOwnership, uploadDriverPhotos, removeDriverPhoto, saveDriver, updateDriverStatus, removeDriver, openDriverDetail, previewDriver, closeDriverDetail, approveDriver, requestDriverRevision, rejectDriver, resetSettlement, saveSettlement } = driverActions
 const administratorsActions = createAdministratorsActions({ api, administratorForm, load, error, displayError, requestConfirmation, notify })
 const { resetAdministrator, editAdministrator, saveAdministrator, disableAdministrator } = administratorsActions
 const operationsStorage = createOperationsStorage({ personnel, entryItems, expenseItems, drivers })
@@ -377,6 +378,7 @@ const App = { setup() {
      selectUser,
      saveUser,
      updateUserStatus,
+     removeUser,
      openWalletAdjustment,
      saveWalletAdjustment,
      goToUserPage,
@@ -447,6 +449,7 @@ const App = { setup() {
      uploadDriverPhotos,
      removeDriverPhoto,
      saveDriver,
+     updateDriverStatus,
      removeDriver,
      previewDriver,
      openDriverDetail,

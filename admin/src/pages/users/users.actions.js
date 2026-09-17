@@ -1,4 +1,4 @@
-export function createUsersActions({ usersApi, users, selectedUser, userForm, walletTransactions, topUpWithdrawalHistory, walletAdjustment, load, view, requestConfirmation, canWrite, displayError, error }) {
+export function createUsersActions({ usersApi, users, selectedUser, userForm, walletTransactions, topUpWithdrawalHistory, walletAdjustment, load, view, requestConfirmation, canWrite, displayError, error, notify }) {
   const edit = item => {
     selectedUser.value = null
     walletAdjustment.value = null
@@ -60,6 +60,30 @@ export function createUsersActions({ usersApi, users, selectedUser, userForm, wa
     }
   }
 
+  const remove = async item => {
+    if (!canWrite.value) return null
+    const confirmed = await requestConfirmation({
+      title: '永久刪除用戶',
+      message: `確定永久刪除用戶「${item.name || item.phoneNumber}」？此操作不可恢復；如已有行程或財務歷史，系統將拒絕刪除。`,
+      confirmLabel: '永久刪除',
+      danger: true
+    })
+    if (!confirmed) return null
+    try {
+      await usersApi.remove(item.id)
+      if (selectedUser.value?.id === item.id) selectedUser.value = null
+      if (userForm.value?.id === item.id) userForm.value = null
+      walletAdjustment.value = null
+      notify('用戶已永久刪除')
+      await load()
+      return true
+    } catch (err) {
+      error.value = displayError(err)
+      notify(error.value, 'error')
+      return null
+    }
+  }
+
   const openWalletAdjustment = wallet => {
     walletAdjustment.value = { wallet, direction: 'INCREASE', amount: '', reason: '' }
   }
@@ -75,5 +99,5 @@ export function createUsersActions({ usersApi, users, selectedUser, userForm, wa
     }
   }
 
-  return { edit, reset, select, save, updateStatus, openWalletAdjustment, saveWalletAdjustment, users }
+  return { edit, reset, select, save, updateStatus, remove, openWalletAdjustment, saveWalletAdjustment, users }
 }

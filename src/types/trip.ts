@@ -13,8 +13,14 @@ export interface TripRoute {
   destinationLongitude?: number
   originRegion?: string
   originCity?: string
+  originDistrict?: string
+  originPlace?: string
+  originDetail?: string
   destinationRegion?: string
   destinationCity?: string
+  destinationDistrict?: string
+  destinationPlace?: string
+  destinationDetail?: string
   flightNumber?: string
   flightDirection?: 'arrival' | 'departure'
   flightStatus?: string

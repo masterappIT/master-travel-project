@@ -13,6 +13,10 @@ export const createDriversApi = api => ({
     return api('/admin/drivers', { method: 'POST', body: form })
   },
   remove: id => api(`/admin/drivers/${id}`, { method: 'DELETE' }),
+  updateStatus: (id, enabled) => api(`/admin/drivers/${id}/status`, {
+    method: 'POST',
+    body: JSON.stringify({ enabled })
+  }),
   approve: id => api(`/admin/drivers/${id}/review/approve`, { method: 'POST' }),
   requestRevision: (id, reason) => api(`/admin/drivers/${id}/review/revision`, { method: 'POST', body: JSON.stringify({ reason }) }),
   reject: (id, reason) => api(`/admin/drivers/${id}/review/reject`, { method: 'POST', body: JSON.stringify({ reason }) }),

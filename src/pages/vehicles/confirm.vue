@@ -107,7 +107,7 @@ import { computed, onMounted, ref, nextTick } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { useTripStore } from '../../stores/trip'
-import { createFareQuote, planDrivingRoute, getSettings, getWalletMe, payTrip, createPendingTrip, getClientProfile, updateClientProfile, listCommonPassengers, type AppSettings, type TripPassenger, type CommonPassenger } from '../../services/api'
+import { createFareQuote, planDrivingRoute, getSettings, getWalletMe, payTrip, createPendingTrip, getClientProfile, updateClientProfile, listCommonPassengers, type AppSettings, type TripPassenger, type CommonPassenger, type TripAddress } from '../../services/api'
 import type { Coordinate } from '../../services/api'
 import type { AddressSelection } from '../../components/home/AddressPicker.vue'
 import { cachedPagePath, closeCachedPage, openCachedPage } from '../../utils/navigation'
@@ -358,11 +358,11 @@ const routeRegion = (value: string | undefined, fallback: string) => {
 }
 const originSelection = computed<AddressSelection | null>(() => {
   const route = tripStore.activeDraft.route
-  return route.originLatitude !== undefined && route.originLongitude !== undefined ? { name: route.origin, address: route.origin, region: (route.originRegion as AddressSelection['region']) || null, city: route.originCity, latitude: route.originLatitude, longitude: route.originLongitude } : null
+  return route.originLatitude !== undefined && route.originLongitude !== undefined ? { name: route.originPlace || route.origin, address: route.originDetail || route.origin, region: (route.originRegion as AddressSelection['region']) || null, city: route.originCity, district: route.originDistrict, landmark: route.originPlace, latitude: route.originLatitude, longitude: route.originLongitude } : null
 })
 const destinationSelection = computed<AddressSelection | null>(() => {
   const route = tripStore.activeDraft.route
-  return route.destinationLatitude !== undefined && route.destinationLongitude !== undefined ? { name: route.destination, address: route.destination, region: (route.destinationRegion as AddressSelection['region']) || null, city: route.destinationCity, latitude: route.destinationLatitude, longitude: route.destinationLongitude } : null
+  return route.destinationLatitude !== undefined && route.destinationLongitude !== undefined ? { name: route.destinationPlace || route.destination, address: route.destinationDetail || route.destination, region: (route.destinationRegion as AddressSelection['region']) || null, city: route.destinationCity, district: route.destinationDistrict, landmark: route.destinationPlace, latitude: route.destinationLatitude, longitude: route.destinationLongitude } : null
 })
 const updateConfirmMap = async () => {
   const route = tripStore.activeDraft.route
@@ -414,7 +414,22 @@ const saveTripChanges = async (origin: string, destination: string, departureTim
   const currentRoute = tripStore.activeDraft.route
   const originCoordinate = nextOriginSelection?.latitude !== undefined && nextOriginSelection.longitude !== undefined ? { latitude: nextOriginSelection.latitude, longitude: nextOriginSelection.longitude } : currentRoute.originLatitude !== undefined && currentRoute.originLongitude !== undefined ? { latitude: currentRoute.originLatitude, longitude: currentRoute.originLongitude } : undefined
   const destinationCoordinate = nextDestinationSelection?.latitude !== undefined && nextDestinationSelection.longitude !== undefined ? { latitude: nextDestinationSelection.latitude, longitude: nextDestinationSelection.longitude } : currentRoute.destinationLatitude !== undefined && currentRoute.destinationLongitude !== undefined ? { latitude: currentRoute.destinationLatitude, longitude: currentRoute.destinationLongitude } : undefined
-  tripStore.setRoute(origin, destination, { originRegion: nextOriginSelection?.region || undefined, originCity: nextOriginSelection?.city || undefined, destinationRegion: nextDestinationSelection?.region || undefined, destinationCity: nextDestinationSelection?.city || undefined, originLatitude: originCoordinate?.latitude, originLongitude: originCoordinate?.longitude, destinationLatitude: destinationCoordinate?.latitude, destinationLongitude: destinationCoordinate?.longitude })
+  tripStore.setRoute(origin, destination, {
+    originRegion: nextOriginSelection?.region || undefined,
+    originCity: nextOriginSelection?.city || undefined,
+    originDistrict: nextOriginSelection?.district || undefined,
+    originPlace: nextOriginSelection?.landmark || nextOriginSelection?.name || undefined,
+    originDetail: nextOriginSelection?.displayAddress || nextOriginSelection?.address || undefined,
+    destinationRegion: nextDestinationSelection?.region || undefined,
+    destinationCity: nextDestinationSelection?.city || undefined,
+    destinationDistrict: nextDestinationSelection?.district || undefined,
+    destinationPlace: nextDestinationSelection?.landmark || nextDestinationSelection?.name || undefined,
+    destinationDetail: nextDestinationSelection?.displayAddress || nextDestinationSelection?.address || undefined,
+    originLatitude: originCoordinate?.latitude,
+    originLongitude: originCoordinate?.longitude,
+    destinationLatitude: destinationCoordinate?.latitude,
+    destinationLongitude: destinationCoordinate?.longitude
+  })
   tripStore.setDepartureTime(departureTime)
   editSheetOpen.value = false
   if (!originCoordinate || !destinationCoordinate) return
@@ -445,6 +460,13 @@ const payNow = async () => {
   paymentOpen.value = true
   startCountdown(selectedFareQuote.value.expiresAt)
 }
+const tripAddressPayload = (target: 'origin' | 'destination'): TripAddress | undefined => {
+  const route = tripStore.activeDraft.route
+  const address = target === 'origin'
+    ? { region: route.originRegion, city: route.originCity, district: route.originDistrict, place: route.originPlace, detail: route.originDetail }
+    : { region: route.destinationRegion, city: route.destinationCity, district: route.destinationDistrict, place: route.destinationPlace, detail: route.destinationDetail }
+  return Object.values(address).some(Boolean) ? address : undefined
+}
 const pendingOrderLoading = ref(false)
 const closePayment = async () => {
   if (pendingOrderLoading.value) return
@@ -461,9 +483,12 @@ const closePayment = async () => {
       quoteId: selectedFareQuote.value.id,
       origin: tripStore.activeDraft.route.origin || originLabel.value,
       destination: tripStore.activeDraft.route.destination || destinationLabel.value,
+      originAddress: tripAddressPayload('origin'),
+      destinationAddress: tripAddressPayload('destination'),
       scheduledAt: tripStore.departureTime || undefined,
       durationSeconds: selectedFareQuote.value.durationSeconds,
-      passenger: passenger.value || undefined    })
+      passenger: passenger.value || undefined
+    })
     paymentOpen.value = false
     stopCountdown()
     openCachedPage('/pages/orders/orders')
@@ -492,6 +517,8 @@ const confirmPayment = async () => {
         quoteId: selectedFareQuote.value.id,
         origin: tripStore.activeDraft.route.origin || originLabel.value,
         destination: tripStore.activeDraft.route.destination || destinationLabel.value,
+        originAddress: tripAddressPayload('origin'),
+        destinationAddress: tripAddressPayload('destination'),
         scheduledAt: tripStore.departureTime || undefined,
         durationSeconds: selectedFareQuote.value.durationSeconds,
         passenger: passenger.value || undefined
@@ -514,6 +541,8 @@ const confirmPayment = async () => {
       quoteId: selectedFareQuote.value.id,
       origin: tripStore.activeDraft.route.origin || originLabel.value,
       destination: tripStore.activeDraft.route.destination || destinationLabel.value,
+      originAddress: tripAddressPayload('origin'),
+      destinationAddress: tripAddressPayload('destination'),
       scheduledAt: tripStore.departureTime || undefined,
       useFareBalance: walletSelections.fare,
       useCashBalance: walletSelections.cash,

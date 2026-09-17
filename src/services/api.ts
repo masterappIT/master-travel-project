@@ -566,6 +566,14 @@ export type TripPassenger = {
   passportCountry?: string | null
 }
 
+export type TripAddress = {
+  region?: string | null
+  city?: string | null
+  district?: string | null
+  place?: string | null
+  detail?: string | null
+}
+
 export type TripPayRequest = {
   userId?: string
   quoteId: string
@@ -574,6 +582,8 @@ export type TripPayRequest = {
   externalPaymentMethod?: 'internal'
   origin?: string
   destination?: string
+  originAddress?: TripAddress
+  destinationAddress?: TripAddress
   scheduledAt?: string
   passenger?: TripPassenger
 }
@@ -601,6 +611,8 @@ export type CreatePendingTripRequest = {
   quoteId: string
   origin?: string
   destination?: string
+  originAddress?: TripAddress
+  destinationAddress?: TripAddress
   scheduledAt?: string
   durationSeconds?: number
   passenger?: TripPassenger
@@ -655,6 +667,8 @@ export type ClientTrip = {
   quoteId: string | null
   origin: string
   destination: string
+  originAddress: TripAddress | null
+  destinationAddress: TripAddress | null
   region: string
   scheduledAt: string
   estimatedArrivalAt: string | null

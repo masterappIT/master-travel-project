@@ -427,6 +427,7 @@ function driverTokenFor(session: DriverSessionToken) {
 function orderUrlTokenHash(token: string) { return createHash('sha256').update(token).digest('hex') }
 function orderUrlValue(token: string) { return `${process.env.DRIVER_ORDER_URL_BASE || '/driver/order'}?token=${encodeURIComponent(token)}` }
 async function driverAuthResponse(driver: any) {
+  if (!driver.enabled) throw new ForbiddenException('Driver account is disabled')
   const exp = Date.now() + 30 * 24 * 60 * 60 * 1000
   const session: DriverSessionToken = { sub: driver.id, exp, jti: randomBytes(16).toString('hex') }
   await prisma.driverSession.create({ data: { jti: session.jti, driverId: driver.id, expiresAt: new Date(exp) } })
@@ -442,13 +443,14 @@ async function driverSessionFrom(req: RequestLike): Promise<DriverSessionToken> 
     const session = JSON.parse(Buffer.from(payload, 'base64url').toString()) as DriverSessionToken
     if (!session.sub || !session.jti || session.exp <= Date.now()) throw new Error('invalid session')
     const stored = await prisma.driverSession.findUnique({ where: { jti: session.jti }, include: { driver: true } })
-    if (!stored || stored.revokedAt || stored.expiresAt.getTime() <= Date.now() || stored.driverId !== session.sub) throw new Error('revoked session')
+    if (!stored || stored.revokedAt || stored.expiresAt.getTime() <= Date.now() || stored.driverId !== session.sub || !stored.driver.enabled) throw new Error('revoked session')
     return session
   } catch {
     throw new UnauthorizedException('Valid driver session required')
   }
 }
-function requireReviewedDriver(driver: { reviewStatus: string }) {
+function requireReviewedDriver(driver: { reviewStatus: string; enabled: boolean }) {
+  if (!driver.enabled) throw new ForbiddenException('Driver account is disabled')
   if (driver.reviewStatus !== 'APPROVED') throw new ForbiddenException('Driver approval is required before accepting or operating trips')
 }
 async function reviewedDriverFrom(req: RequestLike) {
@@ -690,6 +692,7 @@ function driverResponse(driver: {
   settlementMethod: string | null
   settlementAccount: string | null
   isOnline?: boolean
+  enabled?: boolean
   createdAt: Date
   updatedAt: Date
 }) {
@@ -1208,7 +1211,7 @@ class DriverAuthController {
   @Post('phone/request')
   async requestPhoneCode(@Body() body: { countryCode?: string; phoneNumber?: string }) {
     const identity = parsePhoneIdentity(body)
-    const driver = await prisma.driver.findFirst({ where: {
+    const matchingDrivers = await prisma.driver.findMany({ where: {
       OR: [
         { phoneCountryCode: identity.countryCode, phone: identity.phoneNumber },
         ...(identity.countryCode === '+86'
@@ -1216,6 +1219,8 @@ class DriverAuthController {
           : [{ hongKongMacauCountryCode: identity.countryCode, hongKongMacauPhone: identity.phoneNumber }])
       ]
     } })
+    if (matchingDrivers.length > 1) throw new HttpException('Driver phone number is linked to multiple accounts', HttpStatus.CONFLICT)
+    const driver = matchingDrivers[0]
     if (!driver) throw new HttpException('Driver not found', HttpStatus.NOT_FOUND)
     const code = '00000'
     const challengeId = randomBytes(18).toString('hex')
@@ -1675,11 +1680,32 @@ class AdminController {
       : await prisma.driver.create({ data: { id: `driver-${Date.now()}-${randomBytes(4).toString('hex')}`, ...data } })
     return driverResponse(driver)
   }
+  @Post('drivers/:id/status') async updateDriverStatus(@Req() req: RequestLike, @Param('id') id: string, @Body() body: { enabled?: boolean }) {
+    requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
+    if (typeof body.enabled !== 'boolean') throw new HttpException('Enabled status is required', HttpStatus.BAD_REQUEST)
+    const existing = await prisma.driver.findUnique({ where: { id }, select: { id: true } })
+    if (!existing) throw new HttpException('Driver not found', HttpStatus.NOT_FOUND)
+    const driver = await prisma.$transaction(async tx => {
+      const updated = await tx.driver.update({ where: { id }, data: { enabled: body.enabled, ...(!body.enabled ? { isOnline: false } : {}) } })
+      if (!body.enabled) await tx.driverSession.updateMany({ where: { driverId: id, revokedAt: null, expiresAt: { gt: new Date() } }, data: { revokedAt: new Date() } })
+      return updated
+    })
+    return driverResponse(driver)
+  }
   @Delete('drivers/:id') async deleteDriver(@Req() req: RequestLike, @Param('id') id: string) {
     requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
-    const existing = await prisma.driver.findUnique({ where: { id } })
-    if (!existing) throw new HttpException('Driver not found', HttpStatus.NOT_FOUND)
-    await prisma.driver.delete({ where: { id } })
+    await prisma.$transaction(async tx => {
+      const existing = await tx.driver.findUnique({
+        where: { id },
+        select: { id: true, _count: { select: { trips: true, settlements: true, ratings: true } } }
+      })
+      if (!existing) throw new HttpException('Driver not found', HttpStatus.NOT_FOUND)
+      if (existing._count.trips || existing._count.settlements || existing._count.ratings) {
+        throw new HttpException('司機已有行程、結算或評分歷史，不能永久刪除；請改為停用帳號。', HttpStatus.CONFLICT)
+      }
+      await tx.tripOrderUrl.updateMany({ where: { driverId: id }, data: { driverId: null } })
+      await tx.driver.delete({ where: { id } })
+    })
     return { ok: true }
   }
 
@@ -1836,6 +1862,22 @@ class AdminController {
       return result
     })
     return userResponse(updated)
+  }
+  @Delete('users/:id') async deleteUser(@Req() req: RequestLike, @Param('id') id: string) {
+    requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
+    await prisma.$transaction(async tx => {
+      const existing = await tx.user.findUnique({
+        where: { id },
+        select: { id: true, _count: { select: { trips: true, payments: true, walletTransactions: true } } }
+      })
+      if (!existing) throw new HttpException('User not found', HttpStatus.NOT_FOUND)
+      if (existing._count.trips || existing._count.payments || existing._count.walletTransactions) {
+        throw new HttpException('用戶已有行程、付款或錢包歷史，不能永久刪除；請改為停用帳號。', HttpStatus.CONFLICT)
+      }
+      await tx.verificationCode.updateMany({ where: { userId: id }, data: { userId: null } })
+      await tx.user.delete({ where: { id } })
+    })
+    return { ok: true }
   }
   @Post('users/:id/wallet-adjustments') async adjustWallet(@Req() req: RequestLike, @Param('id') id: string, @Body() body: { wallet?: 'CASH' | 'FARE'; direction?: 'INCREASE' | 'DECREASE'; amount?: number; reason?: string }) {
     const session = requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
@@ -3000,6 +3042,8 @@ class PaymentsController {
     quoteId?: string
     origin?: string
     destination?: string
+    originAddress?: { region?: string; city?: string; district?: string; place?: string; detail?: string }
+    destinationAddress?: { region?: string; city?: string; district?: string; place?: string; detail?: string }
     scheduledAt?: string
     passenger?: { name?: string; phone?: string; phoneRegion?: string; gender?: string; documentType?: string; passportCountry?: string | null }
   }) {
@@ -3030,7 +3074,17 @@ class PaymentsController {
         userId: session.sub,
         quoteId,
         origin: body.origin?.trim() || quote.pricing?.routeOriginCity || '香港',
+        originRegion: body.originAddress?.region?.trim() || null,
+        originCity: body.originAddress?.city?.trim() || null,
+        originDistrict: body.originAddress?.district?.trim() || null,
+        originPlace: body.originAddress?.place?.trim() || null,
+        originDetail: body.originAddress?.detail?.trim() || null,
         destination: body.destination?.trim() || quote.pricing?.routeDestinationCity || '深圳',
+        destinationRegion: body.destinationAddress?.region?.trim() || null,
+        destinationCity: body.destinationAddress?.city?.trim() || null,
+        destinationDistrict: body.destinationAddress?.district?.trim() || null,
+        destinationPlace: body.destinationAddress?.place?.trim() || null,
+        destinationDetail: body.destinationAddress?.detail?.trim() || null,
         region: 'GUANGDONG',
         scheduledAt: Number.isNaN(scheduledAt.getTime()) ? new Date(Date.now() + 3600000) : scheduledAt,
         estimatedArrivalAt: new Date((Number.isNaN(scheduledAt.getTime()) ? new Date(Date.now() + 3600000) : scheduledAt).getTime() + (quote.durationSeconds || 0) * 1000),
@@ -3050,6 +3104,8 @@ class PaymentsController {
     externalPaymentMethod?: string
     origin?: string
     destination?: string
+    originAddress?: { region?: string; city?: string; district?: string; place?: string; detail?: string }
+    destinationAddress?: { region?: string; city?: string; district?: string; place?: string; detail?: string }
     scheduledAt?: string
     passenger?: { name?: string; phone?: string; phoneRegion?: string; gender?: string; documentType?: string; passportCountry?: string | null }
   }) {
@@ -3194,6 +3250,18 @@ class PaymentsController {
       // Create or confirm Trip record
       const origin = body.origin || quote.pricing?.routeOriginCity || '香港'
       const destination = body.destination || quote.pricing?.routeDestinationCity || '深圳'
+      const addressData = {
+        originRegion: body.originAddress?.region?.trim() || null,
+        originCity: body.originAddress?.city?.trim() || null,
+        originDistrict: body.originAddress?.district?.trim() || null,
+        originPlace: body.originAddress?.place?.trim() || null,
+        originDetail: body.originAddress?.detail?.trim() || null,
+        destinationRegion: body.destinationAddress?.region?.trim() || null,
+        destinationCity: body.destinationAddress?.city?.trim() || null,
+        destinationDistrict: body.destinationAddress?.district?.trim() || null,
+        destinationPlace: body.destinationAddress?.place?.trim() || null,
+        destinationDetail: body.destinationAddress?.detail?.trim() || null
+      }
       const scheduledAt = body.scheduledAt ? new Date(body.scheduledAt) : new Date(Date.now() + 3600000)
       const passengerData = body.passenger?.name?.trim() && body.passenger.phone?.trim()
         ? { passengerName: body.passenger.name.trim(), passengerPhone: body.passenger.phone.trim(), passengerPhoneRegion: body.passenger.phoneRegion?.trim() || null, passengerGender: body.passenger.gender?.trim() || null, passengerDocumentType: body.passenger.documentType?.trim() || null, passengerPassportCountry: body.passenger.passportCountry?.trim() || null }
@@ -3205,6 +3273,7 @@ class PaymentsController {
             data: {
               origin,
               destination,
+              ...addressData,
               scheduledAt: Number.isNaN(scheduledAt.getTime()) ? existingPendingTrip.scheduledAt : scheduledAt,
               estimatedArrivalAt: new Date((Number.isNaN(scheduledAt.getTime()) ? existingPendingTrip.scheduledAt : scheduledAt).getTime() + (quote.durationSeconds || 0) * 1000),
               status: 'CONFIRMED',
@@ -3221,6 +3290,7 @@ class PaymentsController {
               quoteId: quote.id,
               origin,
               destination,
+              ...addressData,
               region: 'GUANGDONG',
               scheduledAt: Number.isNaN(scheduledAt.getTime()) ? new Date() : scheduledAt,
               estimatedArrivalAt: new Date((Number.isNaN(scheduledAt.getTime()) ? new Date() : scheduledAt).getTime() + (quote.durationSeconds || 0) * 1000),
@@ -3288,6 +3358,8 @@ function clientTripResponse(trip: Prisma.TripGetPayload<{ include: { user: { sel
     quoteId: trip.quoteId,
     origin: trip.origin,
     destination: trip.destination,
+    originAddress: trip.originRegion || trip.originCity || trip.originDistrict || trip.originPlace || trip.originDetail ? { region: trip.originRegion, city: trip.originCity, district: trip.originDistrict, place: trip.originPlace, detail: trip.originDetail } : null,
+    destinationAddress: trip.destinationRegion || trip.destinationCity || trip.destinationDistrict || trip.destinationPlace || trip.destinationDetail ? { region: trip.destinationRegion, city: trip.destinationCity, district: trip.destinationDistrict, place: trip.destinationPlace, detail: trip.destinationDetail } : null,
     region: trip.region,
     scheduledAt: trip.scheduledAt.toISOString(),
     estimatedArrivalAt: trip.estimatedArrivalAt?.toISOString() || null,

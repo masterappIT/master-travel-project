@@ -87,9 +87,32 @@ export function createDriversActions({ driversApi, driverForm, selectedDriver, s
     } catch (err) { error.value = displayError(err) }
   }
 
+  async function updateDriverStatus(item) {
+    const enabled = item.enabled === false
+    const confirmed = await requestConfirmation({
+      title: enabled ? '恢復司機' : '停用司機',
+      message: enabled ? `確定恢復司機「${item.name}」？` : `確定停用司機「${item.name}」？停用後現有登入會立即失效。`,
+      confirmLabel: enabled ? '恢復' : '停用',
+      danger: !enabled
+    })
+    if (!confirmed) return
+    try {
+      const updated = await driversApi.updateStatus(item.id, enabled)
+      Object.assign(item, updated)
+      if (selectedDriver.value?.id === item.id) selectedDriver.value = { ...selectedDriver.value, ...updated, vehiclePhotoUrl }
+      notify(enabled ? '司機已恢復' : '司機已停用')
+    } catch (err) { error.value = displayError(err); notify(error.value, 'error') }
+  }
+
   async function removeDriver(item) {
-    if (!await requestConfirmation({ title: '刪除司機', message: `刪除司機「${item.name}」？`, confirmLabel: '刪除', danger: true })) return
-    try { await driversApi.remove(item.id); notify('司機已刪除'); await load() } catch (err) { error.value = displayError(err); notify(error.value, 'error') }
+    if (!await requestConfirmation({ title: '永久刪除司機', message: `確定永久刪除司機「${item.name}」？此操作不可恢復；如已有行程、結算或評分歷史，系統將拒絕刪除。`, confirmLabel: '永久刪除', danger: true })) return
+    try {
+      await driversApi.remove(item.id)
+      if (selectedDriver.value?.id === item.id) closeDriverDetail()
+      if (driverForm.value?.id === item.id) driverForm.value = null
+      notify('司機已永久刪除')
+      await load()
+    } catch (err) { error.value = displayError(err); notify(error.value, 'error') }
   }
 
   async function openDriverDetail(item) {
@@ -157,5 +180,5 @@ export function createDriversActions({ driversApi, driverForm, selectedDriver, s
     } catch (err) { error.value = displayError(err) }
   }
 
-  return { reviewStatusLabel, resetDriver, editDriver, formatDriverHongKongPlate, formatDriverMacauPlate, formatDriverMainlandPlate, changeDriverOwnership, uploadDriverPhotos, removeDriverPhoto, saveDriver, removeDriver, openDriverDetail, previewDriver, closeDriverDetail, approveDriver, requestDriverRevision, rejectDriver, resetSettlement, saveSettlement }
+  return { reviewStatusLabel, resetDriver, editDriver, formatDriverHongKongPlate, formatDriverMacauPlate, formatDriverMainlandPlate, changeDriverOwnership, uploadDriverPhotos, removeDriverPhoto, saveDriver, updateDriverStatus, removeDriver, openDriverDetail, previewDriver, closeDriverDetail, approveDriver, requestDriverRevision, rejectDriver, resetSettlement, saveSettlement }
 }

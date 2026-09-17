@@ -174,50 +174,60 @@ enum WalletTransactionType {
 }
 
 model Trip {
-  id                       String              @id @default(cuid())
-  userId                   String
-  quoteId                  String?             @unique
-  origin                   String
-  destination              String
-  region                   Region
-  scheduledAt              DateTime
-  passengerName            String?
-  passengerPhone           String?
-  passengerPhoneRegion     String?
-  passengerGender          String?
-  passengerDocumentType    String?
-  passengerPassportCountry String?
-  estimatedArrivalAt       DateTime?
-  status                   TripStatus          @default(PENDING)
-  executionPhase           TripExecutionPhase?
+  id                           String              @id @default(cuid())
+  userId                       String
+  quoteId                      String?             @unique
+  origin                       String
+  originRegion                 String?
+  originCity                   String?
+  originDistrict               String?
+  originPlace                  String?
+  originDetail                 String?
+  destination                  String
+  destinationRegion            String?
+  destinationCity              String?
+  destinationDistrict          String?
+  destinationPlace             String?
+  destinationDetail            String?
+  region                       Region
+  scheduledAt                  DateTime
+  passengerName                String?
+  passengerPhone               String?
+  passengerPhoneRegion         String?
+  passengerGender              String?
+  passengerDocumentType        String?
+  passengerPassportCountry     String?
+  estimatedArrivalAt           DateTime?
+  status                       TripStatus          @default(PENDING)
+  executionPhase               TripExecutionPhase?
   driverId                     String?
   driverPayoutPercentage       Float?
   driverPayoutCalculatedAmount Float?
   driverPayoutAmount           Float?
   driverPayoutCurrency         String?
   driverName                   String?
-  driverPhone              String?
-  vehiclePlate             String?
-  vehicleHkPlate           String?
-  vehicleMacauPlate        String?
-  vehicleMainlandPlate     String?
-  assignedAt               DateTime?
-  acceptedAt               DateTime?
-  arrivedAt                DateTime?
-  startedAt                DateTime?
-  completedAt              DateTime?
-  fareBalancePaid          Float               @default(0)
-  cashBalancePaid          Float               @default(0)
-  externalPaid             Float               @default(0)
-  externalPaymentMethod    String?
-  createdAt                DateTime            @default(now())
-  updatedAt                DateTime            @updatedAt
-  user                     User                @relation(fields: [userId], references: [id])
-  driver                   Driver?             @relation(fields: [driverId], references: [id], onDelete: SetNull)
-  orderUrls                TripOrderUrl[]
-  payment                  Payment?
-  settlement               DriverSettlement?
-  quote                    FareQuote?          @relation(fields: [quoteId], references: [id], onDelete: SetNull)
+  driverPhone                  String?
+  vehiclePlate                 String?
+  vehicleHkPlate               String?
+  vehicleMacauPlate            String?
+  vehicleMainlandPlate         String?
+  assignedAt                   DateTime?
+  acceptedAt                   DateTime?
+  arrivedAt                    DateTime?
+  startedAt                    DateTime?
+  completedAt                  DateTime?
+  fareBalancePaid              Float               @default(0)
+  cashBalancePaid              Float               @default(0)
+  externalPaid                 Float               @default(0)
+  externalPaymentMethod        String?
+  createdAt                    DateTime            @default(now())
+  updatedAt                    DateTime            @updatedAt
+  user                         User                @relation(fields: [userId], references: [id])
+  driver                       Driver?             @relation(fields: [driverId], references: [id], onDelete: SetNull)
+  orderUrls                    TripOrderUrl[]
+  payment                      Payment?
+  settlement                   DriverSettlement?
+  quote                        FareQuote?          @relation(fields: [quoteId], references: [id], onDelete: SetNull)
 
   @@index([userId, status])
   @@index([scheduledAt])
@@ -273,24 +283,24 @@ enum TripExecutionPhase {
 }
 
 model AppSetting {
-  id                    String   @id
-  language              String
-  region                String
-  currency              String
-  pricingCurrency       String   @default("RMB")
-  walletCurrency        String   @default("RMB")
-  exchangeRate          Float
-  adminLogo             String?  @db.Text
-  severeWeatherEnabled  Boolean  @default(false)
-  driverRaceEnabled     Boolean  @default(false)
+  id                     String   @id
+  language               String
+  region                 String
+  currency               String
+  pricingCurrency        String   @default("RMB")
+  walletCurrency         String   @default("RMB")
+  exchangeRate           Float
+  adminLogo              String?  @db.Text
+  severeWeatherEnabled   Boolean  @default(false)
+  driverRaceEnabled      Boolean  @default(false)
   driverPayoutPercentage Float    @default(100)
-  fareBalancePayEnabled Boolean  @default(true)
-  cashBalancePayEnabled Boolean  @default(true)
-  wechatPayEnabled      Boolean  @default(true)
-  alipayPayEnabled      Boolean  @default(true)
-  bankCardPayEnabled    Boolean  @default(true)
-  sandboxMode           Boolean  @default(false)
-  updatedAt             DateTime @updatedAt
+  fareBalancePayEnabled  Boolean  @default(true)
+  cashBalancePayEnabled  Boolean  @default(true)
+  wechatPayEnabled       Boolean  @default(true)
+  alipayPayEnabled       Boolean  @default(true)
+  bankCardPayEnabled     Boolean  @default(true)
+  sandboxMode            Boolean  @default(false)
+  updatedAt              DateTime @updatedAt
 }
 
 model RecommendedAddress {
@@ -336,44 +346,45 @@ model VehicleCategory {
 }
 
 model Driver {
-  id                String                @id
-  driverType        String                @default("內部司機")
-  name              String
-  affiliation       String
-  plateType         String
-  hkPlate           String?
-  mainlandPlate     String?
-  macauPlate        String?
-  vehicleOwnership  String                @default("香港")
-  phoneCountryCode          String                @default("+852")
-  phone                     String
-  hongKongMacauCountryCode  String?
-  hongKongMacauPhone        String?
-  mainlandPhone             String?               @unique
-  vehicleCategory           String
-  vehicleColor      String
-  vehiclePhotos     Json
-  vehiclePhotoData  Bytes?
-  vehiclePhotoMime  String?
-  reviewStatus      String                @default("PENDING")
-  reviewReason      String?
-  reviewSubmittedAt DateTime              @default(now())
-  reviewedAt        DateTime?
-  reviewedBy        String?
-  settlementMethod  String?
-  settlementAccount String?
-  isOnline          Boolean               @default(false)
-  createdAt         DateTime              @default(now())
-  updatedAt         DateTime              @updatedAt
-  trips             Trip[]
-  settlements       DriverSettlement[]
-  onlineSessions    DriverOnlineSession[]
-  ratings           DriverRating[]
-  authIdentities    DriverAuthIdentity[]
-  otpChallenges     DriverOtpChallenge[]
-  sessions          DriverSession[]
-  notifications     Notification[]
-  orderUrls         TripOrderUrl[]
+  id                       String                @id
+  driverType               String                @default("內部司機")
+  name                     String
+  affiliation              String
+  plateType                String
+  hkPlate                  String?
+  mainlandPlate            String?
+  macauPlate               String?
+  vehicleOwnership         String                @default("香港")
+  phoneCountryCode         String                @default("+852")
+  phone                    String
+  hongKongMacauCountryCode String?
+  hongKongMacauPhone       String?
+  mainlandPhone            String?               @unique
+  vehicleCategory          String
+  vehicleColor             String
+  vehiclePhotos            Json
+  vehiclePhotoData         Bytes?
+  vehiclePhotoMime         String?
+  reviewStatus             String                @default("PENDING")
+  reviewReason             String?
+  reviewSubmittedAt        DateTime              @default(now())
+  reviewedAt               DateTime?
+  reviewedBy               String?
+  settlementMethod         String?
+  settlementAccount        String?
+  isOnline                 Boolean               @default(false)
+  enabled                  Boolean               @default(true)
+  createdAt                DateTime              @default(now())
+  updatedAt                DateTime              @updatedAt
+  trips                    Trip[]
+  settlements              DriverSettlement[]
+  onlineSessions           DriverOnlineSession[]
+  ratings                  DriverRating[]
+  authIdentities           DriverAuthIdentity[]
+  otpChallenges            DriverOtpChallenge[]
+  sessions                 DriverSession[]
+  notifications            Notification[]
+  orderUrls                TripOrderUrl[]
 
   @@unique([hongKongMacauCountryCode, hongKongMacauPhone])
   @@index([reviewStatus])

@@ -132,13 +132,13 @@ const selectVehicle = (vehicle: Vehicle) => { if (!vehicle.selectable) return; t
 const originSelection = computed<AddressSelection | null>(() => {
   const route = tripStore.activeDraft.route
   return route.originLatitude !== undefined && route.originLongitude !== undefined
-    ? { name: route.origin, address: route.origin, region: (route.originRegion as AddressSelection['region']) || null, city: route.originCity, latitude: route.originLatitude, longitude: route.originLongitude }
+    ? { name: route.originPlace || route.origin, address: route.originDetail || route.origin, region: (route.originRegion as AddressSelection['region']) || null, city: route.originCity, district: route.originDistrict, landmark: route.originPlace, latitude: route.originLatitude, longitude: route.originLongitude }
     : null
 })
 const destinationSelection = computed<AddressSelection | null>(() => {
   const route = tripStore.activeDraft.route
   return route.destinationLatitude !== undefined && route.destinationLongitude !== undefined
-    ? { name: route.destination, address: route.destination, region: (route.destinationRegion as AddressSelection['region']) || null, city: route.destinationCity, latitude: route.destinationLatitude, longitude: route.destinationLongitude }
+    ? { name: route.destinationPlace || route.destination, address: route.destinationDetail || route.destination, region: (route.destinationRegion as AddressSelection['region']) || null, city: route.destinationCity, district: route.destinationDistrict, landmark: route.destinationPlace, latitude: route.destinationLatitude, longitude: route.destinationLongitude }
     : null
 })
 const saveTripChanges = async (
@@ -162,8 +162,14 @@ const saveTripChanges = async (
   tripStore.setRoute(origin, destination, {
     originRegion: nextOriginSelection?.region || undefined,
     originCity: nextOriginSelection?.city || undefined,
+    originDistrict: nextOriginSelection?.district || undefined,
+    originPlace: nextOriginSelection?.landmark || nextOriginSelection?.name || undefined,
+    originDetail: nextOriginSelection?.displayAddress || nextOriginSelection?.address || undefined,
     destinationRegion: nextDestinationSelection?.region || undefined,
     destinationCity: nextDestinationSelection?.city || undefined,
+    destinationDistrict: nextDestinationSelection?.district || undefined,
+    destinationPlace: nextDestinationSelection?.landmark || nextDestinationSelection?.name || undefined,
+    destinationDetail: nextDestinationSelection?.displayAddress || nextDestinationSelection?.address || undefined,
     originLatitude: originCoordinate?.latitude,
     originLongitude: originCoordinate?.longitude,
     destinationLatitude: destinationCoordinate?.latitude,

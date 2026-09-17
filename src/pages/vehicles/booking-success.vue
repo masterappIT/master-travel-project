@@ -30,6 +30,7 @@ import { cachedPagePath, cachedPageUrl, getCachedPageOrderQuery, openCachedPage 
 import { isPendingTrip, selectNextPendingTrip } from '../../utils/pendingTrip'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { formatAssignmentCountdown, getAssignmentCountdownSeconds } from '../../utils/assignmentCountdown'
+import { formatOrderSummaryAddress } from '../../utils/orderAddress'
 
 const { responsiveStyle } = useResponsiveCanvas()
 const trip = ref<ClientTrip | null>(null)
@@ -42,8 +43,8 @@ let transitioning = false
 const previewCountdownEndsAt = Date.now() + 3 * 60 * 60 * 1000
 const confirmationCountdown = ref(3 * 60 * 60)
 const confirmationCountdownLabel = computed(() => formatAssignmentCountdown(confirmationCountdown.value))
-const originLabel = computed(() => trip.value?.origin || '香港')
-const destinationLabel = computed(() => trip.value?.destination || '深圳')
+const originLabel = computed(() => formatOrderSummaryAddress(trip.value?.originAddress || trip.value?.origin, '香港'))
+const destinationLabel = computed(() => formatOrderSummaryAddress(trip.value?.destinationAddress || trip.value?.destination, '深圳'))
 const bookingTime = computed(() => {
   const date = trip.value ? new Date(trip.value.scheduledAt) : null
   return date && !Number.isNaN(date.valueOf()) ? `${date.getMonth() + 1}月${date.getDate()}日 ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}` : '—'
@@ -267,7 +268,7 @@ const showBookingDetail = () => openCachedPage(`/pages/orders/detail?status=trav
   color: #fff;
 }
 
-.route-row{position:absolute;top:0;left:0;width:324px;height:30px;font-size:14px;font-weight:700}.route-row image{position:absolute;display:block}.route-row .origin-icon{left:69px;top:12px;width:8px;height:14.517px}.route-row .origin-label{position:absolute;left:94px;top:9px;line-height:normal;white-space:nowrap}.route-row .route-arrow{left:139px;top:4px;width:30px;height:30px}.route-row .destination-icon{left:186px;top:13px;width:8px;height:11.978px}.route-row .destination-label{position:absolute;left:211px;top:9px;line-height:normal;white-space:nowrap}
+.route-row{position:absolute;top:0;left:0;display:grid;grid-template-columns:8px minmax(0,1fr) 30px 8px minmax(0,1fr);align-items:center;column-gap:10px;width:324px;height:30px;font-size:14px;font-weight:700}.route-row image{display:block}.route-row .origin-icon{width:8px;height:14.517px}.route-row .route-arrow{width:30px;height:30px}.route-row .destination-icon{width:8px;height:11.978px}.route-row .origin-label,.route-row .destination-label{display:block;min-width:0;overflow:hidden;line-height:30px;text-overflow:ellipsis;white-space:nowrap}
 .booking-time { position:absolute;top:38px;left:0;width:100%;color:#fefefe;font-size:14px;font-weight:100;white-space:nowrap;text-align:center;border:0!important;outline:0!important;box-shadow:none!important;background:transparent!important;text-decoration:none!important }
 .booking-time span { border:0!important;outline:0!important;box-shadow:none!important;background:transparent!important;text-decoration:none!important }
 
