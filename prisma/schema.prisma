@@ -194,6 +194,9 @@ model Trip {
   driverName               String?
   driverPhone              String?
   vehiclePlate             String?
+  vehicleHkPlate           String?
+  vehicleMacauPlate        String?
+  vehicleMainlandPlate     String?
   assignedAt               DateTime?
   acceptedAt               DateTime?
   arrivedAt                DateTime?

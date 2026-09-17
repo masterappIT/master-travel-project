@@ -1,3 +1,5 @@
+import { normalizeVehiclePlates, vehiclePlateError } from './vehicle-plates.js'
+
 export function createDriversActions({ driversApi, driverForm, selectedDriver, settlementForm, drivers, error, load, displayError, requestConfirmation, notify }) {
   let vehiclePhotoUrl = null
   const reviewStatusLabel = status => ({ PENDING: '待審核', APPROVED: '已通過', REVISION_REQUIRED: '退回修改', REJECTED: '已拒絕' }[status] || status || '待審核')
@@ -33,7 +35,10 @@ export function createDriversActions({ driversApi, driverForm, selectedDriver, s
   }
 
   async function saveDriver() {
-    const form = { ...driverForm.value, driverType: driverForm.value.driverType || '內部司機', name: String(driverForm.value.name || '').trim(), hkPlate: String(driverForm.value.hkPlate || '').trim(), macauPlate: String(driverForm.value.macauPlate || '').trim(), mainlandPlate: String(driverForm.value.mainlandPlate || '').trim(), phone: String(driverForm.value.phone || '').trim(), vehicleCategory: String(driverForm.value.vehicleCategory || '').trim(), vehicleColor: String(driverForm.value.vehicleColor || '').trim(), id: driverForm.value.id || undefined }
+    const plates = normalizeVehiclePlates(driverForm.value)
+    const form = { ...driverForm.value, ...plates, driverType: driverForm.value.driverType || '內部司機', name: String(driverForm.value.name || '').trim(), phone: String(driverForm.value.phone || '').trim(), vehicleCategory: String(driverForm.value.vehicleCategory || '').trim(), vehicleColor: String(driverForm.value.vehicleColor || '').trim(), id: driverForm.value.id || undefined }
+    const plateError = vehiclePlateError({ ...plates, vehicleOwnership: form.vehicleOwnership })
+    if (plateError) { error.value = plateError; return }
     if (!form.name || !form.affiliation || !form.plateType || !form.phone || !form.vehicleCategory || !form.vehicleColor) { error.value = '請填寫註冊所需資料'; return }
     if (form.vehicleOwnership === '中國內地' && form.plateType !== '兩地牌') { error.value = '中國內地車輛只可選擇兩地牌'; return }
     if ((form.vehicleOwnership === '香港' || form.vehicleOwnership === '中國內地' || form.plateType === '三地牌') && !form.hkPlate) { error.value = '請填寫香港車牌'; return }

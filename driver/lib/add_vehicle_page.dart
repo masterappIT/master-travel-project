@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import 'core/api/driver_api_client.dart';
+import 'core/vehicle_plate_rules.dart';
 import 'core/layout/driver_page_shell.dart';
 import 'core/tokens/driver_tokens.dart';
 
@@ -145,17 +147,31 @@ class _AddVehiclePageState extends State<AddVehiclePage> {
           .showSnackBar(const SnackBar(content: Text('請完成所有車牌資料')));
       return;
     }
+    final plateError = vehiclePlateError(
+      vehicleOwnership: _ownership,
+      hongKongPlate: _hkPlate.text,
+      macauPlate: _macauPlate.text,
+      mainlandPlate: _mainlandPlate.text,
+    );
+    if (plateError != null) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(plateError)));
+      return;
+    }
     setState(() => _isSaving = true);
     try {
       await DriverApiClient.instance.updateProfile({
         'plateType': _plateType,
         'vehicleOwnership': _ownership,
-        'hkPlate': _hkPlate.text.trim().isEmpty ? null : _hkPlate.text.trim(),
-        'macauPlate':
-            _macauPlate.text.trim().isEmpty ? null : _macauPlate.text.trim(),
-        'mainlandPlate': _mainlandPlate.text.trim().isEmpty
+        'hkPlate': normalizeHongKongPlate(_hkPlate.text).isEmpty
             ? null
-            : _mainlandPlate.text.trim(),
+            : normalizeHongKongPlate(_hkPlate.text),
+        'macauPlate': normalizeMacauPlate(_macauPlate.text).isEmpty
+            ? null
+            : normalizeMacauPlate(_macauPlate.text),
+        'mainlandPlate': normalizeMainlandPlate(_mainlandPlate.text).isEmpty
+            ? null
+            : normalizeMainlandPlate(_mainlandPlate.text),
         'vehicleCategory': _category,
         'vehicleColor': _color.text.trim(),
       });
@@ -397,8 +413,17 @@ class _PlateField extends StatelessWidget {
   final String hint;
   final TextEditingController controller;
   @override
-  Widget build(BuildContext context) =>
-      _TextField(label: label, hint: hint, controller: controller);
+  Widget build(BuildContext context) => _TextField(
+          label: label,
+          hint: hint,
+          controller: controller,
+          inputFormatters: [
+            vehiclePlateFormatter(label.contains('香港')
+                ? '香港'
+                : label.contains('澳門')
+                    ? '澳門'
+                    : '內地')
+          ]);
 }
 
 class _TextField extends StatelessWidget {
@@ -408,11 +433,13 @@ class _TextField extends StatelessWidget {
       this.controller,
       this.readOnly = false,
       this.icon,
-      this.onTap});
+      this.onTap,
+      this.inputFormatters});
   final String label;
   final String hint;
   final TextEditingController? controller;
   final bool readOnly;
+  final List<TextInputFormatter>? inputFormatters;
   final String? icon;
   final VoidCallback? onTap;
   @override
@@ -429,6 +456,7 @@ class _TextField extends StatelessWidget {
       const SizedBox(height: DriverSpacing.sm),
       TextField(
           controller: controller,
+          inputFormatters: inputFormatters,
           readOnly: readOnly,
           onTap: onTap,
           style: const TextStyle(fontSize: 15, color: DriverColors.text),

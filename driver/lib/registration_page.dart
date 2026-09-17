@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'app/route_names.dart';
 import 'core/api/driver_api_client.dart';
 import 'core/navigation/driver_navigation.dart';
+import 'core/vehicle_plate_rules.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
@@ -342,6 +343,17 @@ class _RegistrationPageState extends State<RegistrationPage> {
           .showSnackBar(const SnackBar(content: Text('請完成所有必填資料')));
       return;
     }
+    final plateError = vehiclePlateError(
+      vehicleOwnership: _vehicleOwnership,
+      hongKongPlate: _hkPlateController.text,
+      macauPlate: _macauPlateController.text,
+      mainlandPlate: _mainlandPlateController.text,
+    );
+    if (plateError != null) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(plateError)));
+      return;
+    }
     if (!RegExp(r'^\d+$').hasMatch(phone) || phone.length != expectedLength) {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text('請輸入 $expectedLength 位手機號碼')));
@@ -362,9 +374,9 @@ class _RegistrationPageState extends State<RegistrationPage> {
           name: _nameController.text.trim(),
           plateType: _plateType,
           vehicleOwnership: _vehicleOwnership,
-          hkPlate: _hkPlateController.text.trim(),
-          macauPlate: _macauPlateController.text.trim(),
-          mainlandPlate: _mainlandPlateController.text.trim(),
+          hkPlate: normalizeHongKongPlate(_hkPlateController.text),
+          macauPlate: normalizeMacauPlate(_macauPlateController.text),
+          mainlandPlate: normalizeMainlandPlate(_mainlandPlateController.text),
           vehicleCategory: _vehicleCategoryController.text.trim(),
           vehicleColor: _vehicleColorController.text.trim(),
           vehiclePhotoBytes: _vehiclePhotoBytes,
@@ -376,15 +388,16 @@ class _RegistrationPageState extends State<RegistrationPage> {
           name: _nameController.text.trim(),
           plateType: _plateType,
           vehicleOwnership: _vehicleOwnership,
-          hkPlate: _hkPlateController.text.trim().isEmpty
+          hkPlate: normalizeHongKongPlate(_hkPlateController.text).isEmpty
               ? null
-              : _hkPlateController.text.trim(),
-          macauPlate: _macauPlateController.text.trim().isEmpty
+              : normalizeHongKongPlate(_hkPlateController.text),
+          macauPlate: normalizeMacauPlate(_macauPlateController.text).isEmpty
               ? null
-              : _macauPlateController.text.trim(),
-          mainlandPlate: _mainlandPlateController.text.trim().isEmpty
-              ? null
-              : _mainlandPlateController.text.trim(),
+              : normalizeMacauPlate(_macauPlateController.text),
+          mainlandPlate:
+              normalizeMainlandPlate(_mainlandPlateController.text).isEmpty
+                  ? null
+                  : normalizeMainlandPlate(_mainlandPlateController.text),
           phoneCountryCode: _countryCode,
           phone: phone,
           verificationChallengeId: _registrationChallengeId!,
@@ -929,6 +942,13 @@ class _PlateSection extends StatelessWidget {
               : label.contains('內地')
                   ? mainlandPlateController
                   : hkPlateController,
+          inputFormatters: [
+            vehiclePlateFormatter(label.contains('香港')
+                ? '香港'
+                : label.contains('澳門')
+                    ? '澳門'
+                    : '內地')
+          ],
         ),
     ];
     return Column(

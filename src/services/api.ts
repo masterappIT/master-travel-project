@@ -662,7 +662,7 @@ export type ClientTrip = {
   createdAt: string
   status: 'PENDING' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED'
   executionPhase: 'WAITING_DRIVER' | 'DRIVER_ASSIGNED' | 'IN_PROGRESS' | null
-  driver: { name: string; phone: string; vehiclePlate: string } | null
+  driver: { name: string; phone: string; vehiclePlate: string | null; hkPlate: string | null; macauPlate: string | null; mainlandPlate: string | null } | null
   assignedAt: string | null
   acceptedAt: string | null
   arrivedAt: string | null

@@ -687,6 +687,42 @@ function driverResponse(driver: {
   }
 }
 
+type VehiclePlateData = {
+  vehicleOwnership: string
+  plateType: string
+  hkPlate: string
+  macauPlate: string
+  mainlandPlate: string
+}
+
+function normalizeHongKongPlate(value: unknown) {
+  return typeof value === 'string' ? value.trim().toUpperCase() : ''
+}
+
+function normalizeMacauPlate(value: unknown) {
+  return typeof value === 'string' ? value.trim().toUpperCase() : ''
+}
+
+function normalizeMainlandPlate(value: unknown) {
+  return typeof value === 'string' ? value.trim().replace(/[•・]/g, '·').toUpperCase() : ''
+}
+
+function normalizeVehiclePlateData(body: {
+  vehicleOwnership?: unknown
+  plateType?: unknown
+  hkPlate?: unknown
+  macauPlate?: unknown
+  mainlandPlate?: unknown
+}): VehiclePlateData {
+  return {
+    vehicleOwnership: typeof body.vehicleOwnership === 'string' ? body.vehicleOwnership.trim() : '',
+    plateType: typeof body.plateType === 'string' ? body.plateType.trim() : '',
+    hkPlate: normalizeHongKongPlate(body.hkPlate),
+    macauPlate: normalizeMacauPlate(body.macauPlate),
+    mainlandPlate: normalizeMainlandPlate(body.mainlandPlate)
+  }
+}
+
 function validVehiclePlateData(body: {
   vehicleOwnership?: unknown
   plateType?: unknown
@@ -694,13 +730,17 @@ function validVehiclePlateData(body: {
   macauPlate?: unknown
   mainlandPlate?: unknown
 }) {
-  const ownership = typeof body.vehicleOwnership === 'string' ? body.vehicleOwnership.trim() : ''
-  const plateType = typeof body.plateType === 'string' ? body.plateType.trim() : ''
-  const hkPlate = typeof body.hkPlate === 'string' ? body.hkPlate.trim() : ''
-  const macauPlate = typeof body.macauPlate === 'string' ? body.macauPlate.trim() : ''
-  const mainlandPlate = typeof body.mainlandPlate === 'string' ? body.mainlandPlate.trim() : ''
+  const { vehicleOwnership: ownership, plateType, hkPlate, macauPlate, mainlandPlate } = normalizeVehiclePlateData(body)
   if (!['香港', '澳門', '中國內地'].includes(ownership)) return false
   if (!['單牌', '兩地牌', '三地牌'].includes(plateType)) return false
+  if (hkPlate && (!/^[A-Z0-9 ]+$/.test(hkPlate) || hkPlate.replace(/ /g, '').length > 8)) return false
+  if (macauPlate && !/^[A-Z]{2}-[0-9]{2}-[0-9]{2}$/.test(macauPlate)) return false
+  const mainlandPattern = ownership === '香港'
+    ? /^粵Z·\S+港$/
+    : ownership === '澳門'
+      ? /^粵Z·\S+澳$/
+      : /^粵[A-Z]·\S+$/
+  if (mainlandPlate && (!mainlandPattern.test(mainlandPlate) || /\s/.test(mainlandPlate))) return false
   if (ownership === '中國內地') return plateType === '兩地牌' && Boolean(hkPlate && mainlandPlate)
   if (plateType === '三地牌') {
     return ownership === '香港'
@@ -1037,11 +1077,10 @@ class DriverAuthController {
   @UseInterceptors(FileInterceptor('vehiclePhoto', { limits: { fileSize: 2 * 1024 * 1024 }, fileFilter: (_req, file, cb) => cb(null, /^image\/(jpeg|png|webp)$/.test(file.mimetype)) }))
   async register(@Body() body: { name?: unknown; vehicleOwnership?: unknown; plateType?: unknown; hkPlate?: unknown; macauPlate?: unknown; mainlandPlate?: unknown; phoneCountryCode?: unknown; phone?: unknown; vehicleCategory?: unknown; vehicleColor?: unknown; challengeId?: unknown; code?: unknown }, @UploadedFile() vehiclePhoto?: Express.Multer.File) {
     const name = typeof body.name === 'string' ? body.name.trim() : ''
-    const vehicleOwnership = typeof body.vehicleOwnership === 'string' ? body.vehicleOwnership.trim() : '香港'
-    const plateType = typeof body.plateType === 'string' ? body.plateType.trim() : ''
-    const hkPlate = typeof body.hkPlate === 'string' ? body.hkPlate.trim() : ''
-    const macauPlate = typeof body.macauPlate === 'string' ? body.macauPlate.trim() : ''
-    const mainlandPlate = typeof body.mainlandPlate === 'string' ? body.mainlandPlate.trim() : ''
+    const { vehicleOwnership, plateType, hkPlate, macauPlate, mainlandPlate } = normalizeVehiclePlateData({
+      ...body,
+      vehicleOwnership: body.vehicleOwnership ?? '香港'
+    })
     const vehicleCategory = typeof body.vehicleCategory === 'string' ? body.vehicleCategory.trim() : ''
     const vehicleColor = typeof body.vehicleColor === 'string' ? body.vehicleColor.trim() : ''
     if (!name || !vehicleCategory || !vehicleColor || !validVehiclePlateData({ vehicleOwnership, plateType, hkPlate, macauPlate, mainlandPlate })) {
@@ -1135,13 +1174,15 @@ class DriverAuthController {
     if (!current) throw new UnauthorizedException('Driver not found')
     if (current.reviewStatus === 'REJECTED') throw new ForbiddenException('Rejected registration cannot be resubmitted')
     if (current.reviewStatus !== 'REVISION_REQUIRED') throw new HttpException('Only returned registrations can be resubmitted', HttpStatus.CONFLICT)
-    const value = (input: unknown, fallback: string | null = '') => typeof input === 'string' ? input.trim() : fallback
-    const name = value(body.name, current.name)!
-    const vehicleOwnership = value(body.vehicleOwnership, current.vehicleOwnership)!
-    const plateType = value(body.plateType, current.plateType)!
-    const hkPlate = value(body.hkPlate, current.hkPlate)
-    const macauPlate = value(body.macauPlate, current.macauPlate)
-    const mainlandPlate = value(body.mainlandPlate, current.mainlandPlate)
+    const value = (input: unknown, fallback: string) => typeof input === 'string' ? input.trim() : fallback
+    const name = value(body.name, current.name)
+    const { vehicleOwnership, plateType, hkPlate, macauPlate, mainlandPlate } = normalizeVehiclePlateData({
+      vehicleOwnership: body.vehicleOwnership ?? current.vehicleOwnership,
+      plateType: body.plateType ?? current.plateType,
+      hkPlate: body.hkPlate ?? current.hkPlate,
+      macauPlate: body.macauPlate ?? current.macauPlate,
+      mainlandPlate: body.mainlandPlate ?? current.mainlandPlate
+    })
     const vehicleCategory = value(body.vehicleCategory, current.vehicleCategory)!
     const vehicleColor = value(body.vehicleColor, current.vehicleColor)!
     if (!name || !vehicleCategory || !vehicleColor || !validVehiclePlateData({ vehicleOwnership, plateType, hkPlate, macauPlate, mainlandPlate })) throw new HttpException('Valid driver registration fields are required', HttpStatus.BAD_REQUEST)
@@ -1165,7 +1206,7 @@ class DriverAuthController {
       if (body[field] !== undefined) {
         if (body[field] !== null && typeof body[field] !== 'string') throw new HttpException(`${field} must be a string`, HttpStatus.BAD_REQUEST)
         if (body[field] === null && field !== 'hkPlate' && field !== 'macauPlate' && field !== 'mainlandPlate' && field !== 'settlementMethod' && field !== 'settlementAccount') throw new HttpException(`${field} cannot be null`, HttpStatus.BAD_REQUEST)
-        ;(data as Record<string, unknown>)[field] = body[field] === null ? null : body[field].trim()
+        ;(data as Record<string, unknown>)[field] = body[field] === null ? null : (field === 'hkPlate' ? normalizeHongKongPlate(body[field]) : field === 'macauPlate' ? normalizeMacauPlate(body[field]) : field === 'mainlandPlate' ? normalizeMainlandPlate(body[field]) : body[field].trim())
       }
     }
     if (body.vehiclePhotos !== undefined) {
@@ -1176,13 +1217,19 @@ class DriverAuthController {
     if (['vehicleOwnership', 'plateType', 'hkPlate', 'macauPlate', 'mainlandPlate'].some(field => field in body)) {
       const current = await prisma.driver.findUnique({ where: { id: session.sub } })
       if (!current) throw new UnauthorizedException('Driver not found')
-      if (!validVehiclePlateData({
+      const normalized = normalizeVehiclePlateData({
         vehicleOwnership: body.vehicleOwnership ?? current.vehicleOwnership,
         plateType: body.plateType ?? current.plateType,
         hkPlate: body.hkPlate === undefined ? current.hkPlate : body.hkPlate,
         macauPlate: body.macauPlate === undefined ? current.macauPlate : body.macauPlate,
         mainlandPlate: body.mainlandPlate === undefined ? current.mainlandPlate : body.mainlandPlate
-      })) throw new HttpException('Valid vehicle plate fields are required', HttpStatus.BAD_REQUEST)
+      })
+      if (!validVehiclePlateData(normalized)) throw new HttpException('Valid vehicle plate fields are required', HttpStatus.BAD_REQUEST)
+      data.vehicleOwnership = normalized.vehicleOwnership
+      data.plateType = normalized.plateType
+      data.hkPlate = normalized.hkPlate || null
+      data.macauPlate = normalized.macauPlate || null
+      data.mainlandPlate = normalized.mainlandPlate || null
     }
     const driver = await prisma.driver.update({ where: { id: session.sub }, data })
     return driverResponse(driver)
@@ -1334,6 +1381,9 @@ class DriverAuthController {
         driverName: driver.name,
         driverPhone: `${driver.phoneCountryCode} ${driver.phone}`,
         vehiclePlate: driver.hkPlate,
+        vehicleHkPlate: driver.hkPlate,
+        vehicleMacauPlate: driver.macauPlate,
+        vehicleMainlandPlate: driver.mainlandPlate,
         status: 'CONFIRMED',
         executionPhase: 'DRIVER_ASSIGNED',
         assignedAt: now,
@@ -1383,6 +1433,9 @@ class DriverOrderUrlController {
           driverName: driver.name,
           driverPhone: `${driver.phoneCountryCode} ${driver.phone}`,
           vehiclePlate: driver.hkPlate,
+          vehicleHkPlate: driver.hkPlate,
+          vehicleMacauPlate: driver.macauPlate,
+          vehicleMainlandPlate: driver.mainlandPlate,
           status: 'CONFIRMED',
           executionPhase: 'DRIVER_ASSIGNED',
           assignedAt: now,
@@ -1482,11 +1535,12 @@ class AdminController {
   @Post('drivers') async saveDriver(@Req() req: RequestLike, @Body() body: Partial<Prisma.DriverCreateInput> & { id?: string }) {
     requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
     if (!validDriverPayload(body)) throw new HttpException('Valid driver fields are required', HttpStatus.BAD_REQUEST)
+    const normalized = normalizeVehiclePlateData({ ...body, vehicleOwnership: body.vehicleOwnership || '香港' })
     const data = {
       driverType: body.driverType?.trim() || '內部司機',
-      name: body.name!.trim(), affiliation: body.affiliation!.trim(), plateType: body.plateType!.trim(),
-      hkPlate: body.hkPlate?.trim() || null, macauPlate: body.macauPlate?.trim() || null, mainlandPlate: body.mainlandPlate?.trim() || null,
-      vehicleOwnership: body.vehicleOwnership?.trim() || '香港',
+      name: body.name!.trim(), affiliation: body.affiliation!.trim(), plateType: normalized.plateType,
+      hkPlate: normalized.hkPlate || null, macauPlate: normalized.macauPlate || null, mainlandPlate: normalized.mainlandPlate || null,
+      vehicleOwnership: normalized.vehicleOwnership,
       phoneCountryCode: body.phoneCountryCode?.trim() || '+852', phone: body.phone!.trim(),
       vehicleCategory: body.vehicleCategory!.trim(), vehicleColor: body.vehicleColor!.trim(),
       vehiclePhotos: Array.isArray(body.vehiclePhotos) ? body.vehiclePhotos : [],
@@ -1785,7 +1839,7 @@ class AdminController {
    if (trip.status === 'COMPLETED' || trip.status === 'CANCELLED' || trip.executionPhase === 'IN_PROGRESS') throw new HttpException('This trip cannot be dispatched', HttpStatus.CONFLICT)
    const updated = await prisma.trip.update({
      where: { id },
-     data: { driverId: driver.id, driverName: driver.name, driverPhone: `${driver.phoneCountryCode} ${driver.phone}`, vehiclePlate: driver.hkPlate, status: 'CONFIRMED', executionPhase: 'DRIVER_ASSIGNED', assignedAt: new Date(), acceptedAt: new Date() },
+     data: { driverId: driver.id, driverName: driver.name, driverPhone: `${driver.phoneCountryCode} ${driver.phone}`, vehiclePlate: driver.hkPlate, vehicleHkPlate: driver.hkPlate, vehicleMacauPlate: driver.macauPlate, vehicleMainlandPlate: driver.mainlandPlate, status: 'CONFIRMED', executionPhase: 'DRIVER_ASSIGNED', assignedAt: new Date(), acceptedAt: new Date() },
      include: { user: true, driver: true }
    })
    return { ...updated, scheduledAt: updated.scheduledAt.toISOString(), createdAt: updated.createdAt.toISOString(), updatedAt: updated.updatedAt.toISOString(), user: userResponse(updated.user) }
@@ -3090,10 +3144,13 @@ function clientTripResponse(trip: Prisma.TripGetPayload<{ include: { user: { sel
       modelChoiceLabel: vehicle.modelChoiceLabel
     } : null,
     executionPhase: trip.executionPhase || null,
-    driver: trip.driverName || trip.driverPhone || trip.vehiclePlate ? {
+    driver: trip.driverName || trip.driverPhone || trip.vehiclePlate || trip.vehicleHkPlate || trip.vehicleMacauPlate || trip.vehicleMainlandPlate ? {
       name: trip.driverName || '—',
       phone: trip.driverPhone || '—',
-      vehiclePlate: trip.vehiclePlate || '—'
+      vehiclePlate: trip.vehiclePlate || trip.vehicleHkPlate || null,
+      hkPlate: trip.vehicleHkPlate || trip.vehiclePlate || null,
+      macauPlate: trip.vehicleMacauPlate || null,
+      mainlandPlate: trip.vehicleMainlandPlate || null
     } : null,
     assignedAt: trip.assignedAt?.toISOString() || null,
     acceptedAt: trip.acceptedAt?.toISOString() || null,
