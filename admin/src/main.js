@@ -1,6 +1,8 @@
 import { createApp, computed, nextTick, onMounted, watch, provide } from 'vue'
 import { createAdminApi } from './utils/admin-api.js'
 import { LoadingState, ErrorState, ToastHost, ConfirmDialog } from './components/index.js'
+import { DriverReviewActions } from './components/DriverReviewActions.js'
+import { VehiclePhotoViewer } from './components/VehiclePhotoViewer.js'
 import { sortByOrder, formatOrderNumber, displayMainlandCity, apiMainlandCity, displayPlaceName } from './utils/formatters.js'
 import { promotionKindLabel, promotionDiscountLabel } from './utils/promotions.js'
 import { dateTimeInput, formatTripAmount, paymentMethodLabel, formatBenefits } from './utils/display-formatters.js'
@@ -665,6 +667,8 @@ registerAdminComponents(app, {
   LoadingState,
   ErrorState,
   ToastHost,
-  ConfirmDialog
+  ConfirmDialog,
+  DriverReviewActions,
+  VehiclePhotoViewer
 })
 app.mount('#app')

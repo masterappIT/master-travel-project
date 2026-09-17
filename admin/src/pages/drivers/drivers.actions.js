@@ -2,15 +2,23 @@ import { composeMainlandPlate, formatHongKongPlateInput, formatMacauPlateInput, 
 
 export function createDriversActions({ driversApi, driverForm, selectedDriver, settlementForm, drivers, error, load, displayError, requestConfirmation, notify }) {
   let vehiclePhotoUrl = null
+  let driverFormPhotoUrl = null
   const reviewStatusLabel = status => ({ PENDING: '待審核', APPROVED: '已通過', REVISION_REQUIRED: '退回修改', REJECTED: '已拒絕' }[status] || status || '待審核')
 
+  function clearDriverFormPhotoUrl() {
+    if (driverFormPhotoUrl) URL.revokeObjectURL(driverFormPhotoUrl)
+    driverFormPhotoUrl = null
+  }
+
   function resetDriver() {
-    driverForm.value = { id: '', driverType: '內部司機', name: '', affiliation: '香港', vehicleOwnership: '香港', plateType: '單牌', hkPlate: '', macauPlate: '', mainlandPlate: '', phoneCountryCode: '+852', phone: '', vehicleCategory: '', vehicleColor: '', vehiclePhotos: [] }
+    clearDriverFormPhotoUrl()
+    driverForm.value = { id: '', driverType: '內部司機', name: '', affiliation: '香港', vehicleOwnership: '香港', plateType: '單牌', hkPlate: '', macauPlate: '', mainlandPlate: '', phoneCountryCode: '+852', phone: '', vehicleCategory: '', vehicleColor: '', vehiclePhotos: [], vehiclePhotoFile: null, vehiclePhotoPersisted: false, removeVehiclePhoto: false }
   }
 
   function editDriver(item) {
+    clearDriverFormPhotoUrl()
     const vehicleOwnership = item.vehicleOwnership || '香港'
-    driverForm.value = { driverType: '內部司機', affiliation: '香港', plateType: '單牌', hkPlate: '', macauPlate: '', mainlandPlate: '', phoneCountryCode: '+852', vehiclePhotos: [], ...item, vehicleOwnership, macauPlate: formatMacauPlateInput(item.macauPlate), mainlandPlate: mainlandPlateInput(item.mainlandPlate, vehicleOwnership), vehiclePhotos: [] }
+    driverForm.value = { driverType: '內部司機', affiliation: '香港', plateType: '單牌', hkPlate: '', macauPlate: '', mainlandPlate: '', phoneCountryCode: '+852', ...item, vehicleOwnership, macauPlate: formatMacauPlateInput(item.macauPlate), mainlandPlate: mainlandPlateInput(item.mainlandPlate, vehicleOwnership), vehiclePhotos: [], vehiclePhotoFile: null, vehiclePhotoPersisted: Boolean(item.vehiclePhotos?.length), removeVehiclePhoto: false }
   }
 
   function formatDriverHongKongPlate() {
@@ -40,28 +48,31 @@ export function createDriversActions({ driversApi, driverForm, selectedDriver, s
     const files = [...(event.target.files || [])]
     event.target.value = ''
     if (!files.length) return
-    const images = files.filter(file => file.type.startsWith('image/'))
-    if (images.length !== files.length) { error.value = '車輛相片只支援圖片格式'; return }
-    try {
-      const uploaded = await Promise.all(images.map(file => new Promise((resolve, reject) => {
-        const reader = new FileReader()
-        reader.onload = () => resolve(reader.result)
-        reader.onerror = reject
-        reader.readAsDataURL(file)
-      })))
-      driverForm.value.vehiclePhotos = [...(driverForm.value.vehiclePhotos || []), ...uploaded]
-      error.value = ''
-    } catch { error.value = '車輛相片上傳失敗' }
+    const file = files[0]
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) { error.value = '車輛相片只支援 JPEG、PNG 或 WebP'; return }
+    if (file.size > 2 * 1024 * 1024) { error.value = '車輛相片不可超過 2 MB'; return }
+    clearDriverFormPhotoUrl()
+    driverFormPhotoUrl = URL.createObjectURL(file)
+    driverForm.value.vehiclePhotoFile = file
+    driverForm.value.vehiclePhotos = [driverFormPhotoUrl]
+    driverForm.value.vehiclePhotoPersisted = false
+    driverForm.value.removeVehiclePhoto = false
+    error.value = ''
   }
 
-  function removeDriverPhoto(index) {
-    driverForm.value.vehiclePhotos = (driverForm.value.vehiclePhotos || []).filter((_, photoIndex) => photoIndex !== index)
+  function removeDriverPhoto() {
+    clearDriverFormPhotoUrl()
+    driverForm.value.vehiclePhotoFile = null
+    driverForm.value.vehiclePhotos = []
+    driverForm.value.vehiclePhotoPersisted = false
+    driverForm.value.removeVehiclePhoto = true
   }
 
   async function saveDriver() {
     const vehicleOwnership = driverForm.value.vehicleOwnership || '香港'
     const plates = normalizeVehiclePlates({ ...driverForm.value, mainlandPlate: composeMainlandPlate(driverForm.value.mainlandPlate, vehicleOwnership) })
-    const form = { ...driverForm.value, ...plates, vehicleOwnership, driverType: driverForm.value.driverType || '內部司機', name: String(driverForm.value.name || '').trim(), phone: String(driverForm.value.phone || '').trim(), vehicleCategory: String(driverForm.value.vehicleCategory || '').trim(), vehicleColor: String(driverForm.value.vehicleColor || '').trim(), id: driverForm.value.id || undefined }
+    const { vehiclePhotoFile, vehiclePhotoPersisted, removeVehiclePhoto, vehiclePhotos, ...driverFields } = driverForm.value
+    const form = { ...driverFields, ...plates, vehicleOwnership, driverType: driverForm.value.driverType || '內部司機', name: String(driverForm.value.name || '').trim(), phone: String(driverForm.value.phone || '').trim(), vehicleCategory: String(driverForm.value.vehicleCategory || '').trim(), vehicleColor: String(driverForm.value.vehicleColor || '').trim(), id: driverForm.value.id || undefined }
     const plateError = vehiclePlateError({ ...plates, vehicleOwnership: form.vehicleOwnership })
     if (plateError) { error.value = plateError; return }
     if (!form.name || !form.affiliation || !form.plateType || !form.phone || !form.vehicleCategory || !form.vehicleColor) { error.value = '請填寫註冊所需資料'; return }
@@ -70,7 +81,8 @@ export function createDriversActions({ driversApi, driverForm, selectedDriver, s
     if (form.vehicleOwnership === '澳門' && !form.macauPlate) { error.value = '請填寫澳門車牌'; return }
     if (form.plateType !== '單牌' && !form.mainlandPlate) { error.value = '請填寫內地車牌'; return }
     try {
-      await driversApi.save(form)
+      await driversApi.save(form, vehiclePhotoFile, removeVehiclePhoto)
+      clearDriverFormPhotoUrl()
       driverForm.value = null; error.value = ''; await load()
     } catch (err) { error.value = displayError(err) }
   }

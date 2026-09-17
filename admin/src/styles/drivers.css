@@ -79,6 +79,15 @@
 .driver-detail-info-grid strong { display: block; margin-top: 5px; color: #29415f; font-size: 14px; }
 .driver-detail-photos { margin-top: 20px; padding-top: 16px; border-top: 1px solid #edf2f8; }
 .driver-detail-no-photos { margin-top: 20px; padding-top: 16px; border-top: 1px solid #edf2f8; color: #8293a9; font-size: 13px; }
+.driver-review-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 20px; padding-top: 18px; border-top: 1px solid #edf2f8; }
+.driver-review-actions .driver-review-button { display: inline-flex; align-items: center; justify-content: center; min-width: 112px; min-height: 44px; height: 44px; margin: 0; padding: 0 18px; border-radius: var(--radius-control); font-size: 14px; font-weight: 750; line-height: 1; white-space: nowrap; transition: background-color .16s ease, border-color .16s ease, box-shadow .16s ease, color .16s ease, filter .16s ease, transform .16s ease; }
+.driver-review-actions .driver-review-button-approve { border: 0; color: #fff; background: var(--gradient-primary); box-shadow: var(--shadow-primary); }
+.driver-review-actions .driver-review-button-revision { border: 1px solid #cbd9e9; color: #425974; background: #fff; box-shadow: none; }
+.driver-review-actions .driver-review-button-reject { border: 1px solid #e4a8a8; color: #b43a3a; background: #fff7f7; box-shadow: none; }
+.driver-review-actions .driver-review-button-approve:hover:not(:disabled) { filter: brightness(1.06); transform: translateY(-1px); }
+.driver-review-actions .driver-review-button-revision:hover:not(:disabled) { border-color: #9bbce8; color: var(--color-primary); background: #f5f9ff; transform: translateY(-1px); }
+.driver-review-actions .driver-review-button-reject:hover:not(:disabled) { border-color: #c84545; color: #fff; background: #c84545; transform: translateY(-1px); }
+.driver-review-actions .driver-review-button:active:not(:disabled) { filter: brightness(.98); transform: translateY(0); }
 .driver-finance-summary { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; margin: 20px 0 14px; }
 .driver-finance-summary article { min-width: 0; padding: 16px 18px; border: 1px solid #dce7f5; border-radius: 12px; background: #fff; }
 .driver-finance-summary span { display: block; color: #647892; font-size: 12px; }
@@ -96,7 +105,7 @@
 .driver-settlement-form button.primary:hover { filter: brightness(1.06); transform: translateY(-1px); }
 .driver-settlement-form button.secondary { border: 1px solid #cbd9e9; color: #425974; background: #e8eef6; }
 .driver-settlement-form button.secondary:hover { border-color: #9bbce8; color: #1769e0; background: #f5f9ff; }
-@media (max-width: 600px) { .driver-detail-drawer { padding: 20px 16px; } .driver-detail-header { gap: 12px; } .driver-detail-header h2 { font-size: 22px; } .driver-detail-header-actions { gap: 6px; } .driver-profile-section { padding: 16px; } .driver-profile-section-heading { align-items: flex-start; flex-direction: column; } .driver-profile-section-heading button { width: 100%; } .driver-finance-summary { grid-template-columns: 1fr; } .driver-settlement-form { grid-template-columns: 1fr; } .driver-settlement-form input, .driver-settlement-form select, .driver-settlement-form button { width: 100%; } .driver-settlement-form button { min-width: 0; } .driver-detail-info-grid { grid-template-columns: 1fr; } .driver-settlement-bar { align-items: flex-start; flex-direction: column; } .driver-settlement-bar .toolbar-actions, .driver-settlement-bar .toolbar-actions button { width: 100%; } }
+@media (max-width: 600px) { .driver-detail-drawer { padding: 20px 16px; } .driver-detail-header { gap: 12px; } .driver-detail-header h2 { font-size: 22px; } .driver-detail-header-actions { gap: 6px; } .driver-profile-section { padding: 16px; } .driver-profile-section-heading { align-items: flex-start; flex-direction: column; } .driver-profile-section-heading button { width: 100%; } .driver-review-actions { display: grid; grid-template-columns: 1fr 1fr; } .driver-review-actions .driver-review-button { width: 100%; min-width: 0; } .driver-review-actions .driver-review-button-reject { grid-column: 1 / -1; } .driver-finance-summary { grid-template-columns: 1fr; } .driver-settlement-form { grid-template-columns: 1fr; } .driver-settlement-form input, .driver-settlement-form select, .driver-settlement-form button { width: 100%; } .driver-settlement-form button { min-width: 0; } .driver-detail-info-grid { grid-template-columns: 1fr; } .driver-settlement-bar { align-items: flex-start; flex-direction: column; } .driver-settlement-bar .toolbar-actions, .driver-settlement-bar .toolbar-actions button { width: 100%; } }
 
 .driver-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .driver-form-grid label { display: grid; gap: 7px; color: #526985; font-size: 12px; font-weight: 750; }
@@ -114,6 +123,22 @@
 .driver-photo-preview > div { position: relative; width: 92px; height: 68px; overflow: hidden; border: 1px solid #cbd9e9; border-radius: 8px; background: #eef4fb; }
 .driver-photo-preview img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .driver-photo-preview button { position: absolute; top: 3px; right: 3px; display: grid; place-items: center; width: 36px; height: 36px; min-width: 36px; min-height: 36px; padding: 0; border: 0; border-radius: 50%; color: #fff; background: rgba(18,36,59,.75); line-height: 20px; }
+.vehicle-photo-viewer { margin-top: 8px; }
+.vehicle-photo-viewer-thumbnail { position: relative; display: block; width: min(100%, 420px); aspect-ratio: 4 / 3; overflow: hidden; padding: 0; border: 1px solid #cbd9e9; border-radius: 8px; background: #eef4fb; cursor: zoom-in; }
+.vehicle-photo-viewer-thumbnail img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.vehicle-photo-viewer-thumbnail span { position: absolute; right: 10px; bottom: 10px; padding: 6px 10px; border-radius: 6px; color: #fff; background: rgba(18,36,59,.82); font-size: 12px; font-weight: 750; }
+.vehicle-photo-viewer-thumbnail:focus-visible { outline: 3px solid rgba(74,141,240,.45); outline-offset: 2px; }
+.vehicle-photo-viewer-overlay { position: fixed; inset: 0; z-index: 2000; display: grid; grid-template-rows: auto minmax(0, 1fr); padding: 16px; background: rgba(8,18,31,.94); }
+.vehicle-photo-viewer-toolbar { display: flex; align-items: center; justify-content: center; gap: 8px; padding-bottom: 16px; }
+.vehicle-photo-viewer-toolbar button { display: grid; place-items: center; min-width: 44px; height: 44px; padding: 0 12px; border: 1px solid rgba(255,255,255,.3); border-radius: 8px; color: #fff; background: rgba(255,255,255,.12); font-size: 22px; line-height: 1; }
+.vehicle-photo-viewer-toolbar button:hover:not(:disabled), .vehicle-photo-viewer-toolbar button:focus-visible { border-color: rgba(255,255,255,.75); background: rgba(255,255,255,.22); }
+.vehicle-photo-viewer-toolbar button:focus-visible { outline: 3px solid rgba(105,164,255,.65); outline-offset: 2px; }
+.vehicle-photo-viewer-toolbar button:disabled { opacity: .4; cursor: not-allowed; }
+.vehicle-photo-viewer-toolbar .vehicle-photo-viewer-scale { min-width: 72px; font-size: 14px; font-weight: 750; }
+.vehicle-photo-viewer-toolbar .vehicle-photo-viewer-close { margin-left: 16px; font-size: 28px; }
+.vehicle-photo-viewer-canvas { display: grid; place-items: center; min-width: 0; min-height: 0; overflow: auto; overscroll-behavior: contain; }
+.vehicle-photo-viewer-canvas img { display: block; max-width: 100%; max-height: 100%; object-fit: contain; transform-origin: center; transition: transform .15s ease; }
+@media (max-width: 600px) { .vehicle-photo-viewer-overlay { padding: 10px; } .vehicle-photo-viewer-toolbar { gap: 6px; padding-bottom: 10px; } .vehicle-photo-viewer-toolbar .vehicle-photo-viewer-close { margin-left: 4px; } }
 .driver-form-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: auto; padding-top: 18px; border-top: 1px solid #dbe7f5; }
 .driver-form-actions button { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; min-width: 132px; min-height: 44px; height: 44px; padding: 0 20px; border-radius: 10px; font-size: 14px; font-weight: 750; line-height: 1; white-space: nowrap; }
 .driver-form-actions .primary { border: 0; color: #fff; background: var(--gradient-primary); box-shadow: var(--shadow-primary); }

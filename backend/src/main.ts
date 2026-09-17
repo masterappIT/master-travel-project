@@ -1207,7 +1207,7 @@ class DriverAuthController {
     const session = await driverSessionFrom(req)
     const driver = await prisma.driver.findUnique({ where: { id: session.sub }, select: { vehiclePhotoData: true, vehiclePhotoMime: true } })
     if (!driver?.vehiclePhotoData || !driver.vehiclePhotoMime) throw new HttpException('Vehicle photo not found', HttpStatus.NOT_FOUND)
-    response.type(driver.vehiclePhotoMime).send(driver.vehiclePhotoData)
+    response.type(driver.vehiclePhotoMime).send(Buffer.from(driver.vehiclePhotoData))
   }
 
   @Get('me')
@@ -1582,7 +1582,7 @@ class AdminController {
     requireAuth(req)
     const driver = await prisma.driver.findUnique({ where: { id }, select: { vehiclePhotoData: true, vehiclePhotoMime: true } })
     if (!driver?.vehiclePhotoData || !driver.vehiclePhotoMime) throw new HttpException('Vehicle photo not found', HttpStatus.NOT_FOUND)
-    response.type(driver.vehiclePhotoMime).send(driver.vehiclePhotoData)
+    response.type(driver.vehiclePhotoMime).send(Buffer.from(driver.vehiclePhotoData))
   }
   @Post('drivers/:id/review/approve') async approveDriver(@Req() req: RequestLike, @Param('id') id: string) {
     const session = requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
@@ -1612,7 +1612,9 @@ class AdminController {
     const driver = await prisma.driver.update({ where: { id }, data: { reviewStatus: 'REJECTED', reviewReason: reason, reviewedAt: new Date(), reviewedBy: session.sub, isOnline: false } })
     return driverResponse(driver)
   }
-  @Post('drivers') async saveDriver(@Req() req: RequestLike, @Body() body: Partial<Prisma.DriverCreateInput> & { id?: string }) {
+  @Post('drivers')
+  @UseInterceptors(FileInterceptor('vehiclePhoto', { limits: { fileSize: 2 * 1024 * 1024 }, fileFilter: (_req, file, cb) => cb(null, /^image\/(jpeg|png|webp)$/.test(file.mimetype)) }))
+  async saveDriver(@Req() req: RequestLike, @Body() body: Partial<Prisma.DriverCreateInput> & { id?: string; removeVehiclePhoto?: string }, @UploadedFile() vehiclePhoto?: Express.Multer.File) {
     requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
     if (!validDriverPayload(body)) throw new HttpException('Valid driver fields are required', HttpStatus.BAD_REQUEST)
     const normalized = normalizeVehiclePlateData({ ...body, vehicleOwnership: body.vehicleOwnership || '香港' })
@@ -1622,8 +1624,9 @@ class AdminController {
       hkPlate: normalized.hkPlate || null, macauPlate: normalized.macauPlate || null, mainlandPlate: normalized.mainlandPlate || null,
       vehicleOwnership: normalized.vehicleOwnership,
       phoneCountryCode: body.phoneCountryCode?.trim() || '+852', phone: body.phone!.trim(),
-      vehicleCategory: body.vehicleCategory!.trim(), vehicleColor: body.vehicleColor!.trim(),
-      vehiclePhotos: Array.isArray(body.vehiclePhotos) ? body.vehiclePhotos : [],
+      vehicleCategory: body.vehicleCategory!.trim(), vehicleColor: body.vehicleColor!.trim(), vehiclePhotos: [],
+      ...(vehiclePhoto ? { vehiclePhotoData: new Uint8Array(vehiclePhoto.buffer), vehiclePhotoMime: vehiclePhoto.mimetype } : {}),
+      ...(body.removeVehiclePhoto === 'true' ? { vehiclePhotoData: null, vehiclePhotoMime: null } : {}),
       settlementMethod: body.settlementMethod?.trim() || null, settlementAccount: body.settlementAccount?.trim() || null
     }
     const driver = body.id
