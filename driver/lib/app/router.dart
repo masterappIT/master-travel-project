@@ -91,8 +91,10 @@ abstract final class DriverRouter {
             _approved(OrderInProgressPage(
               tripId: ModalRoute.of(context)?.settings.arguments?.toString(),
             )),
-        DriverRouteNames.orderCompleted: (_) =>
-            _approved(const OrderCompletedPage()),
+        DriverRouteNames.orderCompleted: (context) =>
+            _approved(OrderCompletedPage(
+              tripId: ModalRoute.of(context)?.settings.arguments?.toString(),
+            )),
       };
 
   static Widget _approved(Widget page) =>

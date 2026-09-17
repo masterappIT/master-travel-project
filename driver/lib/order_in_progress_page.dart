@@ -18,7 +18,64 @@ class OrderInProgressPage extends StatefulWidget {
 
 class _OrderInProgressPageState extends State<OrderInProgressPage> {
   final _api = DriverApiClient.instance;
-  bool _loading = false;
+  Map<String, dynamic>? _trip;
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTrip();
+  }
+
+  Future<void> _loadTrip() async {
+    final tripId = widget.tripId;
+    if (tripId == null || tripId.isEmpty) {
+      setState(() {
+        _error = '找不到訂單編號';
+        _loading = false;
+      });
+      return;
+    }
+    try {
+      final trip = await _api.trip(tripId);
+      if (mounted) setState(() => _trip = trip);
+    } on DriverApiException catch (error) {
+      if (mounted) setState(() => _error = error.message);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  String _text(String key, String fallback) {
+    final value = _trip?[key]?.toString().trim();
+    return value == null || value.isEmpty ? fallback : value;
+  }
+
+  String _formatDate(dynamic value) {
+    final date = DateTime.tryParse(value?.toString() ?? '')?.toLocal();
+    if (date == null) return '時間待確認';
+    String two(int number) => number.toString().padLeft(2, '0');
+    return '${date.year}/${two(date.month)}/${two(date.day)} ${two(date.hour)}:${two(date.minute)}';
+  }
+
+  String _formatPrice(dynamic value, dynamic currency) {
+    if (value is! num) return '待確認';
+    final code = currency?.toString();
+    final symbol = code == 'HKD'
+        ? 'HK\$'
+        : code == 'RMB' || code == 'CNY'
+            ? '¥'
+            : code == null || code.isEmpty
+                ? ''
+                : '$code ';
+    return '$symbol${value.toStringAsFixed(2)}';
+  }
+
+  String _region(String address, String fallback) {
+    final value = address.split(RegExp(r'[·•]')).first.trim();
+    return value.isEmpty ? fallback : value;
+  }
 
   Future<void> _completeTrip() async {
     setState(() => _loading = true);
@@ -27,7 +84,11 @@ class _OrderInProgressPageState extends State<OrderInProgressPage> {
       if (tripId == null) throw StateError('missing trip id');
       await _api.completeTrip(tripId);
       if (mounted) {
-        DriverNavigation.push(context, DriverRouteNames.orderCompleted);
+        DriverNavigation.push(
+          context,
+          DriverRouteNames.orderCompleted,
+          arguments: tripId,
+        );
       }
     } on StateError {
       if (mounted) {
@@ -90,17 +151,44 @@ class _OrderInProgressPageState extends State<OrderInProgressPage> {
             ],
           ),
           const SizedBox(height: DriverSpacing.xl),
-          const _ProgressMapPreview(),
-          const SizedBox(height: DriverSpacing.xl),
-          const _PassengerCard(),
-          const SizedBox(height: DriverSpacing.xl),
-          const _TripProgressCard(),
-          const SizedBox(height: DriverSpacing.xl),
-          ElevatedButton(
-            onPressed: _loading ? null : _completeTrip,
-            style: _completeStyle(),
-            child: Text(_loading ? '處理中…' : '確認到達目的地'),
-          ),
+          if (_loading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 120),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (_error != null)
+            Center(
+              child: Column(
+                children: [
+                  Text(_error!, textAlign: TextAlign.center),
+                  const SizedBox(height: DriverSpacing.md),
+                  OutlinedButton(
+                      onPressed: _loadTrip, child: const Text('重新載入')),
+                ],
+              ),
+            )
+          else ...[
+            _ProgressMapPreview(
+              origin: _region(_text('pickupAddress', '起點待確認'), '起點待確認'),
+              destination: _region(_text('dropoffAddress', '終點待確認'), '終點待確認'),
+            ),
+            const SizedBox(height: DriverSpacing.xl),
+            _PassengerCard(name: _text('passengerName', '乘客')),
+            const SizedBox(height: DriverSpacing.xl),
+            _TripProgressCard(
+              origin: _text('pickupAddress', '起點待確認'),
+              destination: _text('dropoffAddress', '終點待確認'),
+              scheduledAt: _formatDate(_trip?['scheduledAt']),
+              passenger: _text('passengerName', '乘客'),
+              price: _formatPrice(_trip?['price'], _trip?['currency']),
+            ),
+            const SizedBox(height: DriverSpacing.xl),
+            ElevatedButton(
+              onPressed: _loading ? null : _completeTrip,
+              style: _completeStyle(),
+              child: Text(_loading ? '處理中…' : '確認到達目的地'),
+            ),
+          ],
         ],
       ),
     );
@@ -108,7 +196,10 @@ class _OrderInProgressPageState extends State<OrderInProgressPage> {
 }
 
 class _ProgressMapPreview extends StatelessWidget {
-  const _ProgressMapPreview();
+  const _ProgressMapPreview({required this.origin, required this.destination});
+  final String origin;
+  final String destination;
+
   @override
   Widget build(BuildContext context) => Container(
         height: 180,
@@ -116,14 +207,14 @@ class _ProgressMapPreview extends StatelessWidget {
             color: DriverColors.text,
             borderRadius: BorderRadius.circular(DriverRadii.card)),
         child: Stack(children: [
-          const Center(
+          Center(
               child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Text('香港中環 → 深圳',
+            Text('$origin → $destination',
                 style: TextStyle(
                     fontSize: DriverTypography.label,
                     color: Color(0xb3ffffff))),
             SizedBox(height: 12),
-            _RouteText(),
+            _RouteText(origin: origin, destination: destination),
           ])),
           const Positioned(top: 16, left: 16, child: _MapLabel('起點')),
           const Positioned(top: 16, right: 16, child: _MapLabel('終點')),
@@ -132,14 +223,17 @@ class _ProgressMapPreview extends StatelessWidget {
 }
 
 class _RouteText extends StatelessWidget {
-  const _RouteText();
+  const _RouteText({required this.origin, required this.destination});
+  final String origin;
+  final String destination;
+
   @override
   Widget build(BuildContext context) => Column(children: [
         Row(mainAxisSize: MainAxisSize.min, children: [
           SvgPicture.asset('assets/in-progress-origin.svg',
               width: 8, height: 8),
           const SizedBox(width: DriverSpacing.sm),
-          const Text('香港中環',
+          Text(origin,
               style: TextStyle(
                   fontSize: DriverTypography.bodyLarge,
                   fontWeight: FontWeight.w700,
@@ -154,7 +248,7 @@ class _RouteText extends StatelessWidget {
           SvgPicture.asset('assets/in-progress-destination.svg',
               width: 8, height: 8),
           const SizedBox(width: DriverSpacing.sm),
-          const Text('深圳',
+          Text(destination,
               style: TextStyle(
                   fontSize: DriverTypography.bodyLarge,
                   fontWeight: FontWeight.w700,
@@ -179,7 +273,9 @@ class _MapLabel extends StatelessWidget {
 }
 
 class _PassengerCard extends StatelessWidget {
-  const _PassengerCard();
+  const _PassengerCard({required this.name});
+  final String name;
+
   @override
   Widget build(BuildContext context) => _Panel(
         padding: 16,
@@ -192,7 +288,8 @@ class _PassengerCard extends StatelessWidget {
                 decoration: BoxDecoration(
                     color: DriverColors.background,
                     borderRadius: BorderRadius.circular(24)),
-                child: const Text('陳',
+                child: Text(
+                    name.isEmpty ? '乘' : String.fromCharCode(name.runes.first),
                     style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w700,
@@ -202,7 +299,7 @@ class _PassengerCard extends StatelessWidget {
                 child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                  Text('陳大文',
+                  Text(name,
                       style: TextStyle(
                           fontSize: DriverTypography.bodyLarge,
                           fontWeight: FontWeight.w700,
@@ -246,7 +343,19 @@ class _CircleAssetButton extends StatelessWidget {
 }
 
 class _TripProgressCard extends StatelessWidget {
-  const _TripProgressCard();
+  const _TripProgressCard({
+    required this.origin,
+    required this.destination,
+    required this.scheduledAt,
+    required this.passenger,
+    required this.price,
+  });
+  final String origin;
+  final String destination;
+  final String scheduledAt;
+  final String passenger;
+  final String price;
+
   @override
   Widget build(BuildContext context) => _Panel(
         padding: 20,
@@ -262,11 +371,11 @@ class _TripProgressCard extends StatelessWidget {
                     color: DriverColors.text)),
           ]),
           const Divider(height: 1, color: DriverColors.background),
-          const _InfoRow(label: '出發地', value: '香港中環置地廣場東門大堂'),
-          const _InfoRow(label: '目的地', value: '深圳福田口岸'),
-          const _InfoRow(label: '出發時間', value: '2024/03/15 14:00'),
-          const _InfoRow(label: '乘客', value: '陳大文'),
-          const _InfoRow(label: '車資', value: '\$280.00', bold: true),
+          _InfoRow(label: '出發地', value: origin),
+          _InfoRow(label: '目的地', value: destination),
+          _InfoRow(label: '出發時間', value: scheduledAt),
+          _InfoRow(label: '乘客', value: passenger),
+          _InfoRow(label: '車資', value: price, bold: true),
         ],
       );
 }

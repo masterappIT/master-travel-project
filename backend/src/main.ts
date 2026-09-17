@@ -852,6 +852,9 @@ function driverTripResponse(trip: {
   origin: string
   destination: string
   scheduledAt: Date
+  acceptedAt: Date | null
+  arrivedAt: Date | null
+  startedAt: Date | null
   completedAt: Date | null
   status: string
   executionPhase: string | null
@@ -869,6 +872,9 @@ function driverTripResponse(trip: {
     pickupAddress: trip.origin,
     dropoffAddress: trip.destination,
     scheduledAt: trip.scheduledAt.toISOString(),
+    acceptedAt: trip.acceptedAt?.toISOString() || null,
+    arrivedAt: trip.arrivedAt?.toISOString() || null,
+    startedAt: trip.startedAt?.toISOString() || null,
     completedAt: trip.completedAt?.toISOString() || null,
     status: trip.status,
     executionPhase: trip.executionPhase,
@@ -1424,12 +1430,38 @@ class DriverAuthController {
     return tripResponse(updated)
   }
 
+  @Post('trips/:id/cancel')
+  async cancel(@Req() req: RequestLike, @Param('id') id: string) {
+    const { session } = await reviewedDriverFrom(req)
+    const trip = await prisma.trip.findUnique({ where: { id }, include: { user: true } })
+    if (!trip || trip.driverId !== session.sub) throw new HttpException('Trip not found', HttpStatus.NOT_FOUND)
+    if (trip.startedAt || trip.completedAt || trip.status === 'CANCELLED') throw new HttpException('Trip cannot be cancelled by driver', HttpStatus.CONFLICT)
+    const updated = await prisma.trip.update({
+      where: { id },
+      data: {
+        driverId: null,
+        driverName: null,
+        driverPhone: null,
+        vehiclePlate: null,
+        vehicleHkPlate: null,
+        vehicleMacauPlate: null,
+        vehicleMainlandPlate: null,
+        assignedAt: null,
+        acceptedAt: null,
+        arrivedAt: null,
+        executionPhase: 'WAITING_DRIVER'
+      },
+      include: { user: true }
+    })
+    return driverTripResponse(updated)
+  }
+
   @Post('trips/:id/start')
   async start(@Req() req: RequestLike, @Param('id') id: string) {
     const { session } = await reviewedDriverFrom(req)
     const trip = await prisma.trip.findUnique({ where: { id }, include: { user: true } })
     if (!trip || trip.driverId !== session.sub) throw new HttpException('Trip not found', HttpStatus.NOT_FOUND)
-    if (!trip.acceptedAt || trip.startedAt || trip.completedAt || trip.status === 'CANCELLED') throw new HttpException('Trip cannot be started', HttpStatus.CONFLICT)
+    if (!trip.acceptedAt || !trip.arrivedAt || trip.startedAt || trip.completedAt || trip.status === 'CANCELLED') throw new HttpException('Trip cannot be started', HttpStatus.CONFLICT)
     const updated = await prisma.trip.update({ where: { id }, data: { startedAt: new Date(), executionPhase: 'IN_PROGRESS' }, include: { user: true } })
     return tripResponse(updated)
   }
@@ -3668,6 +3700,8 @@ async function bootstrap() {
     'http://127.0.0.1:5173',
     'http://localhost:5174',
     'http://127.0.0.1:5174',
+    'http://localhost:5181',
+    'http://127.0.0.1:5181',
     'http://localhost:8080',
     'http://127.0.0.1:8080',
     'http://localhost:8085',

@@ -21,7 +21,6 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
   Map<String, dynamic>? _trip;
   bool _loading = true;
   bool _accepting = false;
-  bool _starting = false;
   String? _error;
 
   @override
@@ -75,26 +74,12 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
     }
   }
 
-  Future<void> _startTrip() async {
-    if (widget.tripId == null) return;
-    setState(() => _starting = true);
-    try {
-      await _api.startTrip(widget.tripId!);
-      if (mounted) {
-        DriverNavigation.push(
-          context,
-          DriverRouteNames.orderInProgress,
-          arguments: widget.tripId,
-        );
-      }
-    } on DriverApiException catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(error.message)));
-      }
-    } finally {
-      if (mounted) setState(() => _starting = false);
-    }
+  void _openAcceptedTrip() {
+    DriverNavigation.push(
+      context,
+      DriverRouteNames.orderAccepted,
+      arguments: widget.tripId,
+    );
   }
 
   void _openInProgressTrip() {
@@ -244,17 +229,9 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
               ])
             else
               ElevatedButton(
-                onPressed: inProgress
-                    ? _openInProgressTrip
-                    : _starting
-                        ? null
-                        : _startTrip,
+                onPressed: inProgress ? _openInProgressTrip : _openAcceptedTrip,
                 style: _primaryButtonStyle(),
-                child: Text(inProgress
-                    ? '查看進行中行程'
-                    : _starting
-                        ? '處理中…'
-                        : '開始行程'),
+                child: Text(inProgress ? '查看進行中行程' : '查看已接行程'),
               ),
           ],
         ],

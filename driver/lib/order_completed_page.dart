@@ -1,16 +1,89 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'app/route_names.dart';
+import 'core/api/driver_api_client.dart';
 import 'core/layout/driver_page_shell.dart';
 import 'core/navigation/driver_navigation.dart';
 
 import 'package:driver_web/core/tokens/driver_tokens.dart';
 
-class OrderCompletedPage extends StatelessWidget {
-  const OrderCompletedPage({super.key});
+class OrderCompletedPage extends StatefulWidget {
+  const OrderCompletedPage({super.key, this.tripId});
+
+  final String? tripId;
+
+  @override
+  State<OrderCompletedPage> createState() => _OrderCompletedPageState();
+}
+
+class _OrderCompletedPageState extends State<OrderCompletedPage> {
+  final _api = DriverApiClient.instance;
+  Map<String, dynamic>? _trip;
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTrip();
+  }
+
+  Future<void> _loadTrip() async {
+    final tripId = widget.tripId;
+    if (tripId == null || tripId.isEmpty) {
+      setState(() {
+        _error = '找不到已完成的訂單';
+        _loading = false;
+      });
+      return;
+    }
+
+    try {
+      final trip = await _api.trip(tripId);
+      if (mounted) setState(() => _trip = trip);
+    } on DriverApiException catch (error) {
+      if (mounted) setState(() => _error = error.message);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  String _text(String key, String fallback) {
+    final value = _trip?[key]?.toString().trim();
+    return value == null || value.isEmpty ? fallback : value;
+  }
+
+  String _formatDate(dynamic value) {
+    final date = DateTime.tryParse(value?.toString() ?? '')?.toLocal();
+    if (date == null) return '時間待確認';
+    String two(int number) => number.toString().padLeft(2, '0');
+    return '${date.year}/${two(date.month)}/${two(date.day)} '
+        '${two(date.hour)}:${two(date.minute)}';
+  }
+
+  String _formatPrice(dynamic value, dynamic currency) {
+    if (value is! num) return '待確認';
+    final code = currency?.toString();
+    final symbol = code == 'HKD'
+        ? 'HK\$'
+        : code == 'RMB' || code == 'CNY'
+            ? '¥'
+            : code == null || code.isEmpty
+                ? ''
+                : '$code ';
+    return '$symbol${value.toStringAsFixed(2)}';
+  }
+
+  String _region(String address, String fallback) {
+    final value = address.split(RegExp(r'[·•]')).first.trim();
+    return value.isEmpty ? fallback : value;
+  }
 
   @override
   Widget build(BuildContext context) {
+    final origin = _text('pickupAddress', '起點待確認');
+    final destination = _text('dropoffAddress', '終點待確認');
+    final total = _formatPrice(_trip?['price'], _trip?['currency']);
+
     return DriverPageShell(
       selectedIndex: 1,
       showBottomNavigation: false,
@@ -22,19 +95,47 @@ class OrderCompletedPage extends StatelessWidget {
         children: [
           const _CompletionHeader(),
           const SizedBox(height: DriverSpacing.xl),
-          const _CompletedMapPreview(),
-          const SizedBox(height: DriverSpacing.xl),
-          const _OrderDetailsCard(),
-          const SizedBox(height: DriverSpacing.xl),
-          const _FareBreakdownCard(),
-          const SizedBox(height: DriverSpacing.xl),
-          ElevatedButton(
-            onPressed: () {
-              DriverNavigation.replaceAll(context, DriverRouteNames.orders);
-            },
-            style: _completeStyle(),
-            child: const Text('確認完成'),
-          ),
+          if (_loading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 120),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (_error != null)
+            Center(
+              child: Column(
+                children: [
+                  Text(_error!, textAlign: TextAlign.center),
+                  const SizedBox(height: DriverSpacing.md),
+                  OutlinedButton(
+                    onPressed: _loadTrip,
+                    child: const Text('重新載入'),
+                  ),
+                ],
+              ),
+            )
+          else ...[
+            _CompletedMapPreview(
+              origin: _region(origin, '起點待確認'),
+              destination: _region(destination, '終點待確認'),
+            ),
+            const SizedBox(height: DriverSpacing.xl),
+            _OrderDetailsCard(
+              origin: origin,
+              destination: destination,
+              scheduledAt: _formatDate(_trip?['scheduledAt']),
+              passenger: _text('passengerName', '乘客'),
+            ),
+            const SizedBox(height: DriverSpacing.xl),
+            _FareBreakdownCard(total: total),
+            const SizedBox(height: DriverSpacing.xl),
+            ElevatedButton(
+              onPressed: () {
+                DriverNavigation.replaceAll(context, DriverRouteNames.orders);
+              },
+              style: _completeStyle(),
+              child: const Text('確認完成'),
+            ),
+          ],
         ],
       ),
     );
@@ -84,7 +185,13 @@ class _CheckBadge extends StatelessWidget {
 }
 
 class _CompletedMapPreview extends StatelessWidget {
-  const _CompletedMapPreview();
+  const _CompletedMapPreview({
+    required this.origin,
+    required this.destination,
+  });
+
+  final String origin;
+  final String destination;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -99,14 +206,14 @@ class _CompletedMapPreview extends StatelessWidget {
                   offset: Offset(0, 8))
             ]),
         child: Stack(children: [
-          const Center(
+          Center(
               child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Text('城市天際線預覽',
+            const Text('城市天際線預覽',
                 style: TextStyle(
                     fontSize: DriverTypography.label,
                     color: Color(0xb3ffffff))),
-            SizedBox(height: 8),
-            _CompletedRouteText(),
+            const SizedBox(height: 8),
+            _CompletedRouteText(origin: origin, destination: destination),
           ])),
           const Positioned(top: 16, left: 16, child: _MapLabel('起點')),
           const Positioned(top: 16, right: 16, child: _MapLabel('終點')),
@@ -115,7 +222,10 @@ class _CompletedMapPreview extends StatelessWidget {
 }
 
 class _CompletedRouteText extends StatelessWidget {
-  const _CompletedRouteText();
+  const _CompletedRouteText({required this.origin, required this.destination});
+
+  final String origin;
+  final String destination;
 
   @override
   Widget build(BuildContext context) => Column(children: [
@@ -123,8 +233,8 @@ class _CompletedRouteText extends StatelessWidget {
           const Icon(Icons.radio_button_checked_rounded,
               size: 8, color: DriverColors.primary),
           const SizedBox(width: DriverSpacing.sm),
-          const Text('香港中環',
-              style: TextStyle(
+          Text(origin,
+              style: const TextStyle(
                   fontSize: DriverTypography.bodyLarge,
                   fontWeight: FontWeight.w700,
                   color: DriverColors.surface)),
@@ -138,8 +248,8 @@ class _CompletedRouteText extends StatelessWidget {
           const Icon(Icons.location_on_rounded,
               size: 8, color: DriverColors.primary),
           const SizedBox(width: DriverSpacing.sm),
-          const Text('深圳',
-              style: TextStyle(
+          Text(destination,
+              style: const TextStyle(
                   fontSize: DriverTypography.bodyLarge,
                   fontWeight: FontWeight.w700,
                   color: DriverColors.surface)),
@@ -164,7 +274,17 @@ class _MapLabel extends StatelessWidget {
 }
 
 class _OrderDetailsCard extends StatelessWidget {
-  const _OrderDetailsCard();
+  const _OrderDetailsCard({
+    required this.origin,
+    required this.destination,
+    required this.scheduledAt,
+    required this.passenger,
+  });
+
+  final String origin;
+  final String destination;
+  final String scheduledAt;
+  final String passenger;
 
   @override
   Widget build(BuildContext context) => _Panel(
@@ -175,32 +295,29 @@ class _OrderDetailsCard extends StatelessWidget {
                   fontSize: DriverTypography.body,
                   fontWeight: FontWeight.w500,
                   color: DriverColors.text)),
-          const _InfoRow(label: '出發地', value: '香港中環置地廣場東門大堂'),
-          const _InfoRow(label: '目的地', value: '深圳福田口岸'),
-          const _InfoRow(label: '出發時間', value: '2024/03/15 14:00'),
-          const _InfoRow(label: '乘客', value: '陳大文'),
+          _InfoRow(label: '出發地', value: origin),
+          _InfoRow(label: '目的地', value: destination),
+          _InfoRow(label: '出發時間', value: scheduledAt),
+          _InfoRow(label: '乘客', value: passenger),
         ],
       );
 }
 
 class _FareBreakdownCard extends StatelessWidget {
-  const _FareBreakdownCard();
+  const _FareBreakdownCard({required this.total});
+
+  final String total;
 
   @override
   Widget build(BuildContext context) => _Panel(
         padding: 16,
         children: [
-          const Text('車資明細',
+          const Text('車資',
               style: TextStyle(
                   fontSize: DriverTypography.body,
                   fontWeight: FontWeight.w500,
                   color: DriverColors.text)),
-          const _FareRow(label: '起步價', value: '\$150.00'),
-          const _FareRow(label: '里程費 (6.4 km × \$15)', value: '\$96.00'),
-          const _FareRow(label: '時間費 (19.5 分鐘 × \$2.5)', value: '\$34.00'),
-          SvgPicture.asset('assets/completed-divider.svg',
-              width: double.infinity, height: 2),
-          const _FareTotal(),
+          _FareTotal(total: total),
         ],
       );
 }
@@ -232,44 +349,23 @@ class _InfoRow extends StatelessWidget {
       );
 }
 
-class _FareRow extends StatelessWidget {
-  const _FareRow({required this.label, required this.value});
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) => Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Flexible(
-              child: Text(label,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                      fontSize: DriverTypography.body,
-                      color: DriverColors.secondaryText))),
-          const SizedBox(width: DriverSpacing.md),
-          Text(value,
-              style: const TextStyle(
-                  fontSize: DriverTypography.body, color: DriverColors.text)),
-        ],
-      );
-}
-
 class _FareTotal extends StatelessWidget {
-  const _FareTotal();
+  const _FareTotal({required this.total});
+
+  final String total;
 
   @override
   Widget build(BuildContext context) => Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         crossAxisAlignment: CrossAxisAlignment.center,
-        children: const [
-          Text('總計應收',
+        children: [
+          const Text('總計應收',
               style: TextStyle(
                   fontSize: DriverTypography.bodyLarge,
                   fontWeight: FontWeight.w700,
                   color: DriverColors.text)),
-          Text('\$280.00',
-              style: TextStyle(
+          Text(total,
+              style: const TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.w700,
                   color: DriverColors.success)),

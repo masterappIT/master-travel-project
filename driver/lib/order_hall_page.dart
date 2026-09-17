@@ -177,6 +177,7 @@ class _OrderHallPageState extends State<OrderHallPage> {
                             item['destination']?.toString() ??
                             '終點待確認',
                         estimatedTime: '預估行程',
+                        actionLabel: '接單',
                         onTap: () => _openOrderDetail(item['id'].toString()),
                       ),
                     );
@@ -198,6 +199,7 @@ class _OrderHallPageState extends State<OrderHallPage> {
                         destination:
                             item['dropoffAddress']?.toString() ?? '終點待確認',
                         estimatedTime: '已成功接單',
+                        actionLabel: '查看行程',
                         onTap: () => _openOrderDetail(item['id'].toString()),
                       ),
                     );
@@ -309,6 +311,7 @@ class _OrderCard extends StatelessWidget {
       required this.origin,
       required this.destination,
       required this.estimatedTime,
+      required this.actionLabel,
       required this.onTap});
   final String passenger;
   final String time;
@@ -316,6 +319,7 @@ class _OrderCard extends StatelessWidget {
   final String origin;
   final String destination;
   final String estimatedTime;
+  final String actionLabel;
   final VoidCallback onTap;
 
   @override
@@ -395,8 +399,8 @@ class _OrderCard extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(
                         horizontal: 16, vertical: 12),
                   ),
-                  child: const Text('接單',
-                      style: TextStyle(
+                  child: Text(actionLabel,
+                      style: const TextStyle(
                           fontSize: DriverTypography.body,
                           fontWeight: FontWeight.w700)),
                 ),
