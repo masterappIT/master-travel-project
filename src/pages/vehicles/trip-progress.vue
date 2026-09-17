@@ -29,10 +29,12 @@
         </view>
       </view>
 
-      <view v-if="hasVehiclePlate" class="license-plate">
-        <text v-if="hongKongPlate" class="plate-gold">{{ hongKongPlate }}</text>
-        <text v-if="macauPlate" class="plate-hk">{{ macauPlate }}</text>
-        <text v-if="mainlandPlate" class="plate-cn">{{ mainlandPlate }}</text>
+      <view v-if="vehiclePlates.length" class="license-plate">
+        <text
+          v-for="plate in vehiclePlates"
+          :key="plate.kind"
+          :class="[`plate-slot-${plate.slot}`, `plate-${plate.kind}`]"
+        >{{ plate.value }}</text>
       </view>
 
       <view class="status-panel">
@@ -62,6 +64,7 @@ import { getClientTrip, listClientTrips, type ClientTrip } from '../../services/
 import { formatOrderSummaryAddress } from '../../utils/orderAddress'
 import { cachedPagePath, cachedPageUrl, getCachedPageOrderQuery, openCachedPage } from '../../utils/navigation'
 import { isPendingTrip, selectNextPendingTrip } from '../../utils/pendingTrip'
+import { layoutVehiclePlates } from '../../utils/vehiclePlate'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 
 const { responsiveStyle } = useResponsiveCanvas()
@@ -77,10 +80,7 @@ const vehicleBrand = computed(() => trip.value?.vehicle ? `${trip.value.vehicle.
 const vehicleSeries = computed(() => trip.value?.vehicle?.series || '30系')
 const vehicleSeats = computed(() => trip.value?.vehicle?.seats || 8)
 const vehicleImage = computed(() => '/static/vehicles/trip-progress/vellfire.png')
-const hongKongPlate = computed(() => trip.value?.driver?.hkPlate || trip.value?.driver?.vehiclePlate || '')
-const macauPlate = computed(() => trip.value?.driver?.macauPlate || '')
-const mainlandPlate = computed(() => trip.value?.driver?.mainlandPlate || '')
-const hasVehiclePlate = computed(() => Boolean(hongKongPlate.value || macauPlate.value || mainlandPlate.value))
+const vehiclePlates = computed(() => layoutVehiclePlates(trip.value?.driver))
 const arrivalTime = computed(() => { const date = trip.value?.estimatedArrivalAt ? new Date(trip.value.estimatedArrivalAt) : null; return date && !Number.isNaN(date.valueOf()) ? `${date.getMonth() + 1}月${date.getDate()}日 ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}` : 'March 15 2024 14:00' })
 let transitioning = false
 const stopPolling = () => { if (pollTimer) clearInterval(pollTimer); pollTimer = undefined }
@@ -160,10 +160,12 @@ const showComingSoon = (label: string) => uni.showToast({ title: `${label}功能
 .seat { position: absolute; left: var(--trip-seat-left); top: var(--trip-seat-top); gap: var(--trip-seat-gap); }
 .colour { position: absolute; left: var(--trip-colour-left); top: var(--trip-seat-top); }
 .license-plate { position: absolute; z-index: 7; top: var(--trip-plate-top); left: var(--trip-plate-left); width: var(--trip-plate-width); height: var(--trip-plate-height); text-align: center; font-weight: 700; overflow: hidden; }
-.license-plate > text { display: block; width: 100%; box-sizing: border-box; }
-.plate-gold { position: absolute; z-index: 3; left: 0; top: 0; height: var(--trip-plate-gold-height); overflow: hidden; line-height: var(--trip-plate-gold-height); border: var(--trip-plate-border) solid var(--trip-surface); border-radius: var(--trip-plate-radius); background: var(--trip-plate-gold); color: var(--trip-plate-gold-text); font-size: var(--trip-plate-gold-size); font-weight: var(--trip-plate-primary-weight); }
-.plate-hk { position: absolute; z-index: 2; left: 0; top: var(--trip-plate-hk-top); height: var(--trip-plate-hk-height); overflow: hidden; line-height: var(--trip-plate-hk-height); border: var(--trip-plate-border) solid var(--trip-surface); border-radius: var(--trip-plate-radius); background: var(--trip-plate-black); color: var(--trip-surface); font-size: var(--trip-plate-hk-size); font-weight: var(--trip-plate-primary-weight); }
-.plate-cn { position: absolute; z-index: 1; left: 0; top: var(--trip-plate-cn-top); width: 100%; height: var(--trip-plate-cn-height); overflow: hidden; line-height: var(--trip-plate-cn-height); background: var(--trip-plate-black); color: var(--trip-surface); font-size: var(--trip-plate-cn-size); border-radius: var(--trip-plate-radius); }
+.license-plate > text { position: absolute; left: 0; display: block; width: 100%; box-sizing: border-box; overflow: hidden; border-radius: var(--trip-plate-radius); font-size: var(--trip-plate-cn-size); font-weight: var(--trip-plate-primary-weight); white-space: nowrap; }
+.plate-slot-top { z-index: 3; top: 0; height: var(--trip-plate-gold-height); line-height: var(--trip-plate-gold-height); border: var(--trip-plate-border) solid var(--trip-surface); }
+.plate-slot-middle { z-index: 2; top: var(--trip-plate-hk-top); height: var(--trip-plate-hk-height); line-height: var(--trip-plate-hk-height); border: var(--trip-plate-border) solid var(--trip-surface); }
+.plate-slot-bottom { z-index: 1; top: var(--trip-plate-cn-top); height: var(--trip-plate-cn-height); padding-top: 9px; line-height: 27px; }
+.plate-hong-kong { background: var(--trip-plate-gold); color: var(--trip-plate-gold-text); }
+.plate-macau, .plate-mainland { background: var(--trip-plate-black); color: var(--trip-surface); }
 .status-panel { position: absolute; z-index: 2; left: 0; top: var(--trip-panel-top); width: 430px; height: var(--trip-panel-height); border-radius: var(--trip-panel-radius) var(--trip-panel-radius) 0 0; background: var(--trip-panel-background); overflow: hidden; }
 .city-scene { position: absolute; left: var(--trip-scene-left); top: var(--trip-scene-top); width: var(--trip-scene-width); height: var(--trip-scene-height); }
 .quick-actions { position: absolute; z-index: 2; top: var(--trip-actions-top); left: var(--trip-card-left); width: var(--trip-card-width); display: flex; justify-content: center; gap: var(--trip-action-gap); color: var(--trip-surface); font-family: var(--trip-action-font); font-size: var(--trip-action-size); font-style: var(--trip-action-style); }

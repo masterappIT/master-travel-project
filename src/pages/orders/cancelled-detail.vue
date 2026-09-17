@@ -95,7 +95,7 @@ const applyStatus = (url?: string) => {
   isTraveling.value = false
 }
 onLoad((options) => {
-  const query = options?.id ? `?id=${encodeURIComponent(options.id)}` : ''
+  const query = options?.id ? `?from=${encodeURIComponent(options.from || options.returnTo || '')}&id=${encodeURIComponent(options.id)}` : ''
   applyStatus(query)
 })
 onMounted(() => {
@@ -112,9 +112,9 @@ onShow(() => {
 watch(cachedPageUrl, (url) => applyStatus(url), { immediate: true })
 // #endif
 const statusIcon = computed(() => isCompleted.value ? '/static/orders/status-blue.svg' : isCancelled.value ? '/static/orders/status-gray.svg' : '/static/orders/status-pending.svg')
-const addressLabel = (value: Parameters<typeof formatOrderDetailAddress>[0], fallback: string) => formatOrderDetailAddress(value, fallback)
-const originLabel = computed(() => addressLabel(storedOrder.value?.originAddress || storedOrder.value?.origin || tripStore.activeTrip?.origin, '香港國際機場'))
-const destinationLabel = computed(() => addressLabel(storedOrder.value?.destinationAddress || storedOrder.value?.destination || tripStore.activeTrip?.destination, '深圳灣口岸'))
+const addressLabel = (value: string | undefined, fallback: string) => formatOrderDetailAddress(value, fallback)
+const originLabel = computed(() => addressLabel(storedOrder.value?.origin || tripStore.activeTrip?.origin, '香港國際機場'))
+const destinationLabel = computed(() => addressLabel(storedOrder.value?.destination || tripStore.activeTrip?.destination, '深圳灣口岸'))
 const formatDateTime = (value?: string) => {
   const date = value ? new Date(value) : null
   return date && !Number.isNaN(date.valueOf())
@@ -160,6 +160,7 @@ const discountLabel = computed(() => {
 })
 const getCurrentPageSource = () => {
   const candidates: string[] = []
+  if (routeUrl.value) candidates.push(routeUrl.value)
   if (cachedPageUrl.value) candidates.push(cachedPageUrl.value)
   if (typeof window !== 'undefined' && window.location.hash) candidates.push(window.location.hash)
 
@@ -193,6 +194,7 @@ const getPreviousStackPath = () => {
 
 const goBack = () => {
   const explicitSource = getCurrentPageSource() || getSourceFromStack()
+  if (explicitSource === 'transactions') return closeCachedPage(`/pages/transactions/expense-detail?tripId=${encodeURIComponent(storedOrder.value?.id || '')}`)
   if (explicitSource === 'profile') return openCachedPage('/pages/trips/trips')
   return openCachedPage('/pages/orders/orders')
 }

@@ -123,7 +123,7 @@ const goBack = () => openCachedPage(fromProfilePending.value
   ? `/pages/trips/pending?id=${encodeURIComponent(tripId.value)}`
   : '/pages/index/index')
 const cancelBooking = () => openCachedPage(`/pages/orders/pending-detail?id=${encodeURIComponent(tripId.value)}`)
-const showBookingDetail = () => openCachedPage(`/pages/orders/detail?status=traveling&from=orders&id=${encodeURIComponent(tripId.value)}`)
+const showBookingDetail = () => openCachedPage(`/pages/orders/traveling-detail?from=booking-success&id=${encodeURIComponent(tripId.value)}`)
 </script>
 
 <style scoped>

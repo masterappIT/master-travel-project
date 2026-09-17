@@ -1436,8 +1436,8 @@ class DriverAuthController {
     const trip = await prisma.trip.findUnique({ where: { id }, include: { user: true } })
     if (!trip || trip.driverId !== session.sub) throw new HttpException('Trip not found', HttpStatus.NOT_FOUND)
     if (trip.startedAt || trip.completedAt || trip.status === 'CANCELLED') throw new HttpException('Trip cannot be cancelled by driver', HttpStatus.CONFLICT)
-    const updated = await prisma.trip.update({
-      where: { id },
+    const result = await prisma.trip.updateMany({
+      where: { id, driverId: session.sub, startedAt: null, completedAt: null, status: { not: 'CANCELLED' } },
       data: {
         driverId: null,
         driverName: null,
@@ -1450,9 +1450,10 @@ class DriverAuthController {
         acceptedAt: null,
         arrivedAt: null,
         executionPhase: 'WAITING_DRIVER'
-      },
-      include: { user: true }
+      }
     })
+    if (result.count !== 1) throw new HttpException('Trip cannot be cancelled by driver', HttpStatus.CONFLICT)
+    const updated = await prisma.trip.findUniqueOrThrow({ where: { id }, include: { user: true } })
     return driverTripResponse(updated)
   }
 
@@ -1462,7 +1463,20 @@ class DriverAuthController {
     const trip = await prisma.trip.findUnique({ where: { id }, include: { user: true } })
     if (!trip || trip.driverId !== session.sub) throw new HttpException('Trip not found', HttpStatus.NOT_FOUND)
     if (!trip.acceptedAt || !trip.arrivedAt || trip.startedAt || trip.completedAt || trip.status === 'CANCELLED') throw new HttpException('Trip cannot be started', HttpStatus.CONFLICT)
-    const updated = await prisma.trip.update({ where: { id }, data: { startedAt: new Date(), executionPhase: 'IN_PROGRESS' }, include: { user: true } })
+    const result = await prisma.trip.updateMany({
+      where: {
+        id,
+        driverId: session.sub,
+        acceptedAt: { not: null },
+        arrivedAt: { not: null },
+        startedAt: null,
+        completedAt: null,
+        status: { not: 'CANCELLED' }
+      },
+      data: { startedAt: new Date(), executionPhase: 'IN_PROGRESS' }
+    })
+    if (result.count !== 1) throw new HttpException('Trip cannot be started', HttpStatus.CONFLICT)
+    const updated = await prisma.trip.findUniqueOrThrow({ where: { id }, include: { user: true } })
     return tripResponse(updated)
   }
 

@@ -154,10 +154,11 @@ const loadOrder = async (url = '') => {
   try {
     storedOrder.value = await getClientTrip(id)
     paymentExpired.value = false
+    const source = params.from === 'transactions' ? 'transactions' : 'orders'
     if (storedOrder.value.status === 'PENDING') startPendingCountdown()
-    else if (storedOrder.value.status === 'CONFIRMED') navigateOrderPage(`/pages/orders/traveling-detail?from=orders&id=${encodeURIComponent(storedOrder.value.id)}`)
-    else if (storedOrder.value.status === 'COMPLETED') navigateOrderPage(`/pages/orders/completed-detail?status=completed&from=orders&id=${encodeURIComponent(storedOrder.value.id)}`)
-    else if (storedOrder.value.status === 'CANCELLED') navigateOrderPage(`/pages/orders/cancelled-detail?from=orders&id=${encodeURIComponent(storedOrder.value.id)}`)
+    else if (storedOrder.value.status === 'CONFIRMED') navigateOrderPage(`/pages/orders/traveling-detail?from=${source}&id=${encodeURIComponent(storedOrder.value.id)}`)
+    else if (storedOrder.value.status === 'COMPLETED') navigateOrderPage(`/pages/orders/completed-detail?status=completed&from=${source}&id=${encodeURIComponent(storedOrder.value.id)}`)
+    else if (storedOrder.value.status === 'CANCELLED') navigateOrderPage(`/pages/orders/cancelled-detail?from=${source}&id=${encodeURIComponent(storedOrder.value.id)}`)
   } catch (error) {
     uni.showToast({ title: error instanceof Error ? error.message : '訂單載入失敗', icon: 'none' })
   }
@@ -200,9 +201,9 @@ onUnmounted(() => {
 onShow(() => {
   isCompleted.value = false
 })
-const addressLabel = (value: Parameters<typeof formatOrderDetailAddress>[0], fallback: string) => formatOrderDetailAddress(value, fallback)
-const originLabel = computed(() => addressLabel(storedOrder.value?.originAddress || storedOrder.value?.origin || tripStore.activeTrip?.origin, '香港國際機場'))
-const destinationLabel = computed(() => addressLabel(storedOrder.value?.destinationAddress || storedOrder.value?.destination || tripStore.activeTrip?.destination, '深圳灣口岸'))
+const addressLabel = (value: string | undefined, fallback: string) => formatOrderDetailAddress(value, fallback)
+const originLabel = computed(() => addressLabel(storedOrder.value?.origin || tripStore.activeTrip?.origin, '香港國際機場'))
+const destinationLabel = computed(() => addressLabel(storedOrder.value?.destination || tripStore.activeTrip?.destination, '深圳灣口岸'))
 const passengerLabel = computed(() => {
   const passenger = storedOrder.value?.passenger
   if (!passenger) return '—'
@@ -254,6 +255,7 @@ const detailDateLabel = computed(() => {
   return date && !Number.isNaN(date.valueOf()) ? `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')}` : '—'
 })
 const goBack = () => {
+  if (getCachedPageOrderQuery(currentOrderUrl.value).from === 'transactions') return closeCachedPage(`/pages/transactions/expense-detail?tripId=${encodeURIComponent(storedOrder.value?.id || '')}`)
   const previousStackPath = getCachedPagePreviousPath('/pages/orders/pending-detail')
   if (previousStackPath === '/pages/index/index') return closeCachedPage('/pages/index/index')
   return closeCachedPage('/pages/orders/orders')

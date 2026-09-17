@@ -63,7 +63,7 @@ const orderNumber = computed(() => {
   const digits = String(storedOrder.value?.id || '').replace(/\D/g, '')
   return digits ? `A${digits.slice(-8).padStart(8, '0')}` : '—'
 })
-const returnTarget = ref<'profile' | 'orders'>(getOrderReturnTarget() || 'orders')
+const returnTarget = ref<'profile' | 'orders' | 'transactions'>(getOrderReturnTarget() || 'orders')
 const parseQueryParams = (url = '') => {
   const query = url.split('?')[1] || ''
   return query.split('&').reduce<Record<string, string>>((result, pair) => {
@@ -78,9 +78,10 @@ const loadOrder = async (url = '') => {
   loadError.value = false
   try {
     storedOrder.value = await getClientTrip(id)
-    if (storedOrder.value.status === 'CANCELLED') return uni.redirectTo({ url: `/pages/orders/cancelled-detail?id=${encodeURIComponent(id)}` })
-    if (storedOrder.value.status === 'PENDING') return uni.redirectTo({ url: `/pages/orders/pending-detail?id=${encodeURIComponent(id)}` })
-    if (storedOrder.value.status === 'CONFIRMED') return uni.redirectTo({ url: `/pages/orders/traveling-detail?id=${encodeURIComponent(id)}` })
+    const sourceQuery = returnTarget.value === 'transactions' ? '&from=transactions' : ''
+    if (storedOrder.value.status === 'CANCELLED') return uni.redirectTo({ url: `/pages/orders/cancelled-detail?id=${encodeURIComponent(id)}${sourceQuery}` })
+    if (storedOrder.value.status === 'PENDING') return uni.redirectTo({ url: `/pages/orders/pending-detail?id=${encodeURIComponent(id)}${sourceQuery}` })
+    if (storedOrder.value.status === 'CONFIRMED') return uni.redirectTo({ url: `/pages/orders/traveling-detail?id=${encodeURIComponent(id)}${sourceQuery}` })
     isCompleted.value = storedOrder.value.status === 'COMPLETED'
     isTraveling.value = storedOrder.value.status === 'CONFIRMED'
   } catch (error) {
@@ -95,7 +96,8 @@ const applyStatus = (url?: string) => {
   isCompleted.value = status === 'completed'
   isTraveling.value = status === 'traveling'
   const storedTarget = getOrderReturnTarget()
-  if (storedTarget) returnTarget.value = storedTarget
+  if (source === 'transactions') returnTarget.value = source
+  else if (storedTarget) returnTarget.value = storedTarget
   else if (source === 'profile' || source === 'orders') returnTarget.value = source
   void loadOrder(url)
 }
@@ -131,9 +133,9 @@ watch(cachedPageUrl, (url) => applyStatus(url), { immediate: true })
 // #endif
 const statusIcon = computed(() => isCompleted.value ? '/static/orders/status-blue.svg' : '/static/orders/status-pending.svg')
 const statusLabel = computed(() => isCompleted.value ? '已完成' : '待確認')
-const addressLabel = (value: Parameters<typeof formatOrderDetailAddress>[0], fallback: string) => formatOrderDetailAddress(value, fallback)
-const originLabel = computed(() => addressLabel(storedOrder.value?.originAddress || storedOrder.value?.origin || tripStore.activeTrip?.origin, '香港國際機場'))
-const destinationLabel = computed(() => addressLabel(storedOrder.value?.destinationAddress || storedOrder.value?.destination || tripStore.activeTrip?.destination, '深圳灣口岸'))
+const addressLabel = (value: string | undefined, fallback: string) => formatOrderDetailAddress(value, fallback)
+const originLabel = computed(() => addressLabel(storedOrder.value?.origin || tripStore.activeTrip?.origin, '香港國際機場'))
+const destinationLabel = computed(() => addressLabel(storedOrder.value?.destination || tripStore.activeTrip?.destination, '深圳灣口岸'))
 const formatDateTime = (value?: string) => {
   const date = value ? new Date(value) : null
   return date && !Number.isNaN(date.valueOf())
@@ -176,6 +178,7 @@ const detailDateLabel = computed(() => {
   return date && !Number.isNaN(date.valueOf()) ? `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')}` : '—'
 })
 const goBack = () => {
+  if (returnTarget.value === 'transactions') return closeCachedPage(`/pages/transactions/expense-detail?tripId=${encodeURIComponent(storedOrder.value?.id || '')}`)
   if (returnTarget.value === 'profile') return openCachedPage('/pages/trips/trips')
   return closeCachedPage('/pages/orders/orders')
 }

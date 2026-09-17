@@ -52,6 +52,7 @@ import { formatAssignmentCountdown, getAssignmentCountdownSeconds } from '../../
 import { cachedPageUrl, closeCachedPage, getCachedPageOrderQuery, getCachedPageUrl, openCachedPage, pagePath } from '../../utils/navigation'
 import { formatOrderDetailAddress } from '../../utils/orderAddress'
 import { isPendingTrip, selectNextPendingTrip } from '../../utils/pendingTrip'
+import { layoutVehiclePlates } from '../../utils/vehiclePlate'
 
 const { responsiveStyle } = useResponsiveCanvas()
 const trip = ref<ClientTrip>()
@@ -73,18 +74,7 @@ const acceptedDriverName = computed(() => trip.value?.driver?.name || '—')
 const acceptedVehicleBrand = computed(() => trip.value?.vehicle ? `${trip.value.vehicle.brand} ${trip.value.vehicle.model}` : '—')
 const acceptedVehicleSeries = computed(() => trip.value?.vehicle?.series || '—')
 const acceptedVehicleSeats = computed(() => trip.value?.vehicle?.seats || 0)
-type AcceptedPlate = { kind: 'hong-kong' | 'macau' | 'mainland'; value: string; slot: 'top' | 'middle' | 'bottom' }
-const acceptedVehiclePlates = computed<AcceptedPlate[]>(() => {
-  const driver = trip.value?.driver
-  if (!driver) return []
-  const plates = [
-    { kind: 'hong-kong' as const, value: driver.hkPlate || driver.vehiclePlate || '' },
-    { kind: 'macau' as const, value: driver.macauPlate || '' },
-    { kind: 'mainland' as const, value: driver.mainlandPlate || '' }
-  ].filter(plate => plate.value)
-  const slots = (plates.length === 1 ? ['bottom'] : plates.length === 2 ? ['middle', 'bottom'] : ['top', 'middle', 'bottom']) as AcceptedPlate['slot'][]
-  return plates.map((plate, index) => ({ ...plate, slot: slots[index] }))
-})
+const acceptedVehiclePlates = computed(() => layoutVehiclePlates(trip.value?.driver))
 const originLabel = computed(() => formatOrderDetailAddress(trip.value?.origin, '香港國際機場'))
 const destinationLabel = computed(() => formatOrderDetailAddress(trip.value?.destination, '深圳灣口岸'))
 const passengerLabel = computed(() => {

@@ -63,6 +63,7 @@ import { onLoad } from '@dcloudio/uni-app'
 import { getClientTrip, listClientTrips, type ClientTrip } from '../../services/api'
 import { formatOrderCardAddress } from '../../utils/orderAddress'
 import { cachedPagePath, cachedPageUrl, getCachedPageOrderQuery, openCachedPage } from '../../utils/navigation'
+import { layoutVehiclePlates } from '../../utils/vehiclePlate'
 import { isPendingTrip, selectNextPendingTrip } from '../../utils/pendingTrip'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 
@@ -80,18 +81,7 @@ const vehicleBrand = computed(() => trip.value?.vehicle ? `${trip.value.vehicle.
 const vehicleSeries = computed(() => trip.value?.vehicle?.series || '30系')
 const vehicleSeats = computed(() => trip.value?.vehicle?.seats || 8)
 const vehicleImage = computed(() => '/static/vehicles/trip-waiting/vellfire.png')
-type VehiclePlate = { kind: 'hong-kong' | 'macau' | 'mainland'; value: string; slot: 'top' | 'middle' | 'bottom' }
-const vehiclePlates = computed<VehiclePlate[]>(() => {
-  const driver = trip.value?.driver
-  if (!driver) return []
-  const plates = [
-    { kind: 'hong-kong' as const, value: driver.hkPlate || driver.vehiclePlate || '' },
-    { kind: 'macau' as const, value: driver.macauPlate || '' },
-    { kind: 'mainland' as const, value: driver.mainlandPlate || '' }
-  ].filter(plate => plate.value)
-  const slots = (plates.length === 1 ? ['bottom'] : plates.length === 2 ? ['middle', 'bottom'] : ['top', 'middle', 'bottom']) as VehiclePlate['slot'][]
-  return plates.map((plate, index) => ({ ...plate, slot: slots[index] }))
-})
+const vehiclePlates = computed(() => layoutVehiclePlates(trip.value?.driver))
 const bookingTime = computed(() => { const date = trip.value ? new Date(trip.value.scheduledAt) : null; return date && !Number.isNaN(date.valueOf()) ? `${date.getMonth() + 1}月${date.getDate()}日 ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}` : 'March 15 2024 14:00' })
 const stopPolling = () => { if (pollTimer) clearInterval(pollTimer); pollTimer = undefined }
 const startPolling = () => {

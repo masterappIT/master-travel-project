@@ -24,11 +24,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { currencySymbol as getCurrencySymbol, normalizeCurrency } from '../../composables/useCurrency'
-import { closeCachedPage, openCachedPage } from '../../utils/navigation'
+import { cachedPagePath, cachedPageUrl, closeCachedPage, getCachedPageOrderQuery, openCachedPage } from '../../utils/navigation'
 import { listClientTransactions, type ClientPayment } from '../../services/api'
 
 const { responsiveStyle } = useResponsiveCanvas()
@@ -41,17 +41,37 @@ const currencySymbol = computed(() => getCurrencySymbol(normalizedPaymentCurrenc
 const paymentMethodLabel = computed(() => payment.value?.externalPaymentMethod === 'internal' ? '內部測試付款' : '錢包支付')
 const paymentMethodDescription = computed(() => payment.value?.externalPaymentMethod === 'internal' ? '內部測試交易' : '我的錢包餘額')
 const paymentTime = computed(() => payment.value ? new Date(payment.value.createdAt).toLocaleString('zh-HK') : '—')
-onLoad(async (options) => {
-  tripId.value = options?.tripId || ''
+const loadPayment = async (id: string) => {
+  tripId.value = id
+  payment.value = null
+  if (!id) return
   try {
     const payments = await listClientTransactions()
-    payment.value = payments.find((item) => item.tripId === tripId.value) || null
+    payment.value = payments.find((item) => item.tripId === id) || null
   } catch (error) {
     uni.showToast({ title: error instanceof Error ? error.message : '交易紀錄載入失敗', icon: 'none' })
   }
-})
+}
+onLoad((options) => { void loadPayment(options?.tripId || '') })
+// #ifdef MP-WEIXIN || MP-TOUTIAO
+watch([cachedPagePath, cachedPageUrl], ([path, url]) => {
+  if (path !== '/pages/transactions/expense-detail') return
+  void loadPayment(getCachedPageOrderQuery(url).tripId || '')
+}, { immediate: true })
+// #endif
 const goBack = () => closeCachedPage('/pages/transactions/transactions')
-const openOrder = () => payment.value && openCachedPage(`/pages/orders/detail?status=traveling&id=${encodeURIComponent(payment.value.tripId)}`)
+const openOrder = () => {
+  if (!tripId.value) return
+  const status = payment.value?.trip.status
+  const path = status === 'CANCELLED'
+    ? '/pages/orders/cancelled-detail'
+    : status === 'PENDING'
+      ? '/pages/orders/pending-detail'
+      : status === 'COMPLETED'
+        ? '/pages/orders/completed-detail'
+        : '/pages/orders/traveling-detail'
+  openCachedPage(`${path}?from=transactions&id=${encodeURIComponent(tripId.value)}`)
+}
 </script>
 
 <style scoped>

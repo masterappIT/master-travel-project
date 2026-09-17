@@ -64,8 +64,10 @@ const orderNumber = computed(() => {
 })
 const parseQueryParams = (url = '') => Object.fromEntries((url.split('?')[1] || '').split('&').filter(Boolean).map(pair => { const [key, ...value] = pair.split('='); return [decodeURIComponent(key), decodeURIComponent(value.join('=') || '')] }))
 const loadError = ref(false)
+const routeUrl = ref('')
 const loadOrder = async (url = '') => {
   const id = parseQueryParams(url).id
+  if (id) routeUrl.value = url
   if (!id) {
     loadError.value = true
     return
@@ -80,14 +82,14 @@ const loadCurrentOrder = () => {
   const source = candidates.find(candidate => parseQueryParams(candidate).id)
   if (source) void loadOrder(source)
 }
-onLoad(options => { void loadOrder(options ? `?id=${options.id || ''}` : '') })
+onLoad(options => { void loadOrder(options ? `?from=${encodeURIComponent(options.from || options.returnTo || '')}&id=${encodeURIComponent(options.id || '')}` : '') })
 onMounted(loadCurrentOrder)
 // #ifdef MP-WEIXIN || MP-TOUTIAO
 watch(cachedPageUrl, loadCurrentOrder)
 // #endif
-const addressLabel = (value: Parameters<typeof formatOrderDetailAddress>[0], fallback: string) => formatOrderDetailAddress(value, fallback)
-const originLabel = computed(() => addressLabel(storedOrder.value?.originAddress || storedOrder.value?.origin || tripStore.activeTrip?.origin, '香港國際機場'))
-const destinationLabel = computed(() => addressLabel(storedOrder.value?.destinationAddress || storedOrder.value?.destination || tripStore.activeTrip?.destination, '深圳灣口岸'))
+const addressLabel = (value: string | undefined, fallback: string) => formatOrderDetailAddress(value, fallback)
+const originLabel = computed(() => addressLabel(storedOrder.value?.origin || tripStore.activeTrip?.origin, '香港國際機場'))
+const destinationLabel = computed(() => addressLabel(storedOrder.value?.destination || tripStore.activeTrip?.destination, '深圳灣口岸'))
 const passengerLabel = computed(() => {
   const passenger = storedOrder.value?.passenger
   if (!passenger) return '—'
@@ -127,9 +129,11 @@ const cardHeight = computed(() => {
   return 530 + surchargeHeight + paymentRecords * 40 + addressOffset
 })
 const summaryLabel = computed(() => storedOrder.value?.executionPhase === 'IN_PROGRESS' ? '行程進行中' : storedOrder.value?.executionPhase === 'DRIVER_ASSIGNED' ? '司機已安排' : '正在為您安排司機')
-const getCurrentPageSource = () => { const candidates = [cachedPageUrl.value, typeof window !== 'undefined' ? window.location.hash : '']; for (const candidate of candidates) { const params = parseQueryParams(candidate); if (params.from || params.returnTo) return params.from || params.returnTo } return '' }
+const getCurrentPageSource = () => { const candidates = [routeUrl.value, cachedPageUrl.value, typeof window !== 'undefined' ? window.location.hash : '']; for (const candidate of candidates) { const params = parseQueryParams(candidate); if (params.from || params.returnTo) return params.from || params.returnTo } return '' }
 const goBack = () => {
-  if (getCurrentPageSource() === 'profile') return closeCachedPage('/pages/trips/trips')
+  const source = getCurrentPageSource()
+  if (source === 'transactions') return closeCachedPage(`/pages/transactions/expense-detail?tripId=${encodeURIComponent(storedOrder.value?.id || '')}`)
+  if (source === 'profile') return closeCachedPage('/pages/trips/trips')
   const currentIndex = cachedPageStack.value.findIndex(entry => (entry || '').split('?')[0] === '/pages/orders/traveling-detail')
   const previous = currentIndex > 0 ? (cachedPageStack.value[currentIndex - 1] || '').split('?')[0] : ''
   return closeCachedPage(previous === '/pages/trips/trips' ? previous : '/pages/orders/orders')
