@@ -646,13 +646,17 @@ function driverResponse(driver: {
   name: string
   affiliation: string
   plateType: string
-  hkPlate: string
+  hkPlate: string | null
   mainlandPlate: string | null
+  macauPlate: string | null
+  vehicleOwnership: string
   phoneCountryCode: string
   phone: string
   vehicleCategory: string
   vehicleColor: string
   vehiclePhotos: unknown
+  vehiclePhotoData?: Uint8Array | null
+  vehiclePhotoMime?: string | null
   reviewStatus: string
   settlementMethod: string | null
   settlementAccount: string | null
@@ -660,15 +664,44 @@ function driverResponse(driver: {
   createdAt: Date
   updatedAt: Date
 }) {
-  return { ...driver, isOnline: driver.isOnline ?? false, vehiclePhotos: Array.isArray(driver.vehiclePhotos) ? driver.vehiclePhotos : [], createdAt: driver.createdAt.toISOString(), updatedAt: driver.updatedAt.toISOString() }
+  const { vehiclePhotoData, vehiclePhotoMime, ...publicDriver } = driver
+  return { ...publicDriver, isOnline: driver.isOnline ?? false, vehiclePhotos: vehiclePhotoData && vehiclePhotoMime ? ['/driver/auth/me/vehicle-photo'] : [], createdAt: driver.createdAt.toISOString(), updatedAt: driver.updatedAt.toISOString() }
+}
+
+function validVehiclePlateData(body: {
+  vehicleOwnership?: unknown
+  plateType?: unknown
+  hkPlate?: unknown
+  macauPlate?: unknown
+  mainlandPlate?: unknown
+}) {
+  const ownership = typeof body.vehicleOwnership === 'string' ? body.vehicleOwnership.trim() : ''
+  const plateType = typeof body.plateType === 'string' ? body.plateType.trim() : ''
+  const hkPlate = typeof body.hkPlate === 'string' ? body.hkPlate.trim() : ''
+  const macauPlate = typeof body.macauPlate === 'string' ? body.macauPlate.trim() : ''
+  const mainlandPlate = typeof body.mainlandPlate === 'string' ? body.mainlandPlate.trim() : ''
+  if (!['香港', '澳門', '中國內地'].includes(ownership)) return false
+  if (!['單牌', '兩地牌', '三地牌'].includes(plateType)) return false
+  if (ownership === '中國內地') return plateType === '兩地牌' && Boolean(hkPlate && mainlandPlate)
+  if (plateType === '三地牌') {
+    return ownership === '香港'
+      ? Boolean(hkPlate && mainlandPlate)
+      : Boolean(hkPlate && macauPlate && mainlandPlate)
+  }
+  const localPlate = ownership === '香港' ? hkPlate : macauPlate
+  return plateType === '單牌' ? Boolean(localPlate) : Boolean(localPlate && mainlandPlate)
 }
 
 function validDriverPayload(body: Partial<Prisma.DriverCreateInput>) {
-  const required = ['name', 'affiliation', 'plateType', 'hkPlate', 'phone', 'vehicleCategory', 'vehicleColor'] as const
+  const required = ['name', 'affiliation', 'phone', 'vehicleCategory', 'vehicleColor'] as const
   if (required.some(field => typeof body[field] !== 'string' || !body[field]!.trim())) return false
-  if (body.plateType !== '單牌' && body.plateType !== '兩地牌' && body.plateType !== '三地牌') return false
-  if ((body.plateType === '兩地牌' || body.plateType === '三地牌') && !body.mainlandPlate?.trim()) return false
-  return true
+  return validVehiclePlateData({
+    vehicleOwnership: body.vehicleOwnership || '香港',
+    plateType: body.plateType,
+    hkPlate: body.hkPlate,
+    macauPlate: body.macauPlate,
+    mainlandPlate: body.mainlandPlate
+  })
 }
 
 function tripResponse(trip: {
@@ -959,26 +992,65 @@ class ClientAuthController {
 
 @Controller('driver/auth')
 class DriverAuthController {
+  @Post('register/phone/request')
+  async requestRegistrationCode(@Body() body: { countryCode?: string; phoneNumber?: string }) {
+    const identity = parsePhoneIdentity(body)
+    const existing = await prisma.driver.findFirst({ where: { phoneCountryCode: identity.countryCode, phone: identity.phoneNumber } })
+    if (existing) throw new HttpException('Driver phone number is already registered', HttpStatus.CONFLICT)
+    const code = '00000'
+    const challengeId = randomBytes(18).toString('hex')
+    const expiresAt = new Date(Date.now() + PHONE_CODE_TTL_MS)
+    await prisma.driverOtpChallenge.create({ data: { id: challengeId, driverId: null, countryCode: identity.countryCode, phone: identity.phoneNumber, codeHash: hashPassword(code), expiresAt } })
+    return { challengeId, expiresAt: expiresAt.toISOString(), ...(process.env.NODE_ENV !== 'production' ? { developmentCode: code } : {}) }
+  }
+
+  @Post('register/phone/verify')
+  async verifyRegistrationCode(@Body() body: { challengeId?: string; code?: string }) {
+    const challenge = await prisma.driverOtpChallenge.findUnique({ where: { id: body.challengeId?.trim() || '' } })
+    const code = body.code?.trim() || ''
+    if (!challenge || challenge.driverId || challenge.consumedAt || challenge.expiresAt.getTime() <= Date.now() || code.length !== 5 || !verifyPassword(code, challenge.codeHash)) {
+      throw new UnauthorizedException('Invalid registration verification code')
+    }
+    return { ok: true, challengeId: challenge.id, countryCode: challenge.countryCode, phone: challenge.phone }
+  }
+
   @Post('register')
-  async register(@Body() body: { name?: unknown; affiliation?: unknown; plateType?: unknown; hkPlate?: unknown; mainlandPlate?: unknown; phoneCountryCode?: unknown; phone?: unknown; vehicleCategory?: unknown; vehicleColor?: unknown }) {
+  @UseInterceptors(FileInterceptor('vehiclePhoto', { limits: { fileSize: 2 * 1024 * 1024 }, fileFilter: (_req, file, cb) => cb(null, /^image\/(jpeg|png|webp)$/.test(file.mimetype)) }))
+  async register(@Body() body: { name?: unknown; vehicleOwnership?: unknown; plateType?: unknown; hkPlate?: unknown; macauPlate?: unknown; mainlandPlate?: unknown; phoneCountryCode?: unknown; phone?: unknown; vehicleCategory?: unknown; vehicleColor?: unknown; challengeId?: unknown; code?: unknown }, @UploadedFile() vehiclePhoto?: Express.Multer.File) {
     const name = typeof body.name === 'string' ? body.name.trim() : ''
-    const affiliation = typeof body.affiliation === 'string' ? body.affiliation.trim() : ''
+    const vehicleOwnership = typeof body.vehicleOwnership === 'string' ? body.vehicleOwnership.trim() : '香港'
     const plateType = typeof body.plateType === 'string' ? body.plateType.trim() : ''
     const hkPlate = typeof body.hkPlate === 'string' ? body.hkPlate.trim() : ''
+    const macauPlate = typeof body.macauPlate === 'string' ? body.macauPlate.trim() : ''
     const mainlandPlate = typeof body.mainlandPlate === 'string' ? body.mainlandPlate.trim() : ''
     const vehicleCategory = typeof body.vehicleCategory === 'string' ? body.vehicleCategory.trim() : ''
     const vehicleColor = typeof body.vehicleColor === 'string' ? body.vehicleColor.trim() : ''
-    if (!name || !affiliation || !vehicleCategory || !vehicleColor || !['單牌', '兩地牌', '三地牌'].includes(plateType) || !hkPlate || (plateType !== '單牌' && !mainlandPlate)) {
+    if (!name || !vehicleCategory || !vehicleColor || !validVehiclePlateData({ vehicleOwnership, plateType, hkPlate, macauPlate, mainlandPlate })) {
       throw new HttpException('Valid driver registration fields are required', HttpStatus.BAD_REQUEST)
     }
+    if (!vehiclePhoto) throw new HttpException('Vehicle photo is required and must be JPEG, PNG, or WebP', HttpStatus.BAD_REQUEST)
+    const activeVehicleCategory = await prisma.vehicleCategory.findFirst({
+      where: { name: vehicleCategory, enabled: true },
+      select: { id: true }
+    })
+    if (!activeVehicleCategory) {
+      throw new HttpException('Vehicle category is not available', HttpStatus.BAD_REQUEST)
+    }
     const identity = parsePhoneIdentity({ countryCode: typeof body.phoneCountryCode === 'string' ? body.phoneCountryCode : undefined, phoneNumber: typeof body.phone === 'string' ? body.phone : undefined })
+    const challengeId = typeof body.challengeId === 'string' ? body.challengeId.trim() : ''
+    const code = typeof body.code === 'string' ? body.code.trim() : ''
+    const challenge = await prisma.driverOtpChallenge.findUnique({ where: { id: challengeId } })
+    if (!challenge || challenge.driverId || challenge.consumedAt || challenge.expiresAt.getTime() <= Date.now() || challenge.countryCode !== identity.countryCode || challenge.phone !== identity.phoneNumber || code.length !== 5 || !verifyPassword(code, challenge.codeHash)) {
+      throw new UnauthorizedException('Invalid registration verification code')
+    }
     const existing = await prisma.driver.findFirst({ where: { phoneCountryCode: identity.countryCode, phone: identity.phoneNumber } })
     if (existing) throw new HttpException('Driver phone number is already registered', HttpStatus.CONFLICT)
     const driver = await prisma.driver.create({ data: {
-      id: `driver-${Date.now()}-${randomBytes(4).toString('hex')}`, name, affiliation, plateType, hkPlate,
-      mainlandPlate: mainlandPlate || null, phoneCountryCode: identity.countryCode, phone: identity.phoneNumber,
-      vehicleCategory, vehicleColor, vehiclePhotos: [], reviewStatus: '待審核',
+      id: `driver-${Date.now()}-${randomBytes(4).toString('hex')}`, name, affiliation: vehicleOwnership, vehicleOwnership, plateType, hkPlate: hkPlate || null,
+      macauPlate: macauPlate || null, mainlandPlate: mainlandPlate || null, phoneCountryCode: identity.countryCode, phone: identity.phoneNumber,
+      vehicleCategory, vehicleColor, vehiclePhotos: [], vehiclePhotoData: new Uint8Array(vehiclePhoto.buffer), vehiclePhotoMime: vehiclePhoto.mimetype, reviewStatus: '待審核',
     } })
+    await prisma.driverOtpChallenge.update({ where: { id: challenge.id }, data: { consumedAt: new Date(), driverId: driver.id } })
     return driverAuthResponse(driver)
   }
 
@@ -1013,6 +1085,14 @@ class DriverAuthController {
     throw new HttpException('Third-party provider verification is not configured', HttpStatus.SERVICE_UNAVAILABLE)
   }
 
+  @Get('me/vehicle-photo')
+  async vehiclePhoto(@Req() req: RequestLike, @Res() response: Response) {
+    const session = await driverSessionFrom(req)
+    const driver = await prisma.driver.findUnique({ where: { id: session.sub }, select: { vehiclePhotoData: true, vehiclePhotoMime: true } })
+    if (!driver?.vehiclePhotoData || !driver.vehiclePhotoMime) throw new HttpException('Vehicle photo not found', HttpStatus.NOT_FOUND)
+    response.type(driver.vehiclePhotoMime).send(driver.vehiclePhotoData)
+  }
+
   @Get('me')
   async me(@Req() req: RequestLike) {
     const session = await driverSessionFrom(req)
@@ -1036,14 +1116,14 @@ class DriverAuthController {
   }
 
   @Patch('me')
-  async updateMe(@Req() req: RequestLike, @Body() body: { name?: unknown; phoneCountryCode?: unknown; phone?: unknown; vehicleCategory?: unknown; vehicleColor?: unknown; hkPlate?: unknown; mainlandPlate?: unknown; plateType?: unknown; vehiclePhotos?: unknown; settlementMethod?: unknown; settlementAccount?: unknown }) {
+  async updateMe(@Req() req: RequestLike, @Body() body: { name?: unknown; phoneCountryCode?: unknown; phone?: unknown; vehicleCategory?: unknown; vehicleColor?: unknown; vehicleOwnership?: unknown; hkPlate?: unknown; macauPlate?: unknown; mainlandPlate?: unknown; plateType?: unknown; vehiclePhotos?: unknown; settlementMethod?: unknown; settlementAccount?: unknown }) {
     const session = await driverSessionFrom(req)
     const data: Prisma.DriverUpdateInput = {}
-    const textFields = ['name', 'phoneCountryCode', 'phone', 'vehicleCategory', 'vehicleColor', 'hkPlate', 'mainlandPlate', 'plateType', 'settlementMethod', 'settlementAccount'] as const
+    const textFields = ['name', 'phoneCountryCode', 'phone', 'vehicleCategory', 'vehicleColor', 'vehicleOwnership', 'hkPlate', 'macauPlate', 'mainlandPlate', 'plateType', 'settlementMethod', 'settlementAccount'] as const
     for (const field of textFields) {
       if (body[field] !== undefined) {
         if (body[field] !== null && typeof body[field] !== 'string') throw new HttpException(`${field} must be a string`, HttpStatus.BAD_REQUEST)
-        if (body[field] === null && field !== 'mainlandPlate' && field !== 'settlementMethod' && field !== 'settlementAccount') throw new HttpException(`${field} cannot be null`, HttpStatus.BAD_REQUEST)
+        if (body[field] === null && field !== 'hkPlate' && field !== 'macauPlate' && field !== 'mainlandPlate' && field !== 'settlementMethod' && field !== 'settlementAccount') throw new HttpException(`${field} cannot be null`, HttpStatus.BAD_REQUEST)
         ;(data as Record<string, unknown>)[field] = body[field] === null ? null : body[field].trim()
       }
     }
@@ -1052,6 +1132,17 @@ class DriverAuthController {
       data.vehiclePhotos = body.vehiclePhotos
     }
     if (Object.keys(data).length === 0) throw new HttpException('No profile fields supplied', HttpStatus.BAD_REQUEST)
+    if (['vehicleOwnership', 'plateType', 'hkPlate', 'macauPlate', 'mainlandPlate'].some(field => field in body)) {
+      const current = await prisma.driver.findUnique({ where: { id: session.sub } })
+      if (!current) throw new UnauthorizedException('Driver not found')
+      if (!validVehiclePlateData({
+        vehicleOwnership: body.vehicleOwnership ?? current.vehicleOwnership,
+        plateType: body.plateType ?? current.plateType,
+        hkPlate: body.hkPlate === undefined ? current.hkPlate : body.hkPlate,
+        macauPlate: body.macauPlate === undefined ? current.macauPlate : body.macauPlate,
+        mainlandPlate: body.mainlandPlate === undefined ? current.mainlandPlate : body.mainlandPlate
+      })) throw new HttpException('Valid vehicle plate fields are required', HttpStatus.BAD_REQUEST)
+    }
     const driver = await prisma.driver.update({ where: { id: session.sub }, data })
     return driverResponse(driver)
   }
@@ -1293,7 +1384,8 @@ class AdminController {
     const data = {
       driverType: body.driverType?.trim() || '內部司機',
       name: body.name!.trim(), affiliation: body.affiliation!.trim(), plateType: body.plateType!.trim(),
-      hkPlate: body.hkPlate!.trim(), mainlandPlate: body.mainlandPlate?.trim() || null,
+      hkPlate: body.hkPlate?.trim() || null, macauPlate: body.macauPlate?.trim() || null, mainlandPlate: body.mainlandPlate?.trim() || null,
+      vehicleOwnership: body.vehicleOwnership?.trim() || '香港',
       phoneCountryCode: body.phoneCountryCode?.trim() || '+852', phone: body.phone!.trim(),
       vehicleCategory: body.vehicleCategory!.trim(), vehicleColor: body.vehicleColor!.trim(),
       vehiclePhotos: Array.isArray(body.vehiclePhotos) ? body.vehiclePhotos : [],
@@ -3161,7 +3253,11 @@ async function bootstrap() {
     'http://localhost:5174',
     'http://127.0.0.1:5174',
     'http://localhost:8080',
-    'http://127.0.0.1:8080'
+    'http://127.0.0.1:8080',
+    'http://localhost:8090',
+    'http://127.0.0.1:8090',
+    'http://localhost:8091',
+    'http://127.0.0.1:8091'
   ])
   app.enableCors({
     origin: (origin, callback) => callback(null, !origin || allowedOrigins.has(origin)),

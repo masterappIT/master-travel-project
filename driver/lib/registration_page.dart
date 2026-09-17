@@ -1,3 +1,7 @@
+import 'dart:async';
+import 'dart:typed_data';
+import 'dart:html' as html;
+
 import 'package:flutter/material.dart';
 
 import 'app/route_names.dart';
@@ -9,7 +13,17 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:driver_web/core/tokens/driver_tokens.dart';
 
 class RegistrationPage extends StatefulWidget {
-  const RegistrationPage({super.key});
+  const RegistrationPage(
+      {super.key,
+      this.initialCountryCode,
+      this.initialPhone,
+      this.verificationChallengeId,
+      this.verificationCode});
+
+  final String? initialCountryCode;
+  final String? initialPhone;
+  final String? verificationChallengeId;
+  final String? verificationCode;
 
   @override
   State<RegistrationPage> createState() => _RegistrationPageState();
@@ -17,41 +31,282 @@ class RegistrationPage extends StatefulWidget {
 
 class _RegistrationPageState extends State<RegistrationPage> {
   final _nameController = TextEditingController();
-  final _affiliationController = TextEditingController();
   final _hkPlateController = TextEditingController();
+  final _macauPlateController = TextEditingController();
   final _mainlandPlateController = TextEditingController();
   final _phoneController = TextEditingController();
   final _vehicleCategoryController = TextEditingController();
   final _vehicleColorController = TextEditingController();
+  final _verificationCodeController = TextEditingController();
+  int _registrationStep = 1;
+  bool _phoneVerified = false;
+  String? _registrationChallengeId;
   String _countryCode = '+852';
+  String _vehicleOwnership = '香港';
   String _plateType = '兩地牌';
+  List<String> _vehicleCategoryOptions = const [];
+  bool _loadingVehicleCategories = true;
+  Uint8List? _vehiclePhotoBytes;
+  String? _vehiclePhotoName;
+  String? _vehiclePhotoMime;
+  bool _processingVehiclePhoto = false;
   bool _loading = false;
 
   @override
+  void initState() {
+    super.initState();
+    _countryCode = widget.initialCountryCode ?? '+852';
+    _phoneController.text = widget.initialPhone ?? '';
+    _verificationCodeController.text = widget.verificationCode ?? '';
+    _registrationChallengeId = widget.verificationChallengeId;
+    _phoneVerified = _registrationChallengeId != null &&
+        _verificationCodeController.text.length == 5;
+    _registrationStep = _phoneVerified ? 2 : 1;
+    _phoneController.addListener(_clearRegistrationChallenge);
+    _loadVehicleCategories();
+  }
+
+  Future<void> _loadVehicleCategories() async {
+    try {
+      final result = await DriverApiClient.instance.listVehicleCatalog();
+      final categories = result['categories'];
+      if (!mounted) return;
+      setState(() {
+        _vehicleCategoryOptions = categories is List
+            ? categories
+                .whereType<Map>()
+                .where((item) => item['enabled'] != false)
+                .map((item) => item['name']?.toString().trim() ?? '')
+                .where((name) => name.isNotEmpty)
+                .toList()
+            : const [];
+        _loadingVehicleCategories = false;
+      });
+    } on DriverApiException catch (error) {
+      if (!mounted) return;
+      setState(() => _loadingVehicleCategories = false);
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(error.message)));
+    }
+  }
+
+  Future<void> _selectVehicleCategory() async {
+    if (_loadingVehicleCategories) return;
+    if (_vehicleCategoryOptions.isEmpty) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('目前沒有可選的車輛類別')));
+      return;
+    }
+    final value = await showModalBottomSheet<String>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: _vehicleCategoryOptions
+              .map((category) => ListTile(
+                    title: Text(category),
+                    onTap: () => Navigator.pop(context, category),
+                  ))
+              .toList(),
+        ),
+      ),
+    );
+    if (value != null) {
+      setState(() => _vehicleCategoryController.text = value);
+    }
+  }
+
+  Future<Uint8List> _readBlob(html.Blob blob) {
+    final completer = Completer<Uint8List>();
+    final reader = html.FileReader();
+    reader.onLoad.listen((_) {
+      final result = reader.result;
+      if (result is ByteBuffer) {
+        completer.complete(result.asUint8List());
+      } else if (result is Uint8List) {
+        completer.complete(result);
+      } else {
+        completer.completeError(StateError('無法讀取圖片'));
+      }
+    });
+    reader.onError.listen((_) => completer.completeError(StateError('無法讀取圖片')));
+    reader.readAsArrayBuffer(blob);
+    return completer.future;
+  }
+
+  Future<Uint8List> _compressVehiclePhoto(html.File file) async {
+    const maxBytes = 2 * 1024 * 1024;
+    final objectUrl = html.Url.createObjectUrl(file);
+    try {
+      final image = html.ImageElement(src: objectUrl);
+      await image.onLoad.first;
+      var width = image.naturalWidth;
+      var height = image.naturalHeight;
+      if (width <= 0 || height <= 0) throw StateError('無法解碼圖片');
+      const maxDimension = 2048;
+      if (width > maxDimension || height > maxDimension) {
+        final ratio = maxDimension / (width > height ? width : height);
+        width = (width * ratio).round();
+        height = (height * ratio).round();
+      }
+      var quality = 0.88;
+      for (var attempt = 0; attempt < 12; attempt++) {
+        final canvas = html.CanvasElement(width: width, height: height);
+        canvas.context2D
+          ..fillStyle = '#FFFFFF'
+          ..fillRect(0, 0, width, height)
+          ..drawImageScaled(image, 0, 0, width, height);
+        final blob = await canvas.toBlob('image/jpeg', quality);
+        final bytes = await _readBlob(blob);
+        if (bytes.length <= maxBytes) return bytes;
+        if (quality > 0.52) {
+          quality -= 0.09;
+        } else {
+          width = (width * 0.82).round();
+          height = (height * 0.82).round();
+          quality = 0.72;
+        }
+      }
+      throw StateError('圖片壓縮後仍超過 2 MB，請選擇較小的圖片');
+    } finally {
+      html.Url.revokeObjectUrl(objectUrl);
+    }
+  }
+
+  Future<void> _selectVehiclePhoto() async {
+    if (_processingVehiclePhoto) return;
+    final input = html.FileUploadInputElement()
+      ..accept = 'image/jpeg,image/png,image/webp'
+      ..multiple = false;
+    input.click();
+    await input.onChange.first;
+    final files = input.files;
+    final file = files == null || files.isEmpty ? null : files.first;
+    if (file == null) return;
+    if (!const ['image/jpeg', 'image/png', 'image/webp'].contains(file.type)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('只支援 JPEG、PNG 或 WebP 圖片')));
+      }
+      return;
+    }
+    setState(() => _processingVehiclePhoto = true);
+    try {
+      const maxBytes = 2 * 1024 * 1024;
+      final bytes = file.size <= maxBytes
+          ? await _readBlob(file)
+          : await _compressVehiclePhoto(file);
+      if (!mounted) return;
+      setState(() {
+        _vehiclePhotoBytes = bytes;
+        _vehiclePhotoName =
+            file.size <= maxBytes ? file.name : '${file.name}.jpg';
+        _vehiclePhotoMime = file.size <= maxBytes ? file.type : 'image/jpeg';
+      });
+    } on Object catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(error is StateError ? error.message : '圖片處理失敗')));
+      }
+    } finally {
+      if (mounted) setState(() => _processingVehiclePhoto = false);
+    }
+  }
+
+  void _clearRegistrationChallenge() {
+    if (_registrationChallengeId != null || _phoneVerified) {
+      setState(() {
+        _registrationChallengeId = null;
+        _phoneVerified = false;
+        _registrationStep = 1;
+      });
+    }
+  }
+
+  @override
   void dispose() {
+    _phoneController.removeListener(_clearRegistrationChallenge);
     for (final controller in [
       _nameController,
-      _affiliationController,
       _hkPlateController,
+      _macauPlateController,
       _mainlandPlateController,
       _phoneController,
       _vehicleCategoryController,
-      _vehicleColorController
+      _vehicleColorController,
+      _verificationCodeController
     ]) {
       controller.dispose();
     }
     super.dispose();
   }
 
+  Future<void> _requestRegistrationCode() async {
+    final phone = _phoneController.text.trim();
+    final expectedLength = _countryCode == '+86' ? 11 : 8;
+    if (!RegExp(r'^\d+$').hasMatch(phone) || phone.length != expectedLength) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('請先輸入 $expectedLength 位手機號碼')));
+      return;
+    }
+    try {
+      final result = await DriverApiClient.instance.requestRegistrationCode(
+          countryCode: _countryCode, phoneNumber: phone);
+      if (mounted) {
+        setState(
+            () => _registrationChallengeId = result['challengeId'] as String?);
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('驗證碼已發送，開發環境驗證碼為 00000')));
+      }
+    } on DriverApiException catch (error) {
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error.message)));
+    }
+  }
+
+  Future<void> _verifyRegistrationCode() async {
+    final code = _verificationCodeController.text.trim();
+    if (_registrationChallengeId == null || code.length != 5) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('請先取得並輸入 5 位驗證碼')));
+      return;
+    }
+    setState(() => _loading = true);
+    try {
+      await DriverApiClient.instance.verifyRegistrationCode(
+          challengeId: _registrationChallengeId!, code: code);
+      if (!mounted) return;
+      setState(() {
+        _phoneVerified = true;
+        _registrationStep = 2;
+      });
+    } on DriverApiException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error.message)));
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
   Future<void> _submit() async {
     final phone = _phoneController.text.trim();
     final expectedLength = _countryCode == '+86' ? 11 : 8;
+    final requiresHkPlate = _vehicleOwnership == '香港' ||
+        _vehicleOwnership == '中國內地' ||
+        _plateType == '三地牌';
+    final requiresMacauPlate = _vehicleOwnership == '澳門';
+    final requiresMainlandPlate = _plateType != '單牌';
     if (_nameController.text.trim().isEmpty ||
-        _affiliationController.text.trim().isEmpty ||
-        _hkPlateController.text.trim().isEmpty ||
+        (requiresHkPlate && _hkPlateController.text.trim().isEmpty) ||
+        (requiresMacauPlate && _macauPlateController.text.trim().isEmpty) ||
         _vehicleCategoryController.text.trim().isEmpty ||
         _vehicleColorController.text.trim().isEmpty ||
-        (_plateType != '單牌' && _mainlandPlateController.text.trim().isEmpty)) {
+        _vehiclePhotoBytes == null ||
+        (requiresMainlandPlate &&
+            _mainlandPlateController.text.trim().isEmpty)) {
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('請完成所有必填資料')));
       return;
@@ -61,20 +316,37 @@ class _RegistrationPageState extends State<RegistrationPage> {
           .showSnackBar(SnackBar(content: Text('請輸入 $expectedLength 位手機號碼')));
       return;
     }
+    if (!_phoneVerified ||
+        _registrationChallengeId == null ||
+        _verificationCodeController.text.trim().length != 5) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('請先完成手機驗證')));
+      return;
+    }
     setState(() => _loading = true);
     try {
       await DriverApiClient.instance.registerDriver(
         name: _nameController.text.trim(),
-        affiliation: _affiliationController.text.trim(),
         plateType: _plateType,
-        hkPlate: _hkPlateController.text.trim(),
+        vehicleOwnership: _vehicleOwnership,
+        hkPlate: _hkPlateController.text.trim().isEmpty
+            ? null
+            : _hkPlateController.text.trim(),
+        macauPlate: _macauPlateController.text.trim().isEmpty
+            ? null
+            : _macauPlateController.text.trim(),
         mainlandPlate: _mainlandPlateController.text.trim().isEmpty
             ? null
             : _mainlandPlateController.text.trim(),
         phoneCountryCode: _countryCode,
         phone: phone,
+        verificationChallengeId: _registrationChallengeId!,
+        verificationCode: _verificationCodeController.text.trim(),
         vehicleCategory: _vehicleCategoryController.text.trim(),
         vehicleColor: _vehicleColorController.text.trim(),
+        vehiclePhotoBytes: _vehiclePhotoBytes!,
+        vehiclePhotoFilename: _vehiclePhotoName!,
+        vehiclePhotoMime: _vehiclePhotoMime!,
       );
       if (mounted) DriverNavigation.replace(context, DriverRouteNames.home);
     } on DriverApiException catch (error) {
@@ -104,25 +376,45 @@ class _RegistrationPageState extends State<RegistrationPage> {
                     _RegistrationHeader(
                         onBack: () => Navigator.of(context).maybePop()),
                     const SizedBox(height: DriverSpacing.xl),
-                    _RegistrationCard(
-                      nameController: _nameController,
-                      affiliationController: _affiliationController,
-                      hkPlateController: _hkPlateController,
-                      mainlandPlateController: _mainlandPlateController,
-                      phoneController: _phoneController,
-                      vehicleCategoryController: _vehicleCategoryController,
-                      vehicleColorController: _vehicleColorController,
-                      countryCode: _countryCode,
-                      onCountryCodeChanged: (value) =>
-                          setState(() => _countryCode = value),
-                      onPlateTypeChanged: (value) =>
-                          setState(() => _plateType = value),
-                    ),
+                    if (_registrationStep == 1)
+                      _PhoneVerificationCard(
+                        phoneController: _phoneController,
+                        verificationController: _verificationCodeController,
+                        countryCode: _countryCode,
+                        onCountryCodeChanged: (value) {
+                          _clearRegistrationChallenge();
+                          setState(() => _countryCode = value);
+                        },
+                        onRequestCode: _requestRegistrationCode,
+                      )
+                    else
+                      _RegistrationCard(
+                        nameController: _nameController,
+                        hkPlateController: _hkPlateController,
+                        macauPlateController: _macauPlateController,
+                        mainlandPlateController: _mainlandPlateController,
+                        vehicleCategoryController: _vehicleCategoryController,
+                        vehicleCategoryLoading: _loadingVehicleCategories,
+                        onVehicleCategoryTap: _selectVehicleCategory,
+                        vehicleColorController: _vehicleColorController,
+                        vehiclePhotoName: _vehiclePhotoName,
+                        vehiclePhotoSize: _vehiclePhotoBytes?.length,
+                        vehiclePhotoProcessing: _processingVehiclePhoto,
+                        onVehiclePhotoTap: _selectVehiclePhoto,
+                        onOwnershipChanged: (value) =>
+                            setState(() => _vehicleOwnership = value),
+                        onPlateTypeChanged: (value) =>
+                            setState(() => _plateType = value),
+                      ),
                     const SizedBox(height: DriverSpacing.xl),
                     SizedBox(
                       height: 56,
                       child: ElevatedButton(
-                        onPressed: _loading ? null : _submit,
+                        onPressed: _loading
+                            ? null
+                            : (_registrationStep == 1
+                                ? _verifyRegistrationCode
+                                : _submit),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: DriverColors.success,
                           foregroundColor: DriverColors.labelText,
@@ -134,10 +426,12 @@ class _RegistrationPageState extends State<RegistrationPage> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 24, vertical: 16),
                         ),
-                        child: const Text('提交審核',
-                            style: TextStyle(
-                                fontSize: DriverTypography.bodyLarge,
-                                fontWeight: FontWeight.w700)),
+                        child: Text(
+                          _registrationStep == 1 ? '驗證並繼續' : '提交審核',
+                          style: const TextStyle(
+                              fontSize: DriverTypography.bodyLarge,
+                              fontWeight: FontWeight.w700),
+                        ),
                       ),
                     ),
                   ],
@@ -190,28 +484,74 @@ class _RegistrationHeader extends StatelessWidget {
       );
 }
 
+class _PhoneVerificationCard extends StatelessWidget {
+  const _PhoneVerificationCard(
+      {required this.phoneController,
+      required this.verificationController,
+      required this.countryCode,
+      required this.onCountryCodeChanged,
+      required this.onRequestCode});
+  final TextEditingController phoneController, verificationController;
+  final String countryCode;
+  final ValueChanged<String> onCountryCodeChanged;
+  final VoidCallback onRequestCode;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+            color: DriverColors.surface,
+            border: Border.all(color: DriverColors.divider),
+            borderRadius: BorderRadius.circular(DriverRadii.card)),
+        child:
+            Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          const Text('第一步：驗證手機號碼',
+              style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: DriverColors.text)),
+          const SizedBox(height: DriverSpacing.lg),
+          _PhoneSection(
+              controller: phoneController,
+              countryCode: countryCode,
+              onCountryCodeChanged: onCountryCodeChanged),
+          const SizedBox(height: DriverSpacing.md),
+          _VerificationCodeSection(
+              controller: verificationController, onRequestCode: onRequestCode),
+        ]),
+      );
+}
+
 class _RegistrationCard extends StatefulWidget {
   const _RegistrationCard(
       {required this.nameController,
-      required this.affiliationController,
       required this.hkPlateController,
+      required this.macauPlateController,
       required this.mainlandPlateController,
-      required this.phoneController,
       required this.vehicleCategoryController,
+      required this.vehicleCategoryLoading,
+      required this.onVehicleCategoryTap,
       required this.vehicleColorController,
-      required this.countryCode,
-      required this.onCountryCodeChanged,
-      required this.onPlateTypeChanged});
+      required this.vehiclePhotoName,
+      required this.vehiclePhotoSize,
+      required this.vehiclePhotoProcessing,
+      required this.onVehiclePhotoTap,
+      required this.onPlateTypeChanged,
+      required this.onOwnershipChanged});
   final TextEditingController nameController,
-      affiliationController,
       hkPlateController,
+      macauPlateController,
       mainlandPlateController,
-      phoneController,
       vehicleCategoryController,
       vehicleColorController;
-  final String countryCode;
-  final ValueChanged<String> onCountryCodeChanged;
   final ValueChanged<String> onPlateTypeChanged;
+  final ValueChanged<String> onOwnershipChanged;
+  final bool vehicleCategoryLoading;
+  final VoidCallback onVehicleCategoryTap;
+  final String? vehiclePhotoName;
+  final int? vehiclePhotoSize;
+  final bool vehiclePhotoProcessing;
+  final VoidCallback onVehiclePhotoTap;
 
   @override
   State<_RegistrationCard> createState() => _RegistrationCardState();
@@ -246,10 +586,6 @@ class _RegistrationCardState extends State<_RegistrationCard> {
                 label: '姓名',
                 hint: '請輸入司機姓名',
                 controller: widget.nameController),
-            _TextFieldSection(
-                label: '隸屬／地區',
-                hint: '請輸入隸屬或地區',
-                controller: widget.affiliationController),
             const SizedBox(height: DriverSpacing.lg),
             _ChoiceSection(
               label: '車輛歸屬地',
@@ -262,11 +598,7 @@ class _RegistrationCardState extends State<_RegistrationCard> {
                     _plateType = '兩地牌';
                   }
                 });
-                widget.onCountryCodeChanged(index == 0
-                    ? '+852'
-                    : index == 1
-                        ? '+853'
-                        : '+86');
+                widget.onOwnershipChanged(_regions[index]);
               },
             ),
             const SizedBox(height: DriverSpacing.lg),
@@ -275,6 +607,7 @@ class _RegistrationCardState extends State<_RegistrationCard> {
               plateType: _plateType,
               plateTypes: _availablePlateTypes,
               hkPlateController: widget.hkPlateController,
+              macauPlateController: widget.macauPlateController,
               mainlandPlateController: widget.mainlandPlateController,
               onPlateTypeChanged: (index) {
                 final value = _availablePlateTypes[index];
@@ -283,17 +616,14 @@ class _RegistrationCardState extends State<_RegistrationCard> {
               },
             ),
             const SizedBox(height: DriverSpacing.lg),
-            _PhoneSection(
-              controller: widget.phoneController,
-              countryCode: widget.countryCode,
-              onCountryCodeChanged: widget.onCountryCodeChanged,
-            ),
-            const SizedBox(height: DriverSpacing.lg),
             _TextFieldSection(
               label: '車輛類別',
-              hint: '請選擇車輛類別',
+              hint: widget.vehicleCategoryLoading ? '載入中…' : '請選擇車輛類別',
               trailing: 'assets/chevron-down.svg',
               controller: widget.vehicleCategoryController,
+              onTap: widget.vehicleCategoryLoading
+                  ? null
+                  : widget.onVehicleCategoryTap,
             ),
             const SizedBox(height: DriverSpacing.lg),
             _TextFieldSection(
@@ -302,7 +632,12 @@ class _RegistrationCardState extends State<_RegistrationCard> {
               controller: widget.vehicleColorController,
             ),
             const SizedBox(height: DriverSpacing.lg),
-            const _VehiclePhotoSection(),
+            _VehiclePhotoSection(
+              filename: widget.vehiclePhotoName,
+              byteLength: widget.vehiclePhotoSize,
+              processing: widget.vehiclePhotoProcessing,
+              onTap: widget.onVehiclePhotoTap,
+            ),
           ],
         ),
       );
@@ -314,12 +649,14 @@ class _TextFieldSection extends StatelessWidget {
       required this.hint,
       this.trailing,
       this.controller,
-      this.inputFormatters});
+      this.inputFormatters,
+      this.onTap});
   final String label;
   final String hint;
   final String? trailing;
   final TextEditingController? controller;
   final List<TextInputFormatter>? inputFormatters;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) => Column(
@@ -338,6 +675,7 @@ class _TextFieldSection extends StatelessWidget {
               controller: controller,
               inputFormatters: inputFormatters,
               readOnly: trailing != null,
+              onTap: onTap,
               decoration: InputDecoration(
                 hintText: hint,
                 hintStyle: const TextStyle(
@@ -443,17 +781,26 @@ class _PlateSection extends StatelessWidget {
     required this.plateType,
     required this.plateTypes,
     required this.hkPlateController,
+    required this.macauPlateController,
     required this.mainlandPlateController,
     required this.onPlateTypeChanged,
   });
   final String region;
   final String plateType;
   final List<String> plateTypes;
-  final TextEditingController hkPlateController, mainlandPlateController;
+  final TextEditingController hkPlateController,
+      macauPlateController,
+      mainlandPlateController;
   final ValueChanged<int> onPlateTypeChanged;
 
   List<String> _plateLabels() {
-    if (plateType == '三地牌') return ['香港車牌', '澳門車牌', '內地車牌'];
+    if (plateType == '三地牌') {
+      return [
+        '香港車牌',
+        region == '香港' ? '澳門車牌（選填）' : '澳門車牌',
+        '內地車牌',
+      ];
+    }
     if (plateType == '兩地牌') {
       if (region == '中國內地') return ['內地車牌', '香港車牌'];
       return ['$region車牌', '內地車牌'];
@@ -467,10 +814,12 @@ class _PlateSection extends StatelessWidget {
       for (final label in _plateLabels())
         _TextFieldSection(
           label: label,
-          hint: '請輸入$label號碼',
-          controller: label.contains('內地')
-              ? mainlandPlateController
-              : hkPlateController,
+          hint: label == '澳門車牌（選填）' ? '如有澳門車牌請填寫' : '請輸入$label號碼',
+          controller: label.contains('澳門')
+              ? macauPlateController
+              : label.contains('內地')
+                  ? mainlandPlateController
+                  : hkPlateController,
         ),
     ];
     return Column(
@@ -540,6 +889,70 @@ class _PhoneSection extends StatelessWidget {
       ],
     );
   }
+}
+
+class _VerificationCodeSection extends StatelessWidget {
+  const _VerificationCodeSection({
+    required this.controller,
+    required this.onRequestCode,
+  });
+
+  final TextEditingController controller;
+  final VoidCallback onRequestCode;
+
+  @override
+  Widget build(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text('驗證碼',
+              style: TextStyle(
+                  fontSize: DriverTypography.body,
+                  fontWeight: FontWeight.w500,
+                  color: DriverColors.text)),
+          const SizedBox(height: DriverSpacing.sm),
+          Row(children: [
+            Expanded(
+              child: Container(
+                height: 50,
+                decoration: _registrationFieldDecoration(),
+                child: TextField(
+                  controller: controller,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(5),
+                  ],
+                  decoration: const InputDecoration(
+                    hintText: '請輸入 5 位驗證碼',
+                    hintStyle: TextStyle(
+                        fontSize: 15, color: DriverColors.secondaryText),
+                    border: InputBorder.none,
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  ),
+                  style:
+                      const TextStyle(fontSize: 15, color: DriverColors.text),
+                ),
+              ),
+            ),
+            const SizedBox(width: DriverSpacing.sm),
+            SizedBox(
+              height: 50,
+              child: OutlinedButton(
+                onPressed: onRequestCode,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: DriverColors.activeBlue,
+                  side: const BorderSide(color: DriverColors.activeBlue),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(DriverRadii.input),
+                  ),
+                ),
+                child: const Text('獲取驗證碼'),
+              ),
+            ),
+          ]),
+        ],
+      );
 }
 
 class _PhoneField extends StatelessWidget {
@@ -660,7 +1073,17 @@ class _PhoneField extends StatelessWidget {
 }
 
 class _VehiclePhotoSection extends StatelessWidget {
-  const _VehiclePhotoSection();
+  const _VehiclePhotoSection(
+      {required this.filename,
+      required this.byteLength,
+      required this.processing,
+      required this.onTap});
+
+  final String? filename;
+  final int? byteLength;
+  final bool processing;
+  final VoidCallback onTap;
+
   @override
   Widget build(BuildContext context) => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -671,40 +1094,60 @@ class _VehiclePhotoSection extends StatelessWidget {
                   fontWeight: FontWeight.w500,
                   color: DriverColors.text)),
           const SizedBox(height: DriverSpacing.md),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-            decoration: BoxDecoration(
-                color: DriverColors.surface,
-                border: Border.all(
-                    color: DriverColors.primary, style: BorderStyle.none),
-                borderRadius: BorderRadius.circular(DriverRadii.input)),
-            child: CustomPaint(
-              painter:
-                  _DashedBorderPainter(color: DriverColors.primary, radius: 12),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 1),
-                child: Column(children: [
-                  Container(
-                      width: 40,
-                      height: 40,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                          color: DriverColors.infoBackground,
-                          borderRadius: BorderRadius.circular(20)),
-                      child: SvgPicture.asset('assets/camera.svg',
-                          width: 20, height: 20)),
-                  const SizedBox(height: DriverSpacing.md),
-                  const Text('點擊上傳車輛相片',
-                      style: TextStyle(
-                          fontSize: DriverTypography.label,
-                          fontWeight: FontWeight.w500,
-                          color: DriverColors.primary)),
-                  const SizedBox(height: DriverSpacing.xs),
-                  const Text('建議上傳車頭、車身、車尾照片，方便審核',
-                      style: TextStyle(
-                          fontSize: 11, color: DriverColors.secondaryText),
-                      textAlign: TextAlign.center),
-                ]),
+          Semantics(
+            button: true,
+            label: filename == null ? '上傳車輛相片' : '更換車輛相片',
+            child: InkWell(
+              onTap: processing ? null : onTap,
+              borderRadius: BorderRadius.circular(DriverRadii.input),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+                decoration: BoxDecoration(
+                    color: DriverColors.surface,
+                    border: Border.all(
+                        color: DriverColors.primary, style: BorderStyle.none),
+                    borderRadius: BorderRadius.circular(DriverRadii.input)),
+                child: CustomPaint(
+                  painter: _DashedBorderPainter(
+                      color: DriverColors.primary, radius: 12),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 1),
+                    child: Column(children: [
+                      Container(
+                          width: 40,
+                          height: 40,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                              color: DriverColors.infoBackground,
+                              borderRadius: BorderRadius.circular(20)),
+                          child: SvgPicture.asset('assets/camera.svg',
+                              width: 20, height: 20)),
+                      const SizedBox(height: DriverSpacing.md),
+                      Text(
+                          processing
+                              ? '正在壓縮圖片…'
+                              : filename == null
+                                  ? '點擊上傳車輛相片'
+                                  : '已選擇 $filename',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                              fontSize: DriverTypography.label,
+                              fontWeight: FontWeight.w500,
+                              color: DriverColors.primary)),
+                      const SizedBox(height: DriverSpacing.xs),
+                      Text(
+                          byteLength == null
+                              ? '只允許 1 張 JPEG、PNG 或 WebP，相片上限 2 MB'
+                              : '${(byteLength! / 1024 / 1024).toStringAsFixed(2)} MB・點擊更換',
+                          style: const TextStyle(
+                              fontSize: 11, color: DriverColors.secondaryText),
+                          textAlign: TextAlign.center),
+                    ]),
+                  ),
+                ),
               ),
             ),
           ),

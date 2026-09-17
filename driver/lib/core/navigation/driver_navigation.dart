@@ -12,8 +12,13 @@ abstract final class DriverNavigation {
     );
   }
 
-  static Future<void> replace(BuildContext context, String route) {
-    return Navigator.of(context).pushReplacementNamed(route);
+  static Future<void> replace(
+    BuildContext context,
+    String route, {
+    Object? arguments,
+  }) {
+    return Navigator.of(context)
+        .pushReplacementNamed(route, arguments: arguments);
   }
 
   static Future<void> replaceAll(BuildContext context, String route) {

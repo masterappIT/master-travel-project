@@ -46,11 +46,11 @@ class _VehiclePageState extends State<VehiclePage> {
   }
 
   VehicleFormData _vehicleData() => VehicleFormData(
-        ownership: '香港',
+        ownership: _driver?['vehicleOwnership']?.toString() ?? '香港',
         plateType: _driver?['plateType']?.toString() ?? '兩地牌',
         category: _driver?['vehicleCategory']?.toString() ?? '',
         hongKongPlate: _driver?['hkPlate']?.toString() ?? '',
-        macauPlate: '',
+        macauPlate: _driver?['macauPlate']?.toString() ?? '',
         mainlandPlate: _driver?['mainlandPlate']?.toString() ?? '',
         color: _driver?['vehicleColor']?.toString() ?? '',
       );
@@ -203,6 +203,8 @@ class _VehicleCard extends StatelessWidget {
             const Divider(height: 1, color: DriverColors.background),
             const SizedBox(height: DriverSpacing.md),
             _InfoRow(label: '香港車牌', value: data.hongKongPlate),
+            if (data.macauPlate.isNotEmpty)
+              _InfoRow(label: '澳門車牌', value: data.macauPlate),
             _InfoRow(label: '內地車牌', value: data.mainlandPlate),
             _InfoRow(label: '車輛顏色', value: data.color),
           ]),

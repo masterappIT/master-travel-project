@@ -96,10 +96,14 @@ class _AddVehiclePageState extends State<AddVehiclePage> {
 
   List<_PlateInput> get _plateInputs {
     if (_plateType == '三地牌') {
-      return const [
-        _PlateInput('香港車牌', '請輸入香港車牌號碼'),
-        _PlateInput('澳門車牌', '請輸入澳門車牌號碼'),
-        _PlateInput('內地車牌', '請輸入內地車牌號碼'),
+      return [
+        const _PlateInput('香港車牌', '請輸入香港車牌號碼'),
+        _PlateInput(
+          _ownership == '香港' ? '澳門車牌（選填）' : '澳門車牌',
+          _ownership == '香港' ? '如有澳門車牌請填寫' : '請輸入澳門車牌號碼',
+          required: _ownership != '香港',
+        ),
+        const _PlateInput('內地車牌', '請輸入內地車牌號碼'),
       ];
     }
     if (_plateType == '兩地牌') {
@@ -115,14 +119,9 @@ class _AddVehiclePageState extends State<AddVehiclePage> {
   }
 
   TextEditingController _controllerFor(String label) {
-    switch (label) {
-      case '香港車牌':
-        return _hkPlate;
-      case '澳門車牌':
-        return _macauPlate;
-      default:
-        return _mainlandPlate;
-    }
+    if (label.contains('香港')) return _hkPlate;
+    if (label.contains('澳門')) return _macauPlate;
+    return _mainlandPlate;
   }
 
   void _changeOwnership(String ownership) {
@@ -140,12 +139,23 @@ class _AddVehiclePageState extends State<AddVehiclePage> {
           .showSnackBar(const SnackBar(content: Text('請選擇車輛類別')));
       return;
     }
+    if (_plateInputs.any((input) =>
+        input.required && _controllerFor(input.label).text.trim().isEmpty)) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('請完成所有車牌資料')));
+      return;
+    }
     setState(() => _isSaving = true);
     try {
       await DriverApiClient.instance.updateProfile({
         'plateType': _plateType,
-        'hkPlate': _hkPlate.text.trim(),
-        'mainlandPlate': _mainlandPlate.text.trim(),
+        'vehicleOwnership': _ownership,
+        'hkPlate': _hkPlate.text.trim().isEmpty ? null : _hkPlate.text.trim(),
+        'macauPlate':
+            _macauPlate.text.trim().isEmpty ? null : _macauPlate.text.trim(),
+        'mainlandPlate': _mainlandPlate.text.trim().isEmpty
+            ? null
+            : _mainlandPlate.text.trim(),
         'vehicleCategory': _category,
         'vehicleColor': _color.text.trim(),
       });
@@ -297,10 +307,11 @@ class _AddVehiclePageState extends State<AddVehiclePage> {
 }
 
 class _PlateInput {
-  const _PlateInput(this.label, this.hint);
+  const _PlateInput(this.label, this.hint, {this.required = true});
 
   final String label;
   final String hint;
+  final bool required;
 }
 
 class _BackButton extends StatelessWidget {

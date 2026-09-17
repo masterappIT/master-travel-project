@@ -14,3 +14,44 @@
   --login-phone-divider-left: 89.5px;
   --login-phone-number-left: 116.5px;
 }
+
+.trip-waiting-page,
+.trip-progress-page,
+.trip-complete-page,
+:root {
+  --trip-background: #ffffff;
+  --trip-viewport-background: #f5f5f5;
+  --trip-surface: #ffffff;
+  --trip-text: #25292f;
+  --trip-text-dark: #000000;
+  --trip-panel-background: #56657e;
+  --trip-pill-background: #d9d9d9;
+  --trip-star: #f6bd3a;
+  --trip-plate-gold: #e6a206;
+  --trip-plate-gold-text: #171717;
+  --trip-plate-black: #000000;
+  --trip-font: 'Noto Sans TC', sans-serif;
+  --trip-action-font: 'Noto Sans TC', sans-serif;
+  --trip-action-style: normal;
+  --trip-canvas-width: 430px; --trip-canvas-height: 932px; --trip-screen-radius: 35px;
+  --trip-back-top: 60px; --trip-back-left: 33px; --trip-back-size: 38px;
+  --trip-card-top: 297px; --trip-card-left: 25px; --trip-card-width: 380px; --trip-card-height: 180px; --trip-card-radius: 25px;
+  --trip-card-copy-left: 27px; --trip-card-copy-top: 44px; --trip-logo-left: 43px; --trip-logo-top: 24px; --trip-logo-size: 20px;
+  --trip-brand-size: 8px; --trip-brand-line: 10px; --trip-series-size: 12px; --trip-series-line: 15px;
+  --trip-car-right: -2px; --trip-car-top: 0px; --trip-car-width: 230px; --trip-car-height: 153px;
+  --trip-driver-top: 90px; --trip-driver-gap: 10px; --trip-avatar-size: 36px; --trip-driver-size: 14px; --trip-driver-line: 18px; --trip-rating-gap: 4px; --trip-rating-size: 8px; --trip-star-size: 12px;
+  --trip-pill-height: 20px; --trip-pill-padding: 7px; --trip-pill-radius: 25px; --trip-pill-size: 10px; --trip-call-left: 27px; --trip-call-top: 141px; --trip-call-gap: 0px; --trip-call-padding: 10px; --trip-call-size: 14px; --trip-call-icon-size: 18px; --trip-seat-icon-size: 16px; --trip-seat-left: 211px; --trip-seat-top: 143px; --trip-seat-gap: 6px; --trip-colour-left: 269px;
+  --trip-plate-top: 243px; --trip-plate-left: 140px; --trip-plate-width: 149px; --trip-plate-height: 86px; --trip-plate-gold-height: 33px; --trip-plate-hk-top: 26px; --trip-plate-hk-height: 33px; --trip-plate-cn-top: 50px; --trip-plate-cn-height: 36px; --trip-plate-border: 1px; --trip-plate-radius: 5px; --trip-plate-gold-size: 20px; --trip-plate-hk-size: 20px; --trip-plate-cn-size: 20px; --trip-plate-primary-weight: 800; --trip-plate-cn-gap: 4px; --trip-plate-cn-content-offset: 3px; --trip-plate-dot-size: 4px;
+  --trip-progress-route-width: 324px; --trip-progress-route-left: 53px; --trip-progress-route-top: 571px; --trip-progress-origin-left: 69px; --trip-progress-origin-label-left: 94px; --trip-progress-destination-left: 186px; --trip-progress-destination-label-left: 211px; --trip-progress-arrow-left: 139px; --trip-progress-arrival-left: 101px; --trip-progress-arrival-top: 608px; --trip-progress-origin-top: 12px; --trip-progress-destination-top: 13px; --trip-progress-arrow-top: 4px; --trip-progress-label-top: 9px;
+  --trip-panel-top: 399px; --trip-panel-height: 533px; --trip-panel-radius: 25px; --trip-scene-left: -101px; --trip-scene-top: 135px; --trip-scene-width: 632px; --trip-scene-height: 474px; --trip-actions-top: 84px; --trip-action-gap: 90px; --trip-action-size: 12px; --trip-status-top: 110px; --trip-status-icon-size: 30px; --trip-status-icon-gap: 5px; --trip-title-size: 20px; --trip-title-line: 29px;
+  --trip-route-left: 122px; --trip-route-top: 575px; --trip-route-gap: 17px; --trip-route-size: 14px; --trip-route-icon-size: 30px; --trip-place-icon-width: 8px; --trip-origin-icon-height: 15px; --trip-destination-icon-height: 12px; --trip-destination-offset: 0px; --trip-arrow-offset: 0px; --trip-departure-left: 115px; --trip-departure-top: 608px; --trip-departure-size: 14px;
+  --trip-complete-accent: #1effaa; --trip-complete-panel-top: 399px; --trip-complete-panel-height: 533px;
+  --trip-complete-floor-left: 6px; --trip-complete-floor-top: 251px; --trip-complete-floor-width: 418px; --trip-complete-floor-height: 236px;
+  --trip-complete-status-top: 40px; --trip-complete-status-left: 152px; --trip-complete-status-width: 140px; --trip-complete-status-height: 29px; --trip-complete-status-gap: 5px; --trip-complete-status-icon: 25px;
+  --trip-complete-summary-top: 69px; --trip-complete-summary-left: 53px; --trip-complete-summary-width: 324px; --trip-complete-summary-height: 154px;
+  --trip-complete-origin-left: 69px; --trip-complete-origin-top: 12px; --trip-complete-origin-label-left: 94px; --trip-complete-label-top: 9px;
+  --trip-complete-arrow-left: 139px; --trip-complete-arrow-top: 4px; --trip-complete-destination-left: 186px; --trip-complete-destination-top: 13px; --trip-complete-destination-label-left: 211px;
+  --trip-complete-time-left: 62px; --trip-complete-time-width: 210px; --trip-complete-time-line: 20px; --trip-complete-departure-top: 38px; --trip-complete-arrival-top: 62px;
+  --trip-complete-rating-top: 99px; --trip-complete-rating-left: 69px; --trip-complete-rating-width: 187px; --trip-complete-rating-height: 54px; --trip-complete-rating-label-left: 23px; --trip-complete-stars-height: 32px;
+  --trip-complete-button-top: 240px; --trip-complete-button-left: 169px; --trip-complete-button-width: 92px; --trip-complete-button-height: 31px; --trip-complete-button-radius: 25px; --trip-complete-button-text: #38434a;
+}

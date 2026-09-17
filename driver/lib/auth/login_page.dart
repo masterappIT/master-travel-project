@@ -22,11 +22,27 @@ class _LoginPageState extends State<LoginPage> {
   final _api = DriverApiClient.instance;
   String _countryCode = '+852';
   String? _challengeId;
+  bool _isRegistration = false;
   String? _error;
   bool _loading = false;
 
   @override
+  void initState() {
+    super.initState();
+    _phoneController.addListener(_clearChallenge);
+  }
+
+  void _clearChallenge() {
+    if (_challengeId == null) return;
+    setState(() {
+      _challengeId = null;
+      _isRegistration = false;
+    });
+  }
+
+  @override
   void dispose() {
+    _phoneController.removeListener(_clearChallenge);
     _phoneController.dispose();
     _codeController.dispose();
     super.dispose();
@@ -44,12 +60,25 @@ class _LoginPageState extends State<LoginPage> {
       _error = null;
     });
     try {
-      final result = await _api.requestPhoneCode(
-          countryCode: _countryCode, phoneNumber: phone);
+      Map<String, dynamic> result;
+      var isRegistration = false;
+      try {
+        result = await _api.requestPhoneCode(
+            countryCode: _countryCode, phoneNumber: phone);
+      } on DriverApiException catch (error) {
+        if (error.statusCode != 404) rethrow;
+        result = await _api.requestRegistrationCode(
+            countryCode: _countryCode, phoneNumber: phone);
+        isRegistration = true;
+      }
       if (!mounted) return;
-      setState(() => _challengeId = result['challengeId'] as String?);
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('驗證碼已發送')));
+      setState(() {
+        _challengeId = result['challengeId'] as String?;
+        _isRegistration = isRegistration;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+              isRegistration ? '新號碼驗證碼已發送，請輸入 00000 完成註冊驗證' : '登入驗證碼已發送')));
     } on DriverApiException catch (error) {
       if (mounted) setState(() => _error = error.message);
     } finally {
@@ -72,9 +101,26 @@ class _LoginPageState extends State<LoginPage> {
       _error = null;
     });
     try {
-      await _api.verifyPhoneCode(challengeId: _challengeId!, code: code);
-      if (!mounted) return;
-      DriverNavigation.replace(context, DriverRouteNames.home);
+      if (_isRegistration) {
+        await _api.verifyRegistrationCode(
+            challengeId: _challengeId!, code: code);
+        if (!mounted) return;
+        final phone = _phoneController.text.replaceAll(RegExp(r'[\s-]'), '');
+        DriverNavigation.replace(
+          context,
+          DriverRouteNames.registration,
+          arguments: {
+            'countryCode': _countryCode,
+            'phone': phone,
+            'challengeId': _challengeId!,
+            'code': code,
+          },
+        );
+      } else {
+        await _api.verifyPhoneCode(challengeId: _challengeId!, code: code);
+        if (!mounted) return;
+        DriverNavigation.replace(context, DriverRouteNames.home);
+      }
     } on DriverApiException catch (error) {
       if (mounted) setState(() => _error = error.message);
     } finally {

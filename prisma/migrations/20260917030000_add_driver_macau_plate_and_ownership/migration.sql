@@ -1,0 +1,3 @@
+ALTER TABLE "Driver" ADD COLUMN "macauPlate" TEXT;
+ALTER TABLE "Driver" ADD COLUMN "vehicleOwnership" TEXT NOT NULL DEFAULT '香港';
+ALTER TABLE "Driver" ALTER COLUMN "hkPlate" DROP NOT NULL;

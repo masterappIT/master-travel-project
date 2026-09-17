@@ -1,10 +1,10 @@
 export function createDriversActions({ driversApi, driverForm, selectedDriver, settlementForm, drivers, error, load, displayError, requestConfirmation, notify }) {
   function resetDriver() {
-    driverForm.value = { id: '', driverType: '內部司機', name: '', affiliation: '香港', plateType: '單牌', hkPlate: '', mainlandPlate: '', phoneCountryCode: '+852', phone: '', vehicleCategory: '', vehicleColor: '', vehiclePhotos: [], reviewStatus: '待審核' }
+    driverForm.value = { id: '', driverType: '內部司機', name: '', affiliation: '香港', vehicleOwnership: '香港', plateType: '單牌', hkPlate: '', macauPlate: '', mainlandPlate: '', phoneCountryCode: '+852', phone: '', vehicleCategory: '', vehicleColor: '', vehiclePhotos: [], reviewStatus: '待審核' }
   }
 
   function editDriver(item) {
-    driverForm.value = { driverType: '內部司機', affiliation: '香港', plateType: '單牌', phoneCountryCode: '+852', vehiclePhotos: [], reviewStatus: '待審核', ...item, vehiclePhotos: Array.isArray(item.vehiclePhotos) ? item.vehiclePhotos : item.vehiclePhotos ? [item.vehiclePhotos] : [] }
+    driverForm.value = { driverType: '內部司機', affiliation: '香港', vehicleOwnership: '香港', plateType: '單牌', hkPlate: '', macauPlate: '', mainlandPlate: '', phoneCountryCode: '+852', vehiclePhotos: [], reviewStatus: '待審核', ...item, vehiclePhotos: Array.isArray(item.vehiclePhotos) ? item.vehiclePhotos : item.vehiclePhotos ? [item.vehiclePhotos] : [] }
   }
 
   async function uploadDriverPhotos(event) {
@@ -30,10 +30,12 @@ export function createDriversActions({ driversApi, driverForm, selectedDriver, s
   }
 
   async function saveDriver() {
-    const form = { ...driverForm.value, driverType: driverForm.value.driverType || '內部司機', name: String(driverForm.value.name || '').trim(), hkPlate: String(driverForm.value.hkPlate || '').trim(), mainlandPlate: String(driverForm.value.mainlandPlate || '').trim(), phone: String(driverForm.value.phone || '').trim(), vehicleCategory: String(driverForm.value.vehicleCategory || '').trim(), vehicleColor: String(driverForm.value.vehicleColor || '').trim(), id: driverForm.value.id || undefined }
+    const form = { ...driverForm.value, driverType: driverForm.value.driverType || '內部司機', name: String(driverForm.value.name || '').trim(), hkPlate: String(driverForm.value.hkPlate || '').trim(), macauPlate: String(driverForm.value.macauPlate || '').trim(), mainlandPlate: String(driverForm.value.mainlandPlate || '').trim(), phone: String(driverForm.value.phone || '').trim(), vehicleCategory: String(driverForm.value.vehicleCategory || '').trim(), vehicleColor: String(driverForm.value.vehicleColor || '').trim(), id: driverForm.value.id || undefined }
     if (!form.name || !form.affiliation || !form.plateType || !form.phone || !form.vehicleCategory || !form.vehicleColor) { error.value = '請填寫註冊所需資料'; return }
-    if (!form.hkPlate) { error.value = '請填寫香港車牌'; return }
-    if ((form.plateType === '兩地牌' || form.plateType === '三地牌') && !form.mainlandPlate) { error.value = '請填寫內地車牌'; return }
+    if (form.vehicleOwnership === '中國內地' && form.plateType !== '兩地牌') { error.value = '中國內地車輛只可選擇兩地牌'; return }
+    if ((form.vehicleOwnership === '香港' || form.vehicleOwnership === '中國內地' || form.plateType === '三地牌') && !form.hkPlate) { error.value = '請填寫香港車牌'; return }
+    if (form.vehicleOwnership === '澳門' && !form.macauPlate) { error.value = '請填寫澳門車牌'; return }
+    if (form.plateType !== '單牌' && !form.mainlandPlate) { error.value = '請填寫內地車牌'; return }
     try {
       await driversApi.save(form)
       driverForm.value = null; error.value = ''; await load()

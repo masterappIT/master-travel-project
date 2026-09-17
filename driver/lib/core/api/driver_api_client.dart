@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'dart:html' as html;
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 
 import '../state/driver_status.dart';
 
@@ -69,31 +71,66 @@ class DriverApiClient {
         if (_token != null) 'Authorization': 'Bearer ' + _token!,
       };
 
+  Future<Map<String, dynamic>> requestRegistrationCode(
+          {required String countryCode, required String phoneNumber}) async =>
+      _decode(await _client.post(
+          Uri.parse('$baseUrl/driver/auth/register/phone/request'),
+          headers: _headers,
+          body: jsonEncode(
+              {'countryCode': countryCode, 'phoneNumber': phoneNumber})));
+
+  Future<Map<String, dynamic>> verifyRegistrationCode({
+    required String challengeId,
+    required String code,
+  }) async =>
+      _decode(await _client.post(
+          Uri.parse('$baseUrl/driver/auth/register/phone/verify'),
+          headers: _headers,
+          body: jsonEncode({'challengeId': challengeId, 'code': code})));
+
   Future<DriverSession> registerDriver({
     required String name,
-    required String affiliation,
     required String plateType,
-    required String hkPlate,
+    required String vehicleOwnership,
+    String? hkPlate,
+    String? macauPlate,
     String? mainlandPlate,
     required String phoneCountryCode,
     required String phone,
+    required String verificationChallengeId,
+    required String verificationCode,
     required String vehicleCategory,
     required String vehicleColor,
+    required Uint8List vehiclePhotoBytes,
+    required String vehiclePhotoFilename,
+    required String vehiclePhotoMime,
   }) async {
-    final session = DriverSession.fromJson(
-        _decode(await _client.post(Uri.parse('$baseUrl/driver/auth/register'),
-            headers: _headers,
-            body: jsonEncode({
-              'name': name,
-              'affiliation': affiliation,
-              'plateType': plateType,
-              'hkPlate': hkPlate,
-              'mainlandPlate': mainlandPlate,
-              'phoneCountryCode': phoneCountryCode,
-              'phone': phone,
-              'vehicleCategory': vehicleCategory,
-              'vehicleColor': vehicleColor,
-            }))));
+    final request = http.MultipartRequest(
+        'POST', Uri.parse('$baseUrl/driver/auth/register'))
+      ..fields.addAll({
+        'name': name,
+        'plateType': plateType,
+        'vehicleOwnership': vehicleOwnership,
+        if (hkPlate != null) 'hkPlate': hkPlate,
+        if (macauPlate != null) 'macauPlate': macauPlate,
+        if (mainlandPlate != null) 'mainlandPlate': mainlandPlate,
+        'phoneCountryCode': phoneCountryCode,
+        'phone': phone,
+        'challengeId': verificationChallengeId,
+        'code': verificationCode,
+        'vehicleCategory': vehicleCategory,
+        'vehicleColor': vehicleColor,
+      })
+      ..files.add(http.MultipartFile.fromBytes(
+        'vehiclePhoto',
+        vehiclePhotoBytes,
+        filename: vehiclePhotoFilename,
+        contentType: MediaType.parse(vehiclePhotoMime),
+      ));
+    if (_token != null) request.headers['Authorization'] = 'Bearer $_token';
+    final streamedResponse = await _client.send(request);
+    final response = await http.Response.fromStream(streamedResponse);
+    final session = DriverSession.fromJson(_decode(response));
     _token = session.token;
     html.window.localStorage[_tokenStorageKey] = session.token;
     return session;

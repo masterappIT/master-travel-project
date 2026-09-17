@@ -23,30 +23,65 @@
 
 <script setup lang="ts">
 import HomeMap from '../../components/home/HomeMap.vue'
-import { computed, ref } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { getClientTrip, type ClientTrip } from '../../services/api'
-import { openCachedPage } from '../../utils/navigation'
+import { cachedPagePath, cachedPageUrl, getCachedPageOrderQuery, openCachedPage } from '../../utils/navigation'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 
 const { responsiveStyle } = useResponsiveCanvas()
 const trip = ref<ClientTrip | null>(null)
 const tripId = ref('')
+let pollTimer: ReturnType<typeof setInterval> | undefined
+let loadingTrip = false
+let transitioning = false
 const originLabel = computed(() => trip.value?.origin || '香港')
 const destinationLabel = computed(() => trip.value?.destination || '深圳')
 const bookingTime = computed(() => {
   const date = trip.value ? new Date(trip.value.scheduledAt) : null
   return date && !Number.isNaN(date.valueOf()) ? `${date.getMonth() + 1}月${date.getDate()}日 ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}` : '—'
 })
-onLoad(async (options) => {
-  tripId.value = options?.id || ''
-  if (!tripId.value) return
+const stopPolling = () => { if (pollTimer) clearInterval(pollTimer); pollTimer = undefined }
+const startPolling = () => {
+  if (!tripId.value || pollTimer) return
+  pollTimer = setInterval(() => { void loadTrip() }, 15000)
+}
+const loadTrip = async () => {
+  if (!tripId.value || loadingTrip || transitioning) return
+  loadingTrip = true
   try {
-    trip.value = await getClientTrip(tripId.value)
+    const nextTrip = await getClientTrip(tripId.value)
+    trip.value = nextTrip
+    const path = nextTrip.status === 'COMPLETED' ? '/pages/vehicles/trip-complete' : nextTrip.executionPhase === 'IN_PROGRESS' ? '/pages/vehicles/trip-progress' : nextTrip.executionPhase === 'DRIVER_ASSIGNED' ? '/pages/vehicles/trip-waiting' : ''
+    if (path) {
+      transitioning = true
+      stopPolling()
+      openCachedPage(`${path}?id=${encodeURIComponent(tripId.value)}`)
+    }
   } catch (error) {
     uni.showToast({ title: error instanceof Error ? error.message : '訂單載入失敗', icon: 'none' })
-  }
+  } finally { loadingTrip = false }
+}
+onLoad((options) => {
+  tripId.value = options?.id || ''
+  if (!tripId.value) return
+  void loadTrip()
+  startPolling()
 })
+// #ifdef MP-WEIXIN || MP-TOUTIAO
+watch([cachedPagePath, cachedPageUrl], ([path, url]) => {
+  if (path !== '/pages/vehicles/booking-success') { stopPolling(); return }
+  const id = getCachedPageOrderQuery(url).id
+  if (!id) { stopPolling(); return }
+  if (id !== tripId.value) {
+    transitioning = false
+    tripId.value = id
+    void loadTrip()
+  }
+  startPolling()
+}, { immediate: true })
+// #endif
+onUnmounted(stopPolling)
 
 const goBack = () => openCachedPage('/pages/index/index')
 const cancelBooking = () => openCachedPage(`/pages/orders/pending-detail?id=${encodeURIComponent(tripId.value)}`)

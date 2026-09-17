@@ -332,13 +332,17 @@ model Driver {
   name              String
   affiliation       String
   plateType         String
-  hkPlate           String
+  hkPlate           String?
   mainlandPlate     String?
+  macauPlate        String?
+  vehicleOwnership  String               @default("香港")
   phoneCountryCode  String               @default("+852")
   phone             String
   vehicleCategory   String
   vehicleColor      String
   vehiclePhotos     Json
+  vehiclePhotoData  Bytes?
+  vehiclePhotoMime  String?
   reviewStatus      String               @default("待審核")
   settlementMethod  String?
   settlementAccount String?

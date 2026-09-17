@@ -26,7 +26,18 @@ import 'route_names.dart';
 abstract final class DriverRouter {
   static Map<String, WidgetBuilder> get builders => {
         DriverRouteNames.login: (_) => const LoginPage(),
-        DriverRouteNames.registration: (_) => const RegistrationPage(),
+        DriverRouteNames.registration: (context) {
+          final arguments = ModalRoute.of(context)?.settings.arguments;
+          final values = arguments is Map<String, String>
+              ? arguments
+              : const <String, String>{};
+          return RegistrationPage(
+            initialCountryCode: values['countryCode'],
+            initialPhone: values['phone'],
+            verificationChallengeId: values['challengeId'],
+            verificationCode: values['code'],
+          );
+        },
         DriverRouteNames.home: (_) => const HomePage(),
         DriverRouteNames.orders: (_) => const OrderHallPage(),
         DriverRouteNames.orderHistory: (_) => const OrderHistoryPage(),
