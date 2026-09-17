@@ -45,10 +45,21 @@ class _ProfilePageState extends State<ProfilePage> {
       setState(() {
         _name = driver['name']?.toString() ?? _name;
         _vehicleSummary = _vehicleSummaryFrom(driver);
-        _hongKongMacauPhone =
-            '${driver['phoneCountryCode'] ?? '+852'} ${driver['phone'] ?? ''}'
-                .trim();
-        _mainlandPhone = driver['mainlandPhone']?.toString() ?? _mainlandPhone;
+        final hongKongMacauCode =
+            driver['hongKongMacauCountryCode']?.toString() ??
+                (driver['phoneCountryCode'] == '+853' ? '+853' : '+852');
+        final hongKongMacauNumber = driver['hongKongMacauPhone']?.toString() ??
+            (driver['phoneCountryCode'] == '+86'
+                ? ''
+                : driver['phone']?.toString() ?? '');
+        _hongKongMacauPhone = '$hongKongMacauCode $hongKongMacauNumber'.trim();
+        final mainlandNumber = driver['mainlandPhone']?.toString() ??
+            (driver['phoneCountryCode'] == '+86'
+                ? driver['phone']?.toString()
+                : null);
+        _mainlandPhone = mainlandNumber == null || mainlandNumber.isEmpty
+            ? '+86 未填寫'
+            : '+86 $mainlandNumber';
         final settlement = statistics['settlement'] is Map
             ? Map<String, dynamic>.from(statistics['settlement'] as Map)
             : <String, dynamic>{};

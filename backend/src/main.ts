@@ -674,6 +674,9 @@ function driverResponse(driver: {
   vehicleOwnership: string
   phoneCountryCode: string
   phone: string
+  hongKongMacauCountryCode: string | null
+  hongKongMacauPhone: string | null
+  mainlandPhone: string | null
   vehicleCategory: string
   vehicleColor: string
   vehiclePhotos: unknown
@@ -1113,7 +1116,14 @@ class DriverAuthController {
   @Post('register/phone/request')
   async requestRegistrationCode(@Body() body: { countryCode?: string; phoneNumber?: string }) {
     const identity = parsePhoneIdentity(body)
-    const existing = await prisma.driver.findFirst({ where: { phoneCountryCode: identity.countryCode, phone: identity.phoneNumber } })
+    const existing = await prisma.driver.findFirst({ where: {
+      OR: [
+        { phoneCountryCode: identity.countryCode, phone: identity.phoneNumber },
+        ...(identity.countryCode === '+86'
+          ? [{ mainlandPhone: identity.phoneNumber }]
+          : [{ hongKongMacauCountryCode: identity.countryCode, hongKongMacauPhone: identity.phoneNumber }])
+      ]
+    } })
     if (existing) throw new HttpException('Driver phone number is already registered', HttpStatus.CONFLICT)
     const code = '00000'
     const challengeId = randomBytes(18).toString('hex')
@@ -1134,7 +1144,7 @@ class DriverAuthController {
 
   @Post('register')
   @UseInterceptors(FileInterceptor('vehiclePhoto', { limits: { fileSize: 2 * 1024 * 1024 }, fileFilter: (_req, file, cb) => cb(null, /^image\/(jpeg|png|webp)$/.test(file.mimetype)) }))
-  async register(@Body() body: { name?: unknown; vehicleOwnership?: unknown; plateType?: unknown; hkPlate?: unknown; macauPlate?: unknown; mainlandPlate?: unknown; phoneCountryCode?: unknown; phone?: unknown; vehicleCategory?: unknown; vehicleColor?: unknown; challengeId?: unknown; code?: unknown }, @UploadedFile() vehiclePhoto?: Express.Multer.File) {
+  async register(@Body() body: { name?: unknown; vehicleOwnership?: unknown; plateType?: unknown; hkPlate?: unknown; macauPlate?: unknown; mainlandPlate?: unknown; phoneCountryCode?: unknown; phone?: unknown; hongKongMacauCountryCode?: unknown; hongKongMacauPhone?: unknown; mainlandPhone?: unknown; vehicleCategory?: unknown; vehicleColor?: unknown; challengeId?: unknown; code?: unknown }, @UploadedFile() vehiclePhoto?: Express.Multer.File) {
     const name = typeof body.name === 'string' ? body.name.trim() : ''
     const { vehicleOwnership, plateType, hkPlate, macauPlate, mainlandPlate } = normalizeVehiclePlateData({
       ...body,
@@ -1154,17 +1164,41 @@ class DriverAuthController {
       throw new HttpException('Vehicle category is not available', HttpStatus.BAD_REQUEST)
     }
     const identity = parsePhoneIdentity({ countryCode: typeof body.phoneCountryCode === 'string' ? body.phoneCountryCode : undefined, phoneNumber: typeof body.phone === 'string' ? body.phone : undefined })
+    const hongKongMacauIdentity = parsePhoneIdentity({
+      countryCode: typeof body.hongKongMacauCountryCode === 'string' ? body.hongKongMacauCountryCode : undefined,
+      phoneNumber: typeof body.hongKongMacauPhone === 'string' ? body.hongKongMacauPhone : undefined
+    })
+    const mainlandIdentity = parsePhoneIdentity({
+      countryCode: '+86',
+      phoneNumber: typeof body.mainlandPhone === 'string' ? body.mainlandPhone : undefined
+    })
+    if (!['+852', '+853'].includes(hongKongMacauIdentity.countryCode)) {
+      throw new HttpException('Hong Kong/Macau phone country code must be +852 or +853', HttpStatus.BAD_REQUEST)
+    }
+    const verifiedPhoneMatches = identity.countryCode === '+86'
+      ? mainlandIdentity.phoneNumber === identity.phoneNumber
+      : hongKongMacauIdentity.countryCode === identity.countryCode && hongKongMacauIdentity.phoneNumber === identity.phoneNumber
+    if (!verifiedPhoneMatches) {
+      throw new HttpException('Verified phone number must match the corresponding registration phone', HttpStatus.BAD_REQUEST)
+    }
     const challengeId = typeof body.challengeId === 'string' ? body.challengeId.trim() : ''
     const code = typeof body.code === 'string' ? body.code.trim() : ''
     const challenge = await prisma.driverOtpChallenge.findUnique({ where: { id: challengeId } })
     if (!challenge || challenge.driverId || challenge.consumedAt || challenge.expiresAt.getTime() <= Date.now() || challenge.countryCode !== identity.countryCode || challenge.phone !== identity.phoneNumber || code.length !== 5 || !verifyPassword(code, challenge.codeHash)) {
       throw new UnauthorizedException('Invalid registration verification code')
     }
-    const existing = await prisma.driver.findFirst({ where: { phoneCountryCode: identity.countryCode, phone: identity.phoneNumber } })
+    const existing = await prisma.driver.findFirst({ where: {
+      OR: [
+        { phoneCountryCode: identity.countryCode, phone: identity.phoneNumber },
+        { hongKongMacauCountryCode: hongKongMacauIdentity.countryCode, hongKongMacauPhone: hongKongMacauIdentity.phoneNumber },
+        { mainlandPhone: mainlandIdentity.phoneNumber }
+      ]
+    } })
     if (existing) throw new HttpException('Driver phone number is already registered', HttpStatus.CONFLICT)
     const driver = await prisma.driver.create({ data: {
       id: `driver-${Date.now()}-${randomBytes(4).toString('hex')}`, name, affiliation: vehicleOwnership, vehicleOwnership, plateType, hkPlate: hkPlate || null,
       macauPlate: macauPlate || null, mainlandPlate: mainlandPlate || null, phoneCountryCode: identity.countryCode, phone: identity.phoneNumber,
+      hongKongMacauCountryCode: hongKongMacauIdentity.countryCode, hongKongMacauPhone: hongKongMacauIdentity.phoneNumber, mainlandPhone: mainlandIdentity.phoneNumber,
       vehicleCategory, vehicleColor, vehiclePhotos: [], vehiclePhotoData: new Uint8Array(vehiclePhoto.buffer), vehiclePhotoMime: vehiclePhoto.mimetype, reviewStatus: 'PENDING', reviewSubmittedAt: new Date(),
     } })
     await prisma.driverOtpChallenge.update({ where: { id: challenge.id }, data: { consumedAt: new Date(), driverId: driver.id } })
@@ -1174,7 +1208,14 @@ class DriverAuthController {
   @Post('phone/request')
   async requestPhoneCode(@Body() body: { countryCode?: string; phoneNumber?: string }) {
     const identity = parsePhoneIdentity(body)
-    const driver = await prisma.driver.findFirst({ where: { phoneCountryCode: identity.countryCode, phone: identity.phoneNumber } })
+    const driver = await prisma.driver.findFirst({ where: {
+      OR: [
+        { phoneCountryCode: identity.countryCode, phone: identity.phoneNumber },
+        ...(identity.countryCode === '+86'
+          ? [{ mainlandPhone: identity.phoneNumber }]
+          : [{ hongKongMacauCountryCode: identity.countryCode, hongKongMacauPhone: identity.phoneNumber }])
+      ]
+    } })
     if (!driver) throw new HttpException('Driver not found', HttpStatus.NOT_FOUND)
     const code = '00000'
     const challengeId = randomBytes(18).toString('hex')
@@ -1257,10 +1298,10 @@ class DriverAuthController {
   }
 
   @Patch('me')
-  async updateMe(@Req() req: RequestLike, @Body() body: { name?: unknown; phoneCountryCode?: unknown; phone?: unknown; vehicleCategory?: unknown; vehicleColor?: unknown; vehicleOwnership?: unknown; hkPlate?: unknown; macauPlate?: unknown; mainlandPlate?: unknown; plateType?: unknown; vehiclePhotos?: unknown; settlementMethod?: unknown; settlementAccount?: unknown }) {
+  async updateMe(@Req() req: RequestLike, @Body() body: { name?: unknown; phoneCountryCode?: unknown; phone?: unknown; hongKongMacauCountryCode?: unknown; hongKongMacauPhone?: unknown; mainlandPhone?: unknown; vehicleCategory?: unknown; vehicleColor?: unknown; vehicleOwnership?: unknown; hkPlate?: unknown; macauPlate?: unknown; mainlandPlate?: unknown; plateType?: unknown; vehiclePhotos?: unknown; settlementMethod?: unknown; settlementAccount?: unknown }) {
     const session = await driverSessionFrom(req)
     const data: Prisma.DriverUpdateInput = {}
-    const textFields = ['name', 'phoneCountryCode', 'phone', 'vehicleCategory', 'vehicleColor', 'vehicleOwnership', 'hkPlate', 'macauPlate', 'mainlandPlate', 'plateType', 'settlementMethod', 'settlementAccount'] as const
+    const textFields = ['name', 'phoneCountryCode', 'phone', 'hongKongMacauCountryCode', 'hongKongMacauPhone', 'mainlandPhone', 'vehicleCategory', 'vehicleColor', 'vehicleOwnership', 'hkPlate', 'macauPlate', 'mainlandPlate', 'plateType', 'settlementMethod', 'settlementAccount'] as const
     for (const field of textFields) {
       if (body[field] !== undefined) {
         if (body[field] !== null && typeof body[field] !== 'string') throw new HttpException(`${field} must be a string`, HttpStatus.BAD_REQUEST)

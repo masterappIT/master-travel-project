@@ -38,6 +38,8 @@ class _RegistrationPageState extends State<RegistrationPage> {
   final _macauPlateController = TextEditingController();
   final _mainlandPlateController = TextEditingController();
   final _phoneController = TextEditingController();
+  final _hongKongMacauPhoneController = TextEditingController();
+  final _mainlandPhoneController = TextEditingController();
   final _vehicleCategoryController = TextEditingController();
   final _vehicleColorController = TextEditingController();
   final _verificationCodeController = TextEditingController();
@@ -45,6 +47,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
   bool _phoneVerified = false;
   String? _registrationChallengeId;
   String _countryCode = '+852';
+  String _hongKongMacauCountryCode = '+852';
   String _vehicleOwnership = '香港';
   String _plateType = '兩地牌';
   List<String> _vehicleCategoryOptions = const [];
@@ -60,6 +63,12 @@ class _RegistrationPageState extends State<RegistrationPage> {
     super.initState();
     _countryCode = widget.initialCountryCode ?? '+852';
     _phoneController.text = widget.initialPhone ?? '';
+    if (_countryCode == '+86') {
+      _mainlandPhoneController.text = widget.initialPhone ?? '';
+    } else {
+      _hongKongMacauCountryCode = _countryCode == '+853' ? '+853' : '+852';
+      _hongKongMacauPhoneController.text = widget.initialPhone ?? '';
+    }
     _verificationCodeController.text = widget.verificationCode ?? '';
     _registrationChallengeId = widget.verificationChallengeId;
     _phoneVerified = _registrationChallengeId != null &&
@@ -69,6 +78,14 @@ class _RegistrationPageState extends State<RegistrationPage> {
       _nameController.text = driver['name']?.toString() ?? '';
       _countryCode = driver['phoneCountryCode']?.toString() ?? '+852';
       _phoneController.text = driver['phone']?.toString() ?? '';
+      _hongKongMacauCountryCode =
+          driver['hongKongMacauCountryCode']?.toString() ??
+              (_countryCode == '+853' ? '+853' : '+852');
+      _hongKongMacauPhoneController.text =
+          driver['hongKongMacauPhone']?.toString() ??
+              (_countryCode == '+86' ? '' : _phoneController.text);
+      _mainlandPhoneController.text = driver['mainlandPhone']?.toString() ??
+          (_countryCode == '+86' ? _phoneController.text : '');
       _vehicleOwnership = driver['vehicleOwnership']?.toString() ?? '香港';
       _plateType = driver['plateType']?.toString() ?? '兩地牌';
       _hkPlateController.text = driver['hkPlate']?.toString() ?? '';
@@ -82,6 +99,19 @@ class _RegistrationPageState extends State<RegistrationPage> {
     }
     _registrationStep = widget.revisionDriver != null || _phoneVerified ? 2 : 1;
     _phoneController.addListener(_clearRegistrationChallenge);
+    for (final controller in [
+      _nameController,
+      _hkPlateController,
+      _macauPlateController,
+      _mainlandPlateController,
+      _hongKongMacauPhoneController,
+      _mainlandPhoneController,
+      _vehicleCategoryController,
+      _vehicleColorController,
+      _verificationCodeController,
+    ]) {
+      controller.addListener(_refreshFormState);
+    }
     _loadVehicleCategories();
   }
 
@@ -257,6 +287,29 @@ class _RegistrationPageState extends State<RegistrationPage> {
     }
   }
 
+  void _refreshFormState() {
+    if (mounted) setState(() {});
+  }
+
+  bool get _registrationDetailsComplete {
+    final requiresHkPlate = _vehicleOwnership == '香港' ||
+        _vehicleOwnership == '中國內地' ||
+        _plateType == '三地牌';
+    final requiresMacauPlate = _vehicleOwnership == '澳門';
+    final requiresMainlandPlate = _plateType != '單牌';
+    return _nameController.text.trim().isNotEmpty &&
+        (!requiresHkPlate || _hkPlateController.text.trim().isNotEmpty) &&
+        (!requiresMacauPlate || _macauPlateController.text.trim().isNotEmpty) &&
+        (!requiresMainlandPlate ||
+            _mainlandPlateController.text.trim().isNotEmpty) &&
+        _vehicleCategoryController.text.trim().isNotEmpty &&
+        _vehicleColorController.text.trim().isNotEmpty &&
+        RegExp(r'^\d{8}$')
+            .hasMatch(_hongKongMacauPhoneController.text.trim()) &&
+        RegExp(r'^\d{11}$').hasMatch(_mainlandPhoneController.text.trim()) &&
+        (widget.revisionDriver != null || _vehiclePhotoBytes != null);
+  }
+
   @override
   void dispose() {
     _phoneController.removeListener(_clearRegistrationChallenge);
@@ -265,7 +318,22 @@ class _RegistrationPageState extends State<RegistrationPage> {
       _hkPlateController,
       _macauPlateController,
       _mainlandPlateController,
+      _hongKongMacauPhoneController,
+      _mainlandPhoneController,
+      _vehicleCategoryController,
+      _vehicleColorController,
+      _verificationCodeController,
+    ]) {
+      controller.removeListener(_refreshFormState);
+    }
+    for (final controller in [
+      _nameController,
+      _hkPlateController,
+      _macauPlateController,
+      _mainlandPlateController,
       _phoneController,
+      _hongKongMacauPhoneController,
+      _mainlandPhoneController,
       _vehicleCategoryController,
       _vehicleColorController,
       _verificationCodeController
@@ -294,9 +362,8 @@ class _RegistrationPageState extends State<RegistrationPage> {
             _verificationCodeController.text = developmentCode;
           }
         });
-        final message = developmentCode == null
-            ? '驗證碼已發送'
-            : '開發環境驗證碼：$developmentCode';
+        final message =
+            developmentCode == null ? '驗證碼已發送' : '開發環境驗證碼：$developmentCode';
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(message)));
       }
@@ -337,6 +404,8 @@ class _RegistrationPageState extends State<RegistrationPage> {
   Future<void> _submit() async {
     final phone = _phoneController.text.trim();
     final expectedLength = _countryCode == '+86' ? 11 : 8;
+    final hongKongMacauPhone = _hongKongMacauPhoneController.text.trim();
+    final mainlandPhone = _mainlandPhoneController.text.trim();
     final requiresHkPlate = _vehicleOwnership == '香港' ||
         _vehicleOwnership == '中國內地' ||
         _plateType == '三地牌';
@@ -347,11 +416,23 @@ class _RegistrationPageState extends State<RegistrationPage> {
         (requiresMacauPlate && _macauPlateController.text.trim().isEmpty) ||
         _vehicleCategoryController.text.trim().isEmpty ||
         _vehicleColorController.text.trim().isEmpty ||
+        hongKongMacauPhone.isEmpty ||
+        mainlandPhone.isEmpty ||
         (widget.revisionDriver == null && _vehiclePhotoBytes == null) ||
         (requiresMainlandPlate &&
             _mainlandPlateController.text.trim().isEmpty)) {
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('請完成所有必填資料')));
+      return;
+    }
+    if (!RegExp(r'^\d{8}$').hasMatch(hongKongMacauPhone)) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('請輸入 8 位香港／澳門號碼')));
+      return;
+    }
+    if (!RegExp(r'^\d{11}$').hasMatch(mainlandPhone)) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('請輸入 11 位中國內地號碼')));
       return;
     }
     final mainlandPlate =
@@ -412,6 +493,9 @@ class _RegistrationPageState extends State<RegistrationPage> {
               : normalizeMainlandPlate(mainlandPlate),
           phoneCountryCode: _countryCode,
           phone: phone,
+          hongKongMacauCountryCode: _hongKongMacauCountryCode,
+          hongKongMacauPhone: hongKongMacauPhone,
+          mainlandPhone: mainlandPhone,
           verificationChallengeId: _registrationChallengeId!,
           verificationCode: _verificationCodeController.text.trim(),
           vehicleCategory: _vehicleCategoryController.text.trim(),
@@ -436,6 +520,8 @@ class _RegistrationPageState extends State<RegistrationPage> {
 
   @override
   Widget build(BuildContext context) {
+    final canSubmitDetails =
+        _registrationStep != 2 || _registrationDetailsComplete;
     return Scaffold(
       backgroundColor: DriverColors.background,
       body: SafeArea(
@@ -471,6 +557,13 @@ class _RegistrationPageState extends State<RegistrationPage> {
                         hkPlateController: _hkPlateController,
                         macauPlateController: _macauPlateController,
                         mainlandPlateController: _mainlandPlateController,
+                        hongKongMacauPhoneController:
+                            _hongKongMacauPhoneController,
+                        mainlandPhoneController: _mainlandPhoneController,
+                        hongKongMacauCountryCode: _hongKongMacauCountryCode,
+                        verifiedCountryCode: _countryCode,
+                        onHongKongMacauCountryCodeChanged: (value) =>
+                            setState(() => _hongKongMacauCountryCode = value),
                         vehicleCategoryController: _vehicleCategoryController,
                         vehicleCategoryLoading: _loadingVehicleCategories,
                         onVehicleCategoryTap: _selectVehicleCategory,
@@ -492,15 +585,17 @@ class _RegistrationPageState extends State<RegistrationPage> {
                     SizedBox(
                       height: 56,
                       child: ElevatedButton(
-                        onPressed: _loading
+                        onPressed: _loading || !canSubmitDetails
                             ? null
                             : (_registrationStep == 1
                                 ? _verifyRegistrationCode
                                 : _submit),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: DriverColors.success,
-                          foregroundColor: DriverColors.labelText,
-                          elevation: 8,
+                          foregroundColor: DriverColors.onPrimary,
+                          disabledBackgroundColor: DriverColors.divider,
+                          disabledForegroundColor: DriverColors.secondaryText,
+                          elevation: canSubmitDetails ? 8 : 0,
                           shadowColor: const Color(0x334cd964),
                           shape: RoundedRectangleBorder(
                               borderRadius:
@@ -509,7 +604,9 @@ class _RegistrationPageState extends State<RegistrationPage> {
                               horizontal: 24, vertical: 16),
                         ),
                         child: Text(
-                          _registrationStep == 1 ? '驗證並繼續' : '提交審核',
+                          _registrationStep == 1
+                              ? '驗證並繼續'
+                              : (canSubmitDetails ? '提交審核' : '請完成必填資料'),
                           style: const TextStyle(
                               fontSize: DriverTypography.bodyLarge,
                               fontWeight: FontWeight.w700),
@@ -612,6 +709,11 @@ class _RegistrationCard extends StatefulWidget {
       required this.hkPlateController,
       required this.macauPlateController,
       required this.mainlandPlateController,
+      required this.hongKongMacauPhoneController,
+      required this.mainlandPhoneController,
+      required this.hongKongMacauCountryCode,
+      required this.verifiedCountryCode,
+      required this.onHongKongMacauCountryCodeChanged,
       required this.vehicleCategoryController,
       required this.vehicleCategoryLoading,
       required this.onVehicleCategoryTap,
@@ -628,8 +730,13 @@ class _RegistrationCard extends StatefulWidget {
       hkPlateController,
       macauPlateController,
       mainlandPlateController,
+      hongKongMacauPhoneController,
+      mainlandPhoneController,
       vehicleCategoryController,
       vehicleColorController;
+  final String hongKongMacauCountryCode;
+  final String verifiedCountryCode;
+  final ValueChanged<String> onHongKongMacauCountryCodeChanged;
   final ValueChanged<String> onPlateTypeChanged;
   final ValueChanged<String> onOwnershipChanged;
   final bool vehicleCategoryLoading;
@@ -682,6 +789,26 @@ class _RegistrationCardState extends State<_RegistrationCard> {
                 label: '姓名',
                 hint: '請輸入司機姓名',
                 controller: widget.nameController),
+            const SizedBox(height: DriverSpacing.lg),
+            _PhoneField(
+              label: '香港／澳門號碼',
+              prefix: widget.hongKongMacauCountryCode,
+              controller: widget.hongKongMacauPhoneController,
+              regionOptions: const {'香港': '+852', '澳門': '+853'},
+              selectedRegion:
+                  widget.hongKongMacauCountryCode == '+853' ? '澳門' : '香港',
+              onRegionChanged: (region) =>
+                  widget.onHongKongMacauCountryCodeChanged(
+                      region == '澳門' ? '+853' : '+852'),
+              readOnly: widget.verifiedCountryCode != '+86',
+            ),
+            const SizedBox(height: DriverSpacing.lg),
+            _PhoneField(
+              label: '中國內地號碼',
+              prefix: '+86',
+              controller: widget.mainlandPhoneController,
+              readOnly: widget.verifiedCountryCode == '+86',
+            ),
             const SizedBox(height: DriverSpacing.lg),
             _ChoiceSection(
               label: '車輛歸屬地',
@@ -1135,6 +1262,7 @@ class _PhoneField extends StatelessWidget {
     this.regionOptions,
     this.selectedRegion,
     this.onRegionChanged,
+    this.readOnly = false,
   });
   final String label;
   final String prefix;
@@ -1142,6 +1270,7 @@ class _PhoneField extends StatelessWidget {
   final Map<String, String>? regionOptions;
   final String? selectedRegion;
   final ValueChanged<String>? onRegionChanged;
+  final bool readOnly;
 
   void _showRegionPicker(BuildContext context) {
     showDialog<void>(
@@ -1196,7 +1325,8 @@ class _PhoneField extends StatelessWidget {
                       color: Colors.transparent,
                       child: InkWell(
                         borderRadius: BorderRadius.circular(DriverRadii.input),
-                        onTap: () => _showRegionPicker(context),
+                        onTap:
+                            readOnly ? null : () => _showRegionPicker(context),
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8),
                           decoration: _registrationFieldDecoration(),
@@ -1227,6 +1357,7 @@ class _PhoneField extends StatelessWidget {
                 height: 50,
                 child: TextField(
                   controller: controller,
+                  readOnly: readOnly,
                   inputFormatters: [
                     FilteringTextInputFormatter.digitsOnly,
                     LengthLimitingTextInputFormatter(prefix == '+86' ? 11 : 8),

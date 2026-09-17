@@ -33,6 +33,49 @@ void main() {
     expect(find.text('登入 / 註冊'), findsOneWidget);
   });
 
+  testWidgets(
+      'prefills Hong Kong registration phone and asks for mainland phone',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(testApp(const RegistrationPage(
+      initialCountryCode: '+852',
+      initialPhone: '91234567',
+      verificationChallengeId: 'challenge',
+      verificationCode: '00000',
+    )));
+
+    expect(find.text('香港／澳門號碼'), findsOneWidget);
+    expect(find.text('中國內地號碼'), findsOneWidget);
+    expect(find.widgetWithText(TextField, '91234567'), findsOneWidget);
+    expect(find.text('+86'), findsOneWidget);
+  });
+
+  testWidgets(
+      'prefills mainland registration phone and asks for Hong Kong phone',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(testApp(const RegistrationPage(
+      initialCountryCode: '+86',
+      initialPhone: '13800138000',
+      verificationChallengeId: 'challenge',
+      verificationCode: '00000',
+    )));
+
+    expect(find.widgetWithText(TextField, '13800138000'), findsOneWidget);
+    expect(find.text('香港 +852'), findsOneWidget);
+  });
+
+  testWidgets('disables submission until registration details are complete',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(testApp(const RegistrationPage(
+      initialCountryCode: '+852',
+      initialPhone: '91234567',
+      verificationChallengeId: 'challenge',
+      verificationCode: '00000',
+    )));
+
+    expect(find.text('請完成必填資料'), findsOneWidget);
+    expect(find.text('提交審核'), findsNothing);
+  });
+
   testWidgets('uses mainland and Hong Kong plates for mainland ownership',
       (WidgetTester tester) async {
     await tester.pumpWidget(testApp(const RegistrationPage()));
@@ -137,13 +180,27 @@ void main() {
 
     expect(find.text('個人資料'), findsOneWidget);
     expect(find.text('基本資料'), findsOneWidget);
-    expect(find.text('+852 9123 4567'), findsOneWidget);
-    expect(find.text('+86 未填寫'), findsOneWidget);
+    expect(find.text('香港 +852'), findsOneWidget);
+    expect(find.text('9123 4567'), findsOneWidget);
+    expect(find.text('+86'), findsOneWidget);
+    expect(find.text('未填寫'), findsOneWidget);
     expect(find.text('修改'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('driver-profile-edit')));
     await tester.pump();
     expect(find.byType(TextField), findsNWidgets(3));
+  });
+
+  testWidgets('uses Macau prefix for a Macau profile phone',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(testApp(const DriverProfilePage(
+      initialHongKongMacauPhone: '+853 6123 4567',
+      initialMainlandPhone: '+86 13800138000',
+    )));
+
+    expect(find.text('澳門 +853'), findsOneWidget);
+    expect(find.text('6123 4567'), findsOneWidget);
+    expect(find.text('13800138000'), findsOneWidget);
   });
   testWidgets('renders the driver profile page and navigation',
       (WidgetTester tester) async {

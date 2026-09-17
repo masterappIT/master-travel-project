@@ -345,9 +345,12 @@ model Driver {
   mainlandPlate     String?
   macauPlate        String?
   vehicleOwnership  String                @default("香港")
-  phoneCountryCode  String                @default("+852")
-  phone             String
-  vehicleCategory   String
+  phoneCountryCode          String                @default("+852")
+  phone                     String
+  hongKongMacauCountryCode  String?
+  hongKongMacauPhone        String?
+  mainlandPhone             String?               @unique
+  vehicleCategory           String
   vehicleColor      String
   vehiclePhotos     Json
   vehiclePhotoData  Bytes?
@@ -372,6 +375,7 @@ model Driver {
   notifications     Notification[]
   orderUrls         TripOrderUrl[]
 
+  @@unique([hongKongMacauCountryCode, hongKongMacauPhone])
   @@index([reviewStatus])
   @@index([phone])
   @@index([vehicleCategory])

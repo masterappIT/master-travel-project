@@ -4,7 +4,7 @@ export const filterDrivers = (items, searchQuery, statusFilter = '全部', typeF
     const statusLabel = { PENDING: '待審核', APPROVED: '已通過', REVISION_REQUIRED: '退回修改', REJECTED: '已拒絕' }[item.reviewStatus] || item.reviewStatus || '待審核'
   const matchesStatus = statusFilter === '全部' || statusLabel === statusFilter
     const matchesType = typeFilter === '全部' || (item.driverType || '內部司機') === typeFilter
-    const matchesQuery = !query || [item.name, item.phone, item.hkPlate, item.macauPlate, item.mainlandPlate, item.vehicleCategory]
+    const matchesQuery = !query || [item.name, item.phone, item.hongKongMacauPhone, item.mainlandPhone, item.hkPlate, item.macauPlate, item.mainlandPlate, item.vehicleCategory]
       .some(value => String(value || '').toLowerCase().includes(query))
     return matchesStatus && matchesType && matchesQuery
   })

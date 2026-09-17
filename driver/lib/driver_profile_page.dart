@@ -37,10 +37,14 @@ class _DriverProfilePageState extends State<DriverProfilePage> {
   void initState() {
     super.initState();
     _nameController = TextEditingController(text: widget.initialName);
-    _hongKongMacauPhoneController =
-        TextEditingController(text: widget.initialHongKongMacauPhone);
-    _mainlandPhoneController =
-        TextEditingController(text: widget.initialMainlandPhone);
+    _hongKongMacauRegion =
+        widget.initialHongKongMacauPhone.trim().startsWith('+853')
+            ? '澳門'
+            : '香港';
+    _hongKongMacauPhoneController = TextEditingController(
+        text: _localPhoneNumber(widget.initialHongKongMacauPhone));
+    _mainlandPhoneController = TextEditingController(
+        text: _localPhoneNumber(widget.initialMainlandPhone));
   }
 
   @override
@@ -51,13 +55,24 @@ class _DriverProfilePageState extends State<DriverProfilePage> {
     super.dispose();
   }
 
+  static String _localPhoneNumber(String value) =>
+      value.trim().replaceFirst(RegExp(r'^\+\d{2,3}\s*'), '');
+
   void _startEditing() => setState(() => _isEditing = true);
 
   void _cancelEditing() {
     _nameController.text = widget.initialName;
-    _hongKongMacauPhoneController.text = widget.initialHongKongMacauPhone;
-    _mainlandPhoneController.text = widget.initialMainlandPhone;
-    setState(() => _isEditing = false);
+    _hongKongMacauPhoneController.text =
+        _localPhoneNumber(widget.initialHongKongMacauPhone);
+    _mainlandPhoneController.text =
+        _localPhoneNumber(widget.initialMainlandPhone);
+    setState(() {
+      _hongKongMacauRegion =
+          widget.initialHongKongMacauPhone.trim().startsWith('+853')
+              ? '澳門'
+              : '香港';
+      _isEditing = false;
+    });
   }
 
   Future<void> _saveProfile() async {
@@ -71,18 +86,24 @@ class _DriverProfilePageState extends State<DriverProfilePage> {
     }
     setState(() => _isSaving = true);
     try {
+      final hongKongMacauPhone = _hongKongMacauPhoneController.text
+          .trim()
+          .replaceFirst(RegExp(r'^\+85[23]\s*'), '');
+      final mainlandPhone = _mainlandPhoneController.text
+          .trim()
+          .replaceFirst(RegExp(r'^\+86\s*'), '');
       await DriverApiClient.instance.updateProfile({
         'name': name,
-        'phoneCountryCode': '+852',
-        'phone': _hongKongMacauPhoneController.text
-            .trim()
-            .replaceFirst(RegExp(r'^\+85[23]\s*'), ''),
+        'hongKongMacauCountryCode': _phoneCodes[_hongKongMacauRegion],
+        'hongKongMacauPhone': hongKongMacauPhone,
+        'mainlandPhone': mainlandPhone,
       });
       if (!mounted) return;
       final result = <String, String>{
         'name': name,
-        'hongKongMacauPhone': _hongKongMacauPhoneController.text.trim(),
-        'mainlandPhone': _mainlandPhoneController.text.trim(),
+        'hongKongMacauPhone':
+            '${_phoneCodes[_hongKongMacauRegion]} $hongKongMacauPhone',
+        'mainlandPhone': '+86 $mainlandPhone',
       };
       setState(() => _isEditing = false);
       ScaffoldMessenger.of(context).showSnackBar(
