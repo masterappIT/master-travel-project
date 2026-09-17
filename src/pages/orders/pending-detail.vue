@@ -119,7 +119,7 @@ const confirmPayment = async () => {
   if (!storedOrder.value?.quoteId) return
   paymentLoading.value = true
   try {
-    await payTrip({ quoteId: storedOrder.value.quoteId, origin: storedOrder.value.origin, destination: storedOrder.value.destination, scheduledAt: storedOrder.value.scheduledAt, useFareBalance: walletSelections.fare, useCashBalance: walletSelections.cash, externalPaymentMethod: 'internal' })
+    await payTrip({ quoteId: storedOrder.value.quoteId, origin: storedOrder.value.origin, destination: storedOrder.value.destination, originAddress: storedOrder.value.originAddress || undefined, destinationAddress: storedOrder.value.destinationAddress || undefined, scheduledAt: storedOrder.value.scheduledAt, useFareBalance: walletSelections.fare, useCashBalance: walletSelections.cash, externalPaymentMethod: 'internal' })
     closePayment()
     await loadOrder(currentOrderUrl.value)
     uni.showToast({ title: '支付成功', icon: 'success' })
@@ -200,9 +200,9 @@ onUnmounted(() => {
 onShow(() => {
   isCompleted.value = false
 })
-const addressLabel = (value: string | undefined, fallback: string) => formatOrderDetailAddress(value, fallback)
-const originLabel = computed(() => addressLabel(storedOrder.value?.origin || tripStore.activeTrip?.origin, '香港國際機場'))
-const destinationLabel = computed(() => addressLabel(storedOrder.value?.destination || tripStore.activeTrip?.destination, '深圳灣口岸'))
+const addressLabel = (value: Parameters<typeof formatOrderDetailAddress>[0], fallback: string) => formatOrderDetailAddress(value, fallback)
+const originLabel = computed(() => addressLabel(storedOrder.value?.originAddress || storedOrder.value?.origin || tripStore.activeTrip?.origin, '香港國際機場'))
+const destinationLabel = computed(() => addressLabel(storedOrder.value?.destinationAddress || storedOrder.value?.destination || tripStore.activeTrip?.destination, '深圳灣口岸'))
 const passengerLabel = computed(() => {
   const passenger = storedOrder.value?.passenger
   if (!passenger) return '—'

@@ -44,7 +44,7 @@ const orders = ref<Order[]>([])
 let loadingOrders: Promise<void> | null = null
 
 let countdownTimer: ReturnType<typeof setInterval> | null = null
-const addressLabel = (value: string | undefined, fallback: string) => formatOrderCardAddress(value, fallback)
+const addressLabel = (value: Parameters<typeof formatOrderCardAddress>[0], fallback: string) => formatOrderCardAddress(value, fallback)
 const formatCountdown = (expiresAt?: string | null) => {
   const expiry = expiresAt ? new Date(expiresAt).getTime() : NaN
   const seconds = Number.isFinite(expiry) ? Math.max(0, Math.floor((expiry - Date.now()) / 1000)) : 0
@@ -90,8 +90,8 @@ const loadOrders = async () => {
       countdown: trip.status === 'PENDING' ? formatCountdown(trip.paymentExpiresAt) : undefined,
       paymentExpiresAt: trip.paymentExpiresAt,
       payment: trip.payment?.status === 'REFUNDED' || trip.payment?.refundedAt ? '已退款' : trip.status === 'CANCELLED' && trip.payment ? '退款申請中' : trip.payment ? '已付款' : undefined,
-      origin: addressLabel(trip.origin, '香港'),
-      destination: addressLabel(trip.destination, '深圳'),
+      origin: addressLabel(trip.originAddress || trip.origin, '香港'),
+      destination: addressLabel(trip.destinationAddress || trip.destination, '深圳'),
       scheduledAt: trip.scheduledAt,
       estimatedArrivalAt: trip.estimatedArrivalAt,
       createdAt: trip.createdAt,

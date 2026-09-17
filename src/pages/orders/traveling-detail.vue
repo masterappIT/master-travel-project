@@ -85,9 +85,9 @@ onMounted(loadCurrentOrder)
 // #ifdef MP-WEIXIN || MP-TOUTIAO
 watch(cachedPageUrl, loadCurrentOrder)
 // #endif
-const addressLabel = (value: string | undefined, fallback: string) => formatOrderDetailAddress(value, fallback)
-const originLabel = computed(() => addressLabel(storedOrder.value?.origin || tripStore.activeTrip?.origin, '香港國際機場'))
-const destinationLabel = computed(() => addressLabel(storedOrder.value?.destination || tripStore.activeTrip?.destination, '深圳灣口岸'))
+const addressLabel = (value: Parameters<typeof formatOrderDetailAddress>[0], fallback: string) => formatOrderDetailAddress(value, fallback)
+const originLabel = computed(() => addressLabel(storedOrder.value?.originAddress || storedOrder.value?.origin || tripStore.activeTrip?.origin, '香港國際機場'))
+const destinationLabel = computed(() => addressLabel(storedOrder.value?.destinationAddress || storedOrder.value?.destination || tripStore.activeTrip?.destination, '深圳灣口岸'))
 const passengerLabel = computed(() => {
   const passenger = storedOrder.value?.passenger
   if (!passenger) return '—'

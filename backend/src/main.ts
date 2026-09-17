@@ -3251,16 +3251,20 @@ class PaymentsController {
       const origin = body.origin || quote.pricing?.routeOriginCity || '香港'
       const destination = body.destination || quote.pricing?.routeDestinationCity || '深圳'
       const addressData = {
-        originRegion: body.originAddress?.region?.trim() || null,
-        originCity: body.originAddress?.city?.trim() || null,
-        originDistrict: body.originAddress?.district?.trim() || null,
-        originPlace: body.originAddress?.place?.trim() || null,
-        originDetail: body.originAddress?.detail?.trim() || null,
-        destinationRegion: body.destinationAddress?.region?.trim() || null,
-        destinationCity: body.destinationAddress?.city?.trim() || null,
-        destinationDistrict: body.destinationAddress?.district?.trim() || null,
-        destinationPlace: body.destinationAddress?.place?.trim() || null,
-        destinationDetail: body.destinationAddress?.detail?.trim() || null
+        ...(body.originAddress ? {
+          originRegion: body.originAddress.region?.trim() || null,
+          originCity: body.originAddress.city?.trim() || null,
+          originDistrict: body.originAddress.district?.trim() || null,
+          originPlace: body.originAddress.place?.trim() || null,
+          originDetail: body.originAddress.detail?.trim() || null
+        } : {}),
+        ...(body.destinationAddress ? {
+          destinationRegion: body.destinationAddress.region?.trim() || null,
+          destinationCity: body.destinationAddress.city?.trim() || null,
+          destinationDistrict: body.destinationAddress.district?.trim() || null,
+          destinationPlace: body.destinationAddress.place?.trim() || null,
+          destinationDetail: body.destinationAddress.detail?.trim() || null
+        } : {})
       }
       const scheduledAt = body.scheduledAt ? new Date(body.scheduledAt) : new Date(Date.now() + 3600000)
       const passengerData = body.passenger?.name?.trim() && body.passenger.phone?.trim()
