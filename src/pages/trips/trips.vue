@@ -111,7 +111,7 @@ const handleOrderAction = async (name: string) => {
       const trips = await listClientTrips()
       const traveling = trips.find((trip) => trip.status === 'CONFIRMED' && trip.executionPhase !== 'IN_PROGRESS')
       if (!traveling) return uni.showToast({ title: '目前沒有待出行訂單', icon: 'none' })
-      return openCachedPage(`/pages/orders/pending-detail?from=profile&id=${encodeURIComponent(traveling.id)}`)
+      return openCachedPage(`/pages/trips/pending?id=${encodeURIComponent(traveling.id)}`)
     } catch (error) {
       return uni.showToast({ title: error instanceof Error ? error.message : '訂單載入失敗', icon: 'none' })
     }

@@ -1,5 +1,5 @@
 export function createApiClient({ baseUrl, getToken, onUnauthorized }) {
-  return async function api(path, options = {}) {
+  async function request(path, options = {}) {
     let response
     try {
       response = await fetch(`${baseUrl}${path}`, {
@@ -28,7 +28,14 @@ export function createApiClient({ baseUrl, getToken, onUnauthorized }) {
       throw error
     }
 
+    return response
+  }
+
+  const api = async (path, options = {}) => {
+    const response = await request(path, options)
     if (response.status === 204) return null
     return response.json()
   }
+  api.blob = async (path, options = {}) => (await request(path, options)).blob()
+  return api
 }

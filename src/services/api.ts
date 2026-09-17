@@ -669,6 +669,8 @@ export type ClientTrip = {
   startedAt: string | null
   completedAt: string | null
   paymentExpiresAt: string | null
+  assignmentExpiresAt: string
+  assignmentExpired: boolean
   payment: Omit<ClientPayment, 'tripId' | 'refundedAt' | 'trip'> & { refundedAt?: string | null } | null
 }
 

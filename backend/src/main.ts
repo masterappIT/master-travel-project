@@ -441,7 +441,14 @@ async function driverSessionFrom(req: RequestLike): Promise<DriverSessionToken> 
   }
 }
 function requireReviewedDriver(driver: { reviewStatus: string }) {
-  if (!['已完成審核', '已審核', '已通過'].includes(driver.reviewStatus)) throw new ForbiddenException('Driver review is required before direct order acceptance')
+  if (driver.reviewStatus !== 'APPROVED') throw new ForbiddenException('Driver approval is required before accepting or operating trips')
+}
+async function reviewedDriverFrom(req: RequestLike) {
+  const session = await driverSessionFrom(req)
+  const driver = await prisma.driver.findUnique({ where: { id: session.sub } })
+  if (!driver) throw new UnauthorizedException('Driver not found')
+  requireReviewedDriver(driver)
+  return { session, driver }
 }
 async function clientAuthResponse(user: ManagedUser) {
   if (!user.enabled) throw new ForbiddenException('User account is disabled')
@@ -658,6 +665,10 @@ function driverResponse(driver: {
   vehiclePhotoData?: Uint8Array | null
   vehiclePhotoMime?: string | null
   reviewStatus: string
+  reviewReason?: string | null
+  reviewSubmittedAt?: Date
+  reviewedAt?: Date | null
+  reviewedBy?: string | null
   settlementMethod: string | null
   settlementAccount: string | null
   isOnline?: boolean
@@ -665,7 +676,15 @@ function driverResponse(driver: {
   updatedAt: Date
 }) {
   const { vehiclePhotoData, vehiclePhotoMime, ...publicDriver } = driver
-  return { ...publicDriver, isOnline: driver.isOnline ?? false, vehiclePhotos: vehiclePhotoData && vehiclePhotoMime ? ['/driver/auth/me/vehicle-photo'] : [], createdAt: driver.createdAt.toISOString(), updatedAt: driver.updatedAt.toISOString() }
+  return {
+    ...publicDriver,
+    isOnline: driver.isOnline ?? false,
+    vehiclePhotos: vehiclePhotoData && vehiclePhotoMime ? ['/driver/auth/me/vehicle-photo'] : [],
+    reviewSubmittedAt: driver.reviewSubmittedAt?.toISOString() || null,
+    reviewedAt: driver.reviewedAt?.toISOString() || null,
+    createdAt: driver.createdAt.toISOString(),
+    updatedAt: driver.updatedAt.toISOString()
+  }
 }
 
 function validVehiclePlateData(body: {
@@ -1048,7 +1067,7 @@ class DriverAuthController {
     const driver = await prisma.driver.create({ data: {
       id: `driver-${Date.now()}-${randomBytes(4).toString('hex')}`, name, affiliation: vehicleOwnership, vehicleOwnership, plateType, hkPlate: hkPlate || null,
       macauPlate: macauPlate || null, mainlandPlate: mainlandPlate || null, phoneCountryCode: identity.countryCode, phone: identity.phoneNumber,
-      vehicleCategory, vehicleColor, vehiclePhotos: [], vehiclePhotoData: new Uint8Array(vehiclePhoto.buffer), vehiclePhotoMime: vehiclePhoto.mimetype, reviewStatus: '待審核',
+      vehicleCategory, vehicleColor, vehiclePhotos: [], vehiclePhotoData: new Uint8Array(vehiclePhoto.buffer), vehiclePhotoMime: vehiclePhoto.mimetype, reviewStatus: 'PENDING', reviewSubmittedAt: new Date(),
     } })
     await prisma.driverOtpChallenge.update({ where: { id: challenge.id }, data: { consumedAt: new Date(), driverId: driver.id } })
     return driverAuthResponse(driver)
@@ -1108,10 +1127,32 @@ class DriverAuthController {
     return { ok: true }
   }
 
-  @Post('submit-review')
-  async submitReview(@Req() req: RequestLike) {
+  @Post('resubmit')
+  @UseInterceptors(FileInterceptor('vehiclePhoto', { limits: { fileSize: 2 * 1024 * 1024 }, fileFilter: (_req, file, cb) => cb(null, /^image\/(jpeg|png|webp)$/.test(file.mimetype)) }))
+  async resubmit(@Req() req: RequestLike, @Body() body: { name?: unknown; vehicleOwnership?: unknown; plateType?: unknown; hkPlate?: unknown; macauPlate?: unknown; mainlandPlate?: unknown; vehicleCategory?: unknown; vehicleColor?: unknown }, @UploadedFile() vehiclePhoto?: Express.Multer.File) {
     const session = await driverSessionFrom(req)
-    const driver = await prisma.driver.update({ where: { id: session.sub }, data: { reviewStatus: '待審核' } })
+    const current = await prisma.driver.findUnique({ where: { id: session.sub } })
+    if (!current) throw new UnauthorizedException('Driver not found')
+    if (current.reviewStatus === 'REJECTED') throw new ForbiddenException('Rejected registration cannot be resubmitted')
+    if (current.reviewStatus !== 'REVISION_REQUIRED') throw new HttpException('Only returned registrations can be resubmitted', HttpStatus.CONFLICT)
+    const value = (input: unknown, fallback: string | null = '') => typeof input === 'string' ? input.trim() : fallback
+    const name = value(body.name, current.name)!
+    const vehicleOwnership = value(body.vehicleOwnership, current.vehicleOwnership)!
+    const plateType = value(body.plateType, current.plateType)!
+    const hkPlate = value(body.hkPlate, current.hkPlate)
+    const macauPlate = value(body.macauPlate, current.macauPlate)
+    const mainlandPlate = value(body.mainlandPlate, current.mainlandPlate)
+    const vehicleCategory = value(body.vehicleCategory, current.vehicleCategory)!
+    const vehicleColor = value(body.vehicleColor, current.vehicleColor)!
+    if (!name || !vehicleCategory || !vehicleColor || !validVehiclePlateData({ vehicleOwnership, plateType, hkPlate, macauPlate, mainlandPlate })) throw new HttpException('Valid driver registration fields are required', HttpStatus.BAD_REQUEST)
+    const activeVehicleCategory = await prisma.vehicleCategory.findFirst({ where: { name: vehicleCategory, enabled: true }, select: { id: true } })
+    if (!activeVehicleCategory) throw new HttpException('Vehicle category is not available', HttpStatus.BAD_REQUEST)
+    const driver = await prisma.driver.update({ where: { id: current.id }, data: {
+      name, affiliation: vehicleOwnership, vehicleOwnership, plateType, hkPlate: hkPlate || null, macauPlate: macauPlate || null,
+      mainlandPlate: mainlandPlate || null, vehicleCategory, vehicleColor,
+      ...(vehiclePhoto ? { vehiclePhotoData: new Uint8Array(vehiclePhoto.buffer), vehiclePhotoMime: vehiclePhoto.mimetype } : {}),
+      reviewStatus: 'PENDING', reviewReason: null, reviewSubmittedAt: new Date(), reviewedAt: null, reviewedBy: null, isOnline: false
+    } })
     return driverResponse(driver)
   }
 
@@ -1149,7 +1190,7 @@ class DriverAuthController {
 
   @Post('status')
   async updateStatus(@Req() req: RequestLike, @Body() body: { isOnline?: unknown }) {
-    const session = await driverSessionFrom(req)
+    const { session } = await reviewedDriverFrom(req)
     if (typeof body.isOnline !== 'boolean') throw new HttpException('isOnline must be a boolean', HttpStatus.BAD_REQUEST)
     const now = new Date()
     const current = await prisma.driver.findUnique({ where: { id: session.sub }, select: { isOnline: true } })
@@ -1216,14 +1257,14 @@ class DriverAuthController {
 
   @Get('trips')
   async history(@Req() req: RequestLike) {
-    const session = await driverSessionFrom(req)
+    const { session } = await reviewedDriverFrom(req)
     const trips = await prisma.trip.findMany({ where: { driverId: session.sub }, include: { user: true, payment: true, settlement: true }, orderBy: { scheduledAt: 'desc' } })
     return trips.map(trip => tripResponse(trip))
   }
 
   @Post('trips/:id/arrive')
   async arrive(@Req() req: RequestLike, @Param('id') id: string) {
-    const session = await driverSessionFrom(req)
+    const { session } = await reviewedDriverFrom(req)
     const trip = await prisma.trip.findUnique({ where: { id }, include: { user: true } })
     if (!trip || trip.driverId !== session.sub) throw new HttpException('Trip not found', HttpStatus.NOT_FOUND)
     if (!trip.acceptedAt || trip.startedAt || trip.completedAt || trip.status === 'CANCELLED') throw new HttpException('Trip cannot be marked arrived', HttpStatus.CONFLICT)
@@ -1233,7 +1274,7 @@ class DriverAuthController {
 
   @Post('trips/:id/start')
   async start(@Req() req: RequestLike, @Param('id') id: string) {
-    const session = await driverSessionFrom(req)
+    const { session } = await reviewedDriverFrom(req)
     const trip = await prisma.trip.findUnique({ where: { id }, include: { user: true } })
     if (!trip || trip.driverId !== session.sub) throw new HttpException('Trip not found', HttpStatus.NOT_FOUND)
     if (!trip.arrivedAt || trip.startedAt || trip.completedAt || trip.status === 'CANCELLED') throw new HttpException('Trip cannot be started', HttpStatus.CONFLICT)
@@ -1243,7 +1284,7 @@ class DriverAuthController {
 
   @Post('trips/:id/complete')
   async complete(@Req() req: RequestLike, @Param('id') id: string) {
-    const session = await driverSessionFrom(req)
+    const { session } = await reviewedDriverFrom(req)
     const trip = await prisma.trip.findUnique({ where: { id }, include: { user: true } })
     if (!trip || trip.driverId !== session.sub) throw new HttpException('Trip not found', HttpStatus.NOT_FOUND)
     if (!trip.startedAt || trip.completedAt || trip.status === 'CANCELLED') throw new HttpException('Trip cannot be completed', HttpStatus.CONFLICT)
@@ -1285,7 +1326,20 @@ class DriverAuthController {
     const driver = await prisma.driver.findUnique({ where: { id: session.sub } })
     if (!driver) throw new UnauthorizedException('Driver not found')
     requireReviewedDriver(driver)
-    const result = await prisma.trip.updateMany({ where: { id, driverId: null, status: { not: 'COMPLETED' }, executionPhase: { not: 'IN_PROGRESS' } }, data: { driverId: driver.id, driverName: driver.name, driverPhone: `${driver.phoneCountryCode} ${driver.phone}`, vehiclePlate: driver.hkPlate, acceptedAt: new Date() } })
+    const now = new Date()
+    const result = await prisma.trip.updateMany({
+      where: { id, driverId: null, status: { notIn: ['COMPLETED', 'CANCELLED'] }, executionPhase: { not: 'IN_PROGRESS' } },
+      data: {
+        driverId: driver.id,
+        driverName: driver.name,
+        driverPhone: `${driver.phoneCountryCode} ${driver.phone}`,
+        vehiclePlate: driver.hkPlate,
+        status: 'CONFIRMED',
+        executionPhase: 'DRIVER_ASSIGNED',
+        assignedAt: now,
+        acceptedAt: now
+      }
+    })
     if (result.count !== 1) throw new HttpException('Trip is no longer available', HttpStatus.CONFLICT)
     return prisma.trip.findUnique({ where: { id }, include: { driver: true } })
   }
@@ -1295,7 +1349,7 @@ class DriverAuthController {
 class DriverOrderUrlController {
   @Get(':token')
   async details(@Req() req: RequestLike, @Param('token') token: string) {
-    const session = await driverSessionFrom(req)
+    const { session } = await reviewedDriverFrom(req)
     const item = await prisma.tripOrderUrl.findUnique({ where: { tokenHash: orderUrlTokenHash(token) }, include: { trip: { include: { user: true, driver: true } }, driver: true } })
     if (!item) throw new HttpException('Order URL not found', HttpStatus.NOT_FOUND)
     const now = new Date()
@@ -1307,7 +1361,7 @@ class DriverOrderUrlController {
 
   @Post(':token/accept')
   async accept(@Req() req: RequestLike, @Param('token') token: string) {
-    const session = await driverSessionFrom(req)
+    const { session } = await reviewedDriverFrom(req)
     const now = new Date()
     const result = await prisma.$transaction(async tx => {
       const item = await tx.tripOrderUrl.findUnique({ where: { tokenHash: orderUrlTokenHash(token) } })
@@ -1317,12 +1371,25 @@ class DriverOrderUrlController {
       const driver = await tx.driver.findUnique({ where: { id: session.sub } })
       if (!driver) throw new UnauthorizedException('Driver not found')
       const trip = await tx.trip.findUnique({ where: { id: item.tripId } })
-      if (!trip || trip.status === 'COMPLETED' || trip.status === 'CANCELLED') throw new HttpException('Trip is not available', HttpStatus.CONFLICT)
+      if (!trip || trip.status === 'COMPLETED' || trip.status === 'CANCELLED' || trip.executionPhase === 'IN_PROGRESS') throw new HttpException('Trip is not available', HttpStatus.CONFLICT)
       if (!item.driverId && trip.driverId && trip.driverId !== driver.id) throw new HttpException('Trip has been accepted by another driver', HttpStatus.CONFLICT)
       if (item.driverId && trip.driverId && trip.driverId !== driver.id) throw new HttpException('Trip has been accepted by another driver', HttpStatus.CONFLICT)
       const claimed = await tx.tripOrderUrl.updateMany({ where: { id: item.id, usedAt: null, revokedAt: null }, data: { usedAt: now, driverId: driver.id } })
       if (claimed.count !== 1) throw new HttpException('Order URL is no longer available', HttpStatus.CONFLICT)
-      return tx.trip.update({ where: { id: trip.id }, data: { driverId: driver.id, driverName: driver.name, driverPhone: `${driver.phoneCountryCode} ${driver.phone}`, vehiclePlate: driver.hkPlate, acceptedAt: now }, include: { user: true, driver: true } })
+      return tx.trip.update({
+        where: { id: trip.id },
+        data: {
+          driverId: driver.id,
+          driverName: driver.name,
+          driverPhone: `${driver.phoneCountryCode} ${driver.phone}`,
+          vehiclePlate: driver.hkPlate,
+          status: 'CONFIRMED',
+          executionPhase: 'DRIVER_ASSIGNED',
+          assignedAt: now,
+          acceptedAt: now
+        },
+        include: { user: true, driver: true }
+      })
     })
     return tripResponse(result)
   }
@@ -1376,7 +1443,41 @@ class AdminController {
   @Get('drivers') async listDrivers(@Req() req: RequestLike) {
     requireAuth(req)
     const data = await prisma.driver.findMany({ orderBy: { createdAt: 'desc' } })
-    return { data: data.map(driverResponse), total: data.length }
+    return { data: data.map(driver => ({ ...driverResponse(driver), vehiclePhotos: driver.vehiclePhotoData && driver.vehiclePhotoMime ? [`/admin/drivers/${driver.id}/vehicle-photo`] : [] })), total: data.length }
+  }
+  @Get('drivers/:id/vehicle-photo') async driverVehiclePhoto(@Req() req: RequestLike, @Param('id') id: string, @Res() response: Response) {
+    requireAuth(req)
+    const driver = await prisma.driver.findUnique({ where: { id }, select: { vehiclePhotoData: true, vehiclePhotoMime: true } })
+    if (!driver?.vehiclePhotoData || !driver.vehiclePhotoMime) throw new HttpException('Vehicle photo not found', HttpStatus.NOT_FOUND)
+    response.type(driver.vehiclePhotoMime).send(driver.vehiclePhotoData)
+  }
+  @Post('drivers/:id/review/approve') async approveDriver(@Req() req: RequestLike, @Param('id') id: string) {
+    const session = requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
+    const existing = await prisma.driver.findUnique({ where: { id } })
+    if (!existing) throw new HttpException('Driver not found', HttpStatus.NOT_FOUND)
+    if (!['PENDING', 'REVISION_REQUIRED'].includes(existing.reviewStatus)) throw new HttpException('Driver registration cannot be approved from its current status', HttpStatus.CONFLICT)
+    const driver = await prisma.driver.update({ where: { id }, data: { reviewStatus: 'APPROVED', reviewReason: null, reviewedAt: new Date(), reviewedBy: session.sub } })
+    return driverResponse(driver)
+  }
+  @Post('drivers/:id/review/revision') async requestDriverRevision(@Req() req: RequestLike, @Param('id') id: string, @Body() body: { reason?: unknown }) {
+    const session = requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
+    const reason = typeof body.reason === 'string' ? body.reason.trim() : ''
+    if (!reason) throw new HttpException('Review reason is required', HttpStatus.BAD_REQUEST)
+    const existing = await prisma.driver.findUnique({ where: { id } })
+    if (!existing) throw new HttpException('Driver not found', HttpStatus.NOT_FOUND)
+    if (existing.reviewStatus !== 'PENDING') throw new HttpException('Only pending registrations can be returned for revision', HttpStatus.CONFLICT)
+    const driver = await prisma.driver.update({ where: { id }, data: { reviewStatus: 'REVISION_REQUIRED', reviewReason: reason, reviewedAt: new Date(), reviewedBy: session.sub, isOnline: false } })
+    return driverResponse(driver)
+  }
+  @Post('drivers/:id/review/reject') async rejectDriver(@Req() req: RequestLike, @Param('id') id: string, @Body() body: { reason?: unknown }) {
+    const session = requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
+    const reason = typeof body.reason === 'string' ? body.reason.trim() : ''
+    if (!reason) throw new HttpException('Review reason is required', HttpStatus.BAD_REQUEST)
+    const existing = await prisma.driver.findUnique({ where: { id } })
+    if (!existing) throw new HttpException('Driver not found', HttpStatus.NOT_FOUND)
+    if (!['PENDING', 'REVISION_REQUIRED'].includes(existing.reviewStatus)) throw new HttpException('Driver registration cannot be rejected from its current status', HttpStatus.CONFLICT)
+    const driver = await prisma.driver.update({ where: { id }, data: { reviewStatus: 'REJECTED', reviewReason: reason, reviewedAt: new Date(), reviewedBy: session.sub, isOnline: false } })
+    return driverResponse(driver)
   }
   @Post('drivers') async saveDriver(@Req() req: RequestLike, @Body() body: Partial<Prisma.DriverCreateInput> & { id?: string }) {
     requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
@@ -1389,7 +1490,6 @@ class AdminController {
       phoneCountryCode: body.phoneCountryCode?.trim() || '+852', phone: body.phone!.trim(),
       vehicleCategory: body.vehicleCategory!.trim(), vehicleColor: body.vehicleColor!.trim(),
       vehiclePhotos: Array.isArray(body.vehiclePhotos) ? body.vehiclePhotos : [],
-      reviewStatus: body.reviewStatus?.trim() || '待審核',
       settlementMethod: body.settlementMethod?.trim() || null, settlementAccount: body.settlementAccount?.trim() || null
     }
     const driver = body.id
@@ -2949,6 +3049,9 @@ class PaymentsController {
 
 function clientTripResponse(trip: Prisma.TripGetPayload<{ include: { user: { select: { name: true; displayName: true; gender: true; countryCode: true; phoneNumber: true } }; payment: true; quote: { select: { expiresAt: true; total: true; currency: true; lines: true; vehicle: true; pricing: { select: { categoryName: true } } } } } }>) {
   const paymentExpiresAt = trip.status === 'PENDING' ? trip.quote?.expiresAt || null : null
+  const assignmentStartedAt = trip.payment?.createdAt || trip.createdAt
+  const assignmentExpiresAt = new Date(assignmentStartedAt.getTime() + 3 * 60 * 60 * 1000)
+  const assignmentExpired = assignmentExpiresAt.getTime() <= Date.now()
   const vehicle = trip.quote?.vehicle
   const vehicleCategoryName = trip.quote?.pricing?.categoryName || null
   const rawName = (trip.passengerName || trip.user.displayName || trip.user.name || '').trim()
@@ -2969,6 +3072,8 @@ function clientTripResponse(trip: Prisma.TripGetPayload<{ include: { user: { sel
       phoneNumber: passengerPhone
     },
     paymentExpiresAt: paymentExpiresAt?.toISOString() || null,
+    assignmentExpiresAt: assignmentExpiresAt.toISOString(),
+    assignmentExpired,
     quote: trip.quote ? {
       total: trip.quote.total,
       currency: trip.quote.currency,

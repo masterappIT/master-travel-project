@@ -47,8 +47,11 @@ class DriverApiClient {
   final String baseUrl;
   final http.Client _client;
   String? _token;
+  Map<String, dynamic>? _currentDriver;
 
   String? get token => _token;
+  Map<String, dynamic>? get currentDriver => _currentDriver;
+  bool get isApproved => _currentDriver?['reviewStatus'] == 'APPROVED';
 
   Future<void> restoreSession() async {
     final storedToken = html.window.localStorage[_tokenStorageKey];
@@ -63,6 +66,7 @@ class DriverApiClient {
 
   void clearSession() {
     _token = null;
+    _currentDriver = null;
     html.window.localStorage.remove(_tokenStorageKey);
   }
 
@@ -132,8 +136,50 @@ class DriverApiClient {
     final response = await http.Response.fromStream(streamedResponse);
     final session = DriverSession.fromJson(_decode(response));
     _token = session.token;
+    _currentDriver = session.driver;
     html.window.localStorage[_tokenStorageKey] = session.token;
     return session;
+  }
+
+  Future<Map<String, dynamic>> resubmitDriver({
+    required String name,
+    required String plateType,
+    required String vehicleOwnership,
+    required String hkPlate,
+    required String macauPlate,
+    required String mainlandPlate,
+    required String vehicleCategory,
+    required String vehicleColor,
+    Uint8List? vehiclePhotoBytes,
+    String? vehiclePhotoFilename,
+    String? vehiclePhotoMime,
+  }) async {
+    final request = http.MultipartRequest(
+        'POST', Uri.parse('$baseUrl/driver/auth/resubmit'))
+      ..headers['Authorization'] = 'Bearer ${_token ?? ''}'
+      ..fields.addAll({
+        'name': name,
+        'plateType': plateType,
+        'vehicleOwnership': vehicleOwnership,
+        'hkPlate': hkPlate,
+        'macauPlate': macauPlate,
+        'mainlandPlate': mainlandPlate,
+        'vehicleCategory': vehicleCategory,
+        'vehicleColor': vehicleColor,
+      });
+    request.headers.addAll(_headers);
+    if (vehiclePhotoBytes != null) {
+      request.files.add(http.MultipartFile.fromBytes(
+        'vehiclePhoto',
+        vehiclePhotoBytes,
+        filename: vehiclePhotoFilename,
+        contentType: MediaType.parse(vehiclePhotoMime!),
+      ));
+    }
+    final result =
+        _decode(await http.Response.fromStream(await _client.send(request)));
+    _currentDriver = result;
+    return result;
   }
 
   Future<Map<String, dynamic>> requestPhoneCode(
@@ -151,6 +197,7 @@ class DriverApiClient {
         headers: _headers,
         body: jsonEncode({'challengeId': challengeId, 'code': code}))));
     _token = session.token;
+    _currentDriver = session.driver;
     html.window.localStorage[_tokenStorageKey] = session.token;
     return session;
   }
@@ -158,10 +205,13 @@ class DriverApiClient {
   Future<Map<String, dynamic>> me() async {
     final result = _decode(await _client
         .get(Uri.parse('$baseUrl/driver/auth/me'), headers: _headers));
-    final driver = result['driver'];
-    if (driver is Map && driver.containsKey('isOnline')) {
-      DriverStatusController.instance.isOnline.value =
-          driver['isOnline'] == true;
+    final driver = result['driver'] is Map ? result['driver'] : result;
+    if (driver is Map) {
+      _currentDriver = Map<String, dynamic>.from(driver);
+      if (driver.containsKey('isOnline')) {
+        DriverStatusController.instance.isOnline.value =
+            driver['isOnline'] == true;
+      }
     }
     return result;
   }

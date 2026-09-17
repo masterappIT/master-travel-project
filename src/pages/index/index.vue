@@ -126,6 +126,7 @@
   </view>
   <!-- #ifdef MP-WEIXIN || MP-TOUTIAO -->
   <TripsPage v-if="visitedPages.has('/pages/trips/trips')" v-show="activePagePath === '/pages/trips/trips'" />
+  <ProfilePendingTripPage v-if="visitedPages.has('/pages/trips/pending')" :key="cachedPageUrl" v-show="activePagePath === '/pages/trips/pending'" />
   <MembershipPage v-if="visitedPages.has('/pages/membership/membership')" v-show="activePagePath === '/pages/membership/membership'" />
   <MileagePage v-if="visitedPages.has('/pages/mileage/mileage')" v-show="activePagePath === '/pages/mileage/mileage'" />
   <InvitePage v-if="visitedPages.has('/pages/invite/invite')" v-show="activePagePath === '/pages/invite/invite'" />
@@ -202,6 +203,7 @@ const pageStyle = computed(() => {
 })
 // #ifdef MP-WEIXIN || MP-TOUTIAO
 import TripsPage from '../trips/trips.vue'
+import ProfilePendingTripPage from '../trips/pending.vue'
 import MembershipPage from '../membership/membership.vue'
 import MileagePage from '../mileage/mileage.vue'
 import InvitePage from '../invite/invite.vue'

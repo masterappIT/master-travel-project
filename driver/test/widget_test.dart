@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:driver_web/app/route_names.dart';
 import 'package:driver_web/app/router.dart';
 import 'package:driver_web/home_page.dart';
 import 'package:driver_web/main.dart';
@@ -23,7 +24,9 @@ Widget testApp(Widget home) {
 
 void main() {
   testWidgets('renders the driver login page', (WidgetTester tester) async {
-    await tester.pumpWidget(const DriverApp());
+    await tester.pumpWidget(
+      const DriverApp(initialRoute: DriverRouteNames.login),
+    );
 
     expect(find.text('跨境出行'), findsOneWidget);
     expect(find.text('司機端登入 / 註冊'), findsOneWidget);

@@ -108,7 +108,7 @@ const finishTrip = () => openCachedPage(`/pages/orders/completed-detail?id=${enc
 .route-arrow { top: var(--trip-complete-arrow-top); left: var(--trip-complete-arrow-left); width: var(--trip-route-icon-size); height: var(--trip-route-icon-size); }
 .destination-icon { top: var(--trip-complete-destination-top); left: var(--trip-complete-destination-left); width: var(--trip-place-icon-width); height: var(--trip-destination-icon-height); }
 .destination-label { top: var(--trip-complete-label-top); left: var(--trip-complete-destination-label-left); }
-.time { position: absolute; left: var(--trip-complete-time-left); width: var(--trip-complete-time-width); font-size: var(--trip-departure-size); line-height: var(--trip-complete-time-line); font-weight: 100; white-space: nowrap; }
+.time { position: absolute; left: 0; width: 100%; font-size: var(--trip-departure-size); line-height: var(--trip-complete-time-line); font-weight: 100; text-align: center; white-space: nowrap; }
 .departure-time { top: var(--trip-complete-departure-top); }
 .arrival-time { top: var(--trip-complete-arrival-top); }
 .rating-prompt { position: absolute; top: var(--trip-complete-rating-top); left: var(--trip-complete-rating-left); width: var(--trip-complete-rating-width); height: var(--trip-complete-rating-height); }

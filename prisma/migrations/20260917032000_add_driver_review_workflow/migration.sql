@@ -1,0 +1,15 @@
+ALTER TABLE "Driver"
+  ADD COLUMN "reviewReason" TEXT,
+  ADD COLUMN "reviewSubmittedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  ADD COLUMN "reviewedAt" TIMESTAMP(3),
+  ADD COLUMN "reviewedBy" TEXT;
+
+UPDATE "Driver"
+SET "reviewStatus" = CASE
+  WHEN "reviewStatus" IN ('待審核', '審核中', 'PENDING') THEN 'PENDING'
+  WHEN "reviewStatus" IN ('未通過', 'REJECTED') THEN 'REJECTED'
+  WHEN "reviewStatus" = 'REVISION_REQUIRED' THEN 'REVISION_REQUIRED'
+  ELSE 'APPROVED'
+END;
+
+ALTER TABLE "Driver" ALTER COLUMN "reviewStatus" SET DEFAULT 'PENDING';

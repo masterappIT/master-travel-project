@@ -119,7 +119,12 @@ class _LoginPageState extends State<LoginPage> {
       } else {
         await _api.verifyPhoneCode(challengeId: _challengeId!, code: code);
         if (!mounted) return;
-        DriverNavigation.replace(context, DriverRouteNames.home);
+        DriverNavigation.replace(
+          context,
+          _api.isApproved
+              ? DriverRouteNames.home
+              : DriverRouteNames.reviewStatus,
+        );
       }
     } on DriverApiException catch (error) {
       if (mounted) setState(() => _error = error.message);

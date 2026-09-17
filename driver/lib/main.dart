@@ -8,11 +8,14 @@ import 'package:driver_web/core/tokens/driver_tokens.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await DriverApiClient.instance.restoreSession();
+  final api = DriverApiClient.instance;
+  await api.restoreSession();
   runApp(DriverApp(
-    initialRoute: DriverApiClient.instance.token == null
+    initialRoute: api.token == null
         ? DriverRouteNames.login
-        : DriverRouteNames.home,
+        : api.isApproved
+            ? DriverRouteNames.home
+            : DriverRouteNames.reviewStatus,
   ));
 }
 

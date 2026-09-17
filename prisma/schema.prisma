@@ -28,21 +28,20 @@ model Notification {
 }
 
 model NotificationTemplate {
-  id           String   @id @default(cuid())
-  name         String
-  type         String
-  title        String
-  content      String   @db.Text
-  audience     String   @default("ALL_USERS")
-  important    Boolean  @default(false)
-  enabled      Boolean  @default(true)
-  builtIn      Boolean  @default(false)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id        String   @id @default(cuid())
+  name      String
+  type      String
+  title     String
+  content   String   @db.Text
+  audience  String   @default("ALL_USERS")
+  important Boolean  @default(false)
+  enabled   Boolean  @default(true)
+  builtIn   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([type, enabled])
 }
-
 
 model User {
   id                 String              @id
@@ -108,6 +107,7 @@ model ClientSession {
   @@index([userId, revokedAt])
   @@index([expiresAt])
 }
+
 model AuthIdentity {
   id         String   @id @default(cuid())
   provider   String
@@ -122,18 +122,18 @@ model AuthIdentity {
 }
 
 model VerificationCode {
-  id           String    @id @default(cuid())
-  userId       String?
-  countryCode  String
-  phoneNumber  String
-  purpose      String    @default("LOGIN")
-  status       String    @default("ISSUED")
-  codeHash     String
-  attempts     Int       @default(0)
-  expiresAt    DateTime
-  consumedAt   DateTime?
-  createdAt    DateTime  @default(now())
-  user         User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  id          String    @id @default(cuid())
+  userId      String?
+  countryCode String
+  phoneNumber String
+  purpose     String    @default("LOGIN")
+  status      String    @default("ISSUED")
+  codeHash    String
+  attempts    Int       @default(0)
+  expiresAt   DateTime
+  consumedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  user        User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([userId, createdAt])
   @@index([countryCode, phoneNumber, createdAt])
@@ -174,43 +174,43 @@ enum WalletTransactionType {
 }
 
 model Trip {
-  id                    String              @id @default(cuid())
-  userId                String
-  quoteId               String?             @unique
-  origin                String
-  destination           String
-  region                Region
-  scheduledAt           DateTime
-  passengerName         String?
-  passengerPhone        String?
-  passengerPhoneRegion  String?
-  passengerGender       String?
-  passengerDocumentType String?
+  id                       String              @id @default(cuid())
+  userId                   String
+  quoteId                  String?             @unique
+  origin                   String
+  destination              String
+  region                   Region
+  scheduledAt              DateTime
+  passengerName            String?
+  passengerPhone           String?
+  passengerPhoneRegion     String?
+  passengerGender          String?
+  passengerDocumentType    String?
   passengerPassportCountry String?
-  estimatedArrivalAt    DateTime?
-  status                TripStatus          @default(PENDING)
-  executionPhase        TripExecutionPhase?
-  driverId              String?
-  driverName            String?
-  driverPhone           String?
-  vehiclePlate          String?
-  assignedAt            DateTime?
-  acceptedAt            DateTime?
-  arrivedAt             DateTime?
-  startedAt             DateTime?
-  completedAt           DateTime?
-  fareBalancePaid       Float               @default(0)
-  cashBalancePaid       Float               @default(0)
-  externalPaid          Float               @default(0)
-  externalPaymentMethod String?
-  createdAt             DateTime            @default(now())
-  updatedAt             DateTime            @updatedAt
-  user                  User                @relation(fields: [userId], references: [id])
-  driver                Driver?             @relation(fields: [driverId], references: [id], onDelete: SetNull)
-  orderUrls             TripOrderUrl[]
-  payment               Payment?
-  settlement            DriverSettlement?
-  quote                 FareQuote?          @relation(fields: [quoteId], references: [id], onDelete: SetNull)
+  estimatedArrivalAt       DateTime?
+  status                   TripStatus          @default(PENDING)
+  executionPhase           TripExecutionPhase?
+  driverId                 String?
+  driverName               String?
+  driverPhone              String?
+  vehiclePlate             String?
+  assignedAt               DateTime?
+  acceptedAt               DateTime?
+  arrivedAt                DateTime?
+  startedAt                DateTime?
+  completedAt              DateTime?
+  fareBalancePaid          Float               @default(0)
+  cashBalancePaid          Float               @default(0)
+  externalPaid             Float               @default(0)
+  externalPaymentMethod    String?
+  createdAt                DateTime            @default(now())
+  updatedAt                DateTime            @updatedAt
+  user                     User                @relation(fields: [userId], references: [id])
+  driver                   Driver?             @relation(fields: [driverId], references: [id], onDelete: SetNull)
+  orderUrls                TripOrderUrl[]
+  payment                  Payment?
+  settlement               DriverSettlement?
+  quote                    FareQuote?          @relation(fields: [quoteId], references: [id], onDelete: SetNull)
 
   @@index([userId, status])
   @@index([scheduledAt])
@@ -327,28 +327,32 @@ model VehicleCategory {
 }
 
 model Driver {
-  id                String               @id
-  driverType        String               @default("內部司機")
+  id                String                @id
+  driverType        String                @default("內部司機")
   name              String
   affiliation       String
   plateType         String
   hkPlate           String?
   mainlandPlate     String?
   macauPlate        String?
-  vehicleOwnership  String               @default("香港")
-  phoneCountryCode  String               @default("+852")
+  vehicleOwnership  String                @default("香港")
+  phoneCountryCode  String                @default("+852")
   phone             String
   vehicleCategory   String
   vehicleColor      String
   vehiclePhotos     Json
   vehiclePhotoData  Bytes?
   vehiclePhotoMime  String?
-  reviewStatus      String               @default("待審核")
+  reviewStatus      String                @default("PENDING")
+  reviewReason      String?
+  reviewSubmittedAt DateTime              @default(now())
+  reviewedAt        DateTime?
+  reviewedBy        String?
   settlementMethod  String?
   settlementAccount String?
-  isOnline          Boolean              @default(false)
-  createdAt         DateTime             @default(now())
-  updatedAt         DateTime             @updatedAt
+  isOnline          Boolean               @default(false)
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
   trips             Trip[]
   settlements       DriverSettlement[]
   onlineSessions    DriverOnlineSession[]
@@ -365,24 +369,24 @@ model Driver {
 }
 
 model DriverSettlement {
-  id              String   @id @default(cuid())
-  tripId          String   @unique
-  driverId        String
-  method          String
-  settledAt       DateTime @default(now())
-  createdAt       DateTime @default(now())
-  trip            Trip     @relation(fields: [tripId], references: [id], onDelete: Restrict)
-  driver          Driver   @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  id        String   @id @default(cuid())
+  tripId    String   @unique
+  driverId  String
+  method    String
+  settledAt DateTime @default(now())
+  createdAt DateTime @default(now())
+  trip      Trip     @relation(fields: [tripId], references: [id], onDelete: Restrict)
+  driver    Driver   @relation(fields: [driverId], references: [id], onDelete: Restrict)
 
   @@index([driverId, settledAt])
 }
 
 model DriverOnlineSession {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   driverId  String
   startedAt DateTime
   endedAt   DateTime?
-  driver    Driver   @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  driver    Driver    @relation(fields: [driverId], references: [id], onDelete: Cascade)
 
   @@index([driverId, startedAt])
   @@index([driverId, endedAt])

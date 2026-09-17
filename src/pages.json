@@ -4,6 +4,7 @@
     { "path": "pages/login/verify", "style": { "navigationStyle": "custom", "navigationBarTitleText": "" } },
     { "path": "pages/index/index", "style": { "navigationStyle": "custom", "navigationBarTitleText": "" } },
     { "path": "pages/trips/trips", "style": { "navigationStyle": "custom", "navigationBarTitleText": "" } },
+    { "path": "pages/trips/pending", "style": { "navigationStyle": "custom", "navigationBarTitleText": "" } },
     { "path": "pages/trips/detail", "style": { "navigationStyle": "custom", "navigationBarTitleText": "" } },
     { "path": "pages/membership/membership", "style": { "navigationStyle": "custom", "navigationBarTitleText": "" } },
     { "path": "pages/mileage/mileage", "style": { "navigationStyle": "custom", "navigationBarTitleText": "" } },

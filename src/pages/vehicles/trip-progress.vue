@@ -66,6 +66,7 @@ import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 const { responsiveStyle } = useResponsiveCanvas()
 const trip = ref<ClientTrip | null>(null)
 const tripId = ref('')
+const fromProfilePending = ref(false)
 let pollTimer: ReturnType<typeof setInterval> | undefined
 const originLabel = computed(() => formatOrderSummaryAddress(trip.value?.origin, '香港').split(' · ')[0])
 const destinationLabel = computed(() => formatOrderSummaryAddress(trip.value?.destination, '深圳').split(' · ')[0])
@@ -84,24 +85,33 @@ const startPolling = () => {
   pollTimer = setInterval(() => { void loadTrip() }, 15000)
 }
 const loadTrip = async () => { if (!tripId.value || transitioning) return; try { const nextTrip = await getClientTrip(tripId.value); trip.value = nextTrip; if (nextTrip.status === 'COMPLETED') { transitioning = true; if (pollTimer) clearInterval(pollTimer); openCachedPage(`/pages/vehicles/trip-complete?id=${encodeURIComponent(tripId.value)}`) } } catch (error) { uni.showToast({ title: error instanceof Error ? error.message : '行程載入失敗', icon: 'none' }) } }
-onLoad(options => { tripId.value = options?.id || ''; void loadTrip(); startPolling() })
+onLoad(options => { tripId.value = options?.id || ''; fromProfilePending.value = options?.from === 'profile-pending'; void loadTrip(); startPolling() })
 // #ifdef MP-WEIXIN || MP-TOUTIAO
 watch([cachedPagePath, cachedPageUrl], ([path, url]) => {
   if (path !== '/pages/vehicles/trip-progress') { stopPolling(); return }
-  const id = getCachedPageOrderQuery(url).id
+  const query = getCachedPageOrderQuery(url)
+  const id = query.id
   if (!id) { stopPolling(); return }
+  fromProfilePending.value = query.from === 'profile-pending'
   if (id !== tripId.value) { transitioning = false; tripId.value = id; void loadTrip() }
   startPolling()
 }, { immediate: true })
 // #endif
 onUnmounted(stopPolling)
-const goBack = () => openCachedPage(`/pages/orders/traveling-detail?id=${encodeURIComponent(tripId.value)}`)
+const goBack = () => openCachedPage(fromProfilePending.value
+  ? `/pages/trips/pending?id=${encodeURIComponent(tripId.value)}`
+  : `/pages/orders/traveling-detail?id=${encodeURIComponent(tripId.value)}`)
 const callDriver = () => { const phone = trip.value?.driver?.phone; if (phone) uni.makePhoneCall({ phoneNumber: phone }); else uni.showToast({ title: '暫無司機電話', icon: 'none' }) }
 const showComingSoon = (label: string) => uni.showToast({ title: `${label}功能準備中`, icon: 'none' })
 </script>
 
 <style scoped>
 @import '../../styles/tokens.css';
+
+@keyframes progress-icon-travel {
+  0%, 100% { transform: translateX(calc(var(--trip-progress-icon-distance) * -1)); }
+  50% { transform: translateX(var(--trip-progress-icon-distance)); }
+}
 
 :global(html), :global(body), :global(#app) { width: 100%; height: 100%; margin: 0; overflow: hidden; background: var(--trip-viewport-background); }
 .trip-progress-page { }
@@ -138,7 +148,7 @@ const showComingSoon = (label: string) => uni.showToast({ title: `${label}功能
 .city-scene { position: absolute; left: var(--trip-scene-left); top: var(--trip-scene-top); width: var(--trip-scene-width); height: var(--trip-scene-height); }
 .quick-actions { position: absolute; z-index: 2; top: var(--trip-actions-top); left: var(--trip-card-left); width: var(--trip-card-width); display: flex; justify-content: center; gap: var(--trip-action-gap); color: var(--trip-surface); font-family: var(--trip-action-font); font-size: var(--trip-action-size); font-style: var(--trip-action-style); }
 .status-content { position: absolute; z-index: 2; top: var(--trip-status-top); left: 0; width: var(--trip-canvas-width); display: flex; flex-direction: column; align-items: center; color: var(--trip-surface); }
-.status-mark { width: var(--trip-status-icon-size); height: var(--trip-status-icon-size); margin-bottom: var(--trip-status-icon-gap); }
+.status-mark { width: var(--trip-status-icon-size); height: var(--trip-status-icon-size); margin-bottom: var(--trip-status-icon-gap); animation: progress-icon-travel var(--trip-progress-icon-duration) var(--trip-icon-easing) infinite; }
 .status-title { font-size: var(--trip-title-size); line-height: var(--trip-title-line); font-weight: 700; }
 .route { position: absolute; z-index: 4; left: var(--trip-progress-route-left); top: var(--trip-progress-route-top); width: var(--trip-progress-route-width); height: var(--trip-route-icon-size); color: var(--trip-surface); font-size: var(--trip-route-size); font-weight: 700; }
 .route > text { position: absolute; top: var(--trip-progress-label-top); white-space: nowrap; }
@@ -151,5 +161,5 @@ const showComingSoon = (label: string) => uni.showToast({ title: `${label}功能
 .origin-icon { height: var(--trip-origin-icon-height); }
 .destination-icon { height: var(--trip-destination-icon-height); margin-left: var(--trip-destination-offset); }
 .route-arrow { width: var(--trip-route-icon-size); height: var(--trip-route-icon-size); margin-left: var(--trip-arrow-offset); }
-.departure { position: absolute; z-index: 4; left: var(--trip-progress-arrival-left); top: var(--trip-progress-arrival-top); color: var(--trip-surface); font-size: var(--trip-departure-size); font-weight: 300; }
+.departure { position: absolute; z-index: 4; left: 0; top: var(--trip-progress-arrival-top); width: var(--trip-canvas-width); color: var(--trip-surface); font-size: var(--trip-departure-size); font-weight: 300; text-align: center; white-space: nowrap; }
 </style>

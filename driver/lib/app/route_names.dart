@@ -1,6 +1,7 @@
 abstract final class DriverRouteNames {
   static const login = '/';
   static const registration = '/registration';
+  static const reviewStatus = '/review-status';
   static const home = '/home';
   static const orders = '/orders';
   static const orderDetail = '/orders/detail';

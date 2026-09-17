@@ -15,6 +15,7 @@
   --login-phone-number-left: 116.5px;
 }
 
+.booking-success-page,
 .trip-waiting-page,
 .trip-progress-page,
 .trip-complete-page,
@@ -33,6 +34,8 @@
   --trip-font: 'Noto Sans TC', sans-serif;
   --trip-action-font: 'Noto Sans TC', sans-serif;
   --trip-action-style: normal;
+  --trip-assign-icon-duration: 1.2s; --trip-waiting-icon-duration: 1.6s; --trip-progress-icon-duration: 1.4s; --trip-icon-easing: ease-in-out; --trip-waiting-icon-easing: linear;
+  --trip-progress-icon-distance: 8px;
   --trip-canvas-width: 430px; --trip-canvas-height: 932px; --trip-screen-radius: 35px;
   --trip-back-top: 60px; --trip-back-left: 33px; --trip-back-size: 38px;
   --trip-card-top: 297px; --trip-card-left: 25px; --trip-card-width: 380px; --trip-card-height: 180px; --trip-card-radius: 25px;

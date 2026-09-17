@@ -18,12 +18,14 @@ class RegistrationPage extends StatefulWidget {
       this.initialCountryCode,
       this.initialPhone,
       this.verificationChallengeId,
-      this.verificationCode});
+      this.verificationCode,
+      this.revisionDriver});
 
   final String? initialCountryCode;
   final String? initialPhone;
   final String? verificationChallengeId;
   final String? verificationCode;
+  final Map<String, dynamic>? revisionDriver;
 
   @override
   State<RegistrationPage> createState() => _RegistrationPageState();
@@ -61,7 +63,21 @@ class _RegistrationPageState extends State<RegistrationPage> {
     _registrationChallengeId = widget.verificationChallengeId;
     _phoneVerified = _registrationChallengeId != null &&
         _verificationCodeController.text.length == 5;
-    _registrationStep = _phoneVerified ? 2 : 1;
+    if (widget.revisionDriver != null) {
+      final driver = widget.revisionDriver!;
+      _nameController.text = driver['name']?.toString() ?? '';
+      _countryCode = driver['phoneCountryCode']?.toString() ?? '+852';
+      _phoneController.text = driver['phone']?.toString() ?? '';
+      _vehicleOwnership = driver['vehicleOwnership']?.toString() ?? '香港';
+      _plateType = driver['plateType']?.toString() ?? '兩地牌';
+      _hkPlateController.text = driver['hkPlate']?.toString() ?? '';
+      _macauPlateController.text = driver['macauPlate']?.toString() ?? '';
+      _mainlandPlateController.text = driver['mainlandPlate']?.toString() ?? '';
+      _vehicleCategoryController.text =
+          driver['vehicleCategory']?.toString() ?? '';
+      _vehicleColorController.text = driver['vehicleColor']?.toString() ?? '';
+    }
+    _registrationStep = widget.revisionDriver != null || _phoneVerified ? 2 : 1;
     _phoneController.addListener(_clearRegistrationChallenge);
     _loadVehicleCategories();
   }
@@ -178,38 +194,53 @@ class _RegistrationPageState extends State<RegistrationPage> {
     final input = html.FileUploadInputElement()
       ..accept = 'image/jpeg,image/png,image/webp'
       ..multiple = false;
-    input.click();
-    await input.onChange.first;
-    final files = input.files;
-    final file = files == null || files.isEmpty ? null : files.first;
-    if (file == null) return;
-    if (!const ['image/jpeg', 'image/png', 'image/webp'].contains(file.type)) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('只支援 JPEG、PNG 或 WebP 圖片')));
-      }
-      return;
-    }
-    setState(() => _processingVehiclePhoto = true);
+    input.style
+      ..position = 'fixed'
+      ..left = '0'
+      ..top = '0'
+      ..width = '1px'
+      ..height = '1px'
+      ..opacity = '0'
+      ..zIndex = '2147483647';
+    html.document.body?.append(input);
     try {
-      const maxBytes = 2 * 1024 * 1024;
-      final bytes = file.size <= maxBytes
-          ? await _readBlob(file)
-          : await _compressVehiclePhoto(file);
-      if (!mounted) return;
-      setState(() {
-        _vehiclePhotoBytes = bytes;
-        _vehiclePhotoName =
-            file.size <= maxBytes ? file.name : '${file.name}.jpg';
-        _vehiclePhotoMime = file.size <= maxBytes ? file.type : 'image/jpeg';
-      });
-    } on Object catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(error is StateError ? error.message : '圖片處理失敗')));
+      final selectionChanged = input.onChange.first;
+      input.click();
+      await selectionChanged;
+      final files = input.files;
+      final file = files == null || files.isEmpty ? null : files.first;
+      if (file == null) return;
+      if (!const ['image/jpeg', 'image/png', 'image/webp']
+          .contains(file.type)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('只支援 JPEG、PNG 或 WebP 圖片')));
+        }
+        return;
+      }
+      setState(() => _processingVehiclePhoto = true);
+      try {
+        const maxBytes = 2 * 1024 * 1024;
+        final bytes = file.size <= maxBytes
+            ? await _readBlob(file)
+            : await _compressVehiclePhoto(file);
+        if (!mounted) return;
+        setState(() {
+          _vehiclePhotoBytes = bytes;
+          _vehiclePhotoName =
+              file.size <= maxBytes ? file.name : '${file.name}.jpg';
+          _vehiclePhotoMime = file.size <= maxBytes ? file.type : 'image/jpeg';
+        });
+      } on Object catch (error) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text(error is StateError ? error.message : '圖片處理失敗')));
+        }
+      } finally {
+        if (mounted) setState(() => _processingVehiclePhoto = false);
       }
     } finally {
-      if (mounted) setState(() => _processingVehiclePhoto = false);
+      input.remove();
     }
   }
 
@@ -304,7 +335,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
         (requiresMacauPlate && _macauPlateController.text.trim().isEmpty) ||
         _vehicleCategoryController.text.trim().isEmpty ||
         _vehicleColorController.text.trim().isEmpty ||
-        _vehiclePhotoBytes == null ||
+        (widget.revisionDriver == null && _vehiclePhotoBytes == null) ||
         (requiresMainlandPlate &&
             _mainlandPlateController.text.trim().isEmpty)) {
       ScaffoldMessenger.of(context)
@@ -316,39 +347,58 @@ class _RegistrationPageState extends State<RegistrationPage> {
           .showSnackBar(SnackBar(content: Text('請輸入 $expectedLength 位手機號碼')));
       return;
     }
-    if (!_phoneVerified ||
-        _registrationChallengeId == null ||
-        _verificationCodeController.text.trim().length != 5) {
+    if (widget.revisionDriver == null &&
+        (!_phoneVerified ||
+            _registrationChallengeId == null ||
+            _verificationCodeController.text.trim().length != 5)) {
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('請先完成手機驗證')));
       return;
     }
     setState(() => _loading = true);
     try {
-      await DriverApiClient.instance.registerDriver(
-        name: _nameController.text.trim(),
-        plateType: _plateType,
-        vehicleOwnership: _vehicleOwnership,
-        hkPlate: _hkPlateController.text.trim().isEmpty
-            ? null
-            : _hkPlateController.text.trim(),
-        macauPlate: _macauPlateController.text.trim().isEmpty
-            ? null
-            : _macauPlateController.text.trim(),
-        mainlandPlate: _mainlandPlateController.text.trim().isEmpty
-            ? null
-            : _mainlandPlateController.text.trim(),
-        phoneCountryCode: _countryCode,
-        phone: phone,
-        verificationChallengeId: _registrationChallengeId!,
-        verificationCode: _verificationCodeController.text.trim(),
-        vehicleCategory: _vehicleCategoryController.text.trim(),
-        vehicleColor: _vehicleColorController.text.trim(),
-        vehiclePhotoBytes: _vehiclePhotoBytes!,
-        vehiclePhotoFilename: _vehiclePhotoName!,
-        vehiclePhotoMime: _vehiclePhotoMime!,
-      );
-      if (mounted) DriverNavigation.replace(context, DriverRouteNames.home);
+      if (widget.revisionDriver != null) {
+        await DriverApiClient.instance.resubmitDriver(
+          name: _nameController.text.trim(),
+          plateType: _plateType,
+          vehicleOwnership: _vehicleOwnership,
+          hkPlate: _hkPlateController.text.trim(),
+          macauPlate: _macauPlateController.text.trim(),
+          mainlandPlate: _mainlandPlateController.text.trim(),
+          vehicleCategory: _vehicleCategoryController.text.trim(),
+          vehicleColor: _vehicleColorController.text.trim(),
+          vehiclePhotoBytes: _vehiclePhotoBytes,
+          vehiclePhotoFilename: _vehiclePhotoName,
+          vehiclePhotoMime: _vehiclePhotoMime,
+        );
+      } else {
+        await DriverApiClient.instance.registerDriver(
+          name: _nameController.text.trim(),
+          plateType: _plateType,
+          vehicleOwnership: _vehicleOwnership,
+          hkPlate: _hkPlateController.text.trim().isEmpty
+              ? null
+              : _hkPlateController.text.trim(),
+          macauPlate: _macauPlateController.text.trim().isEmpty
+              ? null
+              : _macauPlateController.text.trim(),
+          mainlandPlate: _mainlandPlateController.text.trim().isEmpty
+              ? null
+              : _mainlandPlateController.text.trim(),
+          phoneCountryCode: _countryCode,
+          phone: phone,
+          verificationChallengeId: _registrationChallengeId!,
+          verificationCode: _verificationCodeController.text.trim(),
+          vehicleCategory: _vehicleCategoryController.text.trim(),
+          vehicleColor: _vehicleColorController.text.trim(),
+          vehiclePhotoBytes: _vehiclePhotoBytes!,
+          vehiclePhotoFilename: _vehiclePhotoName!,
+          vehiclePhotoMime: _vehiclePhotoMime!,
+        );
+      }
+      if (mounted) {
+        DriverNavigation.replace(context, DriverRouteNames.reviewStatus);
+      }
     } on DriverApiException catch (error) {
       if (mounted)
         ScaffoldMessenger.of(context)
@@ -616,11 +666,10 @@ class _RegistrationCardState extends State<_RegistrationCard> {
               },
             ),
             const SizedBox(height: DriverSpacing.lg),
-            _TextFieldSection(
+            _SelectFieldSection(
               label: '車輛類別',
               hint: widget.vehicleCategoryLoading ? '載入中…' : '請選擇車輛類別',
-              trailing: 'assets/chevron-down.svg',
-              controller: widget.vehicleCategoryController,
+              value: widget.vehicleCategoryController.text,
               onTap: widget.vehicleCategoryLoading
                   ? null
                   : widget.onVehicleCategoryTap,
@@ -640,6 +689,66 @@ class _RegistrationCardState extends State<_RegistrationCard> {
             ),
           ],
         ),
+      );
+}
+
+class _SelectFieldSection extends StatelessWidget {
+  const _SelectFieldSection({
+    required this.label,
+    required this.hint,
+    required this.value,
+    required this.onTap,
+  });
+
+  final String label;
+  final String hint;
+  final String value;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(label,
+              style: const TextStyle(
+                  fontSize: DriverTypography.body,
+                  fontWeight: FontWeight.w500,
+                  color: DriverColors.text)),
+          const SizedBox(height: DriverSpacing.sm),
+          Semantics(
+            button: true,
+            label: value.isEmpty ? hint : value,
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(DriverRadii.input),
+              child: Container(
+                height: 50,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                decoration: _registrationFieldDecoration(),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        value.isEmpty ? hint : value,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: value.isEmpty
+                              ? DriverColors.secondaryText
+                              : DriverColors.text,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: DriverSpacing.sm),
+                    SvgPicture.asset('assets/chevron-down.svg',
+                        width: 16, height: 16),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       );
 }
 

@@ -16,8 +16,10 @@ import '../order_history_page.dart';
 import '../order_in_progress_page.dart';
 import '../profile_page.dart';
 import '../registration_page.dart';
+import '../review_status_page.dart';
 import '../vehicle_legacy_page.dart';
 import '../vehicle_page.dart';
+import '../core/api/driver_api_client.dart';
 import '../settlement_overview_page.dart';
 import '../language_settings_page.dart';
 import '../notification_settings_page.dart';
@@ -36,11 +38,17 @@ abstract final class DriverRouter {
             initialPhone: values['phone'],
             verificationChallengeId: values['challengeId'],
             verificationCode: values['code'],
+            revisionDriver: arguments is Map<String, dynamic> &&
+                    arguments.containsKey('reviewStatus')
+                ? arguments
+                : null,
           );
         },
-        DriverRouteNames.home: (_) => const HomePage(),
-        DriverRouteNames.orders: (_) => const OrderHallPage(),
-        DriverRouteNames.orderHistory: (_) => const OrderHistoryPage(),
+        DriverRouteNames.reviewStatus: (_) => const ReviewStatusPage(),
+        DriverRouteNames.home: (_) => _approved(const HomePage()),
+        DriverRouteNames.orders: (_) => _approved(const OrderHallPage()),
+        DriverRouteNames.orderHistory: (_) =>
+            _approved(const OrderHistoryPage()),
         DriverRouteNames.profile: (_) => const ProfilePage(),
         DriverRouteNames.flightQuery: (_) => const FlightQueryPage(),
         DriverRouteNames.currency: (_) => const CurrencyPage(),
@@ -73,14 +81,20 @@ abstract final class DriverRouter {
         },
         DriverRouteNames.orderDetail: (context) {
           final arguments = ModalRoute.of(context)?.settings.arguments;
-          return OrderDetailPage(tripId: arguments?.toString());
+          return _approved(OrderDetailPage(tripId: arguments?.toString()));
         },
-        DriverRouteNames.orderAccepted: (context) => OrderAcceptedPage(
+        DriverRouteNames.orderAccepted: (context) =>
+            _approved(OrderAcceptedPage(
               tripId: ModalRoute.of(context)?.settings.arguments?.toString(),
-            ),
-        DriverRouteNames.orderInProgress: (context) => OrderInProgressPage(
+            )),
+        DriverRouteNames.orderInProgress: (context) =>
+            _approved(OrderInProgressPage(
               tripId: ModalRoute.of(context)?.settings.arguments?.toString(),
-            ),
-        DriverRouteNames.orderCompleted: (_) => const OrderCompletedPage(),
+            )),
+        DriverRouteNames.orderCompleted: (_) =>
+            _approved(const OrderCompletedPage()),
       };
+
+  static Widget _approved(Widget page) =>
+      DriverApiClient.instance.isApproved ? page : const ReviewStatusPage();
 }
