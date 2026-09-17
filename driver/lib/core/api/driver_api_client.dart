@@ -246,6 +246,10 @@ class DriverApiClient {
       headers: _headers));
   Future<List<dynamic>> trips() async => _decodeList(await _client
       .get(Uri.parse('$baseUrl/driver/auth/trips'), headers: _headers));
+  Future<Map<String, dynamic>> trip(String id) async =>
+      _decode(await _client.get(
+          Uri.parse('$baseUrl/driver/auth/trips/${Uri.encodeComponent(id)}'),
+          headers: _headers));
   Future<Map<String, dynamic>> acceptTrip(String id) async =>
       _decode(await _client.post(
           Uri.parse(

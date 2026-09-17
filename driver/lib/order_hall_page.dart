@@ -53,6 +53,19 @@ class _OrderHallPageState extends State<OrderHallPage> {
     }
   }
 
+  String _formatPrice(dynamic price, dynamic currency) {
+    if (price is! num) return '待確認';
+    final code = currency?.toString();
+    final symbol = code == 'HKD'
+        ? 'HK\$'
+        : code == 'RMB' || code == 'CNY'
+            ? '¥'
+            : code == null || code.isEmpty
+                ? ''
+                : '$code ';
+    return '$symbol${price.toStringAsFixed(2)}';
+  }
+
   void _openOrderDetail(String id) {
     DriverNavigation.push(context, DriverRouteNames.orderDetail, arguments: id)
         .then((_) => _loadTrips());
@@ -156,9 +169,7 @@ class _OrderHallPageState extends State<OrderHallPage> {
                             item['user']?['name']?.toString() ??
                             '乘客',
                         time: _formatTripTime(item['scheduledAt']),
-                        price: item['price'] != null
-                            ? '\$${item['price']}'
-                            : '待確認',
+                        price: _formatPrice(item['price'], item['currency']),
                         origin: item['pickupAddress']?.toString() ??
                             item['origin']?.toString() ??
                             '起點待確認',
@@ -182,9 +193,7 @@ class _OrderHallPageState extends State<OrderHallPage> {
                             item['passengerName']?.toString() ??
                             '乘客',
                         time: _formatTripTime(item['scheduledAt']),
-                        price: item['price'] != null
-                            ? '\$${item['price']}'
-                            : '待確認',
+                        price: _formatPrice(item['price'], item['currency']),
                         origin: item['pickupAddress']?.toString() ?? '起點待確認',
                         destination:
                             item['dropoffAddress']?.toString() ?? '終點待確認',

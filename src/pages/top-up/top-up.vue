@@ -57,11 +57,7 @@ type WalletRecord = { id: number; type: string; amount: number; time: string }
 type WalletState = { withdrawable: number; fare: number; records: WalletRecord[] }
 
 const { responsiveStyle } = useResponsiveCanvas()
-const { formatOriginal, currency, convertAmount } = useCurrency()
-const formatWalletAmount = (amount: number, sourceCurrency: 'HKD' | 'RMB') => {
-  const converted = convertAmount(amount, sourceCurrency)
-  return `${currency.value === 'HKD' ? 'HK$' : '¥'}${converted.toFixed(2)}`
-}
+const { formatConvertedAmount: formatWalletAmount, loadSettings } = useCurrency()
 const amountOptions = [
   { amount: 500, price: 500 },
   { amount: 800, price: 800, recommended: true },
@@ -103,7 +99,8 @@ const syncRemoteWallet = async () => {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
+  await loadSettings()
   void syncRemoteWallet()
 })
 

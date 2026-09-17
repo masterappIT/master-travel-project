@@ -72,13 +72,17 @@ class _LoginPageState extends State<LoginPage> {
         isRegistration = true;
       }
       if (!mounted) return;
+      final developmentCode = result['developmentCode'] as String?;
       setState(() {
         _challengeId = result['challengeId'] as String?;
         _isRegistration = isRegistration;
+        if (developmentCode != null) _codeController.text = developmentCode;
       });
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(
-              isRegistration ? '新號碼驗證碼已發送，請輸入 00000 完成註冊驗證' : '登入驗證碼已發送')));
+      final message = developmentCode == null
+          ? '驗證碼已發送'
+          : '開發環境驗證碼：$developmentCode';
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
     } on DriverApiException catch (error) {
       if (mounted) setState(() => _error = error.message);
     } finally {
@@ -348,7 +352,7 @@ class _VerificationCard extends StatelessWidget {
                         FilteringTextInputFormatter.digitsOnly,
                         LengthLimitingTextInputFormatter(5),
                       ],
-                      decoration: _inputDecoration('請輸入 5 位數簡訊驗證碼')));
+                      decoration: _inputDecoration('請輸入 5 位數驗證碼')));
               final compact = constraints.maxWidth < 350;
               final button = _PrimaryButton(
                   label: loading ? '處理中' : '獲取驗證碼',

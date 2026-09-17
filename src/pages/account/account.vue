@@ -66,15 +66,17 @@ import { closeCachedPage } from '../../utils/navigation'
 const { responsiveStyle } = useResponsiveCanvas()
 import { onShow } from '@dcloudio/uni-app'
 import { computed, reactive, ref, onMounted } from 'vue'
-import { setAuthenticated } from '../../utils/auth'
+import { getAuthUser, setAuthenticated } from '../../utils/auth'
 import { getClientProfile, updateClientProfile, uploadClientAvatar, getClientSecurity, updateClientSecurity, requestClientPhoneChange, verifyClientPhoneChange, linkClientProvider, unlinkClientProvider } from '../../services/api'
 type Provider = 'apple' | 'wechat'
 const stored = uni.getStorageSync('account-profile') || {}
 const storedSecurity = uni.getStorageSync('account-security') || {}
+const authenticatedUser = getAuthUser()
 const activeTab = ref<'profile' | 'security'>('profile')
 const avatarUrl = ref<string>(stored.avatarUrl || '')
-const form = reactive({ name: stored.name || 'John', displayName: stored.displayName || 'John', gender: stored.gender || '先生', region: stored.region || '香港', birthday: stored.birthday || '1990-01-01' })
-const security = reactive({ phone: storedSecurity.phone || '+852 60556543', password: '', email: storedSecurity.email || '', passwordSet: storedSecurity.passwordSet ?? false, appleLinked: storedSecurity.appleLinked ?? false, wechatLinked: storedSecurity.wechatLinked ?? true })
+const form = reactive({ name: stored.name || '', displayName: stored.displayName || '', gender: stored.gender || '先生', region: stored.region || '香港', birthday: stored.birthday || '1990-01-01' })
+const registeredPhone = authenticatedUser?.countryCode && authenticatedUser.phoneNumber ? `${authenticatedUser.countryCode} ${authenticatedUser.phoneNumber}` : ''
+const security = reactive({ phone: registeredPhone || storedSecurity.phone || '', password: '', email: storedSecurity.email || '', passwordSet: storedSecurity.passwordSet ?? false, appleLinked: storedSecurity.appleLinked ?? false, wechatLinked: storedSecurity.wechatLinked ?? true })
 const emailDialogVisible = ref(false)
 const emailDialogValue = ref('')
 const emailDialogError = ref('')
@@ -85,9 +87,9 @@ const passwordDialogError = ref('')
 const passwordConnected = computed(() => security.passwordSet)
 const countryCodes = ['+852', '+853', '+86', '+1', '+44']
 const phoneParts = security.phone.trim().split(/\s+/)
-const countryCode = ref(countryCodes.includes(phoneParts[0]) ? phoneParts[0] : '+852')
+const countryCode = ref(countryCodes.includes(phoneParts[0]) ? phoneParts[0] : '')
 const countryCodeIndex = ref(Math.max(0, countryCodes.indexOf(countryCode.value)))
-const phoneNumber = ref(phoneParts.slice(1).join(' ') || security.phone)
+const phoneNumber = ref(countryCodes.includes(phoneParts[0]) ? phoneParts.slice(1).join(' ') : '')
 const startPasswordSetup = () => { passwordDialogValue.value = ''; passwordDialogError.value = ''; passwordDialogVisible.value = true }
 const closePasswordDialog = () => { passwordDialogVisible.value = false; passwordDialogError.value = '' }
 const savePasswordSetup = async () => {
@@ -267,7 +269,8 @@ const loadSecurity = async () => {
     security.passwordSet = result.passwordSet
     security.appleLinked = result.linkedProviders.includes('apple')
     security.wechatLinked = result.linkedProviders.includes('wechat')
-  } catch { /* Keep cached security values when the API is unavailable. */ }
+    uni.setStorageSync('account-security', { ...security })
+  } catch { /* Keep the authenticated user's cached phone when the API is unavailable. */ }
 }
 
 onMounted(async () => {
@@ -284,7 +287,8 @@ onMounted(async () => {
     phoneNumber.value = user.phoneNumber || phoneNumber.value
     security.phone = `${countryCode.value} ${phoneNumber.value}`
     uni.setStorageSync('account-profile', { ...form, avatarUrl: avatarUrl.value })
-    uni.setStorageSync('client-auth-user', user)
+    uni.setStorageSync('account-security', { ...security })
+    setAuthenticated(undefined, user)
     void loadSecurity()
   } catch {
     // Keep cached profile values when the API is unavailable.
@@ -296,7 +300,14 @@ onShow(() => {
     avatarUrl.value = user.avatarUrl || ''
     form.name = user.name || ''
     form.displayName = user.displayName || ''
+    countryCode.value = user.countryCode
+    countryCodeIndex.value = Math.max(0, countryCodes.indexOf(user.countryCode))
+    phoneNumber.value = user.phoneNumber
+    security.phone = `${user.countryCode} ${user.phoneNumber}`
     uni.setStorageSync('account-profile', { ...form, avatarUrl: avatarUrl.value })
+    uni.setStorageSync('account-security', { ...security })
+    setAuthenticated(undefined, user)
+    void loadSecurity()
   }).catch(() => undefined)
 })
 </script>

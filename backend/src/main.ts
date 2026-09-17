@@ -59,10 +59,12 @@ const appSettingsDefaults = {
   region: '香港',
   currency: 'HKD',
   pricingCurrency: 'RMB',
+  walletCurrency: 'RMB',
   exchangeRate: 0.92,
   adminLogo: null as string | null,
   severeWeatherEnabled: false,
   driverRaceEnabled: false,
+  driverPayoutPercentage: 100,
   fareBalancePayEnabled: true,
   cashBalancePayEnabled: true,
   wechatPayEnabled: true,
@@ -217,7 +219,11 @@ async function ensurePricingDefaults() {
       create: appSettingsDefaults,
       update: {}
     })
-    const appSettings = await tx.appSetting.findUniqueOrThrow({ where: { id: appSettingsDefaults.id } })
+    let appSettings = await tx.appSetting.findUniqueOrThrow({ where: { id: appSettingsDefaults.id } })
+    const normalizedRate = normalizeExchangeRate(appSettings.exchangeRate)
+    if (normalizedRate !== null && normalizedRate !== appSettings.exchangeRate) {
+      appSettings = await tx.appSetting.update({ where: { id: appSettings.id }, data: { exchangeRate: normalizedRate } })
+    }
     for (const category of vehicleCategoryDefaults) {
       await tx.vehicleCategory.upsert({ where: { id: category.id }, create: category, update: {} })
       const pricing = { ...defaultDistancePricing(category.id), currency: configuredCurrencyLabel(appSettings) }
@@ -258,10 +264,12 @@ function appSettingsResponse(settings: typeof appSettingsDefaults) {
     region: settings.region,
     currency: settings.currency,
     pricingCurrency: settings.pricingCurrency,
-    exchangeRate: settings.exchangeRate,
+    walletCurrency: settings.walletCurrency,
+    exchangeRate: normalizeExchangeRate(settings.exchangeRate) ?? appSettingsDefaults.exchangeRate,
     adminLogo: settings.adminLogo,
     severeWeatherEnabled: settings.severeWeatherEnabled,
     driverRaceEnabled: settings.driverRaceEnabled ?? false,
+    driverPayoutPercentage: settings.driverPayoutPercentage ?? 100,
     fareBalancePayEnabled: settings.fareBalancePayEnabled ?? true,
     cashBalancePayEnabled: settings.cashBalancePayEnabled ?? true,
     wechatPayEnabled: settings.wechatPayEnabled ?? true,
@@ -493,11 +501,18 @@ function displayCurrency(value: unknown, fallback: string) {
   if (!code) throw new HttpException('Currency must be RMB or HKD', HttpStatus.BAD_REQUEST)
   return code
 }
+function normalizeExchangeRate(value: unknown) {
+  const rate = Number(value)
+  if (!Number.isFinite(rate) || rate <= 0) return null
+  return rate >= 10 ? rate / 100 : rate
+}
 function convertCurrency(amount: number, sourceCurrency: string, targetCurrency: 'RMB' | 'HKD', exchangeRate: number) {
   const source = currencyCode(sourceCurrency)
   if (!source) throw new HttpException('Pricing currency must be RMB or HKD', HttpStatus.BAD_REQUEST)
   if (source === targetCurrency) return roundMoney(amount)
-  return roundMoney(source === 'RMB' ? amount / exchangeRate : amount * exchangeRate)
+  const normalizedRate = normalizeExchangeRate(exchangeRate)
+  if (normalizedRate === null) throw new HttpException('Exchange rate is unavailable', HttpStatus.CONFLICT)
+  return roundMoney(source === 'RMB' ? amount / normalizedRate : amount * normalizedRate)
 }
 function parseQuoteExtras(body: CreateQuoteRequest): QuoteExtraSelection[] {
   const source = body.extras === undefined ? body.extraIds : body.extras
@@ -825,6 +840,43 @@ function tripResponse(trip: {
     quote: quote ? quoteResponse(quote) : null
   }
 }
+function driverTripResponse(trip: {
+  id: string
+  userId: string
+  origin: string
+  destination: string
+  scheduledAt: Date
+  completedAt: Date | null
+  status: string
+  executionPhase: string | null
+  driverId?: string | null
+  driverPayoutAmount: number | null
+  driverPayoutCurrency: string | null
+  user?: { id: string; name: string | null; displayName: string | null }
+  settlement?: { id: string; driverId: string; method: string; settledAt: Date } | null
+}) {
+  return {
+    id: trip.id,
+    userId: trip.userId,
+    passengerName: trip.user?.name || trip.user?.displayName || null,
+    user: trip.user ? { id: trip.user.id, name: trip.user.name || trip.user.displayName } : undefined,
+    pickupAddress: trip.origin,
+    dropoffAddress: trip.destination,
+    scheduledAt: trip.scheduledAt.toISOString(),
+    completedAt: trip.completedAt?.toISOString() || null,
+    status: trip.status,
+    executionPhase: trip.executionPhase,
+    driverId: trip.driverId,
+    price: trip.driverPayoutAmount,
+    currency: trip.driverPayoutCurrency,
+    settlement: trip.settlement ? {
+      id: trip.settlement.id,
+      driverId: trip.settlement.driverId,
+      method: trip.settlement.method,
+      settledAt: trip.settlement.settledAt.toISOString()
+    } : null
+  }
+}
 function parseDistancePricing(categoryId: string, body: Partial<DistancePricingSettings>): DistancePricingSettings {
   const minimumFare = Number(body.minimumFare)
   const currency = body.currency?.trim()
@@ -1001,23 +1053,26 @@ class ClientAuthController {
   @Post('phone/verify')
   async verifyPhoneCode(@Body() body: { challengeId?: string; code?: string }) {
     const challengeId = body.challengeId?.trim() || ''
-    const challenge = phoneChallenges.get(challengeId)
-    if (!challenge || challenge.exp <= Date.now()) {
+    const memoryChallenge = phoneChallenges.get(challengeId)
+    const storedChallenge = await prisma.verificationCode.findUnique({ where: { id: challengeId } })
+    const now = Date.now()
+    if (!storedChallenge || storedChallenge.purpose !== 'LOGIN' || storedChallenge.consumedAt || !['ISSUED', 'FAILED'].includes(storedChallenge.status) || storedChallenge.expiresAt.getTime() <= now) {
       phoneChallenges.delete(challengeId)
-      await prisma.verificationCode.updateMany({ where: { id: challengeId, status: 'ISSUED' }, data: { status: 'EXPIRED' } })
+      if (storedChallenge?.purpose === 'LOGIN' && ['ISSUED', 'FAILED'].includes(storedChallenge.status) && storedChallenge.expiresAt.getTime() <= now) await prisma.verificationCode.update({ where: { id: challengeId }, data: { status: 'EXPIRED' } })
       throw new UnauthorizedException('Verification code expired')
     }
+    const challenge = memoryChallenge || { countryCode: storedChallenge.countryCode, phoneNumber: storedChallenge.phoneNumber, code: '', exp: storedChallenge.expiresAt.getTime(), attempts: storedChallenge.attempts }
     const submittedCode = body.code?.trim() || ''
-    if (submittedCode !== challenge.code) {
-      challenge.attempts += 1
-      await prisma.verificationCode.updateMany({ where: { id: challengeId }, data: { attempts: challenge.attempts, status: challenge.attempts >= PHONE_CODE_MAX_ATTEMPTS ? 'LOCKED' : 'FAILED' } })
-      if (challenge.attempts >= PHONE_CODE_MAX_ATTEMPTS) phoneChallenges.delete(challengeId)
+    if (createHash('sha256').update(submittedCode).digest('hex') !== storedChallenge.codeHash) {
+      const attempts = storedChallenge.attempts + 1
+      await prisma.verificationCode.update({ where: { id: challengeId }, data: { attempts, status: attempts >= PHONE_CODE_MAX_ATTEMPTS ? 'LOCKED' : 'FAILED' } })
+      if (attempts >= PHONE_CODE_MAX_ATTEMPTS) phoneChallenges.delete(challengeId)
       throw new UnauthorizedException('Invalid verification code')
     }
     phoneChallenges.delete(challengeId)
     const existing = await prisma.user.findUnique({ where: { countryCode_phoneNumber: { countryCode: challenge.countryCode, phoneNumber: challenge.phoneNumber } } })
     const user = existing || await prisma.user.create({ data: { id: await generateUserId(), countryCode: challenge.countryCode, phoneNumber: challenge.phoneNumber } })
-    await prisma.verificationCode.updateMany({ where: { id: challengeId }, data: { userId: user.id, status: 'VERIFIED', consumedAt: new Date() } })
+    await prisma.verificationCode.update({ where: { id: challengeId }, data: { userId: user.id, status: 'VERIFIED', consumedAt: new Date() } })
     const loggedInUser = await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } })
     return clientAuthResponse(loggedInUser)
   }
@@ -1265,7 +1320,7 @@ class DriverAuthController {
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
     const trips = await prisma.trip.findMany({
       where: { driverId: session.sub, status: 'COMPLETED', completedAt: { not: null } },
-      include: { payment: true, settlement: true },
+      include: { settlement: true },
       orderBy: { completedAt: 'desc' }
     })
     const onlineSessions = await prisma.driverOnlineSession.findMany({ where: { driverId: session.sub, startedAt: { lt: now } } })
@@ -1278,14 +1333,14 @@ class DriverAuthController {
     const monthTrips = trips.filter(item => item.completedAt! >= monthStart)
     const settledTrips = trips.filter(item => item.settlement != null)
     const unsettledTrips = trips.filter(item => item.settlement == null)
-    const sum = (items: typeof trips) => items.reduce((total, item) => total + (item.payment?.total ?? item.fareBalancePaid + item.cashBalancePaid + item.externalPaid), 0)
+    const sum = (items: typeof trips) => roundMoney(items.reduce((total, item) => total + (item.driverPayoutAmount ?? 0), 0))
     const ratings = await prisma.driverRating.findMany({ where: { driverId: session.sub }, select: { score: true } })
     const ratingTotal = ratings.reduce((total, item) => total + item.score, 0)
     const recentOrders = trips.slice(0, 3).map(item => ({
       id: item.id,
       completedAt: item.completedAt!.toISOString(),
-      price: item.payment?.total ?? item.fareBalancePaid + item.cashBalancePaid + item.externalPaid,
-      currency: item.payment?.currency ?? 'HKD',
+      price: item.driverPayoutAmount,
+      currency: item.driverPayoutCurrency,
       origin: item.origin,
       destination: item.destination,
       passenger: item.passengerName,
@@ -1294,12 +1349,12 @@ class DriverAuthController {
       settledAt: item.settlement?.settledAt.toISOString() ?? null
     }))
     return {
-      today: { earnings: sum(todayTrips), completedTrips: todayTrips.length, onlineHours: durationMs / 3600000 },
-      month: { earnings: sum(monthTrips) },
+      today: { earnings: sum(todayTrips), currency: trips.find(item => item.driverPayoutCurrency)?.driverPayoutCurrency ?? null, completedTrips: todayTrips.length, onlineHours: durationMs / 3600000 },
+      month: { earnings: sum(monthTrips), currency: trips.find(item => item.driverPayoutCurrency)?.driverPayoutCurrency ?? null },
       settlement: {
         settledEarnings: sum(settledTrips),
         unsettledEarnings: sum(unsettledTrips),
-        currency: trips.find(item => item.payment?.currency)?.payment?.currency ?? 'HKD'
+        currency: trips.find(item => item.driverPayoutCurrency)?.driverPayoutCurrency ?? 'HKD'
       },
       rating: { average: ratings.length ? ratingTotal / ratings.length : null, count: ratings.length },
       recentOrders
@@ -1309,8 +1364,8 @@ class DriverAuthController {
   @Get('trips')
   async history(@Req() req: RequestLike) {
     const { session } = await reviewedDriverFrom(req)
-    const trips = await prisma.trip.findMany({ where: { driverId: session.sub }, include: { user: true, payment: true, settlement: true }, orderBy: { scheduledAt: 'desc' } })
-    return trips.map(trip => tripResponse(trip))
+    const trips = await prisma.trip.findMany({ where: { driverId: session.sub }, include: { user: true, settlement: true }, orderBy: { scheduledAt: 'desc' } })
+    return trips.map(trip => driverTripResponse(trip))
   }
 
   @Post('trips/:id/arrive')
@@ -1328,7 +1383,7 @@ class DriverAuthController {
     const { session } = await reviewedDriverFrom(req)
     const trip = await prisma.trip.findUnique({ where: { id }, include: { user: true } })
     if (!trip || trip.driverId !== session.sub) throw new HttpException('Trip not found', HttpStatus.NOT_FOUND)
-    if (!trip.arrivedAt || trip.startedAt || trip.completedAt || trip.status === 'CANCELLED') throw new HttpException('Trip cannot be started', HttpStatus.CONFLICT)
+    if (!trip.acceptedAt || trip.startedAt || trip.completedAt || trip.status === 'CANCELLED') throw new HttpException('Trip cannot be started', HttpStatus.CONFLICT)
     const updated = await prisma.trip.update({ where: { id }, data: { startedAt: new Date(), executionPhase: 'IN_PROGRESS' }, include: { user: true } })
     return tripResponse(updated)
   }
@@ -1366,7 +1421,26 @@ class DriverAuthController {
     const settings = await prisma.appSetting.findUniqueOrThrow({ where: { id: appSettingsDefaults.id } })
     if (!settings.driverRaceEnabled) throw new ForbiddenException('Driver race acceptance is disabled')
     requireReviewedDriver(driver)
-    return prisma.trip.findMany({ where: { driverId: null, status: { not: 'COMPLETED' }, executionPhase: { not: 'IN_PROGRESS' } }, orderBy: { scheduledAt: 'asc' } })
+    if (!driver.isOnline) throw new ForbiddenException('Driver must be online to accept trips')
+    const trips = await prisma.trip.findMany({ where: { driverId: null, status: 'CONFIRMED', executionPhase: 'WAITING_DRIVER', payment: { is: { status: 'PAID' } } }, include: { user: true }, orderBy: { scheduledAt: 'asc' } })
+    return trips.map(trip => driverTripResponse(trip))
+  }
+
+  @Get('trips/:id')
+  async tripDetails(@Req() req: RequestLike, @Param('id') id: string) {
+    const { session, driver } = await reviewedDriverFrom(req)
+    const trip = await prisma.trip.findUnique({ where: { id }, include: { user: true, payment: true, settlement: true } })
+    if (!trip) throw new HttpException('Trip not found', HttpStatus.NOT_FOUND)
+    const assignedToDriver = trip.driverId === session.sub
+    const settings = await prisma.appSetting.findUniqueOrThrow({ where: { id: appSettingsDefaults.id } })
+    const availableToDriver = trip.driverId === null
+      && trip.status === 'CONFIRMED'
+      && trip.executionPhase === 'WAITING_DRIVER'
+      && trip.payment?.status === 'PAID'
+      && settings.driverRaceEnabled
+      && driver.isOnline
+    if (!assignedToDriver && !availableToDriver) throw new HttpException('Trip not found', HttpStatus.NOT_FOUND)
+    return driverTripResponse(trip)
   }
 
   @Post('trips/:id/accept')
@@ -1377,9 +1451,10 @@ class DriverAuthController {
     const driver = await prisma.driver.findUnique({ where: { id: session.sub } })
     if (!driver) throw new UnauthorizedException('Driver not found')
     requireReviewedDriver(driver)
+    if (!driver.isOnline) throw new ForbiddenException('Driver must be online to accept trips')
     const now = new Date()
     const result = await prisma.trip.updateMany({
-      where: { id, driverId: null, status: { notIn: ['COMPLETED', 'CANCELLED'] }, executionPhase: { not: 'IN_PROGRESS' } },
+      where: { id, driverId: null, status: 'CONFIRMED', executionPhase: 'WAITING_DRIVER', payment: { is: { status: 'PAID' } } },
       data: {
         driverId: driver.id,
         driverName: driver.name,
@@ -1395,7 +1470,8 @@ class DriverAuthController {
       }
     })
     if (result.count !== 1) throw new HttpException('Trip is no longer available', HttpStatus.CONFLICT)
-    return prisma.trip.findUnique({ where: { id }, include: { driver: true } })
+    const trip = await prisma.trip.findUnique({ where: { id }, include: { user: true } })
+    return trip ? driverTripResponse(trip) : null
   }
 }
 
@@ -1833,17 +1909,41 @@ class AdminController {
    await prisma.driverSettlement.delete({ where: { tripId: id } })
    return { ok: true }
   }
-  @Post('trips/:id/dispatch') async dispatchTrip(@Req() req: RequestLike, @Param('id') id: string, @Body() body: { driverId?: string }) {
+  @Post('trips/:id/confirm-dispatch') async confirmDispatchTrip(@Req() req: RequestLike, @Param('id') id: string) {
    requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
-   const driverId = body.driverId?.trim()
-   if (!driverId) throw new HttpException('Driver is required', HttpStatus.BAD_REQUEST)
-   const [trip, driver] = await Promise.all([prisma.trip.findUnique({ where: { id } }), prisma.driver.findUnique({ where: { id: driverId } })])
+   const trip = await prisma.trip.findUnique({ where: { id }, include: { payment: true } })
    if (!trip) throw new HttpException('Trip not found', HttpStatus.NOT_FOUND)
-   if (!driver) throw new HttpException('Driver not found', HttpStatus.BAD_REQUEST)
-   if (trip.status === 'COMPLETED' || trip.status === 'CANCELLED' || trip.executionPhase === 'IN_PROGRESS') throw new HttpException('This trip cannot be dispatched', HttpStatus.CONFLICT)
+   if (trip.status !== 'CONFIRMED' || trip.executionPhase || trip.driverId) throw new HttpException('This trip is not awaiting dispatch confirmation', HttpStatus.CONFLICT)
+   if (!trip.payment || trip.payment.status !== 'PAID') throw new HttpException('Only paid trips can be opened for dispatch', HttpStatus.CONFLICT)
+   const settings = await prisma.appSetting.findUniqueOrThrow({ where: { id: appSettingsDefaults.id } })
+   const calculatedAmount = roundMoney(trip.payment.total * settings.driverPayoutPercentage / 100)
    const updated = await prisma.trip.update({
      where: { id },
-     data: { driverId: driver.id, driverName: driver.name, driverPhone: `${driver.phoneCountryCode} ${driver.phone}`, vehiclePlate: driver.hkPlate, vehicleHkPlate: driver.hkPlate, vehicleMacauPlate: driver.macauPlate, vehicleMainlandPlate: driver.mainlandPlate, status: 'CONFIRMED', executionPhase: 'DRIVER_ASSIGNED', assignedAt: new Date(), acceptedAt: new Date() },
+     data: {
+       executionPhase: 'WAITING_DRIVER',
+       driverPayoutPercentage: settings.driverPayoutPercentage,
+       driverPayoutCalculatedAmount: calculatedAmount,
+       driverPayoutAmount: calculatedAmount,
+       driverPayoutCurrency: trip.payment.currency
+     }
+   })
+   return { id: updated.id, status: updated.status, executionPhase: updated.executionPhase, driverPayoutPercentage: updated.driverPayoutPercentage, driverPayoutCalculatedAmount: updated.driverPayoutCalculatedAmount, driverPayoutAmount: updated.driverPayoutAmount, driverPayoutCurrency: updated.driverPayoutCurrency }
+  }
+  @Post('trips/:id/dispatch') async dispatchTrip(@Req() req: RequestLike, @Param('id') id: string, @Body() body: { driverId?: string; driverPayoutAmount?: unknown }) {
+   requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
+   const driverId = body.driverId?.trim()
+   const driverPayoutAmount = Number(body.driverPayoutAmount)
+   if (!driverId) throw new HttpException('Driver is required', HttpStatus.BAD_REQUEST)
+   if (!Number.isFinite(driverPayoutAmount) || driverPayoutAmount < 0) throw new HttpException('A valid driver payout amount is required', HttpStatus.BAD_REQUEST)
+   const [trip, driver] = await Promise.all([prisma.trip.findUnique({ where: { id }, include: { payment: true } }), prisma.driver.findUnique({ where: { id: driverId } })])
+   if (!trip) throw new HttpException('Trip not found', HttpStatus.NOT_FOUND)
+   if (!driver) throw new HttpException('Driver not found', HttpStatus.BAD_REQUEST)
+   requireReviewedDriver(driver)
+   if (trip.status === 'COMPLETED' || trip.status === 'CANCELLED' || trip.executionPhase !== 'WAITING_DRIVER') throw new HttpException('This trip is not open for dispatch', HttpStatus.CONFLICT)
+   if (!trip.payment || trip.payment.status !== 'PAID') throw new HttpException('Only paid trips can be dispatched', HttpStatus.CONFLICT)
+   const updated = await prisma.trip.update({
+     where: { id },
+     data: { driverId: driver.id, driverName: driver.name, driverPhone: `${driver.phoneCountryCode} ${driver.phone}`, vehiclePlate: driver.hkPlate, vehicleHkPlate: driver.hkPlate, vehicleMacauPlate: driver.macauPlate, vehicleMainlandPlate: driver.mainlandPlate, driverPayoutAmount: roundMoney(driverPayoutAmount), driverPayoutCurrency: trip.driverPayoutCurrency || trip.payment.currency, status: 'CONFIRMED', executionPhase: 'DRIVER_ASSIGNED', assignedAt: new Date(), acceptedAt: new Date() },
      include: { user: true, driver: true }
    })
    return { ...updated, scheduledAt: updated.scheduledAt.toISOString(), createdAt: updated.createdAt.toISOString(), updatedAt: updated.updatedAt.toISOString(), user: userResponse(updated.user) }
@@ -1854,10 +1954,12 @@ class AdminController {
     const validFrom = new Date(body.validFrom || '')
     const validUntil = new Date(body.validUntil || '')
     if (Number.isNaN(validFrom.getTime()) || Number.isNaN(validUntil.getTime()) || validFrom >= validUntil) throw new HttpException('Valid URL date range is required', HttpStatus.BAD_REQUEST)
-    const [trip, driver] = await Promise.all([prisma.trip.findUnique({ where: { id } }), body.driverId ? prisma.driver.findUnique({ where: { id: body.driverId.trim() } }) : null])
+    const [trip, driver] = await Promise.all([prisma.trip.findUnique({ where: { id }, include: { payment: true } }), body.driverId ? prisma.driver.findUnique({ where: { id: body.driverId.trim() } }) : null])
     if (!trip) throw new HttpException('Trip not found', HttpStatus.NOT_FOUND)
-    if (trip.status === 'COMPLETED' || trip.status === 'CANCELLED') throw new HttpException('This trip cannot create an order URL', HttpStatus.CONFLICT)
+    if (trip.status !== 'CONFIRMED' || trip.executionPhase !== 'WAITING_DRIVER') throw new HttpException('This trip is not open for driver order URLs', HttpStatus.CONFLICT)
+    if (!trip.payment || trip.payment.status !== 'PAID') throw new HttpException('Only paid trips can create an order URL', HttpStatus.CONFLICT)
     if (body.driverId && !driver) throw new HttpException('Driver not found', HttpStatus.BAD_REQUEST)
+    if (driver) requireReviewedDriver(driver)
     const token = randomBytes(32).toString('base64url')
     const item = await prisma.tripOrderUrl.create({ data: { tokenHash: orderUrlTokenHash(token), tripId: id, driverId: driver?.id || null, validFrom, validUntil } })
     return { id: item.id, token, url: orderUrlValue(token), tripId: id, driverId: item.driverId, validFrom: validFrom.toISOString(), validUntil: validUntil.toISOString(), usedAt: null, revokedAt: null }
@@ -2505,20 +2607,23 @@ class RecommendedAddressesController {
 @Controller('settings')
 class SettingsController {
   @Get() async get() { return appSettingsResponse(await prisma.appSetting.findUniqueOrThrow({ where: { id: appSettingsDefaults.id } })) }
-  @Post() async update(@Req() req: RequestLike, @Body() body: { language?: string; region?: string; currency?: string; pricingCurrency?: string; exchangeRate?: number; adminLogo?: string | null; severeWeatherEnabled?: boolean; driverRaceEnabled?: boolean; fareBalancePayEnabled?: boolean; cashBalancePayEnabled?: boolean; wechatPayEnabled?: boolean; alipayPayEnabled?: boolean; bankCardPayEnabled?: boolean; sandboxMode?: boolean }) {
+  @Post() async update(@Req() req: RequestLike, @Body() body: { language?: string; region?: string; currency?: string; pricingCurrency?: string; exchangeRate?: number; adminLogo?: string | null; severeWeatherEnabled?: boolean; driverRaceEnabled?: boolean; driverPayoutPercentage?: unknown; fareBalancePayEnabled?: boolean; cashBalancePayEnabled?: boolean; wechatPayEnabled?: boolean; alipayPayEnabled?: boolean; bankCardPayEnabled?: boolean; sandboxMode?: boolean }) {
     const session = requireRole(req, ['SUPER_ADMIN', 'OPERATOR'])
     if (body.adminLogo !== undefined && session.role !== 'SUPER_ADMIN') throw new ForbiddenException('Only super administrators may update the logo')
     const settings = await prisma.appSetting.findUniqueOrThrow({ where: { id: appSettingsDefaults.id } })
     const pricingCurrency = body.pricingCurrency && ['HKD', 'RMB'].includes(body.pricingCurrency) ? body.pricingCurrency : settings.pricingCurrency
+    const driverPayoutPercentage = body.driverPayoutPercentage === undefined ? settings.driverPayoutPercentage : Number(body.driverPayoutPercentage)
+    if (!Number.isFinite(driverPayoutPercentage) || driverPayoutPercentage < 0 || driverPayoutPercentage > 100) throw new HttpException('Driver payout percentage must be between 0 and 100', HttpStatus.BAD_REQUEST)
     const data = {
         language: body.language || settings.language,
         region: body.region || settings.region,
         currency: body.currency && ['HKD', 'RMB'].includes(body.currency) ? body.currency : settings.currency,
         pricingCurrency,
-        exchangeRate: body.exchangeRate !== undefined && Number.isFinite(Number(body.exchangeRate)) && Number(body.exchangeRate) > 0 ? Number(body.exchangeRate) : settings.exchangeRate,
+        exchangeRate: body.exchangeRate !== undefined ? normalizeExchangeRate(body.exchangeRate) ?? settings.exchangeRate : settings.exchangeRate,
         adminLogo: body.adminLogo === undefined ? settings.adminLogo : body.adminLogo === null ? null : validateAdminLogo(body.adminLogo),
         severeWeatherEnabled: body.severeWeatherEnabled ?? settings.severeWeatherEnabled,
         driverRaceEnabled: body.driverRaceEnabled ?? settings.driverRaceEnabled,
+        driverPayoutPercentage,
         fareBalancePayEnabled: body.fareBalancePayEnabled ?? settings.fareBalancePayEnabled,
         cashBalancePayEnabled: body.cashBalancePayEnabled ?? settings.cashBalancePayEnabled,
         wechatPayEnabled: body.wechatPayEnabled ?? settings.wechatPayEnabled,
@@ -2805,6 +2910,7 @@ class WalletController {
       countryCode: user.countryCode,
       cashBalance: user.cashBalance,
       fareBalance: user.fareBalance,
+      walletCurrency: 'RMB',
       transactions: user.walletTransactions
     }
   }
@@ -2957,25 +3063,43 @@ class PaymentsController {
       }
 
       const totalAmount = roundMoney(quote.total)
+      const paymentCurrency = currencyCode(quote.currency)
+      if (!paymentCurrency) throw new HttpException('Quote currency must be RMB or HKD', HttpStatus.BAD_REQUEST)
       const useFare = body.useFareBalance !== false && settings.fareBalancePayEnabled
       const useCash = body.useCashBalance !== false && settings.cashBalancePayEnabled
 
       const user = await tx.user.findUniqueOrThrow({ where: { id: userTarget.id } })
 
       let farePaid = 0
+      let fareApplied = 0
       let cashPaid = 0
+      let cashApplied = 0
 
       if (useFare && user.fareBalance > 0) {
-        farePaid = roundMoney(Math.min(user.fareBalance, totalAmount))
+        const availableFare = convertCurrency(user.fareBalance, 'RMB', paymentCurrency, settings.exchangeRate)
+        fareApplied = roundMoney(Math.min(availableFare, totalAmount))
+        farePaid = roundMoney(Math.min(user.fareBalance, convertCurrency(fareApplied, paymentCurrency, 'RMB', settings.exchangeRate)))
       }
-      const remainingAfterFare = roundMoney(totalAmount - farePaid)
+      const remainingAfterFare = roundMoney(totalAmount - fareApplied)
 
       if (useCash && remainingAfterFare > 0 && user.cashBalance > 0) {
-        cashPaid = roundMoney(Math.min(user.cashBalance, remainingAfterFare))
+        const availableCash = convertCurrency(user.cashBalance, 'RMB', paymentCurrency, settings.exchangeRate)
+        cashApplied = roundMoney(Math.min(availableCash, remainingAfterFare))
+        cashPaid = roundMoney(Math.min(user.cashBalance, convertCurrency(cashApplied, paymentCurrency, 'RMB', settings.exchangeRate)))
       }
-      const externalPaid = roundMoney(totalAmount - farePaid - cashPaid)
+      const externalPaid = roundMoney(totalAmount - fareApplied - cashApplied)
 
-      const internalPaymentMethod = externalPaid > 0 ? 'internal' : null
+      if (externalPaid > 0) {
+        throw new HttpException(
+          {
+            code: 'EXTERNAL_PAYMENT_REQUIRED',
+            message: `錢包餘額不足，仍需支付 ${externalPaid.toFixed(2)} ${quote.currency}`,
+            outstandingAmount: externalPaid,
+            currency: quote.currency
+          },
+          HttpStatus.PAYMENT_REQUIRED
+        )
+      }
 
       let currentFare = user.fareBalance
       let currentCash = user.cashBalance
@@ -3043,8 +3167,8 @@ class PaymentsController {
               ...passengerData,
               fareBalancePaid: farePaid,
               cashBalancePaid: cashPaid,
-              externalPaid,
-              externalPaymentMethod: internalPaymentMethod
+              externalPaid: 0,
+              externalPaymentMethod: null
             }
           })
         : await tx.trip.create({
@@ -3060,8 +3184,8 @@ class PaymentsController {
               ...passengerData,
               fareBalancePaid: farePaid,
               cashBalancePaid: cashPaid,
-              externalPaid,
-              externalPaymentMethod: internalPaymentMethod
+              externalPaid: 0,
+              externalPaymentMethod: null
             }
           })
       const payment = await tx.payment.create({
@@ -3073,9 +3197,9 @@ class PaymentsController {
           currency: quote.currency,
           fareAmount: farePaid,
           cashAmount: cashPaid,
-          externalAmount: externalPaid,
-          externalPaymentMethod: internalPaymentMethod,
-          externalReference: externalPaid > 0 ? `internal-${randomBytes(8).toString('hex')}` : null
+          externalAmount: 0,
+          externalPaymentMethod: null,
+          externalReference: null
         }
       })
       await tx.walletTransaction.updateMany({
@@ -3092,8 +3216,8 @@ class PaymentsController {
         paidSummary: {
           fareBalance: farePaid,
           cashBalance: cashPaid,
-          external: externalPaid,
-          externalMethod: internalPaymentMethod
+          external: 0,
+          externalMethod: null
         },
         user: {
           id: user.id,
@@ -3281,20 +3405,26 @@ class ClientOrdersController {
   async verifyPhoneChange(@Req() req: RequestLike, @Body() body: { challengeId?: string; code?: string }) {
     const session = await clientSessionFrom(req)
     const challengeId = body.challengeId?.trim() || ''
-    const challenge = clientPhoneChangeChallenges.get(challengeId)
-    if (!challenge || challenge.userId !== session.sub || challenge.exp <= Date.now()) {
+    const memoryChallenge = clientPhoneChangeChallenges.get(challengeId)
+    const storedChallenge = await prisma.verificationCode.findUnique({ where: { id: challengeId } })
+    const now = Date.now()
+    if (!storedChallenge || storedChallenge.purpose !== 'PHONE_CHANGE' || storedChallenge.userId !== session.sub || storedChallenge.consumedAt || !['ISSUED', 'FAILED'].includes(storedChallenge.status) || storedChallenge.expiresAt.getTime() <= now) {
       clientPhoneChangeChallenges.delete(challengeId)
+      if (storedChallenge?.purpose === 'PHONE_CHANGE' && storedChallenge.userId === session.sub && ['ISSUED', 'FAILED'].includes(storedChallenge.status) && storedChallenge.expiresAt.getTime() <= now) await prisma.verificationCode.update({ where: { id: challengeId }, data: { status: 'EXPIRED' } })
       throw new UnauthorizedException('Verification code expired')
     }
-    if ((body.code?.trim() || '') !== challenge.code) {
-      challenge.attempts += 1
-      if (challenge.attempts >= PHONE_CODE_MAX_ATTEMPTS) clientPhoneChangeChallenges.delete(challengeId)
+    const challenge = memoryChallenge || { countryCode: storedChallenge.countryCode, phoneNumber: storedChallenge.phoneNumber, code: '', exp: storedChallenge.expiresAt.getTime(), attempts: storedChallenge.attempts, userId: session.sub }
+    const submittedCode = body.code?.trim() || ''
+    if (createHash('sha256').update(submittedCode).digest('hex') !== storedChallenge.codeHash) {
+      const attempts = storedChallenge.attempts + 1
+      await prisma.verificationCode.update({ where: { id: challengeId }, data: { attempts, status: attempts >= PHONE_CODE_MAX_ATTEMPTS ? 'LOCKED' : 'FAILED' } })
+      if (attempts >= PHONE_CODE_MAX_ATTEMPTS) clientPhoneChangeChallenges.delete(challengeId)
       throw new UnauthorizedException('Invalid verification code')
     }
     const duplicate = await prisma.user.findFirst({ where: { countryCode: challenge.countryCode, phoneNumber: challenge.phoneNumber, id: { not: session.sub } } })
     if (duplicate) throw new HttpException('Phone number is already connected', HttpStatus.CONFLICT)
     clientPhoneChangeChallenges.delete(challengeId)
-    await prisma.verificationCode.updateMany({ where: { id: challengeId }, data: { status: 'VERIFIED', consumedAt: new Date() } })
+    await prisma.verificationCode.update({ where: { id: challengeId }, data: { status: 'VERIFIED', consumedAt: new Date() } })
     const user = await prisma.user.update({ where: { id: session.sub }, data: { countryCode: challenge.countryCode, phoneNumber: challenge.phoneNumber }, include: { authIdentities: true } })
     return clientSecurityResponse(user)
   }
@@ -3420,6 +3550,8 @@ async function bootstrap() {
     'http://127.0.0.1:5174',
     'http://localhost:8080',
     'http://127.0.0.1:8080',
+    'http://localhost:8085',
+    'http://127.0.0.1:8085',
     'http://localhost:8090',
     'http://127.0.0.1:8090',
     'http://localhost:8091',

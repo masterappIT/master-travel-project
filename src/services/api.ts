@@ -252,6 +252,7 @@ export type AppSettings = {
   region: string
   currency: string
   pricingCurrency?: string
+  walletCurrency?: string
   exchangeRate?: number
   fareBalancePayEnabled?: boolean
   cashBalancePayEnabled?: boolean
@@ -527,6 +528,7 @@ export type WalletInfo = {
   memberLevel: string
   fareBalance: number
   cashBalance: number
+  walletCurrency: 'RMB'
   totalBalance: number
 }
 

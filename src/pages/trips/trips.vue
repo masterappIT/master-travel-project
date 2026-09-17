@@ -14,7 +14,7 @@
         />
         <template v-if="authenticated">
           <view class="upgrade-position"><UpgradeCard @tap="openMembership" /></view>
-          <view class="wallet-position"><WalletCard :balance="walletBalance" @select="handleWalletAction" /></view>
+          <view class="wallet-position"><WalletCard :cash-balance="cashBalance" @select="handleWalletAction" /></view>
           <view class="orders-position"><OrdersCard @select="handleOrderAction" /></view>
           <view class="common-position"><CommonActions @select="handleCommonAction" /></view>
         </template>
@@ -39,12 +39,14 @@ import OrdersCard from '../../components/profile/OrdersCard.vue'
 import CommonActions from '../../components/profile/CommonActions.vue'
 import ProfileBottomNav from '../../components/profile/ProfileBottomNav.vue'
 import { getClientProfile, listNotifications, listClientTrips } from '../../services/api'
+import { persistWallet, readWallet } from '../../utils/wallet'
 import { selectNextPendingTrip } from '../../utils/pendingTrip'
 
 const unreadCount = ref(0)
 const avatarUrl = ref('')
-const displayName = ref('John')
-const walletBalance = ref(0)
+const displayName = ref('')
+const cashBalance = ref(0)
+const fareBalance = ref(0)
 const authenticated = ref(false)
 let profilePollTimer: ReturnType<typeof setInterval> | undefined
 const avatarWithCacheBust = (url: string | null | undefined) => {
@@ -57,14 +59,18 @@ const refreshProfile = async () => {
   const profile = uni.getStorageSync('account-profile')
   const authUser = getAuthUser()
   avatarUrl.value = profile?.avatarUrl || authUser?.avatarUrl || ''
-  displayName.value = profile?.displayName || profile?.name || authUser?.displayName || authUser?.name || 'John'
+  displayName.value = profile?.name || profile?.displayName || authUser?.name || authUser?.displayName || ''
   if (authenticated.value) {
     try {
       const remote = await getClientProfile()
-      displayName.value = remote.displayName || remote.name || displayName.value
+      displayName.value = remote.name || remote.displayName || displayName.value
       avatarUrl.value = avatarWithCacheBust(remote.avatarUrl)
-      uni.setStorageSync('account-profile', { ...profile, displayName: displayName.value, avatarUrl: remote.avatarUrl || '' })
+      uni.setStorageSync('account-profile', { ...profile, name: remote.name || '', displayName: remote.displayName || '', avatarUrl: remote.avatarUrl || '' })
       uni.setStorageSync('client-auth-user', remote)
+      const wallet = readWallet()
+      cashBalance.value = Number(remote.cashBalance) || 0
+      fareBalance.value = Number(remote.fareBalance) || 0
+      persistWallet({ ...wallet, withdrawable: cashBalance.value, fare: fareBalance.value })
     } catch { /* keep cached profile when offline */ }
   }
   try {
@@ -72,13 +78,14 @@ const refreshProfile = async () => {
   } catch {
     unreadCount.value = 0
   }
-  const wallet = uni.getStorageSync('wallet-state')
-  walletBalance.value = Number(wallet?.withdrawable) || 0
+  const wallet = readWallet()
+  cashBalance.value = wallet.withdrawable
+  fareBalance.value = wallet.fare
 }
 
 void refreshProfile()
 const unsubscribeAuthUser = subscribeAuthUser((user) => {
-  displayName.value = user.displayName || user.name || displayName.value
+  displayName.value = user.name || user.displayName || ''
   avatarUrl.value = user.avatarUrl || ''
   uni.setStorageSync('client-auth-user', user)
 })

@@ -190,8 +190,12 @@ model Trip {
   estimatedArrivalAt       DateTime?
   status                   TripStatus          @default(PENDING)
   executionPhase           TripExecutionPhase?
-  driverId                 String?
-  driverName               String?
+  driverId                     String?
+  driverPayoutPercentage       Float?
+  driverPayoutCalculatedAmount Float?
+  driverPayoutAmount           Float?
+  driverPayoutCurrency         String?
+  driverName                   String?
   driverPhone              String?
   vehiclePlate             String?
   vehicleHkPlate           String?
@@ -274,10 +278,12 @@ model AppSetting {
   region                String
   currency              String
   pricingCurrency       String   @default("RMB")
+  walletCurrency        String   @default("RMB")
   exchangeRate          Float
   adminLogo             String?  @db.Text
   severeWeatherEnabled  Boolean  @default(false)
   driverRaceEnabled     Boolean  @default(false)
+  driverPayoutPercentage Float    @default(100)
   fareBalancePayEnabled Boolean  @default(true)
   cashBalancePayEnabled Boolean  @default(true)
   wechatPayEnabled      Boolean  @default(true)

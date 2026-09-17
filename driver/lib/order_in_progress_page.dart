@@ -99,7 +99,7 @@ class _OrderInProgressPageState extends State<OrderInProgressPage> {
           ElevatedButton(
             onPressed: _loading ? null : _completeTrip,
             style: _completeStyle(),
-            child: Text(_loading ? '處理中…' : '完成'),
+            child: Text(_loading ? '處理中…' : '確認到達目的地'),
           ),
         ],
       ),

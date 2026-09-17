@@ -287,10 +287,18 @@ class _RegistrationPageState extends State<RegistrationPage> {
       final result = await DriverApiClient.instance.requestRegistrationCode(
           countryCode: _countryCode, phoneNumber: phone);
       if (mounted) {
-        setState(
-            () => _registrationChallengeId = result['challengeId'] as String?);
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('驗證碼已發送，開發環境驗證碼為 00000')));
+        final developmentCode = result['developmentCode'] as String?;
+        setState(() {
+          _registrationChallengeId = result['challengeId'] as String?;
+          if (developmentCode != null) {
+            _verificationCodeController.text = developmentCode;
+          }
+        });
+        final message = developmentCode == null
+            ? '驗證碼已發送'
+            : '開發環境驗證碼：$developmentCode';
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(message)));
       }
     } on DriverApiException catch (error) {
       if (mounted) {

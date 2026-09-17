@@ -7,7 +7,7 @@
 
     <view class="balance-card">
       <text class="balance-label">現金餘額</text>
-      <text class="balance">{{ formatWalletAmount(wallet.withdrawable, 'HKD') }}</text>
+      <text class="balance">{{ formatWalletAmount(wallet.withdrawable, 'RMB') }}</text>
       <text class="fare-balance">車費餘額：{{ formatWalletAmount(wallet.fare, 'RMB') }}</text>
     </view>
 
@@ -36,11 +36,7 @@ import { getWalletMe } from '../../services/api'
 import { useCurrency } from '../../composables/useCurrency'
 
 const { responsiveStyle } = useResponsiveCanvas()
-const { currency, convertAmount } = useCurrency()
-const formatWalletAmount = (amount: number, sourceCurrency: 'HKD' | 'RMB') => {
-  const converted = convertAmount(amount, sourceCurrency)
-  return `${currency.value === 'HKD' ? 'HK$' : '¥'}${converted.toFixed(2)}`
-}
+const { formatConvertedAmount: formatWalletAmount, loadSettings } = useCurrency()
 
 type ActionType = 'withdraw' | 'topUp'
 type WalletRecord = { id: number; type: string; amount: number; time: string }
@@ -68,7 +64,8 @@ const fetchWallet = async () => {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
+  await loadSettings()
   void fetchWallet()
 })
 const now = () => {

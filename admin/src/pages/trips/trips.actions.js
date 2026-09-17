@@ -66,8 +66,12 @@ export function createTripsActions({ api, tripsApi, addressesApi, tripForm, sele
     } catch (err) { error.value = displayError(err) }
   }
   async function saveTrip() { if (!tripForm.value) return; if (!tripForm.value.id) return prepareTripQuote(); try { await tripsApi.update(tripForm.value.id, tripForm.value); tripForm.value = null; await load() } catch (err) { error.value = displayError(err) } }
-  function openDispatch(item) { dispatchForm.value = { tripId: item.id, driverId: item.driverId || '' } }
-  async function saveDispatch() { if (!dispatchForm.value?.tripId || !dispatchForm.value.driverId) return; try { await tripsApi.dispatch(dispatchForm.value.tripId, dispatchForm.value.driverId); dispatchForm.value = null; await load() } catch (err) { error.value = displayError(err) } }
+  async function confirmDispatch(item) {
+    if (!canWrite.value || !item?.id) return
+    try { await tripsApi.confirmDispatch(item.id); await load() } catch (err) { error.value = displayError(err) }
+  }
+  function openDispatch(item) { dispatchForm.value = { tripId: item.id, driverId: item.driverId || '', driverPayoutAmount: item.driverPayoutAmount ?? item.driverPayoutCalculatedAmount ?? '', driverPayoutCurrency: item.driverPayoutCurrency || item.payment?.currency || '' } }
+  async function saveDispatch() { if (!dispatchForm.value?.tripId || !dispatchForm.value.driverId || dispatchForm.value.driverPayoutAmount === '') return; try { await tripsApi.dispatch(dispatchForm.value.tripId, { driverId: dispatchForm.value.driverId, driverPayoutAmount: Number(dispatchForm.value.driverPayoutAmount) }); dispatchForm.value = null; await load() } catch (err) { error.value = displayError(err) } }
   function openOrderUrlForm(item) { const now = new Date(); const later = new Date(now.getTime() + 24 * 60 * 60 * 1000); orderUrlForm.value = { tripId: item.id, driverId: item.driverId || '', validFrom: dateTimeInput(now.toISOString()), validUntil: dateTimeInput(later.toISOString()) } }
   async function createOrderUrl() {
     if (!orderUrlForm.value?.tripId || !orderUrlForm.value.validFrom || !orderUrlForm.value.validUntil) return
@@ -77,5 +81,5 @@ export function createTripsActions({ api, tripsApi, addressesApi, tripForm, sele
   function closeCreatedOrderUrl() { createdOrderUrl.value = '' }
   async function copyOrderUrl() { if (!createdOrderUrl.value) return; try { await navigator.clipboard.writeText(createdOrderUrl.value) } catch { error.value = '複製 URL 失敗，請手動複製' } }
   async function revokeOrderUrl(item) { if (!await requestConfirmation({ title: '撤銷訂單 URL', message: '確定要撤銷此訂單 URL？', confirmLabel: '撤銷', danger: true })) return; try { await tripsApi.revokeOrderUrl(item.tripId, item.id); notify('訂單 URL 已撤銷'); await load() } catch (err) { error.value = displayError(err); notify(error.value, 'error') } }
-  return { editTrip, resetTrip, clearTripLocationSearch, searchTripLocation, selectTripLocation, handleTripRegionChange, showTrip, closeTrip, updateTripStatus, settleTrip, unsettleTrip, prepareTripQuote, calculateTripRoute, completeTripBooking, saveTrip, openDispatch, saveDispatch, openOrderUrlForm, createOrderUrl, closeCreatedOrderUrl, copyOrderUrl, revokeOrderUrl }
+  return { editTrip, resetTrip, clearTripLocationSearch, searchTripLocation, selectTripLocation, handleTripRegionChange, showTrip, closeTrip, updateTripStatus, settleTrip, unsettleTrip, prepareTripQuote, calculateTripRoute, completeTripBooking, saveTrip, confirmDispatch, openDispatch, saveDispatch, openOrderUrlForm, createOrderUrl, closeCreatedOrderUrl, copyOrderUrl, revokeOrderUrl }
 }

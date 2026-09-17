@@ -1,7 +1,8 @@
 export const createTripsApi = api => ({
   list: () => api('/admin/trips'),
   update: (id, payload) => api(`/admin/trips/${id}`, { method: 'POST', body: JSON.stringify(payload) }),
-  dispatch: (id, driverId) => api(`/admin/trips/${id}/dispatch`, { method: 'POST', body: JSON.stringify({ driverId }) }),
+  confirmDispatch: id => api(`/admin/trips/${id}/confirm-dispatch`, { method: 'POST' }),
+  dispatch: (id, payload) => api(`/admin/trips/${id}/dispatch`, { method: 'POST', body: JSON.stringify(payload) }),
   settle: (id, method) => api(`/admin/trips/${id}/settlement`, { method: 'POST', body: JSON.stringify({ method }) }),
   unsettle: id => api(`/admin/trips/${id}/settlement/unsettle`, { method: 'POST' }),
   orderUrls: id => api(`/admin/trips/${id}/order-urls`),

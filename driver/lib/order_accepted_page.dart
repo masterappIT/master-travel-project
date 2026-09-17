@@ -21,12 +21,11 @@ class _OrderAcceptedPageState extends State<OrderAcceptedPage> {
   final _api = DriverApiClient.instance;
   bool _loading = false;
 
-  Future<void> _markArrived() async {
+  Future<void> _startTrip() async {
     setState(() => _loading = true);
     try {
       final tripId = widget.tripId;
       if (tripId == null) throw StateError('missing trip id');
-      await _api.arriveTrip(tripId);
       await _api.startTrip(tripId);
       if (mounted) {
         DriverNavigation.push(
@@ -38,7 +37,7 @@ class _OrderAcceptedPageState extends State<OrderAcceptedPage> {
     } on StateError {
       if (mounted) {
         ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('找不到可到達的訂單')));
+            .showSnackBar(const SnackBar(content: Text('找不到可開始的訂單')));
       }
     } on DriverApiException catch (error) {
       if (mounted) {
@@ -107,9 +106,9 @@ class _OrderAcceptedPageState extends State<OrderAcceptedPage> {
             const SizedBox(width: DriverSpacing.md),
             Expanded(
                 child: ElevatedButton(
-              onPressed: _loading ? null : _markArrived,
+              onPressed: _loading ? null : _startTrip,
               style: _arrivedStyle(),
-              child: Text(_loading ? '處理中…' : '已到達上車點'),
+              child: Text(_loading ? '處理中…' : '開始行程'),
             )),
           ]),
         ],

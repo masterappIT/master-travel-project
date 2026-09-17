@@ -18,8 +18,40 @@ class OrderDetailPage extends StatefulWidget {
 
 class _OrderDetailPageState extends State<OrderDetailPage> {
   final _api = DriverApiClient.instance;
-  int _selectedVehicle = 0;
+  Map<String, dynamic>? _trip;
+  bool _loading = true;
   bool _accepting = false;
+  bool _starting = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTrip();
+  }
+
+  Future<void> _loadTrip() async {
+    final id = widget.tripId;
+    if (id == null || id.isEmpty) {
+      setState(() {
+        _error = '找不到訂單編號';
+        _loading = false;
+      });
+      return;
+    }
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final trip = await _api.trip(id);
+      if (mounted) setState(() => _trip = trip);
+    } on DriverApiException catch (error) {
+      if (mounted) setState(() => _error = error.message);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
 
   Future<void> _acceptTrip() async {
     if (widget.tripId == null) return;
@@ -43,8 +75,87 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
     }
   }
 
+  Future<void> _startTrip() async {
+    if (widget.tripId == null) return;
+    setState(() => _starting = true);
+    try {
+      await _api.startTrip(widget.tripId!);
+      if (mounted) {
+        DriverNavigation.push(
+          context,
+          DriverRouteNames.orderInProgress,
+          arguments: widget.tripId,
+        );
+      }
+    } on DriverApiException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error.message)));
+      }
+    } finally {
+      if (mounted) setState(() => _starting = false);
+    }
+  }
+
+  void _openInProgressTrip() {
+    DriverNavigation.push(
+      context,
+      DriverRouteNames.orderInProgress,
+      arguments: widget.tripId,
+    );
+  }
+
+  String _tripText(String key, String fallback) {
+    final value = _trip?[key]?.toString().trim();
+    return value == null || value.isEmpty ? fallback : value;
+  }
+
+  String _formatDate(dynamic value) {
+    final date = DateTime.tryParse(value?.toString() ?? '')?.toLocal();
+    if (date == null) return '時間待確認';
+    String two(int number) => number.toString().padLeft(2, '0');
+    return '${date.year}/${two(date.month)}/${two(date.day)} '
+        '${two(date.hour)}:${two(date.minute)}';
+  }
+
+  String _formatPrice(dynamic value, dynamic currency) {
+    if (value is! num) return '待確認';
+    final code = currency?.toString();
+    final symbol = code == 'HKD'
+        ? 'HK\$'
+        : code == 'RMB' || code == 'CNY'
+            ? '¥'
+            : code == null || code.isEmpty
+                ? ''
+                : '$code ';
+    return '$symbol${value.toStringAsFixed(2)}';
+  }
+
+  String _region(String address, String fallback) {
+    final value = address.split(RegExp(r'[·•]')).first.trim();
+    return value.isEmpty ? fallback : value;
+  }
+
+  String _vehiclePlate(Map<String, dynamic>? driver) {
+    for (final key in ['hkPlate', 'macauPlate', 'mainlandPlate']) {
+      final value = driver?[key]?.toString().trim();
+      if (value != null && value.isNotEmpty) return value;
+    }
+    return '車牌待確認';
+  }
+
   @override
   Widget build(BuildContext context) {
+    final origin = _tripText('pickupAddress', '起點待確認');
+    final destination = _tripText('dropoffAddress', '終點待確認');
+    final originRegion = _region(origin, '起點待確認');
+    final destinationRegion = _region(destination, '終點待確認');
+    final passenger = _tripText('passengerName', '乘客');
+    final scheduledAt = _formatDate(_trip?['scheduledAt']);
+    final driver = _api.currentDriver;
+    final assigned = _trip?['driverId'] != null;
+    final inProgress = _trip?['executionPhase'] == 'IN_PROGRESS';
+
     return DriverPageShell(
       selectedIndex: 1,
       showBottomNavigation: false,
@@ -54,77 +165,98 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              Semantics(
-                button: true,
-                label: '返回接單大廳',
-                child: IconButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  padding: EdgeInsets.zero,
-                  constraints:
-                      const BoxConstraints(minWidth: 44, minHeight: 44),
-                  icon: const Text('<',
-                      style: TextStyle(fontSize: 18, color: DriverColors.text)),
-                ),
+          Row(children: [
+            Semantics(
+              button: true,
+              label: '返回接單大廳',
+              child: IconButton(
+                onPressed: () => Navigator.of(context).pop(),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+                icon: const Text('<',
+                    style: TextStyle(fontSize: 18, color: DriverColors.text)),
               ),
-              const SizedBox(width: DriverSpacing.sm),
-              const Text('訂單詳情',
-                  style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w700,
-                      color: DriverColors.text)),
-            ],
-          ),
+            ),
+            const SizedBox(width: DriverSpacing.sm),
+            const Text('訂單詳情',
+                style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w700,
+                    color: DriverColors.text)),
+          ]),
           const SizedBox(height: DriverSpacing.sm),
           const Text('請確認乘客資訊與行程內容',
               style: TextStyle(
                   fontSize: DriverTypography.body,
                   color: DriverColors.secondaryText)),
           const SizedBox(height: DriverSpacing.xl),
-          const _MapPreview(),
-          const SizedBox(height: DriverSpacing.xl),
-          const _OrderInfoCard(),
-          const SizedBox(height: DriverSpacing.xl),
-          const Text('選擇接單車輛',
-              style: TextStyle(
-                  fontSize: DriverTypography.body,
-                  fontWeight: FontWeight.w700,
-                  color: DriverColors.text)),
-          const SizedBox(height: DriverSpacing.md),
-          Row(children: [
-            Expanded(
-                child: _VehicleCard(
-                    index: 0,
-                    title: '車輛 1',
-                    type: '轎車',
-                    plate: 'AB 1234',
-                    selected: _selectedVehicle == 0,
-                    onTap: () => setState(() => _selectedVehicle = 0))),
-            const SizedBox(width: DriverSpacing.md),
-            Expanded(
-                child: _VehicleCard(
-                    index: 1,
-                    title: '車輛 2',
-                    type: 'MPV',
-                    plate: 'CD 5678',
-                    selected: _selectedVehicle == 1,
-                    onTap: () => setState(() => _selectedVehicle = 1))),
-          ]),
-          const SizedBox(height: DriverSpacing.xl),
-          Row(children: [
-            Expanded(
-                child: OutlinedButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    style: _secondaryButtonStyle(),
-                    child: const Text('拒絕'))),
-            const SizedBox(width: DriverSpacing.md),
-            Expanded(
-                child: ElevatedButton(
-                    onPressed: _accepting ? null : _acceptTrip,
-                    style: _primaryButtonStyle(),
-                    child: Text(_accepting ? '處理中…' : '確認接單'))),
-          ]),
+          if (_loading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 120),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (_error != null)
+            _OrderDetailError(message: _error!, onRetry: _loadTrip)
+          else ...[
+            _MapPreview(origin: originRegion, destination: destinationRegion),
+            const SizedBox(height: DriverSpacing.xl),
+            _OrderInfoCard(
+              passenger: passenger,
+              routeOrigin: originRegion,
+              routeDestination: destinationRegion,
+              origin: origin,
+              destination: destination,
+              scheduledAt: scheduledAt,
+              price: _formatPrice(_trip?['price'], _trip?['currency']),
+            ),
+            const SizedBox(height: DriverSpacing.xl),
+            const Text('接單車輛',
+                style: TextStyle(
+                    fontSize: DriverTypography.body,
+                    fontWeight: FontWeight.w700,
+                    color: DriverColors.text)),
+            const SizedBox(height: DriverSpacing.md),
+            _VehicleCard(
+              index: 0,
+              title:
+                  driver?['vehicleColor']?.toString().trim().isNotEmpty == true
+                      ? driver!['vehicleColor'].toString()
+                      : '已登記車輛',
+              type: driver?['vehicleCategory']?.toString() ?? '車型待確認',
+              plate: _vehiclePlate(driver),
+              selected: true,
+              onTap: () {},
+            ),
+            const SizedBox(height: DriverSpacing.xl),
+            if (!assigned)
+              Row(children: [
+                Expanded(
+                    child: OutlinedButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        style: _secondaryButtonStyle(),
+                        child: const Text('拒絕'))),
+                const SizedBox(width: DriverSpacing.md),
+                Expanded(
+                    child: ElevatedButton(
+                        onPressed: _accepting ? null : _acceptTrip,
+                        style: _primaryButtonStyle(),
+                        child: Text(_accepting ? '處理中…' : '確認接單'))),
+              ])
+            else
+              ElevatedButton(
+                onPressed: inProgress
+                    ? _openInProgressTrip
+                    : _starting
+                        ? null
+                        : _startTrip,
+                style: _primaryButtonStyle(),
+                child: Text(inProgress
+                    ? '查看進行中行程'
+                    : _starting
+                        ? '處理中…'
+                        : '開始行程'),
+              ),
+          ],
         ],
       ),
     );
@@ -153,8 +285,29 @@ ButtonStyle _primaryButtonStyle() => ElevatedButton.styleFrom(
           fontSize: DriverTypography.bodyLarge, fontWeight: FontWeight.w700),
     );
 
+class _OrderDetailError extends StatelessWidget {
+  const _OrderDetailError({required this.message, required this.onRetry});
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 80),
+        child: Column(children: [
+          Text(message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: DriverColors.secondaryText)),
+          const SizedBox(height: DriverSpacing.md),
+          OutlinedButton(onPressed: onRetry, child: const Text('重新載入')),
+        ]),
+      );
+}
+
 class _MapPreview extends StatelessWidget {
-  const _MapPreview();
+  const _MapPreview({required this.origin, required this.destination});
+  final String origin;
+  final String destination;
+
   @override
   Widget build(BuildContext context) => Container(
         height: 180,
@@ -168,19 +321,25 @@ class _MapPreview extends StatelessWidget {
                   offset: Offset(0, 8))
             ]),
         child: Stack(children: [
-          const Center(
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Text('地圖路徑預覽',
-                style: TextStyle(
-                    fontSize: DriverTypography.label,
-                    color: Color(0xb3ffffff))),
-            SizedBox(height: 8),
-            Text('香港中環 → 深圳',
-                style: TextStyle(
-                    fontSize: DriverTypography.bodyLarge,
-                    fontWeight: FontWeight.w700,
-                    color: DriverColors.surface))
-          ])),
+          Center(
+              child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 56),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              const Text('地圖路徑預覽',
+                  style: TextStyle(
+                      fontSize: DriverTypography.label,
+                      color: Color(0xb3ffffff))),
+              const SizedBox(height: 8),
+              Text('$origin → $destination',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                      fontSize: DriverTypography.bodyLarge,
+                      fontWeight: FontWeight.w700,
+                      color: DriverColors.surface))
+            ]),
+          )),
           Positioned(top: 16, left: 16, child: _MapLabel('起點')),
           Positioned(top: 16, right: 16, child: _MapLabel('終點')),
         ]),
@@ -203,7 +362,23 @@ class _MapLabel extends StatelessWidget {
 }
 
 class _OrderInfoCard extends StatelessWidget {
-  const _OrderInfoCard();
+  const _OrderInfoCard({
+    required this.passenger,
+    required this.routeOrigin,
+    required this.routeDestination,
+    required this.origin,
+    required this.destination,
+    required this.scheduledAt,
+    required this.price,
+  });
+  final String passenger;
+  final String routeOrigin;
+  final String routeDestination;
+  final String origin;
+  final String destination;
+  final String scheduledAt;
+  final String price;
+
   @override
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.all(16),
@@ -227,23 +402,25 @@ class _OrderInfoCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(DriverRadii.input)),
               ),
               const SizedBox(width: DriverSpacing.md),
-              const Expanded(
+              Expanded(
                 child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('陳大文',
-                          style: TextStyle(
+                      Text(passenger,
+                          style: const TextStyle(
                               fontSize: DriverTypography.bodyLarge,
                               fontWeight: FontWeight.w700,
                               color: DriverColors.text)),
-                      SizedBox(height: 4),
-                      Text('香港中環 → 深圳',
-                          style: TextStyle(
+                      const SizedBox(height: 4),
+                      Text('$routeOrigin → $routeDestination',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
                               fontSize: DriverTypography.label,
                               color: Color(0xff57667d))),
-                      SizedBox(height: 4),
-                      Text('2024/03/15 14:00',
-                          style: TextStyle(
+                      const SizedBox(height: 4),
+                      Text(scheduledAt,
+                          style: const TextStyle(
                               fontSize: DriverTypography.label,
                               color: DriverColors.secondaryText))
                     ]),
@@ -251,22 +428,21 @@ class _OrderInfoCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: DriverSpacing.md),
-          const _AddressRow(
-              asset: 'assets/order-detail-origin.svg', label: '香港中環置地廣場東門大堂'),
+          _AddressRow(asset: 'assets/order-detail-origin.svg', label: origin),
           const SizedBox(height: DriverSpacing.md),
-          const _AddressRow(
-              asset: 'assets/order-detail-destination.svg', label: '深圳福田口岸'),
+          _AddressRow(
+              asset: 'assets/order-detail-destination.svg', label: destination),
           const SizedBox(height: DriverSpacing.md),
-          const Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+          Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
             Expanded(
-                child: Text('出發時間  2024/03/15 14:00',
+                child: Text('出發時間  $scheduledAt',
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
+                    style: const TextStyle(
                         fontSize: DriverTypography.label,
                         color: DriverColors.secondaryText))),
-            SizedBox(width: 12),
-            Text('\$280.00',
-                style: TextStyle(
+            const SizedBox(width: 12),
+            Text(price,
+                style: const TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w700,
                     color: DriverColors.success))

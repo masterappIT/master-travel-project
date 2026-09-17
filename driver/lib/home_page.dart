@@ -9,6 +9,19 @@ import 'core/state/driver_status.dart';
 
 import 'package:driver_web/core/tokens/driver_tokens.dart';
 
+String _formatMoney(dynamic value, dynamic currency) {
+  if (value is! num) return '—';
+  final code = currency?.toString();
+  final symbol = code == 'HKD'
+      ? 'HK\$'
+      : code == 'RMB' || code == 'CNY'
+          ? '¥'
+          : code == null || code.isEmpty
+              ? ''
+              : '$code ';
+  return '$symbol${value.toStringAsFixed(2)}';
+}
+
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -357,8 +370,6 @@ class _EarningsCard extends StatelessWidget {
   final bool loading;
   final String? error;
 
-  String _money(dynamic value) =>
-      value is num ? '\$${value.toStringAsFixed(2)}' : '—';
   String _number(dynamic value) => value is num ? value.toString() : '—';
 
   @override
@@ -380,7 +391,7 @@ class _EarningsCard extends StatelessWidget {
                               fontSize: DriverTypography.body,
                               color: DriverColors.secondaryText)),
                       const SizedBox(height: DriverSpacing.xs),
-                      Text(_money(today?['earnings']),
+                      Text(_formatMoney(today?['earnings'], today?['currency']),
                           style: const TextStyle(
                               fontSize: 36,
                               fontWeight: FontWeight.w800,
@@ -418,9 +429,7 @@ class _QuickStatsRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final month = statistics?['month'] as Map<String, dynamic>?;
     final rating = statistics?['rating'] as Map<String, dynamic>?;
-    final monthValue = month?['earnings'] is num
-        ? '\$${(month!['earnings'] as num).toStringAsFixed(2)}'
-        : '—';
+    final monthValue = _formatMoney(month?['earnings'], month?['currency']);
     final ratingValue = rating?['average'] is num
         ? '${(rating!['average'] as num).toStringAsFixed(1)} / 5.0'
         : '尚無評分';
