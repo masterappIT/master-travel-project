@@ -714,12 +714,16 @@ function normalizeVehiclePlateData(body: {
   macauPlate?: unknown
   mainlandPlate?: unknown
 }): VehiclePlateData {
+  const vehicleOwnership = typeof body.vehicleOwnership === 'string' ? body.vehicleOwnership.trim() : ''
+  const plateType = typeof body.plateType === 'string' ? body.plateType.trim() : ''
+  const isSinglePlate = plateType === '單牌'
+  const isTriplePlate = plateType === '三地牌'
   return {
-    vehicleOwnership: typeof body.vehicleOwnership === 'string' ? body.vehicleOwnership.trim() : '',
-    plateType: typeof body.plateType === 'string' ? body.plateType.trim() : '',
-    hkPlate: normalizeHongKongPlate(body.hkPlate),
-    macauPlate: normalizeMacauPlate(body.macauPlate),
-    mainlandPlate: normalizeMainlandPlate(body.mainlandPlate)
+    vehicleOwnership,
+    plateType,
+    hkPlate: vehicleOwnership === '澳門' && !isTriplePlate ? '' : normalizeHongKongPlate(body.hkPlate),
+    macauPlate: vehicleOwnership !== '澳門' && !isTriplePlate ? '' : normalizeMacauPlate(body.macauPlate),
+    mainlandPlate: isSinglePlate ? '' : normalizeMainlandPlate(body.mainlandPlate)
   }
 }
 

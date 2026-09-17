@@ -49,7 +49,6 @@ class _AddVehiclePageState extends State<AddVehiclePage> {
   final _color = TextEditingController();
 
   List<String> _categoryOptions = const [];
-  bool _loadingCategories = true;
   bool _isSaving = false;
 
   @override
@@ -61,8 +60,9 @@ class _AddVehiclePageState extends State<AddVehiclePage> {
       _plateType = data.plateType;
       _category = data.category;
       _hkPlate.text = data.hongKongPlate;
-      _macauPlate.text = data.macauPlate;
-      _mainlandPlate.text = data.mainlandPlate;
+      _macauPlate.text = formatMacauPlateInput(data.macauPlate);
+      _mainlandPlate.text =
+          mainlandPlateInput(data.mainlandPlate, data.ownership);
       _color.text = data.color;
     }
     _loadCategories();
@@ -82,10 +82,9 @@ class _AddVehiclePageState extends State<AddVehiclePage> {
                 .where((name) => name.isNotEmpty)
                 .toList()
             : const [];
-        _loadingCategories = false;
       });
     } on DriverApiException {
-      if (mounted) setState(() => _loadingCategories = false);
+      // Keep the category selector empty when the catalog is unavailable.
     }
   }
 
@@ -129,6 +128,9 @@ class _AddVehiclePageState extends State<AddVehiclePage> {
   void _changeOwnership(String ownership) {
     setState(() {
       _ownership = ownership;
+      _hkPlate.clear();
+      _macauPlate.clear();
+      _mainlandPlate.clear();
       if (!_availablePlateTypes.contains(_plateType)) {
         _plateType = '兩地牌';
       }
@@ -147,11 +149,12 @@ class _AddVehiclePageState extends State<AddVehiclePage> {
           .showSnackBar(const SnackBar(content: Text('請完成所有車牌資料')));
       return;
     }
+    final mainlandPlate = composeMainlandPlate(_mainlandPlate.text, _ownership);
     final plateError = vehiclePlateError(
       vehicleOwnership: _ownership,
       hongKongPlate: _hkPlate.text,
       macauPlate: _macauPlate.text,
-      mainlandPlate: _mainlandPlate.text,
+      mainlandPlate: mainlandPlate,
     );
     if (plateError != null) {
       ScaffoldMessenger.of(context)
@@ -169,9 +172,9 @@ class _AddVehiclePageState extends State<AddVehiclePage> {
         'macauPlate': normalizeMacauPlate(_macauPlate.text).isEmpty
             ? null
             : normalizeMacauPlate(_macauPlate.text),
-        'mainlandPlate': normalizeMainlandPlate(_mainlandPlate.text).isEmpty
+        'mainlandPlate': normalizeMainlandPlate(mainlandPlate).isEmpty
             ? null
-            : normalizeMainlandPlate(_mainlandPlate.text),
+            : normalizeMainlandPlate(mainlandPlate),
         'vehicleCategory': _category,
         'vehicleColor': _color.text.trim(),
       });
@@ -230,7 +233,8 @@ class _AddVehiclePageState extends State<AddVehiclePage> {
                 _PlateField(
                     label: field.label,
                     hint: field.hint,
-                    controller: _controllerFor(field.label)),
+                    controller: _controllerFor(field.label),
+                    ownership: _ownership),
                 const SizedBox(height: DriverSpacing.md),
               ]),
           _TextField(
@@ -408,15 +412,31 @@ class _ChoiceField extends StatelessWidget {
 
 class _PlateField extends StatelessWidget {
   const _PlateField(
-      {required this.label, required this.hint, required this.controller});
+      {required this.label,
+      required this.hint,
+      required this.controller,
+      required this.ownership});
   final String label;
   final String hint;
   final TextEditingController controller;
+  final String ownership;
   @override
   Widget build(BuildContext context) => _TextField(
           label: label,
           hint: hint,
           controller: controller,
+          prefixText: label.contains('內地')
+              ? ownership == '中國內地'
+                  ? '粵'
+                  : '粵Z·'
+              : null,
+          suffixText: label.contains('內地')
+              ? ownership == '香港'
+                  ? '港'
+                  : ownership == '澳門'
+                      ? '澳'
+                      : null
+              : null,
           inputFormatters: [
             vehiclePlateFormatter(label.contains('香港')
                 ? '香港'
@@ -434,13 +454,17 @@ class _TextField extends StatelessWidget {
       this.readOnly = false,
       this.icon,
       this.onTap,
-      this.inputFormatters});
+      this.inputFormatters,
+      this.prefixText,
+      this.suffixText});
   final String label;
   final String hint;
   final TextEditingController? controller;
   final bool readOnly;
   final List<TextInputFormatter>? inputFormatters;
   final String? icon;
+  final String? prefixText;
+  final String? suffixText;
   final VoidCallback? onTap;
   @override
   Widget build(BuildContext context) {
@@ -462,6 +486,8 @@ class _TextField extends StatelessWidget {
           style: const TextStyle(fontSize: 15, color: DriverColors.text),
           decoration: InputDecoration(
               hintText: hint,
+              prefixText: prefixText,
+              suffixText: suffixText,
               hintStyle: const TextStyle(
                   fontSize: 15, color: DriverColors.secondaryText),
               suffixIcon: icon == null

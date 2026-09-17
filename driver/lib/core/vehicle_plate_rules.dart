@@ -5,6 +5,54 @@ String normalizeMacauPlate(String value) => value.trim().toUpperCase();
 String normalizeMainlandPlate(String value) =>
     value.trim().replaceAll(RegExp(r'[•・]'), '·').toUpperCase();
 
+String formatMacauPlateInput(String value) {
+  final raw = value.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
+  final buffer = StringBuffer();
+  for (final character in raw.split('')) {
+    final expectsLetter = buffer.length < 2;
+    if ((expectsLetter && RegExp(r'[A-Z]').hasMatch(character)) ||
+        (!expectsLetter && RegExp(r'[0-9]').hasMatch(character))) {
+      buffer.write(character);
+    }
+    if (buffer.length == 6) break;
+  }
+  final limited = buffer.toString();
+  final firstEnd = limited.length < 2 ? limited.length : 2;
+  final secondEnd = limited.length < 4 ? limited.length : 4;
+  return [
+    limited.substring(0, firstEnd),
+    if (limited.length > 2) limited.substring(2, secondEnd),
+    if (limited.length > 4) limited.substring(4),
+  ].where((part) => part.isNotEmpty).join('-');
+}
+
+String mainlandPlateInput(String value, String vehicleOwnership) {
+  final plate = normalizeMainlandPlate(value);
+  if (vehicleOwnership == '香港' &&
+      plate.startsWith('粵Z·') &&
+      plate.endsWith('港')) {
+    return plate.substring(3, plate.length - 1);
+  }
+  if (vehicleOwnership == '澳門' &&
+      plate.startsWith('粵Z·') &&
+      plate.endsWith('澳')) {
+    return plate.substring(3, plate.length - 1);
+  }
+  if (vehicleOwnership == '中國內地' && plate.startsWith('粵')) {
+    return plate.substring(1);
+  }
+  return plate;
+}
+
+String composeMainlandPlate(String value, String vehicleOwnership) {
+  final input =
+      mainlandPlateInput(value, vehicleOwnership).replaceAll(RegExp(r'\s'), '');
+  if (input.isEmpty) return '';
+  if (vehicleOwnership == '香港') return '粵Z·$input港';
+  if (vehicleOwnership == '澳門') return '粵Z·$input澳';
+  return '粵$input';
+}
+
 String? vehiclePlateError({
   required String vehicleOwnership,
   required String hongKongPlate,
@@ -57,10 +105,7 @@ TextInputFormatter vehiclePlateFormatter(String region) {
   }
   if (region == '澳門') {
     return TextInputFormatter.withFunction((oldValue, newValue) {
-      final normalized = newValue.text.toUpperCase();
-      if (!RegExp(r'^[A-Z0-9-]{0,8}$').hasMatch(normalized)) {
-        return oldValue;
-      }
+      final normalized = formatMacauPlateInput(newValue.text);
       return newValue.copyWith(
           text: normalized,
           selection: TextSelection.collapsed(offset: normalized.length));
@@ -69,9 +114,7 @@ TextInputFormatter vehiclePlateFormatter(String region) {
   return TextInputFormatter.withFunction((oldValue, newValue) {
     final normalized =
         newValue.text.replaceAll(RegExp(r'[•・]'), '·').toUpperCase();
-    if (RegExp(r'\s').hasMatch(normalized)) {
-      return oldValue;
-    }
+    if (RegExp(r'\s').hasMatch(normalized)) return oldValue;
     return newValue.copyWith(
         text: normalized,
         selection: TextSelection.collapsed(offset: normalized.length));

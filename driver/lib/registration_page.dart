@@ -72,8 +72,10 @@ class _RegistrationPageState extends State<RegistrationPage> {
       _vehicleOwnership = driver['vehicleOwnership']?.toString() ?? '香港';
       _plateType = driver['plateType']?.toString() ?? '兩地牌';
       _hkPlateController.text = driver['hkPlate']?.toString() ?? '';
-      _macauPlateController.text = driver['macauPlate']?.toString() ?? '';
-      _mainlandPlateController.text = driver['mainlandPlate']?.toString() ?? '';
+      _macauPlateController.text =
+          formatMacauPlateInput(driver['macauPlate']?.toString() ?? '');
+      _mainlandPlateController.text = mainlandPlateInput(
+          driver['mainlandPlate']?.toString() ?? '', _vehicleOwnership);
       _vehicleCategoryController.text =
           driver['vehicleCategory']?.toString() ?? '';
       _vehicleColorController.text = driver['vehicleColor']?.toString() ?? '';
@@ -291,9 +293,10 @@ class _RegistrationPageState extends State<RegistrationPage> {
             const SnackBar(content: Text('驗證碼已發送，開發環境驗證碼為 00000')));
       }
     } on DriverApiException catch (error) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(error.message)));
+      }
     }
   }
 
@@ -343,11 +346,13 @@ class _RegistrationPageState extends State<RegistrationPage> {
           .showSnackBar(const SnackBar(content: Text('請完成所有必填資料')));
       return;
     }
+    final mainlandPlate =
+        composeMainlandPlate(_mainlandPlateController.text, _vehicleOwnership);
     final plateError = vehiclePlateError(
       vehicleOwnership: _vehicleOwnership,
       hongKongPlate: _hkPlateController.text,
       macauPlate: _macauPlateController.text,
-      mainlandPlate: _mainlandPlateController.text,
+      mainlandPlate: mainlandPlate,
     );
     if (plateError != null) {
       ScaffoldMessenger.of(context)
@@ -376,7 +381,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
           vehicleOwnership: _vehicleOwnership,
           hkPlate: normalizeHongKongPlate(_hkPlateController.text),
           macauPlate: normalizeMacauPlate(_macauPlateController.text),
-          mainlandPlate: normalizeMainlandPlate(_mainlandPlateController.text),
+          mainlandPlate: normalizeMainlandPlate(mainlandPlate),
           vehicleCategory: _vehicleCategoryController.text.trim(),
           vehicleColor: _vehicleColorController.text.trim(),
           vehiclePhotoBytes: _vehiclePhotoBytes,
@@ -394,10 +399,9 @@ class _RegistrationPageState extends State<RegistrationPage> {
           macauPlate: normalizeMacauPlate(_macauPlateController.text).isEmpty
               ? null
               : normalizeMacauPlate(_macauPlateController.text),
-          mainlandPlate:
-              normalizeMainlandPlate(_mainlandPlateController.text).isEmpty
-                  ? null
-                  : normalizeMainlandPlate(_mainlandPlateController.text),
+          mainlandPlate: normalizeMainlandPlate(mainlandPlate).isEmpty
+              ? null
+              : normalizeMainlandPlate(mainlandPlate),
           phoneCountryCode: _countryCode,
           phone: phone,
           verificationChallengeId: _registrationChallengeId!,
@@ -413,9 +417,10 @@ class _RegistrationPageState extends State<RegistrationPage> {
         DriverNavigation.replace(context, DriverRouteNames.reviewStatus);
       }
     } on DriverApiException catch (error) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(error.message)));
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -452,6 +457,8 @@ class _RegistrationPageState extends State<RegistrationPage> {
                       )
                     else
                       _RegistrationCard(
+                        initialOwnership: _vehicleOwnership,
+                        initialPlateType: _plateType,
                         nameController: _nameController,
                         hkPlateController: _hkPlateController,
                         macauPlateController: _macauPlateController,
@@ -464,8 +471,12 @@ class _RegistrationPageState extends State<RegistrationPage> {
                         vehiclePhotoSize: _vehiclePhotoBytes?.length,
                         vehiclePhotoProcessing: _processingVehiclePhoto,
                         onVehiclePhotoTap: _selectVehiclePhoto,
-                        onOwnershipChanged: (value) =>
-                            setState(() => _vehicleOwnership = value),
+                        onOwnershipChanged: (value) => setState(() {
+                          _vehicleOwnership = value;
+                          _hkPlateController.clear();
+                          _macauPlateController.clear();
+                          _mainlandPlateController.clear();
+                        }),
                         onPlateTypeChanged: (value) =>
                             setState(() => _plateType = value),
                       ),
@@ -587,7 +598,9 @@ class _PhoneVerificationCard extends StatelessWidget {
 
 class _RegistrationCard extends StatefulWidget {
   const _RegistrationCard(
-      {required this.nameController,
+      {required this.initialOwnership,
+      required this.initialPlateType,
+      required this.nameController,
       required this.hkPlateController,
       required this.macauPlateController,
       required this.mainlandPlateController,
@@ -601,6 +614,8 @@ class _RegistrationCard extends StatefulWidget {
       required this.onVehiclePhotoTap,
       required this.onPlateTypeChanged,
       required this.onOwnershipChanged});
+  final String initialOwnership;
+  final String initialPlateType;
   final TextEditingController nameController,
       hkPlateController,
       macauPlateController,
@@ -624,11 +639,21 @@ class _RegistrationCardState extends State<_RegistrationCard> {
   static const _regions = ['香港', '澳門', '中國內地'];
   static const _plateTypes = ['單牌', '兩地牌', '三地牌'];
 
-  int _regionIndex = 0;
-  String _plateType = '兩地牌';
+  late int _regionIndex;
+  late String _plateType;
 
   List<String> get _availablePlateTypes =>
       _regionIndex == 2 ? ['兩地牌'] : _plateTypes;
+
+  @override
+  void initState() {
+    super.initState();
+    final initialRegionIndex = _regions.indexOf(widget.initialOwnership);
+    _regionIndex = initialRegionIndex < 0 ? 0 : initialRegionIndex;
+    _plateType = _availablePlateTypes.contains(widget.initialPlateType)
+        ? widget.initialPlateType
+        : '兩地牌';
+  }
 
   @override
   Widget build(BuildContext context) => Container(
@@ -655,13 +680,18 @@ class _RegistrationCardState extends State<_RegistrationCard> {
               options: _regions,
               selected: _regionIndex,
               onChanged: (index) {
+                var plateTypeChanged = false;
                 setState(() {
                   _regionIndex = index;
                   if (!_availablePlateTypes.contains(_plateType)) {
                     _plateType = '兩地牌';
+                    plateTypeChanged = true;
                   }
                 });
                 widget.onOwnershipChanged(_regions[index]);
+                if (plateTypeChanged) {
+                  widget.onPlateTypeChanged(_plateType);
+                }
               },
             ),
             const SizedBox(height: DriverSpacing.lg),
@@ -769,16 +799,16 @@ class _TextFieldSection extends StatelessWidget {
   const _TextFieldSection(
       {required this.label,
       required this.hint,
-      this.trailing,
       this.controller,
       this.inputFormatters,
-      this.onTap});
+      this.prefixText,
+      this.suffixText});
   final String label;
   final String hint;
-  final String? trailing;
   final TextEditingController? controller;
   final List<TextInputFormatter>? inputFormatters;
-  final VoidCallback? onTap;
+  final String? prefixText;
+  final String? suffixText;
 
   @override
   Widget build(BuildContext context) => Column(
@@ -796,22 +826,15 @@ class _TextFieldSection extends StatelessWidget {
             child: TextField(
               controller: controller,
               inputFormatters: inputFormatters,
-              readOnly: trailing != null,
-              onTap: onTap,
               decoration: InputDecoration(
                 hintText: hint,
+                prefixText: prefixText,
+                suffixText: suffixText,
                 hintStyle: const TextStyle(
                     fontSize: 15, color: DriverColors.secondaryText),
                 border: InputBorder.none,
                 contentPadding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                suffixIcon: trailing == null
-                    ? null
-                    : Padding(
-                        padding: const EdgeInsets.all(16),
-                        child:
-                            SvgPicture.asset(trailing!, width: 16, height: 16),
-                      ),
               ),
               style: const TextStyle(fontSize: 15, color: DriverColors.text),
             ),
@@ -942,6 +965,18 @@ class _PlateSection extends StatelessWidget {
               : label.contains('內地')
                   ? mainlandPlateController
                   : hkPlateController,
+          prefixText: label.contains('內地')
+              ? region == '中國內地'
+                  ? '粵'
+                  : '粵Z·'
+              : null,
+          suffixText: label.contains('內地')
+              ? region == '香港'
+                  ? '港'
+                  : region == '澳門'
+                      ? '澳'
+                      : null
+              : null,
           inputFormatters: [
             vehiclePlateFormatter(label.contains('香港')
                 ? '香港'

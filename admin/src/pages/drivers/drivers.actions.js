@@ -1,4 +1,4 @@
-import { normalizeVehiclePlates, vehiclePlateError } from './vehicle-plates.js'
+import { composeMainlandPlate, formatHongKongPlateInput, formatMacauPlateInput, formatMainlandPlateInput, mainlandPlateInput, normalizeVehiclePlates, vehiclePlateError } from './vehicle-plates.js'
 
 export function createDriversActions({ driversApi, driverForm, selectedDriver, settlementForm, drivers, error, load, displayError, requestConfirmation, notify }) {
   let vehiclePhotoUrl = null
@@ -9,7 +9,31 @@ export function createDriversActions({ driversApi, driverForm, selectedDriver, s
   }
 
   function editDriver(item) {
-    driverForm.value = { driverType: '內部司機', affiliation: '香港', vehicleOwnership: '香港', plateType: '單牌', hkPlate: '', macauPlate: '', mainlandPlate: '', phoneCountryCode: '+852', vehiclePhotos: [], ...item, vehiclePhotos: [] }
+    const vehicleOwnership = item.vehicleOwnership || '香港'
+    driverForm.value = { driverType: '內部司機', affiliation: '香港', plateType: '單牌', hkPlate: '', macauPlate: '', mainlandPlate: '', phoneCountryCode: '+852', vehiclePhotos: [], ...item, vehicleOwnership, macauPlate: formatMacauPlateInput(item.macauPlate), mainlandPlate: mainlandPlateInput(item.mainlandPlate, vehicleOwnership), vehiclePhotos: [] }
+  }
+
+  function formatDriverHongKongPlate() {
+    if (!driverForm.value) return
+    driverForm.value.hkPlate = formatHongKongPlateInput(driverForm.value.hkPlate)
+  }
+
+  function formatDriverMacauPlate() {
+    if (!driverForm.value) return
+    driverForm.value.macauPlate = formatMacauPlateInput(driverForm.value.macauPlate)
+  }
+
+  function formatDriverMainlandPlate() {
+    if (!driverForm.value) return
+    driverForm.value.mainlandPlate = formatMainlandPlateInput(driverForm.value.mainlandPlate)
+  }
+
+  function changeDriverOwnership() {
+    if (!driverForm.value) return
+    if (driverForm.value.vehicleOwnership === '中國內地') driverForm.value.plateType = '兩地牌'
+    driverForm.value.hkPlate = ''
+    driverForm.value.macauPlate = ''
+    driverForm.value.mainlandPlate = ''
   }
 
   async function uploadDriverPhotos(event) {
@@ -35,8 +59,9 @@ export function createDriversActions({ driversApi, driverForm, selectedDriver, s
   }
 
   async function saveDriver() {
-    const plates = normalizeVehiclePlates(driverForm.value)
-    const form = { ...driverForm.value, ...plates, driverType: driverForm.value.driverType || '內部司機', name: String(driverForm.value.name || '').trim(), phone: String(driverForm.value.phone || '').trim(), vehicleCategory: String(driverForm.value.vehicleCategory || '').trim(), vehicleColor: String(driverForm.value.vehicleColor || '').trim(), id: driverForm.value.id || undefined }
+    const vehicleOwnership = driverForm.value.vehicleOwnership || '香港'
+    const plates = normalizeVehiclePlates({ ...driverForm.value, mainlandPlate: composeMainlandPlate(driverForm.value.mainlandPlate, vehicleOwnership) })
+    const form = { ...driverForm.value, ...plates, vehicleOwnership, driverType: driverForm.value.driverType || '內部司機', name: String(driverForm.value.name || '').trim(), phone: String(driverForm.value.phone || '').trim(), vehicleCategory: String(driverForm.value.vehicleCategory || '').trim(), vehicleColor: String(driverForm.value.vehicleColor || '').trim(), id: driverForm.value.id || undefined }
     const plateError = vehiclePlateError({ ...plates, vehicleOwnership: form.vehicleOwnership })
     if (plateError) { error.value = plateError; return }
     if (!form.name || !form.affiliation || !form.plateType || !form.phone || !form.vehicleCategory || !form.vehicleColor) { error.value = '請填寫註冊所需資料'; return }
@@ -120,5 +145,5 @@ export function createDriversActions({ driversApi, driverForm, selectedDriver, s
     } catch (err) { error.value = displayError(err) }
   }
 
-  return { reviewStatusLabel, resetDriver, editDriver, uploadDriverPhotos, removeDriverPhoto, saveDriver, removeDriver, openDriverDetail, previewDriver, closeDriverDetail, approveDriver, requestDriverRevision, rejectDriver, resetSettlement, saveSettlement }
+  return { reviewStatusLabel, resetDriver, editDriver, formatDriverHongKongPlate, formatDriverMacauPlate, formatDriverMainlandPlate, changeDriverOwnership, uploadDriverPhotos, removeDriverPhoto, saveDriver, removeDriver, openDriverDetail, previewDriver, closeDriverDetail, approveDriver, requestDriverRevision, rejectDriver, resetSettlement, saveSettlement }
 }

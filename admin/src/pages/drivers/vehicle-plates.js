@@ -1,9 +1,50 @@
 export function normalizeVehiclePlates({ hkPlate, macauPlate, mainlandPlate }) {
   return {
     hkPlate: String(hkPlate || '').trim().toUpperCase(),
-    macauPlate: String(macauPlate || '').trim().toUpperCase(),
+    macauPlate: formatMacauPlateInput(macauPlate),
     mainlandPlate: String(mainlandPlate || '').trim().replace(/[•・]/g, '·').toUpperCase(),
   }
+}
+
+export function formatHongKongPlateInput(value) {
+  let nonSpaceCount = 0
+  return [...String(value || '').toUpperCase()].filter(character => {
+    if (character === ' ') return true
+    if (!/[A-Z0-9]/.test(character) || nonSpaceCount === 8) return false
+    nonSpaceCount += 1
+    return true
+  }).join('')
+}
+
+export function formatMacauPlateInput(value) {
+  const raw = String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '')
+  let filtered = ''
+  for (const character of raw) {
+    const valid = filtered.length < 2 ? /[A-Z]/.test(character) : /[0-9]/.test(character)
+    if (valid) filtered += character
+    if (filtered.length === 6) break
+  }
+  return [filtered.slice(0, 2), filtered.slice(2, 4), filtered.slice(4, 6)].filter(Boolean).join('-')
+}
+
+export function formatMainlandPlateInput(value) {
+  return String(value || '').replace(/\s/g, '').replace(/[•・]/g, '·').toUpperCase()
+}
+
+export function mainlandPlateInput(value, vehicleOwnership) {
+  const plate = String(value || '').trim().replace(/[•・]/g, '·').toUpperCase()
+  if (vehicleOwnership === '香港' && /^粵Z·.*港$/.test(plate)) return plate.slice(3, -1)
+  if (vehicleOwnership === '澳門' && /^粵Z·.*澳$/.test(plate)) return plate.slice(3, -1)
+  if (vehicleOwnership === '中國內地' && plate.startsWith('粵')) return plate.slice(1)
+  return plate
+}
+
+export function composeMainlandPlate(value, vehicleOwnership) {
+  const input = mainlandPlateInput(value, vehicleOwnership).replace(/\s/g, '')
+  if (!input) return ''
+  if (vehicleOwnership === '香港') return `粵Z·${input}港`
+  if (vehicleOwnership === '澳門') return `粵Z·${input}澳`
+  return `粵${input}`
 }
 
 export function vehiclePlateError({ vehicleOwnership, hkPlate, macauPlate, mainlandPlate }) {

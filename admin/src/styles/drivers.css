@@ -103,6 +103,11 @@
 .driver-form-grid label.full-width { grid-column: 1 / -1; }
 .driver-form-grid input, .driver-form-grid select { width: 100%; height: 44px; min-height: 44px; border: 1px solid #cbd9e9; border-radius: 10px; padding: 0 12px; color: #29425f; background: #fff; }
 .driver-form-grid input:focus, .driver-form-grid select:focus { outline: none; border-color: #4a8df0; box-shadow: 0 0 0 3px rgba(74,141,240,.13); }
+.driver-plate-input { display: flex; align-items: center; min-width: 0; height: 44px; overflow: hidden; border: 1px solid #cbd9e9; border-radius: 10px; background: #fff; }
+.driver-plate-input:focus-within { border-color: #4a8df0; box-shadow: 0 0 0 3px rgba(74,141,240,.13); }
+.driver-plate-input span { flex: 0 0 auto; padding: 0 12px; color: #526985; font-size: 14px; }
+.driver-plate-input input { min-width: 0; height: 42px; min-height: 42px; border: 0; border-radius: 0; padding: 0; box-shadow: none; }
+.driver-plate-input input:focus { box-shadow: none; }
 .driver-form-grid input[type="file"] { height: auto; min-height: 44px; padding: 10px 12px; }
 .driver-upload-hint { color: #8293a9; font-size: 11px; font-weight: 500; }
 .driver-photo-preview { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 2px; }
