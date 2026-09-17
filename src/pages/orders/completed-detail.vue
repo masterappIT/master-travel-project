@@ -27,18 +27,20 @@
       <view :class="['status', { 'completed-status': isCompleted }]">
         <image :src="statusIcon" mode="aspectFit" /><text>{{ statusLabel }}</text>
       </view>
-      <view :class="['traveling-card', 'standard-detail-card', { 'pending-card': !isCompleted, 'completed-card': isCompleted }]">
-      <view class="locations"><view><image src="/static/orders/origin.svg" mode="aspectFit" /><text>{{ originLabel }}</text></view><view><image src="/static/orders/destination.svg" mode="aspectFit" /><text>{{ destinationLabel }}</text></view></view>
-      <view class="times"><text>預約時間 ：{{ bookingTime }}</text><text>預計到達時間 ：{{ arrivalTime }}</text></view>
-      <view class="passenger-title">乘客及聯絡資料：</view><view class="passenger"><view><image src="/static/orders/passenger.svg" mode="aspectFit" /><text>{{ passengerLabel }}</text></view><view><image src="/static/orders/phone.svg" mode="aspectFit" /><text>{{ passengerPhoneLabel }}</text></view></view>
-      <view :class="['payment', { completed: isCompleted, pending: !isCompleted }]">
-        <text v-if="!isCompleted">交易時間剩餘：05:00</text>
-        <text v-if="!isCompleted" class="amount">{{ amountLabel }}</text>
-        <view v-if="!isCompleted" class="pay-tag">待付款</view>
-        <view v-else class="paid-tag">已付款</view>
-      </view>
-      <view class="detail"><text class="detail-title">訂單詳細</text><text class="detail-date">{{ detailDateLabel }}</text><view class="line"/><view class="row"><text>{{ vehicleLabel }}</text><text>{{ currencyLabel }} {{ baseFareTotal.toFixed(2) }}</text></view><view v-for="item in surchargeItems" :key="item.label" class="row"><text>{{ item.label }}</text><text>{{ formatLineAmount(item) }}</text></view><view class="row"><text>優惠券抵扣</text><text>{{ discountLabel }}</text></view><view :class="['total', { 'completed-total': isCompleted }]">Total： {{ currencyLabel }} {{ paymentTotal.toFixed(2) }}</view><view v-if="isCompleted && storedOrder?.payment" class="completed-payment"><view v-if="storedOrder.payment.fareAmount > 0" class="payment-record wallet-record"><image src="/static/vehicles/payment/payment-wallet-fare.svg" mode="aspectFit" /><text>車費餘額</text><text class="record-amount">-{{ currencyLabel }} {{ storedOrder.payment.fareAmount.toFixed(2) }}</text></view><view v-if="storedOrder.payment.cashAmount > 0" class="payment-record wallet-record"><image src="/static/vehicles/payment/payment-wallet-cash.svg" mode="aspectFit" /><text>現金餘額</text><text class="record-amount">-{{ currencyLabel }} {{ storedOrder.payment.cashAmount.toFixed(2) }}</text></view><view v-if="storedOrder.payment.externalAmount > 0" class="payment-record wechat-record"><image src="/static/vehicles/payment/payment-wechat.svg" mode="aspectFit" /><text>{{ paymentMethodLabel }}</text><text class="record-amount">-{{ currencyLabel }} {{ storedOrder.payment.externalAmount.toFixed(2) }}</text></view><view class="payment-divider" /><view class="record-link" @tap="showPaymentRecords">相關支付紀錄 <text>›</text></view></view><button v-if="!isCompleted" class="cancel" @tap="cancelOrder">取消</button></view>
-      </view>
+      <scroll-view class="standard-scroll" scroll-y>
+        <view :class="['traveling-card', 'standard-detail-card', { 'pending-card': !isCompleted, 'completed-card': isCompleted }]">
+        <view class="locations"><view><image src="/static/orders/origin.svg" mode="aspectFit" /><text>{{ originLabel }}</text></view><view><image src="/static/orders/destination.svg" mode="aspectFit" /><text>{{ destinationLabel }}</text></view></view>
+        <view class="times"><text>預約時間 ：{{ bookingTime }}</text><text>預計到達時間 ：{{ arrivalTime }}</text></view>
+        <view class="passenger-title">乘客及聯絡資料：</view><view class="passenger"><view><image src="/static/orders/passenger.svg" mode="aspectFit" /><text>{{ passengerLabel }}</text></view><view><image src="/static/orders/phone.svg" mode="aspectFit" /><text>{{ passengerPhoneLabel }}</text></view></view>
+        <view :class="['payment', { completed: isCompleted, pending: !isCompleted }]">
+          <text v-if="!isCompleted">交易時間剩餘：05:00</text>
+          <text v-if="!isCompleted" class="amount">{{ amountLabel }}</text>
+          <view v-if="!isCompleted" class="pay-tag">待付款</view>
+          <view v-else class="paid-tag">已付款</view>
+        </view>
+        <view class="detail"><text class="detail-title">訂單詳細</text><text class="detail-date">{{ detailDateLabel }}</text><view class="line"/><view class="row"><text>{{ vehicleLabel }}</text><text>{{ currencyLabel }} {{ baseFareTotal.toFixed(2) }}</text></view><view v-for="item in surchargeItems" :key="item.label" class="row"><text>{{ item.label }}</text><text>{{ formatLineAmount(item) }}</text></view><view class="row"><text>優惠券抵扣</text><text>{{ discountLabel }}</text></view><view :class="['total', { 'completed-total': isCompleted }]">Total： {{ currencyLabel }} {{ paymentTotal.toFixed(2) }}</view><view v-if="isCompleted && storedOrder?.payment" class="completed-payment"><view v-if="storedOrder.payment.fareAmount > 0" class="payment-record wallet-record"><image src="/static/vehicles/payment/payment-wallet-fare.svg" mode="aspectFit" /><text>車費餘額</text><text class="record-amount">-{{ currencyLabel }} {{ storedOrder.payment.fareAmount.toFixed(2) }}</text></view><view v-if="storedOrder.payment.cashAmount > 0" class="payment-record wallet-record"><image src="/static/vehicles/payment/payment-wallet-cash.svg" mode="aspectFit" /><text>現金餘額</text><text class="record-amount">-{{ currencyLabel }} {{ storedOrder.payment.cashAmount.toFixed(2) }}</text></view><view v-if="storedOrder.payment.externalAmount > 0" class="payment-record wechat-record"><image src="/static/vehicles/payment/payment-wechat.svg" mode="aspectFit" /><text>{{ paymentMethodLabel }}</text><text class="record-amount">-{{ currencyLabel }} {{ storedOrder.payment.externalAmount.toFixed(2) }}</text></view><view class="payment-divider" /><view class="record-link" @tap="showPaymentRecords">相關支付紀錄 <text>›</text></view></view><button v-if="!isCompleted" class="cancel" @tap="cancelOrder">取消</button></view>
+        </view>
+      </scroll-view>
     </template>
     </template>
   </view>
@@ -274,7 +276,7 @@ const showPaymentRecords = () => openCachedPage(`/pages/transactions/expense-det
 .traveling-scroll .traveling-card.card>.detail{position:relative;top:auto;left:0;width:380px;margin-top:242px;padding:0 25px 35px;box-sizing:border-box}
 .traveling-scroll .traveling-card.card>.detail .completed-payment,.traveling-scroll .traveling-card.card>.detail .payment-record,.traveling-scroll .traveling-card.card>.detail .record-link,.traveling-scroll .traveling-card.card>.detail .payment-divider{width:330px}
 /* Shared content-driven order detail layout. */
-.page { overflow-y: auto; } .card {
+.card {
   position: relative;
   top: 175px;
   left: 0;
@@ -304,7 +306,8 @@ const showPaymentRecords = () => openCachedPage(`/pages/transactions/expense-det
 .card .detail .payment-record, .card .detail .payment-divider, .card .detail .record-link { width: 100%; }
 .card .detail .total { position: static; width: auto; margin-top: 25px; }
 /* Standard traveling-card geometry for the regular status detail card. */
-.standard-detail-card { position: relative; top: 175px; left: 0; width: 430px; min-height: 0; height: auto !important; padding: 20px 30px 0; box-sizing: border-box; border-radius: 25px; }
+.standard-scroll { position: absolute; top: 175px; left: 0; width: 430px; height: calc(var(--mobile-height, 932px) - 175px); }
+.standard-detail-card { position: relative; top: 0; left: 0; width: 430px; min-height: 0; height: auto !important; padding: 20px 30px 0; box-sizing: border-box; border-radius: 25px; }
 .standard-detail-card .locations { position: static; width: 270px; }
 .standard-detail-card .locations view { display: flex; align-items: flex-start; gap: 20px; min-height: 30px; height: auto; }
 .standard-detail-card .locations image { flex: none; margin-top: 6px; }
@@ -326,5 +329,5 @@ const showPaymentRecords = () => openCachedPage(`/pages/transactions/expense-det
   height: auto;
 }
 .standard-detail-card .payment .paid-tag { position: static; display: block; width: max-content; margin-left: auto; margin-top: 0; }
-@media (max-width:599px) { .page { height: var(--mobile-height,100dvh); overflow-y: auto; } }
+@media (max-width:599px) { .page { height: var(--mobile-height,100dvh); } }
 </style>

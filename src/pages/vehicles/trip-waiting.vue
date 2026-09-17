@@ -58,9 +58,10 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
-import { getClientTrip, type ClientTrip } from '../../services/api'
+import { getClientTrip, listClientTrips, type ClientTrip } from '../../services/api'
 import { formatOrderCardAddress } from '../../utils/orderAddress'
 import { cachedPagePath, cachedPageUrl, getCachedPageOrderQuery, openCachedPage } from '../../utils/navigation'
+import { isPendingTrip, selectNextPendingTrip } from '../../utils/pendingTrip'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 
 const { responsiveStyle } = useResponsiveCanvas()
@@ -89,6 +90,14 @@ const loadTrip = async () => {
   try {
     const nextTrip = await getClientTrip(tripId.value)
     trip.value = nextTrip
+    if (fromProfilePending.value && !isPendingTrip(nextTrip)) {
+      transitioning = true
+      stopPolling()
+      const pendingTrip = selectNextPendingTrip(await listClientTrips(), nextTrip.id)
+      if (pendingTrip) return openCachedPage(`/pages/trips/pending?id=${encodeURIComponent(pendingTrip.id)}`)
+      uni.showToast({ title: '目前沒有待出行訂單', icon: 'none' })
+      return openCachedPage('/pages/trips/trips')
+    }
     const path = nextTrip.status === 'COMPLETED' ? '/pages/vehicles/trip-complete' : nextTrip.executionPhase === 'IN_PROGRESS' ? '/pages/vehicles/trip-progress' : ''
     if (path) {
       transitioning = true
@@ -96,7 +105,7 @@ const loadTrip = async () => {
       const source = fromProfilePending.value ? '&from=profile-pending' : ''
       openCachedPage(`${path}?id=${encodeURIComponent(tripId.value)}${source}`)
     }
-  } catch (error) { uni.showToast({ title: error instanceof Error ? error.message : '行程載入失敗', icon: 'none' }) }
+  } catch (error) { transitioning = false; startPolling(); uni.showToast({ title: error instanceof Error ? error.message : '行程載入失敗', icon: 'none' }) }
 }
 onLoad(options => { tripId.value = options?.id || ''; fromProfilePending.value = options?.from === 'profile-pending'; void loadTrip(); startPolling() })
 // #ifdef MP-WEIXIN || MP-TOUTIAO

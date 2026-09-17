@@ -41,10 +41,11 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import OrdersBackButton from '../../components/orders/OrdersBackButton.vue'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
-import { getClientTrip, type ClientTrip } from '../../services/api'
+import { getClientTrip, listClientTrips, type ClientTrip } from '../../services/api'
 import { formatAssignmentCountdown, getAssignmentCountdownSeconds } from '../../utils/assignmentCountdown'
 import { cachedPageUrl, closeCachedPage, getCachedPageOrderQuery, getCachedPageUrl, openCachedPage, pagePath } from '../../utils/navigation'
 import { formatOrderDetailAddress } from '../../utils/orderAddress'
+import { isPendingTrip, selectNextPendingTrip } from '../../utils/pendingTrip'
 
 const { responsiveStyle } = useResponsiveCanvas()
 const trip = ref<ClientTrip>()
@@ -54,6 +55,7 @@ const previewProgress = ref(false)
 const countdown = ref(0)
 let countdownTimer: ReturnType<typeof setInterval> | undefined
 let pollTimer: ReturnType<typeof setInterval> | undefined
+let transitioning = false
 
 const isDriverAccepted = computed(() => previewAssigned.value || (trip.value?.executionPhase === 'DRIVER_ASSIGNED' && Boolean(trip.value.acceptedAt)))
 const isTripInProgress = computed(() => previewProgress.value || trip.value?.executionPhase === 'IN_PROGRESS')
@@ -95,9 +97,17 @@ const startTimers = () => {
   if (!pollTimer) pollTimer = setInterval(() => { void loadTrip() }, 15000)
 }
 const loadTrip = async () => {
-  if (!tripId.value) return
+  if (!tripId.value || transitioning) return
   try {
     const loadedTrip = await getClientTrip(tripId.value)
+    if (!previewAssigned.value && !previewProgress.value && !isPendingTrip(loadedTrip)) {
+      transitioning = true
+      stopTimers()
+      const nextTrip = selectNextPendingTrip(await listClientTrips(), loadedTrip.id)
+      if (nextTrip) return openCachedPage(`/pages/trips/pending?id=${encodeURIComponent(nextTrip.id)}`)
+      uni.showToast({ title: '目前沒有待出行訂單', icon: 'none' })
+      return openCachedPage('/pages/trips/trips')
+    }
     trip.value = previewAssigned.value || previewProgress.value
       ? {
           ...loadedTrip,
@@ -109,6 +119,8 @@ const loadTrip = async () => {
       : loadedTrip
     refreshCountdown()
   } catch (error) {
+    transitioning = false
+    startTimers()
     uni.showToast({ title: error instanceof Error ? error.message : '訂單載入失敗', icon: 'none' })
   }
 }
@@ -118,6 +130,7 @@ const activatePage = (url: string) => {
   if (!id) return
   previewAssigned.value = import.meta.env.DEV && url.includes('preview=assigned')
   previewProgress.value = import.meta.env.DEV && url.includes('preview=progress')
+  transitioning = false
   tripId.value = id
   void loadTrip()
   startTimers()

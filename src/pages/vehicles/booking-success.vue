@@ -25,8 +25,9 @@
 import HomeMap from '../../components/home/HomeMap.vue'
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
-import { getClientTrip, type ClientTrip } from '../../services/api'
+import { getClientTrip, listClientTrips, type ClientTrip } from '../../services/api'
 import { cachedPagePath, cachedPageUrl, getCachedPageOrderQuery, openCachedPage } from '../../utils/navigation'
+import { isPendingTrip, selectNextPendingTrip } from '../../utils/pendingTrip'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { formatAssignmentCountdown, getAssignmentCountdownSeconds } from '../../utils/assignmentCountdown'
 
@@ -70,6 +71,14 @@ const loadTrip = async () => {
     const nextTrip = await getClientTrip(tripId.value)
     trip.value = nextTrip
     refreshConfirmationCountdown()
+    if (fromProfilePending.value && !isPendingTrip(nextTrip)) {
+      transitioning = true
+      stopPolling()
+      const pendingTrip = selectNextPendingTrip(await listClientTrips(), nextTrip.id)
+      if (pendingTrip) return openCachedPage(`/pages/trips/pending?id=${encodeURIComponent(pendingTrip.id)}`)
+      uni.showToast({ title: '目前沒有待出行訂單', icon: 'none' })
+      return openCachedPage('/pages/trips/trips')
+    }
     const path = nextTrip.status === 'COMPLETED' ? '/pages/vehicles/trip-complete' : nextTrip.executionPhase === 'IN_PROGRESS' ? '/pages/vehicles/trip-progress' : nextTrip.executionPhase === 'DRIVER_ASSIGNED' ? '/pages/vehicles/trip-waiting' : ''
     if (path) {
       transitioning = true
@@ -78,6 +87,8 @@ const loadTrip = async () => {
       openCachedPage(`${path}?id=${encodeURIComponent(tripId.value)}${source}`)
     }
   } catch (error) {
+    transitioning = false
+    startPolling()
     uni.showToast({ title: error instanceof Error ? error.message : '訂單載入失敗', icon: 'none' })
   } finally { loadingTrip = false }
 }

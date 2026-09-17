@@ -2,7 +2,7 @@
   <view class="page" :style="responsiveStyle">
     <view v-if="loadError" class="load-error">訂單不存在或無權查看</view>
     <template v-else>
-      <view class="header">
+      <view class="header" :style="headerStyle">
         <OrdersBackButton icon-src="/static/orders/traveling-back.svg" @tap="goBack" />
         <text class="number">訂單編號：{{ orderNumber }}</text>
       </view>
@@ -42,6 +42,20 @@ import { getClientTrip, type ClientTrip } from '../../services/api'
 import { formatCurrencyAmount, normalizeCurrency } from '../../composables/useCurrency'
 
 const { responsiveStyle } = useResponsiveCanvas()
+const headerStyle = computed(() => {
+  // #ifdef MP-WEIXIN
+  try {
+    const { windowWidth = 430 } = uni.getSystemInfoSync()
+    const menuButton = uni.getMenuButtonBoundingClientRect()
+    const canvasScale = windowWidth / 430
+    const rightInset = Math.max(0, 430 - menuButton.left / canvasScale + 12)
+    return { '--order-header-right': `${rightInset}px` }
+  } catch {
+    return {}
+  }
+  // #endif
+  return {}
+})
 const tripStore = useTripStore()
 const storedOrder = ref<ClientTrip>()
 const orderNumber = computed(() => {
@@ -152,7 +166,7 @@ const showPaymentRecords = () => openCachedPage(`/pages/transactions/expense-det
 .traveling-divider { width: 100%; height: 1px; margin-top: 20px; overflow: hidden; }
 .traveling-divider image { width: 100%; height: 1px; }
 .traveling-record image { width: 20px; height: 20px; }
-.number { position: absolute; top: 58px; left: 122px; font-size: 18px; font-weight: 500; }
+.number { position: absolute; top: 58px; left: 122px; right: var(--order-header-right, auto); overflow: hidden; font-size: 18px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
 .long-addresses .times { top: 102px; }
 .long-addresses .passenger-title { top: 157px; }
 .long-addresses .passenger { top: 187px; }
@@ -299,8 +313,8 @@ const showPaymentRecords = () => openCachedPage(`/pages/transactions/expense-det
 } .detail {
   position: absolute;
   top: 225px;
-  left: 0;
-  width: auto;
+  left: 30px;
+  width: 370px;
   min-height: 0;
   padding: 0;
   box-sizing: border-box;

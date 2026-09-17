@@ -39,6 +39,7 @@ import OrdersCard from '../../components/profile/OrdersCard.vue'
 import CommonActions from '../../components/profile/CommonActions.vue'
 import ProfileBottomNav from '../../components/profile/ProfileBottomNav.vue'
 import { getClientProfile, listNotifications, listClientTrips } from '../../services/api'
+import { selectNextPendingTrip } from '../../utils/pendingTrip'
 
 const unreadCount = ref(0)
 const avatarUrl = ref('')
@@ -109,7 +110,7 @@ const handleOrderAction = async (name: string) => {
     setOrderReturnTarget('profile')
     try {
       const trips = await listClientTrips()
-      const traveling = trips.find((trip) => trip.status === 'CONFIRMED' && trip.executionPhase !== 'IN_PROGRESS')
+      const traveling = selectNextPendingTrip(trips)
       if (!traveling) return uni.showToast({ title: '目前沒有待出行訂單', icon: 'none' })
       return openCachedPage(`/pages/trips/pending?id=${encodeURIComponent(traveling.id)}`)
     } catch (error) {

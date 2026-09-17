@@ -58,9 +58,10 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
-import { getClientTrip, type ClientTrip } from '../../services/api'
+import { getClientTrip, listClientTrips, type ClientTrip } from '../../services/api'
 import { formatOrderSummaryAddress } from '../../utils/orderAddress'
 import { cachedPagePath, cachedPageUrl, getCachedPageOrderQuery, openCachedPage } from '../../utils/navigation'
+import { isPendingTrip, selectNextPendingTrip } from '../../utils/pendingTrip'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 
 const { responsiveStyle } = useResponsiveCanvas()
@@ -84,7 +85,25 @@ const startPolling = () => {
   if (!tripId.value || pollTimer) return
   pollTimer = setInterval(() => { void loadTrip() }, 15000)
 }
-const loadTrip = async () => { if (!tripId.value || transitioning) return; try { const nextTrip = await getClientTrip(tripId.value); trip.value = nextTrip; if (nextTrip.status === 'COMPLETED') { transitioning = true; if (pollTimer) clearInterval(pollTimer); openCachedPage(`/pages/vehicles/trip-complete?id=${encodeURIComponent(tripId.value)}`) } } catch (error) { uni.showToast({ title: error instanceof Error ? error.message : '行程載入失敗', icon: 'none' }) } }
+const loadTrip = async () => {
+  if (!tripId.value || transitioning) return
+  try {
+    const nextTrip = await getClientTrip(tripId.value)
+    trip.value = nextTrip
+    if (isPendingTrip(nextTrip)) return
+    if (!fromProfilePending.value && nextTrip.status !== 'COMPLETED') return
+    transitioning = true
+    stopPolling()
+    if (!fromProfilePending.value) return openCachedPage(`/pages/vehicles/trip-complete?id=${encodeURIComponent(tripId.value)}`)
+    const pendingTrip = selectNextPendingTrip(await listClientTrips(), nextTrip.id)
+    if (pendingTrip) return openCachedPage(`/pages/trips/pending?id=${encodeURIComponent(pendingTrip.id)}`)
+    uni.showToast({ title: '目前沒有待出行訂單', icon: 'none' })
+    return openCachedPage('/pages/trips/trips')
+  } catch (error) {
+    transitioning = false
+    uni.showToast({ title: error instanceof Error ? error.message : '行程載入失敗', icon: 'none' })
+  }
+}
 onLoad(options => { tripId.value = options?.id || ''; fromProfilePending.value = options?.from === 'profile-pending'; void loadTrip(); startPolling() })
 // #ifdef MP-WEIXIN || MP-TOUTIAO
 watch([cachedPagePath, cachedPageUrl], ([path, url]) => {
