@@ -20,6 +20,7 @@ export function createAdminResourceState() {
     routeMinimumFares: ref([]),
     routeMinimumFareForm: ref(null),
     membershipPlans: ref([]),
+    membershipOrders: ref([]),
     promotions: ref([]),
     promotionForm: ref(null),
     promotionSaving: ref(false),

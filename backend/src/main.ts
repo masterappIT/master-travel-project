@@ -476,7 +476,7 @@ const promotionMatchesContext = (
   }
   return true;
 };
-const membershipPlans: MembershipPlan[] = [
+const membershipPlanDefaults: MembershipPlan[] = [
   {
     id: "silver",
     level: "SILVER",
@@ -511,6 +511,74 @@ const membershipPlans: MembershipPlan[] = [
     order: 3,
   },
 ];
+
+const membershipPlanResponse = (plan: {
+  id: string;
+  level: string;
+  name: string;
+  description: string;
+  monthlyPrice: number;
+  yearlyPrice: number;
+  currency: string;
+  benefits: Prisma.JsonValue;
+  voucherCount: number;
+  mileageRate: number;
+  recommended: boolean;
+  enabled: boolean;
+  order: number;
+}) => ({
+  id: plan.id,
+  level: plan.level,
+  name: plan.name,
+  description: plan.description,
+  monthly: plan.monthlyPrice,
+  yearly: plan.yearlyPrice,
+  currency: plan.currency,
+  benefits: Array.isArray(plan.benefits) ? plan.benefits.map(String) : [],
+  voucherCount: plan.voucherCount,
+  mileageRate: plan.mileageRate,
+  recommended: plan.recommended,
+  enabled: plan.enabled,
+  order: plan.order,
+});
+
+async function ensureMembershipPlanDefaults() {
+  const settings = await prisma.appSetting.findUniqueOrThrow({
+    where: { id: appSettingsDefaults.id },
+    select: { pricingCurrency: true, exchangeRate: true },
+  });
+  const currency = configuredCurrencyLabel(settings);
+  for (const plan of membershipPlanDefaults) {
+    const existing = await prisma.membershipPlan.findUnique({ where: { id: plan.id } });
+    if (!existing) {
+      await prisma.membershipPlan.create({
+        data: {
+          id: plan.id,
+          level: plan.level,
+          name: plan.name,
+          monthlyPrice: convertCurrency(plan.monthly, "HKD", currency, settings.exchangeRate),
+          yearlyPrice: convertCurrency(plan.yearly, "HKD", currency, settings.exchangeRate),
+          currency,
+          benefits: plan.benefits,
+          voucherCount: Number(plan.benefits[0]?.match(/\d+/)?.[0] || 0),
+          mileageRate: plan.id === "silver" ? 1.1 : plan.id === "black" ? 1.25 : 1.5,
+          recommended: plan.recommended,
+          enabled: plan.enabled,
+          order: plan.order,
+        },
+      });
+    } else if (existing.currency !== currency) {
+      await prisma.membershipPlan.update({
+        where: { id: plan.id },
+        data: {
+          monthlyPrice: convertCurrency(existing.monthlyPrice, existing.currency, currency, settings.exchangeRate),
+          yearlyPrice: convertCurrency(existing.yearlyPrice, existing.currency, currency, settings.exchangeRate),
+          currency,
+        },
+      });
+    }
+  }
+}
 const generateUserId = async () => {
   while (true) {
     const id = String(randomBytes(4).readUInt32BE(0) % 1_000_000).padStart(
@@ -6228,70 +6296,70 @@ class AdminController {
     order.status = body.status;
     return order;
   }
-  @Get("membership-plans") listMembershipPlans(@Req() req: RequestLike) {
+  @Get("membership-plans") async listMembershipPlans(@Req() req: RequestLike) {
     requireAuth(req);
-    return {
-      data: [...membershipPlans].sort((a, b) => a.order - b.order),
-      total: membershipPlans.length,
-    };
+    const data = await prisma.membershipPlan.findMany({ orderBy: { order: "asc" } });
+    return { data: data.map(membershipPlanResponse), total: data.length };
   }
-  @Post("membership-plans") saveMembershipPlan(
+  @Post("membership-plans") async saveMembershipPlan(
     @Req() req: RequestLike,
-    @Body() body: Partial<MembershipPlan>,
+    @Body() body: Partial<MembershipPlan> & { description?: unknown; voucherCount?: unknown; mileageRate?: unknown },
   ) {
     requireAuth(req);
     const id = body.id?.trim();
     const name = body.name?.trim();
+    const level = body.level?.trim();
     const monthly = Number(body.monthly);
     const yearly = Number(body.yearly);
-    if (
-      !id ||
-      !name ||
-      !body.level?.trim() ||
-      !Number.isFinite(monthly) ||
-      monthly < 0 ||
-      !Number.isFinite(yearly) ||
-      yearly < 0
-    )
-      throw new HttpException(
-        "Valid membership plan fields are required",
-        HttpStatus.BAD_REQUEST,
-      );
-    const existing = membershipPlans.find((item) => item.id === id);
-    const values = {
-      level: body.level.trim(),
-      name,
-      monthly,
-      yearly,
-      recommended: body.recommended ?? false,
-      benefits: Array.isArray(body.benefits)
-        ? body.benefits.map(String).filter(Boolean).slice(0, 6)
-        : existing?.benefits || [],
-      enabled: body.enabled ?? true,
-      order:
-        Number(body.order) || existing?.order || membershipPlans.length + 1,
-    };
-    if (existing) {
-      Object.assign(existing, values);
-      return existing;
-    }
-    const item = { id, ...values };
-    membershipPlans.push(item);
-    return item;
+    const voucherCount = Number(body.voucherCount ?? 0);
+    const mileageRate = Number(body.mileageRate ?? 1);
+    if (!id || !name || !level || !Number.isFinite(monthly) || monthly < 0 || !Number.isFinite(yearly) || yearly < 0 || !Number.isInteger(voucherCount) || voucherCount < 0 || !Number.isFinite(mileageRate) || mileageRate < 1 || mileageRate > 3)
+      throw new HttpException("Valid membership plan fields are required", HttpStatus.BAD_REQUEST);
+    const benefits = Array.isArray(body.benefits) ? body.benefits.map(String).map((item) => item.trim()).filter(Boolean).slice(0, 8) : [];
+    const settings = await prisma.appSetting.findUniqueOrThrow({
+      where: { id: appSettingsDefaults.id },
+      select: { pricingCurrency: true },
+    });
+    const currency = configuredCurrencyLabel(settings);
+    const plan = await prisma.membershipPlan.upsert({
+      where: { id },
+      create: { id, level, name, description: typeof body.description === "string" ? body.description.trim() : "", monthlyPrice: monthly, yearlyPrice: yearly, currency, benefits, voucherCount, mileageRate, recommended: body.recommended ?? false, enabled: body.enabled ?? true, order: Number(body.order) || 1 },
+      update: { level, name, description: typeof body.description === "string" ? body.description.trim() : "", monthlyPrice: monthly, yearlyPrice: yearly, currency, benefits, voucherCount, mileageRate, recommended: body.recommended ?? false, enabled: body.enabled ?? true, order: Number(body.order) || 1 },
+    });
+    return membershipPlanResponse(plan);
   }
-  @Delete("membership-plans/:id") deleteMembershipPlan(
-    @Req() req: RequestLike,
-    @Param("id") id: string,
-  ) {
+  @Delete("membership-plans/:id") async deleteMembershipPlan(@Req() req: RequestLike, @Param("id") id: string) {
     requireAuth(req);
-    const item = membershipPlans.find((plan) => plan.id === id);
-    if (!item)
-      throw new HttpException(
-        "Membership plan not found",
-        HttpStatus.NOT_FOUND,
-      );
-    item.enabled = false;
+    const item = await prisma.membershipPlan.findUnique({ where: { id } });
+    if (!item) throw new HttpException("Membership plan not found", HttpStatus.NOT_FOUND);
+    await prisma.membershipPlan.update({ where: { id }, data: { enabled: false } });
     return { ok: true };
+  }
+  @Get("membership-orders") async listMembershipOrders(@Req() req: RequestLike) {
+    requireAuth(req);
+    const data = await prisma.membershipOrder.findMany({ include: { user: { select: { id: true, name: true, displayName: true, phoneNumber: true } }, plan: true, subscription: true }, orderBy: { createdAt: "desc" }, take: 100 });
+    return { data: data.map((order) => ({ ...order, plan: membershipPlanResponse(order.plan) })) };
+  }
+  @Post("membership-orders/:id/confirm") async confirmMembershipOrder(@Req() req: RequestLike, @Param("id") id: string) {
+    requireAuth(req);
+    return prisma.$transaction(async (tx) => {
+      const order = await tx.membershipOrder.findUnique({ where: { id }, include: { plan: true } });
+      if (!order) throw new HttpException("Membership order not found", HttpStatus.NOT_FOUND);
+      if (order.status === "CANCELLED") throw new HttpException("Cancelled order cannot be confirmed", HttpStatus.CONFLICT);
+      if (order.status === "PAID") return { ok: true, subscriptionId: order.subscriptionId };
+      const now = new Date();
+      const periodEnd = new Date(now);
+      if (order.billingPeriod === "MONTHLY") periodEnd.setMonth(periodEnd.getMonth() + 1);
+      else periodEnd.setFullYear(periodEnd.getFullYear() + 1);
+      const active = await tx.membershipSubscription.findFirst({ where: { userId: order.userId, status: "ACTIVE" }, orderBy: { createdAt: "desc" } });
+      const subscription = active
+        ? await tx.membershipSubscription.update({ where: { id: active.id }, data: { planId: order.planId, billingPeriod: order.billingPeriod, currentPeriodStartsAt: now, currentPeriodEndsAt: periodEnd, cancelAtPeriodEnd: false, cancelledAt: null } })
+        : await tx.membershipSubscription.create({ data: { userId: order.userId, planId: order.planId, billingPeriod: order.billingPeriod, currentPeriodStartsAt: now, currentPeriodEndsAt: periodEnd } });
+      await tx.membershipOrder.update({ where: { id }, data: { status: "PAID", paidAt: now, subscriptionId: subscription.id } });
+      await tx.user.update({ where: { id: order.userId }, data: { membershipLevel: order.plan.level } });
+      await tx.membershipEvent.create({ data: { userId: order.userId, subscriptionId: subscription.id, orderId: order.id, type: "ACTIVATED", title: `${order.plan.name}已啟用`, details: { billingPeriod: order.billingPeriod, periodEndsAt: periodEnd.toISOString() } } });
+      return { ok: true, subscriptionId: subscription.id };
+    });
   }
   @Get("vehicle-categories") async listVehicleCategories(
     @Req() req: RequestLike,
@@ -6979,12 +7047,81 @@ class NotificationsController {
 
 @Controller("membership-plans")
 class PublicMembershipPlansController {
-  @Get() list() {
+  @Get() async list() {
+    const data = await prisma.membershipPlan.findMany({ where: { enabled: true }, orderBy: { order: "asc" } });
+    return { data: data.map(membershipPlanResponse) };
+  }
+}
+
+@Controller("client/membership")
+class ClientMembershipController {
+  @Get("summary")
+  async summary(@Req() req: RequestLike) {
+    const session = await clientSessionFrom(req);
+    const now = new Date();
+    const [user, plans, subscription, pendingOrder, events] = await Promise.all([
+      prisma.user.findUnique({ where: { id: session.sub }, select: { id: true, name: true, displayName: true, membershipLevel: true } }),
+      prisma.membershipPlan.findMany({ where: { enabled: true }, orderBy: { order: "asc" } }),
+      prisma.membershipSubscription.findFirst({ where: { userId: session.sub, status: "ACTIVE", currentPeriodEndsAt: { gt: now } }, include: { plan: true }, orderBy: { createdAt: "desc" } }),
+      prisma.membershipOrder.findFirst({ where: { userId: session.sub, status: "PENDING" }, include: { plan: true }, orderBy: { createdAt: "desc" } }),
+      prisma.membershipEvent.findMany({ where: { userId: session.sub }, orderBy: { createdAt: "desc" }, take: 20 }),
+    ]);
+    if (!user) throw new HttpException("User not found", HttpStatus.NOT_FOUND);
     return {
-      data: membershipPlans
-        .filter((item) => item.enabled)
-        .sort((a, b) => a.order - b.order),
+      user: { id: user.id, name: user.displayName || user.name || "會員" },
+      membershipLevel: subscription?.plan.level || null,
+      subscription: subscription ? { id: subscription.id, status: subscription.status, billingPeriod: subscription.billingPeriod, currentPeriodStartsAt: subscription.currentPeriodStartsAt, currentPeriodEndsAt: subscription.currentPeriodEndsAt, cancelAtPeriodEnd: subscription.cancelAtPeriodEnd, plan: membershipPlanResponse(subscription.plan) } : null,
+      pendingOrder: pendingOrder ? { id: pendingOrder.id, status: pendingOrder.status, billingPeriod: pendingOrder.billingPeriod, amount: pendingOrder.amount, currency: pendingOrder.currency, createdAt: pendingOrder.createdAt, plan: membershipPlanResponse(pendingOrder.plan) } : null,
+      plans: plans.map(membershipPlanResponse),
+      events,
     };
+  }
+
+  @Post("orders")
+  async createOrder(@Req() req: RequestLike, @Body() body: { planId?: unknown; billingPeriod?: unknown; idempotencyKey?: unknown }) {
+    const session = await clientSessionFrom(req);
+    const planId = typeof body.planId === "string" ? body.planId.trim() : "";
+    const billingPeriod = body.billingPeriod === "MONTHLY" || body.billingPeriod === "YEARLY" ? body.billingPeriod : null;
+    const idempotencyKey = typeof body.idempotencyKey === "string" ? body.idempotencyKey.trim() : "";
+    if (!planId || !billingPeriod || !idempotencyKey) throw new HttpException("請選擇有效會員方案", HttpStatus.BAD_REQUEST);
+    const existing = await prisma.membershipOrder.findUnique({ where: { idempotencyKey }, include: { plan: true } });
+    if (existing) {
+      if (existing.userId !== session.sub) throw new HttpException("Invalid idempotency key", HttpStatus.CONFLICT);
+      return { data: { ...existing, plan: membershipPlanResponse(existing.plan) } };
+    }
+    const plan = await prisma.membershipPlan.findUnique({ where: { id: planId } });
+    if (!plan || !plan.enabled) throw new HttpException("會員方案不存在或已停用", HttpStatus.NOT_FOUND);
+    const pending = await prisma.membershipOrder.findFirst({ where: { userId: session.sub, status: "PENDING" } });
+    if (pending) throw new HttpException("已有待確認的會員訂單", HttpStatus.CONFLICT);
+    const amount = billingPeriod === "MONTHLY" ? plan.monthlyPrice : plan.yearlyPrice;
+    const order = await prisma.membershipOrder.create({ data: { userId: session.sub, planId, billingPeriod, amount, currency: plan.currency, idempotencyKey, planSnapshot: membershipPlanResponse(plan), events: { create: { userId: session.sub, type: "ORDER_CREATED", title: `已建立${plan.name}訂單`, details: { billingPeriod, amount, currency: plan.currency } } } }, include: { plan: true } });
+    return { data: { ...order, plan: membershipPlanResponse(order.plan) }, message: "會員訂單已建立，等待確認" };
+  }
+
+  @Post("orders/:id/cancel")
+  async cancelOrder(@Req() req: RequestLike, @Param("id") id: string) {
+    const session = await clientSessionFrom(req);
+    const order = await prisma.membershipOrder.findFirst({ where: { id, userId: session.sub } });
+    if (!order) throw new HttpException("會員訂單不存在", HttpStatus.NOT_FOUND);
+    if (order.status !== "PENDING") throw new HttpException("只有待確認訂單可以取消", HttpStatus.CONFLICT);
+    await prisma.$transaction([
+      prisma.membershipOrder.update({ where: { id }, data: { status: "CANCELLED", cancelledAt: new Date() } }),
+      prisma.membershipEvent.create({ data: { userId: session.sub, orderId: id, type: "ORDER_CANCELLED", title: "會員訂單已取消" } }),
+    ]);
+    return { ok: true };
+  }
+
+  @Post("subscription/cancel-renewal")
+  async cancelRenewal(@Req() req: RequestLike) {
+    const session = await clientSessionFrom(req);
+    const subscription = await prisma.membershipSubscription.findFirst({ where: { userId: session.sub, status: "ACTIVE", currentPeriodEndsAt: { gt: new Date() } }, orderBy: { createdAt: "desc" } });
+    if (!subscription) throw new HttpException("目前沒有有效會員會籍", HttpStatus.NOT_FOUND);
+    if (subscription.cancelAtPeriodEnd) return { ok: true };
+    await prisma.$transaction([
+      prisma.membershipSubscription.update({ where: { id: subscription.id }, data: { cancelAtPeriodEnd: true, cancelledAt: new Date() } }),
+      prisma.membershipEvent.create({ data: { userId: session.sub, subscriptionId: subscription.id, type: "RENEWAL_CANCELLED", title: "已取消自動續期", details: { accessUntil: subscription.currentPeriodEndsAt.toISOString() } } }),
+    ]);
+    return { ok: true };
   }
 }
 
@@ -7815,6 +7952,24 @@ class SettingsController {
           tx.routeMinimumFare.updateMany({ data: { currency: label } }),
           tx.promotion.updateMany({ data: { currency: label } }),
         ]);
+        const membershipPlans = await tx.membershipPlan.findMany({
+          select: { id: true, monthlyPrice: true, yearlyPrice: true, currency: true },
+        });
+        for (const plan of membershipPlans) {
+          if (plan.currency === label) continue;
+          const sourceCurrency = currencyCode(plan.currency);
+          if (!sourceCurrency) {
+            throw new HttpException("會員方案貨幣無效", HttpStatus.CONFLICT);
+          }
+          await tx.membershipPlan.update({
+            where: { id: plan.id },
+            data: {
+              monthlyPrice: convertCurrency(plan.monthlyPrice, sourceCurrency, pricingCurrency as "RMB" | "HKD", data.exchangeRate),
+              yearlyPrice: convertCurrency(plan.yearlyPrice, sourceCurrency, pricingCurrency as "RMB" | "HKD", data.exchangeRate),
+              currency: label,
+            },
+          });
+        }
       }
       return result;
     });
@@ -9985,6 +10140,7 @@ class HealthController {
     PublicVehiclesController,
     PublicQuotesController,
     PublicMembershipPlansController,
+    ClientMembershipController,
     PublicPromotionsController,
     PaymentCardsController,
     WalletController,
@@ -10003,6 +10159,7 @@ class HealthController {
 class AppModule {}
 async function bootstrap() {
   await prisma.$connect();
+  await ensureMembershipPlanDefaults();
   await ensurePricingDefaults();
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     bodyParser: false,

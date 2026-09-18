@@ -447,12 +447,73 @@ export async function listMainlandCities(): Promise<MainlandCity[]> {
   return (response.data as { data: MainlandCity[] }).data
 }
 
-export type MembershipPlan = { id: string; level: string; name: string; monthly: number; yearly: number; recommended: boolean; benefits: string[]; enabled: boolean; order: number }
+export type MembershipPlan = {
+  id: string
+  level: string
+  name: string
+  description: string
+  monthly: number
+  yearly: number
+  currency: string
+  benefits: string[]
+  voucherCount: number
+  mileageRate: number
+  recommended: boolean
+  enabled: boolean
+  order: number
+}
+
+export type MembershipSummary = {
+  user: { id: string; name: string }
+  membershipLevel: string | null
+  subscription: null | {
+    id: string
+    status: 'ACTIVE' | 'CANCELLED' | 'EXPIRED'
+    billingPeriod: 'MONTHLY' | 'YEARLY'
+    currentPeriodStartsAt: string
+    currentPeriodEndsAt: string
+    cancelAtPeriodEnd: boolean
+    plan: MembershipPlan
+  }
+  pendingOrder: null | {
+    id: string
+    status: 'PENDING'
+    billingPeriod: 'MONTHLY' | 'YEARLY'
+    amount: number
+    currency: string
+    createdAt: string
+    plan: MembershipPlan
+  }
+  plans: MembershipPlan[]
+  events: Array<{ id: string; type: string; title: string; createdAt: string }>
+}
 
 export async function listMembershipPlans(): Promise<MembershipPlan[]> {
   const response = await uni.request({ url: `${API_BASE_URL}/membership-plans` })
   if (response.statusCode >= 400) throw new Error('會員方案暫時無法載入')
   return (response.data as { data: MembershipPlan[] }).data
+}
+
+export async function getMembershipSummary(): Promise<MembershipSummary> {
+  const response = await uni.request({ url: `${API_BASE_URL}/client/membership/summary`, header: authHeaders() })
+  if (response.statusCode >= 400) throw apiError(response, '無法載入會員資料')
+  return response.data as MembershipSummary
+}
+
+export async function createMembershipOrder(planId: string, billingPeriod: 'MONTHLY' | 'YEARLY', idempotencyKey: string) {
+  const response = await uni.request({ url: `${API_BASE_URL}/client/membership/orders`, method: 'POST', header: authHeaders(), data: { planId, billingPeriod, idempotencyKey } })
+  if (response.statusCode >= 400) throw apiError(response, '無法建立會員訂單')
+  return response.data as { data: MembershipSummary['pendingOrder']; message: string }
+}
+
+export async function cancelMembershipOrder(orderId: string): Promise<void> {
+  const response = await uni.request({ url: `${API_BASE_URL}/client/membership/orders/${orderId}/cancel`, method: 'POST', header: authHeaders() })
+  if (response.statusCode >= 400) throw apiError(response, '無法取消會員訂單')
+}
+
+export async function cancelMembershipRenewal(): Promise<void> {
+  const response = await uni.request({ url: `${API_BASE_URL}/client/membership/subscription/cancel-renewal`, method: 'POST', header: authHeaders() })
+  if (response.statusCode >= 400) throw apiError(response, '無法取消會員續期')
 }
 
 export type PublicPromotion = {

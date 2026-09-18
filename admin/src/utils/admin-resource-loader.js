@@ -58,8 +58,13 @@ export async function loadVehicleResources({ api, categories, vehicles, extras, 
   distancePricing.value = sortByOrder(pricingResult.data)
 }
 
-export async function loadMembershipResources({ api, membershipPlans }) {
-  membershipPlans.value = (await api('/admin/membership-plans')).data
+export async function loadMembershipResources({ api, membershipPlans, membershipOrders }) {
+  const [plansResult, ordersResult] = await Promise.all([
+    api('/admin/membership-plans'),
+    api('/admin/membership-orders')
+  ])
+  membershipPlans.value = plansResult.data
+  membershipOrders.value = ordersResult.data
 }
 
 export async function loadPromotionResources({ api, promotions, mileageRules, mileageRewards, mileageAccounts, invitationSettings, invitationWalletCurrency, invitationSummary, invitationRecords }) {

@@ -44,40 +44,43 @@ model NotificationTemplate {
 }
 
 model User {
-  id                 String              @id
-  countryCode        String              @default("+852")
-  phoneNumber        String
-  name               String?
-  displayName        String?
-  avatarUrl          String?
-  avatarData         Bytes?
-  avatarMimeType     String?
-  email              String?
-  passwordHash       String?
-  gender             String?
-  region             String?
-  birthday           DateTime?
-  cashBalance        Float               @default(0)
-  fareBalance        Float               @default(0)
-  membershipLevel    String?
-  lastLoginAt        DateTime?
-  lastLogoutAt       DateTime?
-  createdAt          DateTime            @default(now())
-  enabled            Boolean             @default(true)
-  trips              Trip[]
-  walletTransactions WalletTransaction[]
-  payments           Payment[]
-  authIdentities     AuthIdentity[]
-  clientSessions     ClientSession[]
-  verificationCodes  VerificationCode[]
-  notifications      Notification[]
-  commonPassengers   CommonPassenger[]
-  mileageAccount     MileageAccount?
-  mileageLedger      MileageLedger[]
-  mileageRedemptions MileageRedemption[]
-  invitationCode     InvitationCode?
-  invitationsSent    Invitation[]        @relation("InvitationInviter")
-  invitationReceived Invitation?         @relation("InvitationInvitee")
+  id                      String                   @id
+  countryCode             String                   @default("+852")
+  phoneNumber             String
+  name                    String?
+  displayName             String?
+  avatarUrl               String?
+  avatarData              Bytes?
+  avatarMimeType          String?
+  email                   String?
+  passwordHash            String?
+  gender                  String?
+  region                  String?
+  birthday                DateTime?
+  cashBalance             Float                    @default(0)
+  fareBalance             Float                    @default(0)
+  membershipLevel         String?
+  lastLoginAt             DateTime?
+  lastLogoutAt            DateTime?
+  createdAt               DateTime                 @default(now())
+  enabled                 Boolean                  @default(true)
+  trips                   Trip[]
+  walletTransactions      WalletTransaction[]
+  payments                Payment[]
+  authIdentities          AuthIdentity[]
+  clientSessions          ClientSession[]
+  verificationCodes       VerificationCode[]
+  notifications           Notification[]
+  commonPassengers        CommonPassenger[]
+  mileageAccount          MileageAccount?
+  mileageLedger           MileageLedger[]
+  mileageRedemptions      MileageRedemption[]
+  invitationCode          InvitationCode?
+  invitationsSent         Invitation[]             @relation("InvitationInviter")
+  invitationReceived      Invitation?              @relation("InvitationInvitee")
+  membershipSubscriptions MembershipSubscription[]
+  membershipOrders        MembershipOrder[]
+  membershipEvents        MembershipEvent[]
 
   @@unique([countryCode, phoneNumber])
 }
@@ -183,6 +186,115 @@ model VerificationCode {
   @@index([userId, createdAt])
   @@index([countryCode, phoneNumber, createdAt])
   @@index([status, expiresAt])
+}
+
+model MembershipPlan {
+  id            String                   @id
+  level         String                   @unique
+  name          String
+  description   String                   @default("")
+  monthlyPrice  Float
+  yearlyPrice   Float
+  currency      String                   @default("HKD")
+  benefits      Json
+  voucherCount  Int                      @default(0)
+  mileageRate   Float                    @default(1)
+  recommended   Boolean                  @default(false)
+  enabled       Boolean                  @default(true)
+  order         Int                      @default(1)
+  createdAt     DateTime                 @default(now())
+  updatedAt     DateTime                 @updatedAt
+  subscriptions MembershipSubscription[]
+  orders        MembershipOrder[]
+
+  @@index([enabled, order])
+}
+
+model MembershipSubscription {
+  id                    String                       @id @default(cuid())
+  userId                String
+  planId                String
+  status                MembershipSubscriptionStatus @default(ACTIVE)
+  billingPeriod         MembershipBillingPeriod
+  startedAt             DateTime                     @default(now())
+  currentPeriodStartsAt DateTime
+  currentPeriodEndsAt   DateTime
+  cancelAtPeriodEnd     Boolean                      @default(false)
+  cancelledAt           DateTime?
+  createdAt             DateTime                     @default(now())
+  updatedAt             DateTime                     @updatedAt
+  user                  User                         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan                  MembershipPlan               @relation(fields: [planId], references: [id], onDelete: Restrict)
+  orders                MembershipOrder[]
+  events                MembershipEvent[]
+
+  @@index([userId, status, currentPeriodEndsAt])
+  @@index([planId, status])
+}
+
+model MembershipOrder {
+  id             String                  @id @default(cuid())
+  userId         String
+  planId         String
+  subscriptionId String?
+  billingPeriod  MembershipBillingPeriod
+  status         MembershipOrderStatus   @default(PENDING)
+  amount         Float
+  currency       String                  @default("HKD")
+  planSnapshot   Json
+  idempotencyKey String                  @unique
+  paidAt         DateTime?
+  cancelledAt    DateTime?
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+  user           User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan           MembershipPlan          @relation(fields: [planId], references: [id], onDelete: Restrict)
+  subscription   MembershipSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  events         MembershipEvent[]
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+}
+
+model MembershipEvent {
+  id             String                  @id @default(cuid())
+  userId         String
+  subscriptionId String?
+  orderId        String?
+  type           MembershipEventType
+  title          String
+  details        Json?
+  createdAt      DateTime                @default(now())
+  user           User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscription   MembershipSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  order          MembershipOrder?        @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+}
+
+enum MembershipBillingPeriod {
+  MONTHLY
+  YEARLY
+}
+
+enum MembershipSubscriptionStatus {
+  ACTIVE
+  CANCELLED
+  EXPIRED
+}
+
+enum MembershipOrderStatus {
+  PENDING
+  PAID
+  CANCELLED
+}
+
+enum MembershipEventType {
+  ORDER_CREATED
+  ACTIVATED
+  RENEWAL_CANCELLED
+  ORDER_CANCELLED
+  ADMIN_ADJUSTED
 }
 
 model MileageAccount {

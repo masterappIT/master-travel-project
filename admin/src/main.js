@@ -68,7 +68,7 @@ const vehicleTab = vehiclesPageState.tab
 const extraSortId = vehiclesPageState.extraSortId
 let loadRequestId = 0
 const { exchangeRate, pricingCurrency, severeWeatherEnabled, adminLogo, paymentSettings } = createAdminSettingsState()
-const { users, selectedUser, walletTransactions, topUpWithdrawalHistory, trips, charterOrders, addresses, mainlandCities, addressSearchKeyword, addressSearchResults, addressSearching, categories, vehicles, extras, distancePricing, routeMinimumFares, routeMinimumFareForm, membershipPlans, promotions, promotionForm, promotionSaving, promotionDeletingId, promotionTogglingId, mileageRules, mileageRewards, mileageAccounts, mileageRewardForm, mileageLedger, mileageSelectedAccount, mileageSaving, invitationSettings, invitationWalletCurrency, invitationSummary, invitationRecords, invitationSaving } = createAdminResourceState()
+const { users, selectedUser, walletTransactions, topUpWithdrawalHistory, trips, charterOrders, addresses, mainlandCities, addressSearchKeyword, addressSearchResults, addressSearching, categories, vehicles, extras, distancePricing, routeMinimumFares, routeMinimumFareForm, membershipPlans, membershipOrders, promotions, promotionForm, promotionSaving, promotionDeletingId, promotionTogglingId, mileageRules, mileageRewards, mileageAccounts, mileageRewardForm, mileageLedger, mileageSelectedAccount, mileageSaving, invitationSettings, invitationWalletCurrency, invitationSummary, invitationRecords, invitationSaving } = createAdminResourceState()
 const { administrators, auditLogs, notifications, notificationTemplates, notificationUsers, notificationDrivers, personnel, entryItems, drivers, selectedDriver, expenseItems } = createAdminAuxiliaryState()
 const { orderUrls, createdOrderUrl, tripCatalog, tripQuote, vehicleCategories, tripBookingStep, tripPaymentMethod, tripUseFareBalance, tripUseCashBalance, tripLocationKeyword, tripLocationResults, tripLocationSearching, tripLocationTarget } = createAdminInteractionState()
 const { toasts, confirmDialog, dismissToast, notify, requestConfirmation, resolveConfirmation } = createFeedbackController()
@@ -115,7 +115,7 @@ const resourceLoader = createAdminResourceLoader({
     trips: () => import('./utils/admin-resource-loader.js').then(({ loadTripsResources }) => loadTripsResources({ tripsApi, driversApi, api, trips, drivers, tripPage, tripCatalog })),
     charters: () => import('./utils/admin-resource-loader.js').then(({ loadCharterResources }) => loadCharterResources({ api, charterOrders })),
     addresses: () => import('./utils/admin-resource-loader.js').then(({ loadAddressResources }) => loadAddressResources({ addressesApi, addresses, mainlandCities, displayMainlandCity, displayError })),
-    membership: () => import('./utils/admin-resource-loader.js').then(({ loadMembershipResources }) => loadMembershipResources({ api, membershipPlans })),
+    membership: () => import('./utils/admin-resource-loader.js').then(({ loadMembershipResources }) => loadMembershipResources({ api, membershipPlans, membershipOrders })),
     promotions: () => import('./utils/admin-resource-loader.js').then(({ loadPromotionResources }) => loadPromotionResources({ api, promotions, mileageRules, mileageRewards, mileageAccounts, invitationSettings, invitationWalletCurrency, invitationSummary, invitationRecords })),
     administrators: () => import('./utils/admin-resource-loader.js').then(({ loadAdministratorResources }) => loadAdministratorResources({ api, administrators })),
     notifications: () => import('./utils/admin-resource-loader.js').then(({ loadNotificationResources }) => loadNotificationResources({ api, usersApi, driversApi, notifications, notificationTemplates, notificationUsers, notificationDrivers })),
@@ -151,7 +151,7 @@ const { edit: editUser, reset: resetUser, select: selectUser, save: saveUser, up
 const tripsActions = createTripsActions({ api, tripsApi, addressesApi, tripForm, selectedTrip, tripQuote, tripBookingStep, tripPaymentMethod, tripUseFareBalance, tripUseCashBalance, tripLocationKeyword, tripLocationResults, tripLocationSearching, tripLocationTarget, dispatchForm, orderUrlForm, createdOrderUrl, users, trips, error, load, displayError, canWrite, requestConfirmation, notify, tripCatalog, dateTimeInput })
 const { editTrip, resetTrip, clearTripLocationSearch, searchTripLocation, selectTripLocation, handleTripRegionChange, showTrip, closeTrip, updateTripStatus, settleTrip, unsettleTrip, prepareTripQuote, calculateTripRoute, completeTripBooking, saveTrip, confirmDispatch, openDispatch, saveDispatch, openOrderUrlForm, createOrderUrl, closeCreatedOrderUrl, copyOrderUrl, revokeOrderUrl } = tripsActions
 const membershipActions = createMembershipActions({ api, membershipForm, membershipPlans, load, error, displayError, requestConfirmation, notify, t })
-const { editMembership, resetMembership, saveMembership, removeMembership } = membershipActions
+const { editMembership, resetMembership, saveMembership, removeMembership, confirmMembershipOrder } = membershipActions
 const promotionsActions = createPromotionsActions({ api, promotionForm, promotionSaving, promotionDeletingId, promotionTogglingId, pricingCurrency, dateTimeInput, nextTick, load, error, displayError, notify, requestConfirmation, t, generateRandomCouponCodeStr, mileageRules, mileageRewardForm, mileageLedger, mileageSelectedAccount, mileageSaving, invitationSettings, invitationSaving })
 const { openPromotionForm, resetPromotion, editPromotion, savePromotion, removePromotion, duplicatePromotion, togglePromotionEnabled, generateRandomCouponCode, resetMileageReward, editMileageReward, saveMileageRules, saveMileageReward, toggleMileageReward, removeMileageReward, openMileageAccount, adjustMileage, saveInvitationSettings } = promotionsActions
 
@@ -242,11 +242,13 @@ const App = { setup() {
    provide('adminMembershipContext', {
      view,
      membershipPlans,
+     membershipOrders,
      membershipForm,
      resetMembership,
      editMembership,
      saveMembership,
      removeMembership,
+     confirmMembershipOrder,
      formatBenefits
    })
    provide('adminPromotionsContext', {
