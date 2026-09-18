@@ -337,6 +337,11 @@ const appSettingsDefaults = {
   sandboxMode: false,
   mileageSpendPerKm: 10,
   mileageValidityMonths: 12,
+  invitationEnabled: true,
+  invitationInviterMileage: 300,
+  invitationInviteeFare: 50,
+  invitationQualificationDays: 30,
+  invitationMileageValidityMonths: 12,
 };
 const currencyLabels = { RMB: "RMB", HKD: "HKD" } as const;
 const configuredCurrencyLabel = (settings: { pricingCurrency: string }) =>
@@ -932,6 +937,12 @@ function appSettingsResponse(settings: typeof appSettingsDefaults) {
     sandboxMode: settings.sandboxMode ?? false,
     mileageSpendPerKm: settings.mileageSpendPerKm ?? 10,
     mileageValidityMonths: settings.mileageValidityMonths ?? 12,
+    invitationEnabled: settings.invitationEnabled ?? true,
+    invitationInviterMileage: settings.invitationInviterMileage ?? 300,
+    invitationInviteeFare: settings.invitationInviteeFare ?? 50,
+    invitationQualificationDays: settings.invitationQualificationDays ?? 30,
+    invitationMileageValidityMonths:
+      settings.invitationMileageValidityMonths ?? 12,
   };
 }
 function validateAdminLogo(value: string) {
@@ -1397,9 +1408,6 @@ async function reviewedDriverFrom(req: RequestLike) {
   requireReviewedDriver(driver);
   return { session, driver };
 }
-const INVITER_MILEAGE_REWARD = 300;
-const INVITEE_FARE_REWARD = 50;
-
 function normalizeInvitationCode(value: unknown) {
   return typeof value === "string" ? value.trim().toUpperCase() : "";
 }
@@ -1428,7 +1436,7 @@ async function rewardInvitation(tx: Prisma.TransactionClient, inviteeId: string,
   const completedTrips = await tx.trip.count({ where: { userId: inviteeId, status: "COMPLETED" } });
   if (completedTrips !== 1) return;
   const now = new Date();
-  if (now.getTime() - invitation.createdAt.getTime() > 30 * 24 * 60 * 60 * 1000) {
+  if (now > invitation.expiresAt) {
     await tx.invitation.updateMany({ where: { id: invitation.id, status: "REGISTERED" }, data: { status: "EXPIRED" } });
     return;
   }
@@ -1443,11 +1451,27 @@ async function rewardInvitation(tx: Prisma.TransactionClient, inviteeId: string,
     update: { balance: { increment: invitation.inviterMileageReward }, lifetimeEarned: { increment: invitation.inviterMileageReward } },
   });
   await tx.mileageLedger.create({
-    data: { userId: invitation.inviterId, amount: invitation.inviterMileageReward, balanceAfter: account.balance, type: "EARN", reason: "邀請好友完成首趟行程", expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000) },
+    data: {
+      userId: invitation.inviterId,
+      amount: invitation.inviterMileageReward,
+      balanceAfter: account.balance,
+      type: "EARN",
+      reason: "邀請好友完成首趟行程",
+      expiresAt: new Date(new Date(now).setMonth(now.getMonth() + invitation.mileageValidityMonths)),
+    },
   });
-  const invitee = await tx.user.update({ where: { id: inviteeId }, data: { fareBalance: { increment: invitation.inviteeFareReward } } });
+  const settings = await tx.appSetting.findUniqueOrThrow({
+    where: { id: appSettingsDefaults.id },
+  });
+  const rewardAmount = convertCurrency(
+    invitation.inviteeFareReward,
+    invitation.rewardCurrency,
+    currencyCode(settings.walletCurrency) ?? "RMB",
+    settings.exchangeRate,
+  );
+  const invitee = await tx.user.update({ where: { id: inviteeId }, data: { fareBalance: { increment: rewardAmount } } });
   await tx.walletTransaction.create({
-    data: { userId: inviteeId, wallet: "FARE", type: "INVITATION_REWARD", amount: invitation.inviteeFareReward, balanceAfter: invitee.fareBalance, reason: "完成受邀首趟行程" },
+    data: { userId: inviteeId, wallet: "FARE", type: "INVITATION_REWARD", amount: rewardAmount, balanceAfter: invitee.fareBalance, reason: "完成受邀首趟行程" },
   });
 }
 
@@ -2647,6 +2671,11 @@ class ClientAuthController {
       },
     });
     const invitationCode = normalizeInvitationCode(body.invitationCode);
+    const invitationSettings = invitationCode
+      ? await prisma.appSetting.findUniqueOrThrow({ where: { id: appSettingsDefaults.id } })
+      : null;
+    if (!existing && invitationCode && invitationSettings?.invitationEnabled === false)
+      throw new HttpException("邀請活動暫停", HttpStatus.CONFLICT);
     const inviter = invitationCode
       ? await prisma.invitationCode.findUnique({ where: { code: invitationCode } })
       : null;
@@ -2665,8 +2694,19 @@ class ClientAuthController {
       if (!existing && inviter) {
         if (inviter.userId === user.id)
           throw new HttpException("不可使用自己的邀請碼", HttpStatus.BAD_REQUEST);
+        const qualificationDays = invitationSettings?.invitationQualificationDays ?? 30;
         await tx.invitation.create({
-          data: { inviterId: inviter.userId, inviteeId: user.id, code: invitationCode },
+          data: {
+            inviterId: inviter.userId,
+            inviteeId: user.id,
+            code: invitationCode,
+            inviterMileageReward: invitationSettings?.invitationInviterMileage ?? 300,
+            inviteeFareReward: invitationSettings?.invitationInviteeFare ?? 50,
+            rewardCurrency: invitationSettings?.walletCurrency ?? appSettingsDefaults.walletCurrency,
+            qualificationDays,
+            mileageValidityMonths: invitationSettings?.invitationMileageValidityMonths ?? 12,
+            expiresAt: new Date(Date.now() + qualificationDays * 24 * 60 * 60 * 1000),
+          },
         });
       }
       await tx.verificationCode.update({
@@ -4955,6 +4995,95 @@ class AdminController {
     return {
       spendPerKm: settings.mileageSpendPerKm,
       validityMonths: settings.mileageValidityMonths,
+    };
+  }
+
+  @Get("invitations/settings") async invitationSettings(@Req() req: RequestLike) {
+    requireAuth(req);
+    const now = new Date();
+    await prisma.invitation.updateMany({
+      where: { status: "REGISTERED", expiresAt: { lt: now } },
+      data: { status: "EXPIRED" },
+    });
+    const [settings, records, grouped] = await Promise.all([
+      prisma.appSetting.findUniqueOrThrow({ where: { id: appSettingsDefaults.id } }),
+      prisma.invitation.findMany({
+        include: {
+          inviter: { select: { id: true, name: true, displayName: true, phoneNumber: true } },
+          invitee: { select: { id: true, name: true, displayName: true, phoneNumber: true } },
+        },
+        orderBy: { createdAt: "desc" },
+        take: 200,
+      }),
+      prisma.invitation.groupBy({ by: ["status"], _count: { _all: true } }),
+    ]);
+    const count = (status: string) => grouped.find((item) => item.status === status)?._count._all ?? 0;
+    return {
+      rules: {
+        enabled: settings.invitationEnabled,
+        inviterMileage: settings.invitationInviterMileage,
+        inviteeFare: settings.invitationInviteeFare,
+        qualificationDays: settings.invitationQualificationDays,
+        mileageValidityMonths: settings.invitationMileageValidityMonths,
+      },
+      walletCurrency: settings.walletCurrency,
+      summary: {
+        pending: count("REGISTERED"),
+        rewarded: count("REWARDED"),
+        expired: count("EXPIRED"),
+      },
+      records,
+    };
+  }
+
+  @Post("invitations/settings") async saveInvitationSettings(
+    @Req() req: RequestLike,
+    @Body() body: {
+      enabled?: unknown;
+      inviterMileage?: unknown;
+      inviteeFare?: unknown;
+      qualificationDays?: unknown;
+      mileageValidityMonths?: unknown;
+    },
+  ) {
+    requireRole(req, ["SUPER_ADMIN", "OPERATOR"]);
+    const inviterMileage = Number(body.inviterMileage);
+    const inviteeFare = roundMoney(Number(body.inviteeFare));
+    const qualificationDays = Number(body.qualificationDays);
+    const mileageValidityMonths = Number(body.mileageValidityMonths);
+    if (
+      typeof body.enabled !== "boolean" ||
+      !Number.isInteger(inviterMileage) ||
+      inviterMileage < 0 ||
+      inviterMileage > 1000000 ||
+      !Number.isFinite(inviteeFare) ||
+      inviteeFare < 0 ||
+      inviteeFare > 1000000 ||
+      !Number.isInteger(qualificationDays) ||
+      qualificationDays < 1 ||
+      qualificationDays > 365 ||
+      !Number.isInteger(mileageValidityMonths) ||
+      mileageValidityMonths < 1 ||
+      mileageValidityMonths > 120
+    )
+      throw new HttpException("Invitation settings are invalid", HttpStatus.BAD_REQUEST);
+    const settings = await prisma.appSetting.update({
+      where: { id: appSettingsDefaults.id },
+      data: {
+        invitationEnabled: body.enabled,
+        invitationInviterMileage: inviterMileage,
+        invitationInviteeFare: inviteeFare,
+        invitationQualificationDays: qualificationDays,
+        invitationMileageValidityMonths: mileageValidityMonths,
+      },
+    });
+    return {
+      enabled: settings.invitationEnabled,
+      inviterMileage: settings.invitationInviterMileage,
+      inviteeFare: settings.invitationInviteeFare,
+      qualificationDays: settings.invitationQualificationDays,
+      mileageValidityMonths: settings.invitationMileageValidityMonths,
+      walletCurrency: settings.walletCurrency,
     };
   }
 
@@ -9131,6 +9260,9 @@ class ClientOrdersController {
   async invitationDashboard(@Req() req: RequestLike) {
     const session = await clientSessionFrom(req);
     const code = await invitationCodeFor(session.sub);
+    const settings = await prisma.appSetting.findUniqueOrThrow({
+      where: { id: appSettingsDefaults.id },
+    });
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const invitations = await prisma.invitation.findMany({
@@ -9139,13 +9271,12 @@ class ClientOrdersController {
       orderBy: { createdAt: "desc" },
       take: 50,
     });
-    const expiryCutoff = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
     await prisma.invitation.updateMany({
-      where: { inviterId: session.sub, status: "REGISTERED", createdAt: { lt: expiryCutoff } },
+      where: { inviterId: session.sub, status: "REGISTERED", expiresAt: { lt: now } },
       data: { status: "EXPIRED" },
     });
     const normalizedInvitations = invitations.map((item) =>
-      item.status === "REGISTERED" && item.createdAt < expiryCutoff ? { ...item, status: "EXPIRED" as const } : item,
+      item.status === "REGISTERED" && item.expiresAt < now ? { ...item, status: "EXPIRED" as const } : item,
     );
     const monthly = normalizedInvitations.filter((item) => item.createdAt >= monthStart);
     const maskName = (name: string) => {
@@ -9158,8 +9289,15 @@ class ClientOrdersController {
     const shareBase = (process.env.INVITE_BASE_URL || requestBase).replace(/\/$/, "");
     return {
       code,
+      enabled: settings.invitationEnabled,
       shareUrl: `${shareBase}/#/pages/login/login?invite=${encodeURIComponent(code)}`,
-      rewards: { inviterMileage: INVITER_MILEAGE_REWARD, inviteeFare: INVITEE_FARE_REWARD },
+      rewards: {
+        inviterMileage: settings.invitationInviterMileage,
+        inviteeFare: settings.invitationInviteeFare,
+        currency: settings.walletCurrency,
+      },
+      qualificationDays: settings.invitationQualificationDays,
+      mileageValidityMonths: settings.invitationMileageValidityMonths,
       summary: {
         month: now.getMonth() + 1,
         invited: monthly.length,

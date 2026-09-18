@@ -97,8 +97,11 @@ export async function logoutClient(): Promise<void> {
 
 export type InvitationDashboard = {
   code: string
+  enabled: boolean
   shareUrl: string
-  rewards: { inviterMileage: number; inviteeFare: number }
+  rewards: { inviterMileage: number; inviteeFare: number; currency: 'RMB' | 'HKD' }
+  qualificationDays: number
+  mileageValidityMonths: number
   summary: { month: number; invited: number; rewarded: number; pending: number; mileageEarned: number }
   records: Array<{ id: string; name: string; status: 'REGISTERED' | 'REWARDED' | 'EXPIRED'; reward: number; registeredAt: string; rewardedAt: string | null }>
 }

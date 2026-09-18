@@ -1,4 +1,4 @@
-export function createPromotionsActions({ api, promotionForm, promotionSaving, promotionDeletingId, promotionTogglingId, pricingCurrency, dateTimeInput, nextTick, load, error, displayError, notify, requestConfirmation, t, openPromotionForm, generateRandomCouponCodeStr, mileageRules, mileageRewardForm, mileageLedger, mileageSelectedAccount, mileageSaving }) {
+export function createPromotionsActions({ api, promotionForm, promotionSaving, promotionDeletingId, promotionTogglingId, pricingCurrency, dateTimeInput, nextTick, load, error, displayError, notify, requestConfirmation, t, openPromotionForm, generateRandomCouponCodeStr, mileageRules, mileageRewardForm, mileageLedger, mileageSelectedAccount, mileageSaving, invitationSettings, invitationSaving }) {
   async function openPromotionFormAndFocus(form) {
     promotionForm.value = form
     await nextTick()
@@ -83,5 +83,12 @@ export function createPromotionsActions({ api, promotionForm, promotionSaving, p
     catch (err) { error.value = displayError(err); notify(error.value, 'error') }
     finally { mileageSaving.value = false }
   }
-  return { openPromotionForm: openPromotionFormAndFocus, resetPromotion, editPromotion, savePromotion, removePromotion, duplicatePromotion, togglePromotionEnabled, generateRandomCouponCode, resetMileageReward, editMileageReward, saveMileageRules, saveMileageReward, toggleMileageReward, removeMileageReward, openMileageAccount, adjustMileage }
+  async function saveInvitationSettings() {
+    if (invitationSaving.value) return
+    invitationSaving.value = true
+    try { await api('/admin/invitations/settings', { method: 'POST', body: JSON.stringify(invitationSettings.value) }); notify('邀請好友設定已保存'); await load() }
+    catch (err) { error.value = displayError(err); notify(error.value, 'error') }
+    finally { invitationSaving.value = false }
+  }
+  return { openPromotionForm: openPromotionFormAndFocus, resetPromotion, editPromotion, savePromotion, removePromotion, duplicatePromotion, togglePromotionEnabled, generateRandomCouponCode, resetMileageReward, editMileageReward, saveMileageRules, saveMileageReward, toggleMileageReward, removeMileageReward, openMileageAccount, adjustMileage, saveInvitationSettings }
 }

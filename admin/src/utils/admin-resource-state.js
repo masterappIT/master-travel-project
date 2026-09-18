@@ -31,6 +31,11 @@ export function createAdminResourceState() {
     mileageRewardForm: ref(null),
     mileageLedger: ref([]),
     mileageSelectedAccount: ref(null),
-    mileageSaving: ref(false)
+    mileageSaving: ref(false),
+    invitationSettings: ref({ enabled: true, inviterMileage: 300, inviteeFare: 50, qualificationDays: 30, mileageValidityMonths: 12 }),
+    invitationWalletCurrency: ref('RMB'),
+    invitationSummary: ref({ pending: 0, rewarded: 0, expired: 0 }),
+    invitationRecords: ref([]),
+    invitationSaving: ref(false)
   }
 }

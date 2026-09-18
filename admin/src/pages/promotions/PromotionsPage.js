@@ -16,6 +16,7 @@ export const PromotionsPage = {
   <div class="promotion-section-tabs" role="tablist" aria-label="優惠設定分類">
     <button type="button" :class="{ active: promotionSection === 'PROMOTIONS' }" @click="promotionSection = 'PROMOTIONS'">優惠方案</button>
     <button type="button" :class="{ active: promotionSection === 'MILEAGE' }" @click="promotionSection = 'MILEAGE'">會員里程</button>
+    <button type="button" :class="{ active: promotionSection === 'INVITATIONS' }" @click="promotionSection = 'INVITATIONS'">邀請好友</button>
   </div>
   <div v-if="promotionSection === 'PROMOTIONS'" class="promotion-summary">
     <article class="summary-card" :class="{ active: promotionFilterTab === 'CAMPAIGN' }" @click="promotionFilterTab = (promotionFilterTab === 'CAMPAIGN' ? 'ALL' : 'CAMPAIGN')">
@@ -401,6 +402,50 @@ export const PromotionsPage = {
       <div class="mileage-panel-heading"><div><h3>{{mileageSelectedAccount.user.name}}的里程流水</h3><span class="muted">目前餘額 {{mileageSelectedAccount.balance}} KM</span></div><button type="button" class="close-btn" @click="mileageSelectedAccount = null; mileageLedger = []">X</button></div>
       <form v-if="canWrite" class="mileage-adjust-form" @submit.prevent="adjustMileage(mileageSelectedAccount)"><label class="form-group"><span class="label-text">調整里程（扣除請輸入負數）</span><input v-model.number="mileageSelectedAccount.adjustmentAmount" type="number" step="1" required /></label><label class="form-group"><span class="label-text">調整原因</span><input v-model.trim="mileageSelectedAccount.adjustmentReason" required /></label><button type="submit" class="btn-save" :disabled="mileageSaving">確認調整</button></form>
       <div class="promo-table-wrapper"><table><thead><tr><th>時間</th><th>類型</th><th>原因</th><th>變動</th><th>結餘</th></tr></thead><tbody><tr v-if="!mileageLedger.length"><td colspan="5" class="promotion-empty">尚無流水</td></tr><tr v-for="item in mileageLedger" :key="item.id"><td>{{formatDate(item.createdAt, true)}}</td><td>{{item.type}}</td><td>{{item.reason}}</td><td :class="item.amount > 0 ? 'mileage-positive' : 'mileage-negative'">{{item.amount > 0 ? '+' : ''}}{{item.amount}} KM</td><td>{{item.balanceAfter}} KM</td></tr></tbody></table></div>
+    </section>
+  </template>
+
+  <template v-if="promotionSection === 'INVITATIONS'">
+    <div class="invitation-summary-grid">
+      <article><span>待完成首趟</span><strong>{{invitationSummary.pending}}</strong></article>
+      <article><span>已發放獎勵</span><strong>{{invitationSummary.rewarded}}</strong></article>
+      <article><span>已失效</span><strong>{{invitationSummary.expired}}</strong></article>
+    </div>
+
+    <section class="panel invitation-settings-panel">
+      <div class="mileage-panel-heading">
+        <div><span class="eyebrow">REFERRAL PROGRAM</span><h3>邀請活動設定</h3></div>
+        <button type="button" class="add-btn campaign-btn" :disabled="!canWrite || invitationSaving" @click="saveInvitationSettings">{{invitationSaving ? '保存中…' : '保存設定'}}</button>
+      </div>
+      <div class="invitation-status-row">
+        <div><strong>邀請好友功能</strong><p>{{invitationSettings.enabled ? '新會員可使用邀請碼綁定活動' : '已停止接受新的邀請碼綁定，既有邀請仍按原規則履約'}}</p></div>
+        <label class="toggle-wrapper"><input v-model="invitationSettings.enabled" type="checkbox" class="toggle-checkbox" :disabled="!canWrite" /><span class="toggle-label"></span><span class="toggle-text">{{invitationSettings.enabled ? '已開啟' : '已關閉'}}</span></label>
+      </div>
+      <div class="invitation-setting-grid">
+        <label class="form-group"><span class="label-text">邀請人里程獎勵（KM）</span><input v-model.number="invitationSettings.inviterMileage" type="number" min="0" max="1000000" step="1" :disabled="!canWrite" /></label>
+        <label class="form-group"><span class="label-text">受邀人車資餘額（{{invitationWalletCurrency}}）</span><input v-model.number="invitationSettings.inviteeFare" type="number" min="0" max="1000000" step="0.01" :disabled="!canWrite" /></label>
+        <label class="form-group"><span class="label-text">首趟完成期限（日）</span><input v-model.number="invitationSettings.qualificationDays" type="number" min="1" max="365" step="1" :disabled="!canWrite" /></label>
+        <label class="form-group"><span class="label-text">獎勵里程有效期（月）</span><input v-model.number="invitationSettings.mileageValidityMonths" type="number" min="1" max="120" step="1" :disabled="!canWrite" /></label>
+      </div>
+      <p class="invitation-setting-note">車資獎勵固定同步目前錢包結算貨幣 {{invitationWalletCurrency}}。設定保存後只套用於新建立的邀請，既有邀請保留建立時的獎勵與期限。</p>
+    </section>
+
+    <section class="panel">
+      <div class="admin-toolbar promo-toolbar">
+        <div><h2>邀請紀錄</h2><span class="muted">查詢邀請關係、達標狀態及實際獎勵快照</span></div>
+        <div class="invitation-record-filters"><select v-model="invitationStatusFilter"><option value="ALL">全部狀態</option><option value="REGISTERED">待完成首趟</option><option value="REWARDED">已發放</option><option value="EXPIRED">已失效</option></select><input v-model.trim="invitationSearchQuery" placeholder="搜尋邀請人、受邀人或邀請碼" /></div>
+      </div>
+      <div class="promo-table-wrapper"><table><thead><tr><th>邀請人</th><th>受邀人</th><th>邀請碼</th><th>獎勵快照</th><th>期限</th><th>狀態</th></tr></thead><tbody>
+        <tr v-if="!invitationRecords.length"><td colspan="6" class="promotion-empty">尚無邀請紀錄</td></tr>
+        <tr v-for="item in invitationRecords.filter(record => (invitationStatusFilter === 'ALL' || record.status === invitationStatusFilter) && (!invitationSearchQuery || ((record.inviter.displayName || record.inviter.name || record.inviter.phoneNumber) + (record.invitee.displayName || record.invitee.name || record.invitee.phoneNumber) + record.code).toLowerCase().includes(invitationSearchQuery.toLowerCase())))" :key="item.id">
+          <td><strong>{{item.inviter.displayName || item.inviter.name || '未命名會員'}}</strong><div class="muted-info">{{item.inviter.phoneNumber}}</div></td>
+          <td><strong>{{item.invitee.displayName || item.invitee.name || '未命名會員'}}</strong><div class="muted-info">{{item.invitee.phoneNumber}}</div></td>
+          <td><strong>{{item.code}}</strong><div class="muted-info">{{formatDate(item.createdAt, true)}}</div></td>
+          <td>{{item.inviterMileageReward}} KM / {{item.rewardCurrency}} {{item.inviteeFareReward}}</td>
+          <td>{{formatDate(item.expiresAt, true)}}<div class="muted-info">{{item.qualificationDays}} 日</div></td>
+          <td><span class="invitation-status" :class="item.status.toLowerCase()">{{item.status === 'REWARDED' ? '已發放' : item.status === 'EXPIRED' ? '已失效' : '待完成首趟'}}</span></td>
+        </tr>
+      </tbody></table></div>
     </section>
   </template>
 </section>`
