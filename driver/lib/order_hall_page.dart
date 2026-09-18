@@ -31,16 +31,42 @@ class _OrderHallPageState extends State<OrderHallPage> {
 
   Future<void> _loadTrips() async {
     try {
-      final results = await Future.wait([_api.availableTrips(), _api.trips()]);
+      final acceptedTrips = await _api.trips();
+      List<dynamic> availableTrips;
+      try {
+        availableTrips = await _api.availableTrips();
+      } on DriverApiException catch (error) {
+        if (error.statusCode != 403) rethrow;
+        availableTrips = [];
+      }
       if (!mounted) return;
+      final assignedTrips = acceptedTrips
+          .where((trip) =>
+              trip is Map &&
+              trip['driverId'] != null &&
+              trip['completedAt'] == null)
+          .toList();
+      final pendingTrips = assignedTrips
+          .where(
+              (trip) => trip['executionPhase'] == 'DRIVER_PENDING_ACCEPTANCE')
+          .toList();
+      final availableIds = availableTrips
+          .whereType<Map>()
+          .map((trip) => trip['id']?.toString())
+          .whereType<String>()
+          .toSet();
       setState(() {
-        _available = results[0];
-        _accepted = results[1]
+        _available = [
+          ...availableTrips,
+          ...pendingTrips.where((trip) =>
+              !availableIds.contains((trip as Map)['id']?.toString())),
+        ];
+        _accepted = assignedTrips
             .where((trip) =>
-                trip is Map &&
-                trip['driverId'] != null &&
-                trip['completedAt'] == null)
+                trip['executionPhase'] != 'DRIVER_PENDING_ACCEPTANCE' &&
+                trip['acceptedAt'] != null)
             .toList();
+        _error = null;
         _loading = false;
       });
     } on DriverApiException catch (error) {
@@ -162,6 +188,8 @@ class _OrderHallPageState extends State<OrderHallPage> {
                 else if (_selectedTab == 0)
                   ..._available.map((trip) {
                     final item = Map<String, dynamic>.from(trip as Map);
+                    final pendingAssignment =
+                        item['executionPhase'] == 'DRIVER_PENDING_ACCEPTANCE';
                     return Padding(
                       padding: const EdgeInsets.only(bottom: DriverSpacing.md),
                       child: _OrderCard(
@@ -176,8 +204,8 @@ class _OrderHallPageState extends State<OrderHallPage> {
                         destination: item['dropoffAddress']?.toString() ??
                             item['destination']?.toString() ??
                             '終點待確認',
-                        estimatedTime: '預估行程',
-                        actionLabel: '接單',
+                        estimatedTime: pendingAssignment ? '等待確認接單' : '預估行程',
+                        actionLabel: pendingAssignment ? '確認訂單' : '接單',
                         onTap: () => _openOrderDetail(item['id'].toString()),
                       ),
                     );

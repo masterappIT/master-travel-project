@@ -163,7 +163,14 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                             item['settlement']?['method']?.toString() ?? '未設定');
                     return Padding(
                         padding: const EdgeInsets.only(bottom: 12),
-                        child: _HistoryCard(entry: entry));
+                        child: _HistoryCard(
+                          entry: entry,
+                          onTap: () => DriverNavigation.push(
+                            context,
+                            DriverRouteNames.completedOrderDetail,
+                            arguments: item['id']?.toString(),
+                          ),
+                        ));
                   }),
                   const SizedBox(height: DriverSpacing.sm),
                 ]),
@@ -290,99 +297,107 @@ class _HistoryEntry {
 }
 
 class _HistoryCard extends StatelessWidget {
-  const _HistoryCard({required this.entry});
+  const _HistoryCard({required this.entry, required this.onTap});
   final _HistoryEntry entry;
+  final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-            color: DriverColors.surface,
-            border: Border.all(color: DriverColors.border),
-            borderRadius: BorderRadius.circular(DriverRadii.card)),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  Widget build(BuildContext context) => Material(
+        color: DriverColors.surface,
+        borderRadius: BorderRadius.circular(DriverRadii.card),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(DriverRadii.card),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+                border: Border.all(color: DriverColors.border),
+                borderRadius: BorderRadius.circular(DriverRadii.card)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Flexible(
-                    child: Text('出發  ${entry.date}',
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                            fontSize: DriverTypography.label,
-                            color: DriverColors.secondaryText))),
-                const SizedBox(width: DriverSpacing.sm),
-                Text(entry.price,
-                    style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        color: DriverColors.text)),
-              ],
-            ),
-            const SizedBox(height: DriverSpacing.md),
-            _RouteRow(
-                asset: 'assets/order-history-origin.svg',
-                label: '出發：${entry.origin}'),
-            const SizedBox(height: 2),
-            _RouteRow(
-                asset: 'assets/order-history-destination.svg',
-                label: '目的：${entry.destination}'),
-            const SizedBox(height: DriverSpacing.md),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Flexible(
-                    child: Row(children: [
-                  SvgPicture.asset('assets/order-history-destination.svg',
-                      width: 8, height: 8),
-                  const SizedBox(width: DriverSpacing.sm),
-                  Flexible(
-                      child: Text(entry.passenger,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              fontSize: DriverTypography.label,
-                              color: DriverColors.secondaryText))),
-                ])),
-                const SizedBox(width: DriverSpacing.sm),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                        color: entry.settled
-                            ? DriverColors.successBackground
-                            : DriverColors.warningBackground,
-                        borderRadius: BorderRadius.circular(4)),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(entry.settled ? '已結算' : '未結算',
-                            maxLines: 1,
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Flexible(
+                        child: Text('出發  ${entry.date}',
                             overflow: TextOverflow.ellipsis,
-                            textAlign: TextAlign.end,
-                            style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                color: entry.settled
-                                    ? DriverColors.primary
-                                    : DriverColors.secondaryText)),
-                        Text('結算方式：${entry.settlementMethod}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            textAlign: TextAlign.end,
                             style: const TextStyle(
-                                fontSize: 10,
-                                color: DriverColors.secondaryText)),
-                      ],
+                                fontSize: DriverTypography.label,
+                                color: DriverColors.secondaryText))),
+                    const SizedBox(width: DriverSpacing.sm),
+                    Text(entry.price,
+                        style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                            color: DriverColors.text)),
+                  ],
+                ),
+                const SizedBox(height: DriverSpacing.md),
+                _RouteRow(
+                    asset: 'assets/order-history-origin.svg',
+                    label: '出發：${entry.origin}'),
+                const SizedBox(height: 2),
+                _RouteRow(
+                    asset: 'assets/order-history-destination.svg',
+                    label: '目的：${entry.destination}'),
+                const SizedBox(height: DriverSpacing.md),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Flexible(
+                        child: Row(children: [
+                      SvgPicture.asset('assets/order-history-destination.svg',
+                          width: 8, height: 8),
+                      const SizedBox(width: DriverSpacing.sm),
+                      Flexible(
+                          child: Text(entry.passenger,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                  fontSize: DriverTypography.label,
+                                  color: DriverColors.secondaryText))),
+                    ])),
+                    const SizedBox(width: DriverSpacing.sm),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                            color: entry.settled
+                                ? DriverColors.successBackground
+                                : DriverColors.warningBackground,
+                            borderRadius: BorderRadius.circular(4)),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(entry.settled ? '已結算' : '未結算',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.end,
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: entry.settled
+                                        ? DriverColors.primary
+                                        : DriverColors.secondaryText)),
+                            Text('結算方式：${entry.settlementMethod}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.end,
+                                style: const TextStyle(
+                                    fontSize: 10,
+                                    color: DriverColors.secondaryText)),
+                          ],
+                        ),
+                      ),
                     ),
-                  ),
+                  ],
                 ),
               ],
             ),
-          ],
+          ),
         ),
       );
 }

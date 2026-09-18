@@ -9,8 +9,9 @@ import 'core/navigation/driver_navigation.dart';
 import 'package:driver_web/core/tokens/driver_tokens.dart';
 
 class OrderDetailPage extends StatefulWidget {
-  const OrderDetailPage({super.key, this.tripId});
+  const OrderDetailPage({super.key, this.tripId, this.completed = false});
   final String? tripId;
+  final bool completed;
 
   @override
   State<OrderDetailPage> createState() => _OrderDetailPageState();
@@ -63,6 +64,24 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
           DriverRouteNames.orderAccepted,
           arguments: widget.tripId,
         );
+      }
+    } on DriverApiException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error.message)));
+      }
+    } finally {
+      if (mounted) setState(() => _accepting = false);
+    }
+  }
+
+  Future<void> _rejectTrip() async {
+    if (widget.tripId == null) return;
+    setState(() => _accepting = true);
+    try {
+      await _api.rejectTrip(widget.tripId!);
+      if (mounted) {
+        DriverNavigation.replaceAll(context, DriverRouteNames.orders);
       }
     } on DriverApiException catch (error) {
       if (mounted) {
@@ -138,7 +157,9 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
     final passenger = _tripText('passengerName', '乘客');
     final scheduledAt = _formatDate(_trip?['scheduledAt']);
     final driver = _api.currentDriver;
-    final assigned = _trip?['driverId'] != null;
+    final accepted = _trip?['acceptedAt'] != null;
+    final pendingAssignment =
+        _trip?['executionPhase'] == 'DRIVER_PENDING_ACCEPTANCE' && !accepted;
     final inProgress = _trip?['executionPhase'] == 'IN_PROGRESS';
 
     return DriverPageShell(
@@ -163,15 +184,15 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
               ),
             ),
             const SizedBox(width: DriverSpacing.sm),
-            const Text('訂單詳情',
-                style: TextStyle(
+            Text(widget.completed ? '已完成訂單詳情' : '訂單詳情',
+                style: const TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.w700,
                     color: DriverColors.text)),
           ]),
           const SizedBox(height: DriverSpacing.sm),
-          const Text('請確認乘客資訊與行程內容',
-              style: TextStyle(
+          Text(widget.completed ? '行程與結算資料' : '請確認乘客資訊與行程內容',
+              style: const TextStyle(
                   fontSize: DriverTypography.body,
                   color: DriverColors.secondaryText)),
           const SizedBox(height: DriverSpacing.xl),
@@ -193,6 +214,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
               destination: destination,
               scheduledAt: scheduledAt,
               price: _formatPrice(_trip?['price'], _trip?['currency']),
+              showFullAddresses: widget.completed,
             ),
             const SizedBox(height: DriverSpacing.xl),
             const Text('接單車輛',
@@ -212,27 +234,34 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
               selected: true,
               onTap: () {},
             ),
-            const SizedBox(height: DriverSpacing.xl),
-            if (!assigned)
-              Row(children: [
-                Expanded(
-                    child: OutlinedButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        style: _secondaryButtonStyle(),
-                        child: const Text('拒絕'))),
-                const SizedBox(width: DriverSpacing.md),
-                Expanded(
-                    child: ElevatedButton(
-                        onPressed: _accepting ? null : _acceptTrip,
-                        style: _primaryButtonStyle(),
-                        child: Text(_accepting ? '處理中…' : '確認接單'))),
-              ])
-            else
-              ElevatedButton(
-                onPressed: inProgress ? _openInProgressTrip : _openAcceptedTrip,
-                style: _primaryButtonStyle(),
-                child: Text(inProgress ? '查看進行中行程' : '查看已接行程'),
-              ),
+            if (!widget.completed) ...[
+              const SizedBox(height: DriverSpacing.xl),
+              if (!accepted)
+                Row(children: [
+                  Expanded(
+                      child: OutlinedButton(
+                          onPressed: _accepting
+                              ? null
+                              : pendingAssignment
+                                  ? _rejectTrip
+                                  : () => Navigator.of(context).pop(),
+                          style: _secondaryButtonStyle(),
+                          child: Text(pendingAssignment ? '不接此單' : '拒絕'))),
+                  const SizedBox(width: DriverSpacing.md),
+                  Expanded(
+                      child: ElevatedButton(
+                          onPressed: _accepting ? null : _acceptTrip,
+                          style: _primaryButtonStyle(),
+                          child: Text(_accepting ? '處理中…' : '確認接單'))),
+                ])
+              else
+                ElevatedButton(
+                  onPressed:
+                      inProgress ? _openInProgressTrip : _openAcceptedTrip,
+                  style: _primaryButtonStyle(),
+                  child: Text(inProgress ? '查看進行中行程' : '查看已接行程'),
+                ),
+            ],
           ],
         ],
       ),
@@ -347,6 +376,7 @@ class _OrderInfoCard extends StatelessWidget {
     required this.destination,
     required this.scheduledAt,
     required this.price,
+    required this.showFullAddresses,
   });
   final String passenger;
   final String routeOrigin;
@@ -355,6 +385,7 @@ class _OrderInfoCard extends StatelessWidget {
   final String destination;
   final String scheduledAt;
   final String price;
+  final bool showFullAddresses;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -405,10 +436,17 @@ class _OrderInfoCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: DriverSpacing.md),
-          _AddressRow(asset: 'assets/order-detail-origin.svg', label: origin),
+          _AddressRow(
+            asset: 'assets/order-detail-origin.svg',
+            label: origin,
+            showFullText: showFullAddresses,
+          ),
           const SizedBox(height: DriverSpacing.md),
           _AddressRow(
-              asset: 'assets/order-detail-destination.svg', label: destination),
+            asset: 'assets/order-detail-destination.svg',
+            label: destination,
+            showFullText: showFullAddresses,
+          ),
           const SizedBox(height: DriverSpacing.md),
           Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
             Expanded(
@@ -429,19 +467,37 @@ class _OrderInfoCard extends StatelessWidget {
 }
 
 class _AddressRow extends StatelessWidget {
-  const _AddressRow({required this.asset, required this.label});
+  const _AddressRow({
+    required this.asset,
+    required this.label,
+    required this.showFullText,
+  });
   final String asset;
   final String label;
+  final bool showFullText;
   @override
-  Widget build(BuildContext context) => Row(children: [
-        SvgPicture.asset(asset, width: 8, height: 8),
-        const SizedBox(width: DriverSpacing.sm),
-        Expanded(
-            child: Text(label,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                    fontSize: DriverTypography.body, color: DriverColors.text)))
-      ]);
+  Widget build(BuildContext context) => Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 7),
+            child: SvgPicture.asset(asset, width: 8, height: 8),
+          ),
+          const SizedBox(width: DriverSpacing.sm),
+          Expanded(
+            child: Text(
+              label,
+              maxLines: showFullText ? null : 1,
+              overflow:
+                  showFullText ? TextOverflow.visible : TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: DriverTypography.body,
+                color: DriverColors.text,
+              ),
+            ),
+          ),
+        ],
+      );
 }
 
 class _VehicleCard extends StatelessWidget {

@@ -236,6 +236,26 @@ class DriverApiClient {
       _decode(await _client.patch(Uri.parse('$baseUrl/driver/auth/me'),
           headers: _headers, body: jsonEncode(fields)));
 
+  Future<Map<String, dynamic>> updateWechatPayment({
+    required String wechatId,
+    Uint8List? qrCodeBytes,
+    String fileName = 'wechat-qr-code.jpg',
+    String mimeType = 'image/jpeg',
+  }) async {
+    final request = http.MultipartRequest(
+        'POST', Uri.parse('$baseUrl/driver/auth/me/wechat-payment'))
+      ..headers.addAll({
+        if (_token != null) 'Authorization': 'Bearer $_token',
+      })
+      ..fields['wechatId'] = wechatId;
+    if (qrCodeBytes != null) {
+      request.files.add(http.MultipartFile.fromBytes(
+          'wechatQrCode', qrCodeBytes,
+          filename: fileName, contentType: MediaType.parse(mimeType)));
+    }
+    return _decode(await http.Response.fromStream(await request.send()));
+  }
+
   Future<Map<String, dynamic>> getVehicleProfile() async => me();
 
   Future<Map<String, dynamic>> listVehicleCatalog() async => _decode(
@@ -260,6 +280,11 @@ class DriverApiClient {
       _decode(await _client.post(
           Uri.parse(
               '$baseUrl/driver/auth/trips/${Uri.encodeComponent(id)}/accept'),
+          headers: _headers));
+  Future<Map<String, dynamic>> rejectTrip(String id) async =>
+      _decode(await _client.post(
+          Uri.parse(
+              '$baseUrl/driver/auth/trips/${Uri.encodeComponent(id)}/reject'),
           headers: _headers));
   Future<Map<String, dynamic>> arriveTrip(String id) async =>
       _decode(await _client.post(

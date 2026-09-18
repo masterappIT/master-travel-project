@@ -24,6 +24,13 @@ export function createAdminResourceState() {
     promotionForm: ref(null),
     promotionSaving: ref(false),
     promotionDeletingId: ref(''),
-    promotionTogglingId: ref('')
+    promotionTogglingId: ref(''),
+    mileageRules: ref({ spendPerKm: 10, validityMonths: 12 }),
+    mileageRewards: ref([]),
+    mileageAccounts: ref([]),
+    mileageRewardForm: ref(null),
+    mileageLedger: ref([]),
+    mileageSelectedAccount: ref(null),
+    mileageSaving: ref(false)
   }
 }

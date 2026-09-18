@@ -426,3 +426,35 @@ tr.disabled td { opacity: 0.65; background: #f8fafc; }
     flex: 1 1 0;
   }
 }
+
+.promotion-section-tabs { display: inline-flex; width: fit-content; gap: 4px; padding: 4px; border: 1px solid #dce7f5; border-radius: 10px; background: #f1f5f9; }
+.promotion-section-tabs button { min-height: 40px; border: 0; border-radius: 7px; padding: 8px 20px; color: #52657d; background: transparent; font-weight: 700; cursor: pointer; }
+.promotion-section-tabs button.active { color: #fff; background: #1769e0; box-shadow: 0 2px 8px rgba(23, 105, 224, .2); }
+.mileage-admin-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(240px, 1fr); gap: 16px; }
+.mileage-rule-panel, .mileage-stat-panel, .mileage-account-detail { padding: 22px 24px; }
+.mileage-panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.mileage-panel-heading h3 { margin: 4px 0; color: #12243b; font-size: 19px; }
+.mileage-rule-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 18px; }
+.mileage-rule-preview { margin: 16px 0 0; padding: 12px 14px; border-left: 3px solid #1769e0; color: #425974; background: #f5f9ff; font-size: 13px; }
+.mileage-stat-panel { display: grid; grid-template-columns: 1fr auto; align-content: center; gap: 4px 18px; }
+.mileage-stat-panel span { color: #647892; font-size: 13px; font-weight: 700; }
+.mileage-stat-panel strong { color: #12243b; font-size: 24px; }
+.mileage-stat-panel small { grid-column: 1 / -1; margin-bottom: 12px; color: #8a9aad; }
+.mileage-reward-editor { margin: 20px 24px; padding: 20px; border: 1px solid #dce7f5; border-radius: 12px; background: #f8fafd; }
+.mileage-reward-form { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-top: 16px; }
+.mileage-form-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 10px; }
+.mileage-adjust-form { display: grid; grid-template-columns: 180px minmax(240px, 1fr) auto; align-items: end; gap: 14px; margin: 18px 0; padding: 16px; border: 1px solid #dce7f5; border-radius: 10px; background: #f8fafd; }
+.mileage-positive { color: #087a55; font-weight: 700; }
+.mileage-negative { color: #b43a3a; font-weight: 700; }
+@media (max-width: 900px) {
+  .mileage-admin-grid { grid-template-columns: 1fr; }
+  .mileage-reward-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mileage-adjust-form { grid-template-columns: 1fr 1fr; }
+  .mileage-adjust-form button { grid-column: 1 / -1; }
+}
+@media (max-width: 620px) {
+  .promotion-section-tabs { display: grid; width: 100%; grid-template-columns: 1fr 1fr; box-sizing: border-box; }
+  .mileage-rule-form, .mileage-reward-form, .mileage-adjust-form { grid-template-columns: 1fr; }
+  .mileage-reward-form .col-span-2, .mileage-adjust-form button { grid-column: auto; }
+  .mileage-panel-heading { align-items: flex-start; }
+}

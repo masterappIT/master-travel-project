@@ -6,6 +6,7 @@
     { "label": "Verify: API", "type": "shell", "command": "npm run verify:api", "options": { "cwd": "${workspaceFolder:Shared and Infra}" }, "group": "build", "problemMatcher": ["$tsc"] },
     { "label": "Verify: admin", "type": "shell", "command": "npm run verify:admin", "options": { "cwd": "${workspaceFolder:Shared and Infra}" }, "group": "build", "problemMatcher": [] },
     { "label": "Verify: driver", "type": "shell", "command": "npm run verify:driver", "options": { "cwd": "${workspaceFolder:Shared and Infra}" }, "group": "test", "problemMatcher": [] },
+    { "label": "Start: driver (8085)", "type": "shell", "command": "flutter run -d web-server --web-hostname 127.0.0.1 --web-port 8085", "options": { "cwd": "${workspaceFolder:Shared and Infra}/driver" }, "isBackground": true, "inAgents": true, "problemMatcher": [] },
     { "label": "Verify: brand", "type": "shell", "command": "npm run verify:brand", "options": { "cwd": "${workspaceFolder:Shared and Infra}" }, "group": "build", "problemMatcher": [] }
   ]
 }

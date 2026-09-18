@@ -68,7 +68,7 @@ const vehicleTab = vehiclesPageState.tab
 const extraSortId = vehiclesPageState.extraSortId
 let loadRequestId = 0
 const { exchangeRate, pricingCurrency, severeWeatherEnabled, adminLogo, paymentSettings } = createAdminSettingsState()
-const { users, selectedUser, walletTransactions, topUpWithdrawalHistory, trips, charterOrders, addresses, mainlandCities, addressSearchKeyword, addressSearchResults, addressSearching, categories, vehicles, extras, distancePricing, routeMinimumFares, routeMinimumFareForm, membershipPlans, promotions, promotionForm, promotionSaving, promotionDeletingId, promotionTogglingId } = createAdminResourceState()
+const { users, selectedUser, walletTransactions, topUpWithdrawalHistory, trips, charterOrders, addresses, mainlandCities, addressSearchKeyword, addressSearchResults, addressSearching, categories, vehicles, extras, distancePricing, routeMinimumFares, routeMinimumFareForm, membershipPlans, promotions, promotionForm, promotionSaving, promotionDeletingId, promotionTogglingId, mileageRules, mileageRewards, mileageAccounts, mileageRewardForm, mileageLedger, mileageSelectedAccount, mileageSaving } = createAdminResourceState()
 const { administrators, auditLogs, notifications, notificationTemplates, notificationUsers, notificationDrivers, personnel, entryItems, drivers, selectedDriver, expenseItems } = createAdminAuxiliaryState()
 const { orderUrls, createdOrderUrl, tripCatalog, tripQuote, vehicleCategories, tripBookingStep, tripPaymentMethod, tripUseFareBalance, tripUseCashBalance, tripLocationKeyword, tripLocationResults, tripLocationSearching, tripLocationTarget } = createAdminInteractionState()
 const { toasts, confirmDialog, dismissToast, notify, requestConfirmation, resolveConfirmation } = createFeedbackController()
@@ -116,7 +116,7 @@ const resourceLoader = createAdminResourceLoader({
     charters: () => import('./utils/admin-resource-loader.js').then(({ loadCharterResources }) => loadCharterResources({ api, charterOrders })),
     addresses: () => import('./utils/admin-resource-loader.js').then(({ loadAddressResources }) => loadAddressResources({ addressesApi, addresses, mainlandCities, displayMainlandCity, displayError })),
     membership: () => import('./utils/admin-resource-loader.js').then(({ loadMembershipResources }) => loadMembershipResources({ api, membershipPlans })),
-    promotions: () => import('./utils/admin-resource-loader.js').then(({ loadPromotionResources }) => loadPromotionResources({ api, promotions })),
+    promotions: () => import('./utils/admin-resource-loader.js').then(({ loadPromotionResources }) => loadPromotionResources({ api, promotions, mileageRules, mileageRewards, mileageAccounts })),
     administrators: () => import('./utils/admin-resource-loader.js').then(({ loadAdministratorResources }) => loadAdministratorResources({ api, administrators })),
     notifications: () => import('./utils/admin-resource-loader.js').then(({ loadNotificationResources }) => loadNotificationResources({ api, usersApi, driversApi, notifications, notificationTemplates, notificationUsers, notificationDrivers })),
     vehicles: () => import('./utils/admin-resource-loader.js').then(({ loadVehicleResources }) => loadVehicleResources({ api, categories, vehicles, extras, distancePricing, sortByOrder })),
@@ -152,8 +152,8 @@ const tripsActions = createTripsActions({ api, tripsApi, addressesApi, tripForm,
 const { editTrip, resetTrip, clearTripLocationSearch, searchTripLocation, selectTripLocation, handleTripRegionChange, showTrip, closeTrip, updateTripStatus, settleTrip, unsettleTrip, prepareTripQuote, calculateTripRoute, completeTripBooking, saveTrip, confirmDispatch, openDispatch, saveDispatch, openOrderUrlForm, createOrderUrl, closeCreatedOrderUrl, copyOrderUrl, revokeOrderUrl } = tripsActions
 const membershipActions = createMembershipActions({ api, membershipForm, membershipPlans, load, error, displayError, requestConfirmation, notify, t })
 const { editMembership, resetMembership, saveMembership, removeMembership } = membershipActions
-const promotionsActions = createPromotionsActions({ api, promotionForm, promotionSaving, promotionDeletingId, promotionTogglingId, pricingCurrency, dateTimeInput, nextTick, load, error, displayError, notify, requestConfirmation, t, generateRandomCouponCodeStr })
-const { openPromotionForm, resetPromotion, editPromotion, savePromotion, removePromotion, duplicatePromotion, togglePromotionEnabled, generateRandomCouponCode } = promotionsActions
+const promotionsActions = createPromotionsActions({ api, promotionForm, promotionSaving, promotionDeletingId, promotionTogglingId, pricingCurrency, dateTimeInput, nextTick, load, error, displayError, notify, requestConfirmation, t, generateRandomCouponCodeStr, mileageRules, mileageRewardForm, mileageLedger, mileageSelectedAccount, mileageSaving })
+const { openPromotionForm, resetPromotion, editPromotion, savePromotion, removePromotion, duplicatePromotion, togglePromotionEnabled, generateRandomCouponCode, resetMileageReward, editMileageReward, saveMileageRules, saveMileageReward, toggleMileageReward, removeMileageReward, openMileageAccount, adjustMileage } = promotionsActions
 
 const promotionDisplay = createPromotionDisplay({ promotionForm, promotionsPageState, severeWeatherEnabled, extras })
 const { promotionDiscountHint, promotionStackingHint, filteredPromotions, toggleWeekday, isWeekdaySelected, setWeekdaysPreset, formatWeekdaysText, formatRouteText, formatTimeRangeText, triggerLabel, triggerSummary, isTriggerActive } = promotionDisplay
@@ -254,6 +254,7 @@ const App = { setup() {
      t,
      canWrite,
      promotions,
+     promotionSection: promotionsPageState.section,
      promotionForm,
      promotionSaving,
      promotionDeletingId,
@@ -278,7 +279,23 @@ const App = { setup() {
      formatWeekdaysText,
      formatRouteText,
      formatTimeRangeText,
-     formatDate
+     formatDate,
+     mileageRules,
+     mileageRewards,
+     mileageAccounts,
+     mileageRewardForm,
+     mileageLedger,
+     mileageSelectedAccount,
+     mileageSearchQuery: promotionsPageState.mileageSearchQuery,
+     mileageSaving,
+     resetMileageReward,
+     editMileageReward,
+     saveMileageRules,
+     saveMileageReward,
+     toggleMileageReward,
+     removeMileageReward,
+     openMileageAccount,
+     adjustMileage
    })
    provide('adminAccessContext', {
      view,

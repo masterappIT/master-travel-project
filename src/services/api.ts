@@ -70,11 +70,11 @@ export async function requestPhoneVerificationCode(countryCode: string, phoneNum
   return response.data as PhoneAuthChallenge
 }
 
-export async function verifyPhoneVerificationCode(challengeId: string, code = ''): Promise<AuthResult> {
+export async function verifyPhoneVerificationCode(challengeId: string, code = '', invitationCode = ''): Promise<AuthResult> {
   const response = await uni.request({
     url: `${API_BASE_URL}/auth/phone/verify`,
     method: 'POST',
-    data: { challengeId, code }
+    data: { challengeId, code, invitationCode: invitationCode || undefined }
   })
   if (response.statusCode >= 400) throw apiError(response, '驗證碼錯誤或已過期')
   return response.data as AuthResult
@@ -93,6 +93,20 @@ export async function authenticateThirdParty(provider: 'wechat' | 'apple', provi
 export async function logoutClient(): Promise<void> {
   const response = await uni.request({ url: `${API_BASE_URL}/auth/logout`, method: 'POST', header: authHeaders() })
   if (response.statusCode >= 400) throw apiError(response, '登出失敗')
+}
+
+export type InvitationDashboard = {
+  code: string
+  shareUrl: string
+  rewards: { inviterMileage: number; inviteeFare: number }
+  summary: { month: number; invited: number; rewarded: number; pending: number; mileageEarned: number }
+  records: Array<{ id: string; name: string; status: 'REGISTERED' | 'REWARDED' | 'EXPIRED'; reward: number; registeredAt: string; rewardedAt: string | null }>
+}
+
+export async function getInvitationDashboard(): Promise<InvitationDashboard> {
+  const response = await uni.request({ url: `${API_BASE_URL}/client/invitations/me`, header: authHeaders() })
+  if (response.statusCode >= 400) throw apiError(response, '無法載入邀請資料')
+  return response.data as InvitationDashboard
 }
 
 export type ClientProfile = AuthUser & { avatarUrl: string | null; displayName: string | null; email: string | null; gender: string | null; region: string | null; birthday: string | null; cashBalance: number; fareBalance: number; membershipLevel?: string | null }
@@ -466,6 +480,22 @@ export async function redeemPromotionCode(couponCode: string): Promise<{ promoti
   const data = response.data as { data: PublicPromotion; message: string }
   return { promotion: data.data, message: data.message }
 }
+export type MileageLedger = { id: string; amount: number; balanceAfter: number; type: 'EARN' | 'REDEEM' | 'EXPIRE' | 'ADJUST' | 'REFUND'; reason: string; expiresAt: string | null; createdAt: string }
+export type MileageReward = { id: string; name: string; description: string; cost: number; enabled: boolean; stock: number | null }
+export type MileageSummary = { balance: number; lifetimeEarned: number; lifetimeRedeemed: number; monthlyEarned: number; yearlyEarned: number; expiringAmount: number; expiringAt: string | null; ledger: MileageLedger[]; rewards: MileageReward[] }
+
+export async function getMileageSummary(): Promise<MileageSummary> {
+  const response = await uni.request({ url: `${API_BASE_URL}/client/mileage/summary`, header: authHeaders() })
+  if (response.statusCode >= 400) throw apiError(response, '無法載入會員里程')
+  return response.data as MileageSummary
+}
+
+export async function redeemMileageReward(rewardId: string): Promise<{ data: { id: string }; message: string }> {
+  const response = await uni.request({ url: `${API_BASE_URL}/client/mileage/redeem`, method: 'POST', header: authHeaders(), data: { rewardId } })
+  if (response.statusCode >= 400) throw apiError(response, '里程兌換失敗')
+  return response.data as { data: { id: string }; message: string }
+}
+
 export type CardNetwork = 'visa' | 'mastercard' | 'unionpay' | 'amex' | 'jcb' | 'unknown'
 
 export type CardIdentification = {
@@ -677,7 +707,7 @@ export type ClientTrip = {
   vehicle: { id: string; categoryId: string | null; categoryName: string | null; brand: string; model: string; series: string; seats: number; modelChoiceLabel: string } | null
   createdAt: string
   status: 'PENDING' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED'
-  executionPhase: 'WAITING_DRIVER' | 'DRIVER_ASSIGNED' | 'IN_PROGRESS' | null
+  executionPhase: 'WAITING_DRIVER' | 'DRIVER_PENDING_ACCEPTANCE' | 'DRIVER_ASSIGNED' | 'IN_PROGRESS' | null
   driver: { name: string; phone: string; vehiclePlate: string | null; hkPlate: string | null; macauPlate: string | null; mainlandPlate: string | null } | null
   assignedAt: string | null
   acceptedAt: string | null

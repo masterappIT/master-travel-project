@@ -2,6 +2,7 @@ import type { ClientTrip } from '../services/api'
 
 const pendingExecutionPhases = new Set<ClientTrip['executionPhase']>([
   'WAITING_DRIVER',
+  'DRIVER_PENDING_ACCEPTANCE',
   'DRIVER_ASSIGNED',
   'IN_PROGRESS',
 ])

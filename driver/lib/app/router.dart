@@ -19,6 +19,7 @@ import '../registration_page.dart';
 import '../review_status_page.dart';
 import '../vehicle_legacy_page.dart';
 import '../vehicle_page.dart';
+import '../wechat_payment_page.dart';
 import '../core/api/driver_api_client.dart';
 import '../settlement_overview_page.dart';
 import '../language_settings_page.dart';
@@ -52,6 +53,7 @@ abstract final class DriverRouter {
         DriverRouteNames.profile: (_) => const ProfilePage(),
         DriverRouteNames.flightQuery: (_) => const FlightQueryPage(),
         DriverRouteNames.currency: (_) => const CurrencyPage(),
+        DriverRouteNames.wechatPayment: (_) => const WechatPaymentPage(),
         DriverRouteNames.settlementOverview: (_) =>
             const SettlementOverviewPage(),
         DriverRouteNames.about: (_) => const AboutPage(),
@@ -82,6 +84,13 @@ abstract final class DriverRouter {
         DriverRouteNames.orderDetail: (context) {
           final arguments = ModalRoute.of(context)?.settings.arguments;
           return _approved(OrderDetailPage(tripId: arguments?.toString()));
+        },
+        DriverRouteNames.completedOrderDetail: (context) {
+          final arguments = ModalRoute.of(context)?.settings.arguments;
+          return _approved(OrderDetailPage(
+            tripId: arguments?.toString(),
+            completed: true,
+          ));
         },
         DriverRouteNames.orderAccepted: (context) =>
             _approved(OrderAcceptedPage(

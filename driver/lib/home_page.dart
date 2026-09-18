@@ -478,6 +478,14 @@ class _RecentOrdersSection extends StatelessWidget {
   final String? error;
   final VoidCallback onViewAll;
 
+  String _formatCompletedAt(dynamic value) {
+    final date = DateTime.tryParse(value?.toString() ?? '')?.toLocal();
+    if (date == null) return '—';
+    String two(int number) => number.toString().padLeft(2, '0');
+    return '${date.year}/${two(date.month)}/${two(date.day)} '
+        '${two(date.hour)}:${two(date.minute)}';
+  }
+
   @override
   Widget build(BuildContext context) {
     if (loading) return const Center(child: CircularProgressIndicator());
@@ -505,7 +513,7 @@ class _RecentOrdersSection extends StatelessWidget {
         ...orders.map((order) => Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: _RecentOrderCard(
-                time: order['completedAt']?.toString() ?? '—',
+                time: _formatCompletedAt(order['completedAt']),
                 price: order['price'] is num
                     ? '\$${(order['price'] as num).toStringAsFixed(2)}'
                     : '—',

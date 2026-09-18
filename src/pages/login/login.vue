@@ -59,6 +59,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { onLoad } from '@dcloudio/uni-app'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { authenticateThirdParty, requestPhoneVerificationCode, verifyPhoneVerificationCode } from '../../services/api'
 import { setAuthenticated } from '../../utils/auth'
@@ -72,7 +73,12 @@ const countryCode = ref(countryCodes[countryIndex.value])
 const phone = ref('')
 const agreed = ref(false)
 const loginSubmitting = ref(false)
+const invitationCode = ref('')
 const phoneMaxLength = computed(() => countryPhoneLengths[countryIndex.value])
+
+onLoad((options) => {
+  invitationCode.value = typeof options?.invite === 'string' ? options.invite.trim().toUpperCase() : ''
+})
 
 const handleCountryChange = (event: { detail: { value: string | number } }) => {
   const index = Number(event.detail.value)
@@ -98,7 +104,7 @@ const handleLogin = async () => {
   loginSubmitting.value = true
   try {
     const challenge = await requestPhoneVerificationCode(countryCode.value, phone.value)
-    const query = `challengeId=${encodeURIComponent(challenge.challengeId)}&phone=${encodeURIComponent(`${countryCode.value}-${phone.value}`)}`
+    const query = `challengeId=${encodeURIComponent(challenge.challengeId)}&phone=${encodeURIComponent(`${countryCode.value}-${phone.value}`)}&invite=${encodeURIComponent(invitationCode.value)}`
     uni.navigateTo({ url: `/pages/login/verify?${query}`, animationType: 'none', animationDuration: 0 })
   } catch (error) {
     uni.showToast({ title: error instanceof Error ? error.message : '驗證碼發送失敗', icon: 'none' })

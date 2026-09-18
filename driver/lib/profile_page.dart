@@ -26,6 +26,8 @@ class _ProfilePageState extends State<ProfilePage> {
   String _vehicleSummary = '香港 · 兩地牌 · 車輛';
   String _hongKongMacauPhone = '+852 9123 4567';
   String _mainlandPhone = '+86 未填寫';
+  String? _wechatId;
+  bool _hasWechatQrCode = false;
   String _settledAmount = '0';
   String _unsettledAmount = '0';
 
@@ -60,6 +62,8 @@ class _ProfilePageState extends State<ProfilePage> {
         _mainlandPhone = mainlandNumber == null || mainlandNumber.isEmpty
             ? '+86 未填寫'
             : '+86 $mainlandNumber';
+        _wechatId = driver['wechatId']?.toString();
+        _hasWechatQrCode = driver['wechatQrCodeUrl']?.toString().isNotEmpty ?? false;
         final settlement = statistics['settlement'] is Map
             ? Map<String, dynamic>.from(statistics['settlement'] as Map)
             : <String, dynamic>{};
@@ -240,8 +244,23 @@ class _ProfilePageState extends State<ProfilePage> {
                     onTap: () => DriverNavigation.push(
                         context, DriverRouteNames.currency)),
                 _MenuItem(
-                    '微信支付', 'assets/profile-wechat.svg', _IconTone.success,
-                    detail: '已綁定：$_name'),
+                    '微信支付', 'assets/profile-wechat.svg',
+                    _wechatId != null && _wechatId!.isNotEmpty && _hasWechatQrCode
+                        ? _IconTone.success
+                        : _IconTone.neutral,
+                    detail: _wechatId != null && _wechatId!.isNotEmpty && _hasWechatQrCode
+                        ? '已綁定：$_wechatId'
+                        : '未綁定',
+                    onTap: () async {
+                      final result = await DriverNavigation.push(
+                          context, DriverRouteNames.wechatPayment);
+                      if (result is Map<String, dynamic> && mounted) {
+                        setState(() {
+                          _wechatId = result['wechatId']?.toString();
+                          _hasWechatQrCode = result['wechatQrCodeUrl']?.toString().isNotEmpty ?? false;
+                        });
+                      }
+                    }),
                 _MenuItem('支付寶', 'assets/profile-fps.svg', _IconTone.neutral,
                     detail: '未綁定'),
                 _MenuItem(

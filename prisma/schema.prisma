@@ -72,8 +72,48 @@ model User {
   verificationCodes  VerificationCode[]
   notifications      Notification[]
   commonPassengers   CommonPassenger[]
+  mileageAccount     MileageAccount?
+  mileageLedger      MileageLedger[]
+  mileageRedemptions MileageRedemption[]
+  invitationCode     InvitationCode?
+  invitationsSent    Invitation[]        @relation("InvitationInviter")
+  invitationReceived Invitation?         @relation("InvitationInvitee")
 
   @@unique([countryCode, phoneNumber])
+}
+
+model InvitationCode {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  code      String   @unique
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Invitation {
+  id                   String           @id @default(cuid())
+  inviterId            String
+  inviteeId            String           @unique
+  code                 String
+  status               InvitationStatus @default(REGISTERED)
+  qualifiedTripId      String?          @unique
+  inviterMileageReward Int              @default(300)
+  inviteeFareReward    Float            @default(50)
+  rewardedAt           DateTime?
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  inviter              User             @relation("InvitationInviter", fields: [inviterId], references: [id], onDelete: Cascade)
+  invitee              User             @relation("InvitationInvitee", fields: [inviteeId], references: [id], onDelete: Cascade)
+
+  @@index([inviterId, createdAt])
+  @@index([inviterId, status])
+  @@index([code])
+}
+
+enum InvitationStatus {
+  REGISTERED
+  REWARDED
+  EXPIRED
 }
 
 model CommonPassenger {
@@ -140,6 +180,83 @@ model VerificationCode {
   @@index([status, expiresAt])
 }
 
+model MileageAccount {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  balance          Int      @default(0)
+  lifetimeEarned   Int      @default(0)
+  lifetimeRedeemed Int      @default(0)
+  updatedAt        DateTime @updatedAt
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model MileageLedger {
+  id              String             @id @default(cuid())
+  userId          String
+  amount          Int
+  balanceAfter    Int
+  type            MileageLedgerType
+  reason          String
+  administratorId String?
+  tripId          String?
+  redemptionId    String?
+  expiresAt       DateTime?
+  createdAt       DateTime           @default(now())
+  user            User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trip            Trip?              @relation(fields: [tripId], references: [id], onDelete: SetNull)
+  redemption      MileageRedemption? @relation(fields: [redemptionId], references: [id], onDelete: SetNull)
+
+  @@unique([tripId, type])
+  @@index([userId, createdAt])
+  @@index([userId, expiresAt])
+}
+
+enum MileageLedgerType {
+  EARN
+  REDEEM
+  EXPIRE
+  ADJUST
+  REFUND
+}
+
+model MileageReward {
+  id             String              @id @default(cuid())
+  name           String
+  description    String
+  cost           Int
+  enabled        Boolean             @default(true)
+  stock          Int?
+  couponValue    Float?
+  couponCurrency String?
+  promotionId    String?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  redemptions    MileageRedemption[]
+  promotion      Promotion?          @relation(fields: [promotionId], references: [id], onDelete: SetNull)
+
+  @@index([promotionId])
+}
+
+model MileageRedemption {
+  id         String                  @id @default(cuid())
+  userId     String
+  rewardId   String
+  cost       Int
+  status     MileageRedemptionStatus @default(COMPLETED)
+  couponCode String?
+  createdAt  DateTime                @default(now())
+  user       User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reward     MileageReward           @relation(fields: [rewardId], references: [id], onDelete: Restrict)
+  ledger     MileageLedger[]
+
+  @@index([userId, createdAt])
+}
+
+enum MileageRedemptionStatus {
+  COMPLETED
+  REVERSED
+}
+
 model WalletTransaction {
   id              String                @id @default(cuid())
   userId          String
@@ -171,6 +288,7 @@ enum WalletTransactionType {
   WITHDRAWAL
   TRIP_PAYMENT
   REFUND
+  INVITATION_REWARD
 }
 
 model Trip {
@@ -228,6 +346,7 @@ model Trip {
   payment                      Payment?
   settlement                   DriverSettlement?
   quote                        FareQuote?          @relation(fields: [quoteId], references: [id], onDelete: SetNull)
+  mileageLedger                MileageLedger[]
 
   @@index([userId, status])
   @@index([scheduledAt])
@@ -278,6 +397,7 @@ enum TripStatus {
 
 enum TripExecutionPhase {
   WAITING_DRIVER
+  DRIVER_PENDING_ACCEPTANCE
   DRIVER_ASSIGNED
   IN_PROGRESS
 }
@@ -300,6 +420,8 @@ model AppSetting {
   alipayPayEnabled       Boolean  @default(true)
   bankCardPayEnabled     Boolean  @default(true)
   sandboxMode            Boolean  @default(false)
+  mileageSpendPerKm      Float    @default(10)
+  mileageValidityMonths  Int      @default(12)
   updatedAt              DateTime @updatedAt
 }
 
@@ -372,6 +494,9 @@ model Driver {
   reviewedBy               String?
   settlementMethod         String?
   settlementAccount        String?
+  wechatId                 String?
+  wechatQrCodeData         Bytes?
+  wechatQrCodeMime         String?
   isOnline                 Boolean               @default(false)
   enabled                  Boolean               @default(true)
   createdAt                DateTime              @default(now())
@@ -688,6 +813,7 @@ model Promotion {
   createdAt         DateTime              @default(now())
   updatedAt         DateTime              @updatedAt
   usages            PromotionUsage[]
+  mileageRewards    MileageReward[]
 
   @@index([kind, enabled, startsAt, endsAt])
 }

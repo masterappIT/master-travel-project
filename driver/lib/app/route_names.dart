@@ -5,6 +5,7 @@ abstract final class DriverRouteNames {
   static const home = '/home';
   static const orders = '/orders';
   static const orderDetail = '/orders/detail';
+  static const completedOrderDetail = '/orders/history/detail';
   static const orderHistory = '/orders/history';
   static const profile = '/profile';
   static const profileEdit = '/profile/edit';
@@ -14,6 +15,7 @@ abstract final class DriverRouteNames {
   static const flightQuery = '/profile/flight-query';
   static const currency = '/profile/currency';
   static const settlementOverview = '/profile/settlement';
+  static const wechatPayment = '/profile/wechat-payment';
   static const addVehicle = '/profile/vehicle/add';
   static const vehicleLegacy = '/profile/vehicle-legacy';
   static const languageSettings = '/profile/language';

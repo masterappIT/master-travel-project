@@ -13,7 +13,11 @@ export const PromotionsPage = {
       <p class="muted">管理折扣活動、優惠碼與會員專屬優惠</p>
     </div>
   </div>
-  <div class="promotion-summary">
+  <div class="promotion-section-tabs" role="tablist" aria-label="優惠設定分類">
+    <button type="button" :class="{ active: promotionSection === 'PROMOTIONS' }" @click="promotionSection = 'PROMOTIONS'">優惠方案</button>
+    <button type="button" :class="{ active: promotionSection === 'MILEAGE' }" @click="promotionSection = 'MILEAGE'">會員里程</button>
+  </div>
+  <div v-if="promotionSection === 'PROMOTIONS'" class="promotion-summary">
     <article class="summary-card" :class="{ active: promotionFilterTab === 'CAMPAIGN' }" @click="promotionFilterTab = (promotionFilterTab === 'CAMPAIGN' ? 'ALL' : 'CAMPAIGN')">
       <div>
         <span>折扣活動</span>
@@ -34,7 +38,7 @@ export const PromotionsPage = {
     </article>
   </div>
 
-  <div class="panel">
+  <div v-if="promotionSection === 'PROMOTIONS'" class="panel">
     <div class="admin-toolbar promo-toolbar">
       <div>
         <h2>優惠功能設定</h2>
@@ -341,5 +345,63 @@ export const PromotionsPage = {
       </table>
     </div>
   </div>
+
+  <template v-if="promotionSection === 'MILEAGE'">
+    <div class="mileage-admin-grid">
+      <section class="panel mileage-rule-panel">
+        <div class="mileage-panel-heading">
+          <div><span class="eyebrow">EARNING RULE</span><h3>里程累積規則</h3></div>
+          <button type="button" class="add-btn campaign-btn" :disabled="!canWrite || mileageSaving" @click="saveMileageRules">保存規則</button>
+        </div>
+        <div class="mileage-rule-form">
+          <label class="form-group"><span class="label-text">每 1 KM 所需消費金額</span><input v-model.number="mileageRules.spendPerKm" type="number" min="0.01" max="100000" step="0.01" /></label>
+          <label class="form-group"><span class="label-text">里程有效期（月）</span><input v-model.number="mileageRules.validityMonths" type="number" min="1" max="120" step="1" /></label>
+        </div>
+        <p class="mileage-rule-preview">會員每消費 {{mileageRules.spendPerKm}} 元累積 1 KM，入帳後 {{mileageRules.validityMonths}} 個月到期。</p>
+      </section>
+      <section class="panel mileage-stat-panel">
+        <span>會員數</span><strong>{{mileageAccounts.length}}</strong><small>全部會員（含 0 KM）</small>
+        <span>兌換品</span><strong>{{mileageRewards.filter(item => item.enabled).length}} / {{mileageRewards.length}}</strong><small>啟用 / 全部</small>
+      </section>
+    </div>
+
+    <section class="panel">
+      <div class="admin-toolbar promo-toolbar">
+        <div><h2>里程兌換品</h2><span class="muted">管理成本、庫存及兌換後使用的優惠</span></div>
+        <button type="button" class="add-btn coupon-btn" :disabled="!canWrite" @click="resetMileageReward">＋ 新增兌換品</button>
+      </div>
+      <div v-if="mileageRewardForm" class="mileage-reward-editor">
+        <div class="mileage-panel-heading"><h3>{{mileageRewardForm.id ? '編輯兌換品' : '新增兌換品'}}</h3><button type="button" class="close-btn" @click="mileageRewardForm = null">X</button></div>
+        <form class="mileage-reward-form" @submit.prevent="saveMileageReward">
+          <label class="form-group"><span class="label-text">名稱</span><input v-model.trim="mileageRewardForm.name" required /></label>
+          <label class="form-group"><span class="label-text">所需 KM</span><input v-model.number="mileageRewardForm.cost" type="number" min="1" step="1" required /></label>
+          <label class="form-group"><span class="label-text">庫存（留空為不限）</span><input v-model="mileageRewardForm.stock" type="number" min="0" step="1" /></label>
+          <label class="form-group"><span class="label-text">關聯優惠</span><select v-model="mileageRewardForm.promotionId"><option value="">不關聯</option><option v-for="promo in promotions.filter(item => item.kind === 'COUPON')" :key="promo.id" :value="promo.id">{{promo.name}}（{{promo.couponCode}}）</option></select></label>
+          <label class="form-group col-span-2"><span class="label-text">說明</span><input v-model.trim="mileageRewardForm.description" required /></label>
+          <label class="form-group"><span class="label-text">顯示優惠面額</span><input v-model="mileageRewardForm.couponValue" type="number" min="0.01" step="0.01" /></label>
+          <label class="form-group switch-group"><span class="label-text">啟用</span><input v-model="mileageRewardForm.enabled" type="checkbox" /></label>
+          <div class="mileage-form-actions"><button type="button" class="btn-cancel" @click="mileageRewardForm = null">取消</button><button type="submit" class="btn-save" :disabled="mileageSaving">保存兌換品</button></div>
+        </form>
+      </div>
+      <div class="promo-table-wrapper"><table><thead><tr><th>兌換品</th><th>所需里程</th><th>庫存 / 已兌換</th><th>關聯優惠</th><th>狀態</th><th style="text-align:right">操作</th></tr></thead><tbody>
+        <tr v-if="!mileageRewards.length"><td colspan="6" class="promotion-empty">尚未建立兌換品</td></tr>
+        <tr v-for="item in mileageRewards" :key="item.id" :class="{ disabled: !item.enabled }"><td><strong>{{item.name}}</strong><div class="muted-info">{{item.description}}</div></td><td><strong>{{item.cost}} KM</strong></td><td>{{item.stock === null ? '不限' : item.stock}} / {{item._count.redemptions}}</td><td>{{item.promotion?.name || '未關聯'}}</td><td><button type="button" class="status-toggle-btn" :class="item.enabled ? 'is-active' : 'is-inactive'" :disabled="!canWrite || mileageSaving" @click="toggleMileageReward(item)"><span class="status-dot"></span>{{item.enabled ? '已啟用' : '已停用'}}</button></td><td class="row-actions" style="text-align:right"><button type="button" class="action-btn edit-btn" :disabled="!canWrite" @click="editMileageReward(item)">編輯</button><button type="button" class="action-btn danger-btn" :disabled="!canWrite" @click="removeMileageReward(item)">刪除</button></td></tr>
+      </tbody></table></div>
+    </section>
+
+    <section class="panel">
+      <div class="admin-toolbar promo-toolbar"><div><h2>會員里程帳戶</h2><span class="muted">查詢餘額、終身累積及人工調整記錄</span></div><div class="promo-search"><input v-model="mileageSearchQuery" placeholder="搜尋會員姓名或電話" /></div></div>
+      <div class="promo-table-wrapper"><table><thead><tr><th>會員</th><th>會員等級</th><th>可用里程</th><th>累積 / 已兌換</th><th>最後更新</th><th style="text-align:right">操作</th></tr></thead><tbody>
+        <tr v-if="!mileageAccounts.length"><td colspan="6" class="promotion-empty">尚無里程帳戶</td></tr>
+        <tr v-for="account in mileageAccounts.filter(item => !mileageSearchQuery || (item.user.name + item.user.countryCode + item.user.phoneNumber).toLowerCase().includes(mileageSearchQuery.toLowerCase()))" :key="account.id"><td><strong>{{account.user.name}}</strong><div class="muted-info">{{account.user.countryCode}} {{account.user.phoneNumber}}</div></td><td>{{account.user.membershipLevel || '一般會員'}}</td><td><strong>{{account.balance}} KM</strong></td><td>{{account.lifetimeEarned}} / {{account.lifetimeRedeemed}}</td><td>{{formatDate(account.updatedAt, true)}}</td><td class="row-actions" style="text-align:right"><button type="button" class="action-btn edit-btn" @click="openMileageAccount(account)">查看 / 調整</button></td></tr>
+      </tbody></table></div>
+    </section>
+
+    <section v-if="mileageSelectedAccount" class="panel mileage-account-detail">
+      <div class="mileage-panel-heading"><div><h3>{{mileageSelectedAccount.user.name}}的里程流水</h3><span class="muted">目前餘額 {{mileageSelectedAccount.balance}} KM</span></div><button type="button" class="close-btn" @click="mileageSelectedAccount = null; mileageLedger = []">X</button></div>
+      <form v-if="canWrite" class="mileage-adjust-form" @submit.prevent="adjustMileage(mileageSelectedAccount)"><label class="form-group"><span class="label-text">調整里程（扣除請輸入負數）</span><input v-model.number="mileageSelectedAccount.adjustmentAmount" type="number" step="1" required /></label><label class="form-group"><span class="label-text">調整原因</span><input v-model.trim="mileageSelectedAccount.adjustmentReason" required /></label><button type="submit" class="btn-save" :disabled="mileageSaving">確認調整</button></form>
+      <div class="promo-table-wrapper"><table><thead><tr><th>時間</th><th>類型</th><th>原因</th><th>變動</th><th>結餘</th></tr></thead><tbody><tr v-if="!mileageLedger.length"><td colspan="5" class="promotion-empty">尚無流水</td></tr><tr v-for="item in mileageLedger" :key="item.id"><td>{{formatDate(item.createdAt, true)}}</td><td>{{item.type}}</td><td>{{item.reason}}</td><td :class="item.amount > 0 ? 'mileage-positive' : 'mileage-negative'">{{item.amount > 0 ? '+' : ''}}{{item.amount}} KM</td><td>{{item.balanceAfter}} KM</td></tr></tbody></table></div>
+    </section>
+  </template>
 </section>`
 }

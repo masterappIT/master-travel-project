@@ -42,6 +42,7 @@ import { verifyPhoneVerificationCode } from '../../services/api'
 const { responsiveStyle } = useResponsiveCanvas()
 const phone = ref('')
 const challengeId = ref('')
+const invitationCode = ref('')
 const codes = ref(['', '', '', '', ''])
 const focusedIndex = ref(0)
 const codeInputs = ref<Array<UniApp.InputContext | null>>([null, null, null, null, null])
@@ -53,6 +54,7 @@ const setCodeInput = (element: unknown, index: number) => {
 onLoad((options) => {
   if (options?.phone) phone.value = decodeURIComponent(options.phone)
   if (options?.challengeId) challengeId.value = options.challengeId
+  if (options?.invite) invitationCode.value = options.invite.trim().toUpperCase()
 })
 
 const handleCodeInput = (index: number) => {
@@ -77,7 +79,7 @@ const handleSubmit = async () => {
     return
   }
   try {
-    const result = await verifyPhoneVerificationCode(challengeId.value, codes.value.join(''))
+    const result = await verifyPhoneVerificationCode(challengeId.value, codes.value.join(''), invitationCode.value)
     setAuthenticated(result.token, result.user)
     goHome()
   } catch (error) {
