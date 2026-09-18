@@ -8,9 +8,9 @@
       </view>
       <view class="assist"><image src="/static/orders/help.svg" mode="aspectFit" /><text>訂單協助</text></view>
       <view class="status"><image src="/static/orders/status-blue.svg" mode="aspectFit" /><text>待出行</text></view>
-      <scroll-view class="traveling-scroll" scroll-y>
-        <view class="traveling-content">
-          <view :class="['traveling-card', { 'long-addresses': hasLongAddress }]">
+      <scroll-view class="traveling-detail-scroll" scroll-y>
+        <view class="traveling-detail-content">
+          <view class="traveling-detail-card">
             <view class="card-top"><view class="locations"><view :class="{ 'long-location': isLongAddress(originLabel) }"><image src="/static/orders/origin.svg" mode="aspectFit" /><text>{{ formatAddressLabel(originLabel) }}</text></view><view :class="{ 'long-location': isLongAddress(destinationLabel) }"><image src="/static/orders/destination.svg" mode="aspectFit" /><text>{{ formatAddressLabel(destinationLabel) }}</text></view></view><view class="payment completed"><view class="paid-tag">已付款</view></view></view>
             <view class="times"><text>預約時間 ：{{ bookingTime }}</text><text>預計到達時間 ：{{ arrivalTime }}</text></view>
             <view class="passenger-title">乘客及聯絡資料：</view>
@@ -121,19 +121,13 @@ const formatAddressLabel = (value: string) => {
   if (splitIndex < 0) return value
   return `${characters.slice(0, splitIndex).join('')}\n${characters.slice(splitIndex).join('')}`
 }
-const hasLongAddress = computed(() => isLongAddress(originLabel.value) || isLongAddress(destinationLabel.value))
-const cardHeight = computed(() => {
-  const surchargeHeight = surchargeItems.value.length * 40
-  const paymentRecords = storedOrder.value?.payment ? [storedOrder.value.payment.fareAmount, storedOrder.value.payment.cashAmount].filter(amount => amount > 0).length : 0
-  const addressOffset = hasLongAddress.value ? 22 : 0
-  return 530 + surchargeHeight + paymentRecords * 40 + addressOffset
-})
 const summaryLabel = computed(() => storedOrder.value?.executionPhase === 'IN_PROGRESS' ? '行程進行中' : storedOrder.value?.executionPhase === 'DRIVER_ASSIGNED' ? '司機已安排' : '正在為您安排司機')
 const getCurrentPageSource = () => { const candidates = [routeUrl.value, cachedPageUrl.value, typeof window !== 'undefined' ? window.location.hash : '']; for (const candidate of candidates) { const params = parseQueryParams(candidate); if (params.from || params.returnTo) return params.from || params.returnTo } return '' }
 const goBack = () => {
   const source = getCurrentPageSource()
   if (source === 'transactions') return closeCachedPage(`/pages/transactions/expense-detail?tripId=${encodeURIComponent(storedOrder.value?.id || '')}`)
   if (source === 'profile') return closeCachedPage('/pages/trips/trips')
+  if (source === 'booking-success') return closeCachedPage(`/pages/vehicles/booking-success?id=${encodeURIComponent(storedOrder.value?.id || '')}`)
   const currentIndex = cachedPageStack.value.findIndex(entry => (entry || '').split('?')[0] === '/pages/orders/traveling-detail')
   const previous = currentIndex > 0 ? (cachedPageStack.value[currentIndex - 1] || '').split('?')[0] : ''
   return closeCachedPage(previous === '/pages/trips/trips' ? previous : '/pages/orders/orders')
@@ -145,7 +139,7 @@ const showPaymentRecords = () => openCachedPage(`/pages/transactions/expense-det
 .page { position: fixed; inset: 0 auto auto 0; width: 430px; height: var(--mobile-height, 932px); overflow: hidden; background: #f0f2f5; color: #38434a; font-family: 'Noto Sans TC', sans-serif; transform: scale(var(--mobile-scale, 1)); transform-origin: top left; }
 .header { position: absolute; z-index: 2; top: 0; left: 0; width: 430px; height: 110px; border-radius: 0 0 25px 25px; background: #fff; }
 .traveling-title { position: absolute; top: 58px; left: 50%; transform: translateX(-50%); font-size: 18px; font-weight: 500; line-height: 27px; }
-.traveling-scroll { position: absolute; top: 170px; right: 0; bottom: 0; left: 0; width: 430px; height: calc(var(--mobile-height, 932px) - 170px); overflow: auto; }
+.traveling-detail-scroll { position: absolute; top: 170px; right: 0; bottom: 0; left: 0; width: 430px; height: calc(var(--mobile-height, 932px) - 170px); }
 .traveling-order-number { display: flex; align-items: center; height: 56px; padding: 0 38px; box-sizing: border-box; background: #edf0f2; font-size: 18px; font-weight: 500; }
 .traveling-status-row { display: flex; height: 23px; padding: 10px 15px 0; box-sizing: content-box; }
 .traveling-waiting { display: flex; align-items: center; color: #285cfc; font-size: 12px; font-weight: 700; }
@@ -171,10 +165,7 @@ const showPaymentRecords = () => openCachedPage(`/pages/transactions/expense-det
 .traveling-divider image { width: 100%; height: 1px; }
 .traveling-record image { width: 20px; height: 20px; }
 .number { position: absolute; top: 58px; left: 122px; right: var(--order-header-right, auto); overflow: hidden; font-size: 18px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
-.long-addresses .times { top: 102px; }
-.long-addresses .passenger-title { top: 157px; }
-.long-addresses .passenger { top: 187px; }
-.long-addresses .detail { top: 247px; } .passenger view {
+.passenger view {
   display: flex;
   align-items: center;
   height: 30px;
@@ -206,78 +197,75 @@ const showPaymentRecords = () => openCachedPage(`/pages/transactions/expense-det
 .status image { width: 25px; height: 25px; }
 .load-error { padding-top: 200px; text-align: center; color: #38434a; font-size: 16px; }
 
-.traveling-card {
+.traveling-detail-content {
+  padding-bottom: 32px;
+}
+.traveling-detail-card {
   position: relative;
   width: 430px;
-  min-height: 643px;
+  height: auto;
+  min-height: 0;
   margin: 0;
+  padding: 20px 30px 0;
+  box-sizing: border-box;
   border-radius: 25px;
   background: #fff;
-  padding: 20px 30px;
-  box-sizing: border-box;
 }
-.card-top {
+.traveling-detail-card .card-top {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  min-height: 70px;
-} .locations {
+}
+.traveling-detail-card .locations {
   position: static;
-  top: 20px;
-  left: 33px;
-  font-size: 14px;
   width: 270px;
-} .locations view {
+  font-size: 14px;
+}
+.traveling-detail-card .locations view {
   display: flex;
   align-items: flex-start;
   min-height: 30px;
   gap: 20px;
-} .locations image {
+}
+.traveling-detail-card .locations image {
   flex: none;
   width: 18px;
   height: 18px;
   margin-top: 6px;
-} .locations .long-location image {
+}
+.traveling-detail-card .locations .long-location image {
   margin-top: 2px;
-} .locations text {
+}
+.traveling-detail-card .locations text {
   display: block;
-  line-height: 30px;
-  white-space: pre-line;
   flex: 1;
   min-width: 0;
-} .locations .long-location {
-  min-height: 44px;
-  align-items: flex-start;
-} .locations .long-location text {
-  width: auto;
-  line-height: 22px;
+  line-height: 30px;
   white-space: pre-line;
+}
+.traveling-detail-card .locations .long-location {
+  min-height: 44px;
+}
+.traveling-detail-card .locations .long-location text {
+  line-height: 22px;
   overflow-wrap: normal;
   word-break: keep-all;
-} .payment {
+}
+.traveling-detail-card .payment {
   position: absolute;
   top: 15px;
-  left: auto;
+  right: 25px;
   width: 164px;
   height: auto;
+  min-height: 70px;
   font-size: 14px;
   font-weight: 300;
-  right: 25px;
-  min-height: 70px;
 }
-.payment .paid-tag {
-  margin-top: 0;
-}
-.amount,
-.paid-tag {
+.traveling-detail-card .paid-tag {
   position: static;
   display: block;
   width: max-content;
   margin-left: auto;
-} .paid-tag {
-  position: absolute;
-  top: 0;
-  right: 0;
   padding: 5px 10px;
   border: 1px solid #285cfc;
   border-radius: 10px;
@@ -285,59 +273,44 @@ const showPaymentRecords = () => openCachedPage(`/pages/transactions/expense-det
   font-weight: 700;
   line-height: 20px;
   white-space: nowrap;
-  margin-top: 0;
 }
-.times,
-.passenger-title,
-.passenger,
-.detail {
+.traveling-detail-card .times {
   position: static;
-} .times {
-  position: absolute;
-  top: 80px;
-  left: 33px;
   display: flex;
   flex-direction: column;
   gap: 5px;
+  margin-top: 20px;
   font-size: 14px;
   font-weight: 300;
-  margin-top: 10px;
-} .passenger-title {
-  position: absolute;
-  top: 135px;
-  left: 33px;
-  font-size: 14px;
-  margin-top: 22px;
-} .passenger {
-  position: absolute;
-  top: 165px;
-  left: 33px;
-  font-size: 14px;
-  margin-top: 8px;
-} .detail {
-  position: absolute;
-  top: 225px;
-  left: 30px;
-  width: 370px;
-  min-height: 0;
-  padding: 0;
-  box-sizing: border-box;
-  margin: 25px 0 0;
 }
-.long-addresses .times,
-.long-addresses .passenger-title,
-.long-addresses .passenger,
-.long-addresses .detail { position: static; } .completed-payment {
+.traveling-detail-card .passenger-title {
+  position: static;
   margin-top: 25px;
-  width: 370px;
-  margin-bottom: 0;
-  padding-bottom: 0;
+  font-size: 14px;
 }
-.payment-divider,
-.record-link {
-  width: 370px;
-} .traveling-content {
-  padding-bottom: 32px;
-  padding-top: 0;
+.traveling-detail-card .passenger {
+  position: static;
+  margin-top: 8px;
+  font-size: 14px;
+}
+.traveling-detail-card .detail {
+  position: static;
+  width: auto;
+  height: auto;
+  min-height: 0;
+  margin-top: 25px;
+  padding: 0 0 32px;
+  box-sizing: border-box;
+}
+.traveling-detail-card .completed-payment {
+  position: static;
+  width: 100%;
+  height: auto;
+  margin-top: 25px;
+}
+.traveling-detail-card .payment-record,
+.traveling-detail-card .payment-divider,
+.traveling-detail-card .record-link {
+  width: 100%;
 }
 </style>

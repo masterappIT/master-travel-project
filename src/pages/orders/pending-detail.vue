@@ -136,12 +136,7 @@ const orderNumber = computed(() => {
   const digits = (storedOrder.value?.id || '').replace(/\D/g, '')
   return digits ? `A${digits.slice(-8).padStart(8, '0')}` : '—'
 })
-const navigateOrderPage = (url: string) => {
-  // #ifdef MP-WEIXIN || MP-TOUTIAO
-  return openCachedPage(url)
-  // #endif
-  return uni.redirectTo({ url })
-}
+const navigateOrderPage = (url: string) => openCachedPage(url)
 const loadOrder = async (url = '') => {
   const params = getCachedPageOrderQuery(url)
   const id = params.id

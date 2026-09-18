@@ -154,6 +154,7 @@
   <VoucherClaimPage v-if="visitedPages.has('/pages/voucher/claim')" v-show="activePagePath === '/pages/voucher/claim'" />
   <WithdrawPage v-if="visitedPages.has('/pages/withdraw/withdraw')" v-show="activePagePath === '/pages/withdraw/withdraw'" />
   <WithdrawDetailPage v-if="visitedPages.has('/pages/withdraw/detail')" v-show="activePagePath === '/pages/withdraw/detail'" />
+  <AlipayWithdrawPage v-if="visitedPages.has('/pages/withdraw/alipay')" v-show="activePagePath === '/pages/withdraw/alipay'" />
   <AlipayWithdrawDetailPage v-if="visitedPages.has('/pages/withdraw/alipay-detail')" v-show="activePagePath === '/pages/withdraw/alipay-detail'" />
   <PaymentSettingsPage v-if="visitedPages.has('/pages/payment-settings/payment-settings')" v-show="activePagePath === '/pages/payment-settings/payment-settings'" />
   <TransactionsPage v-if="visitedPages.has('/pages/transactions/transactions')" v-show="activePagePath === '/pages/transactions/transactions'" />
@@ -231,6 +232,7 @@ import TopUpDetailPage from '../top-up/detail/detail.vue'
 import VoucherClaimPage from '../voucher/claim.vue'
 import WithdrawPage from '../withdraw/withdraw.vue'
 import WithdrawDetailPage from '../withdraw/detail.vue'
+import AlipayWithdrawPage from '../withdraw/alipay.vue'
 import AlipayWithdrawDetailPage from '../withdraw/alipay-detail.vue'
 import PaymentSettingsPage from '../payment-settings/payment-settings.vue'
 import TransactionsPage from '../transactions/transactions.vue'

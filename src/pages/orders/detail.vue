@@ -79,9 +79,9 @@ const loadOrder = async (url = '') => {
   try {
     storedOrder.value = await getClientTrip(id)
     const sourceQuery = returnTarget.value === 'transactions' ? '&from=transactions' : ''
-    if (storedOrder.value.status === 'CANCELLED') return uni.redirectTo({ url: `/pages/orders/cancelled-detail?id=${encodeURIComponent(id)}${sourceQuery}` })
-    if (storedOrder.value.status === 'PENDING') return uni.redirectTo({ url: `/pages/orders/pending-detail?id=${encodeURIComponent(id)}${sourceQuery}` })
-    if (storedOrder.value.status === 'CONFIRMED') return uni.redirectTo({ url: `/pages/orders/traveling-detail?id=${encodeURIComponent(id)}${sourceQuery}` })
+    if (storedOrder.value.status === 'CANCELLED') return openCachedPage(`/pages/orders/cancelled-detail?id=${encodeURIComponent(id)}${sourceQuery}`)
+    if (storedOrder.value.status === 'PENDING') return openCachedPage(`/pages/orders/pending-detail?id=${encodeURIComponent(id)}${sourceQuery}`)
+    if (storedOrder.value.status === 'CONFIRMED') return openCachedPage(`/pages/orders/traveling-detail?id=${encodeURIComponent(id)}${sourceQuery}`)
     isCompleted.value = storedOrder.value.status === 'COMPLETED'
     isTraveling.value = storedOrder.value.status === 'CONFIRMED'
   } catch (error) {

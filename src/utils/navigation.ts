@@ -2,7 +2,9 @@ import { computed, ref } from 'vue'
 
 const HOME_PATH = '/pages/index/index'
 const ORDER_RETURN_TARGET_KEY = 'order-detail-return-target'
+const EMBEDDED_LAUNCH_URL_KEY = 'embedded-launch-url'
 let embeddedHostActive = false
+let lastEmbeddedLaunchUrl = ''
 export const pagePath = (url: string) => url.split('?')[0]
 
 const parseQuery = (url = ''): Record<string, string> => {
@@ -30,6 +32,25 @@ export const cachedPageStack = ref<string[]>([HOME_PATH])
 const cachedVisitedPages = ref<string[]>([HOME_PATH])
 export const visitedPages = computed(() => new Set(cachedVisitedPages.value))
 
+const persistEmbeddedLaunchUrl = (url: string) => {
+  const targetPath = pagePath(url)
+  cachedPageStack.value = targetPath === HOME_PATH ? [HOME_PATH] : [HOME_PATH, url]
+  cachedPageUrl.value = url
+  if (!cachedVisitedPages.value.includes(targetPath)) {
+    cachedVisitedPages.value = [...cachedVisitedPages.value, targetPath]
+  }
+  try { uni.setStorageSync(EMBEDDED_LAUNCH_URL_KEY, url) } catch {}
+}
+
+const consumeEmbeddedLaunchUrl = () => {
+  let url = cachedPageUrl.value !== HOME_PATH ? cachedPageUrl.value : ''
+  try {
+    url = uni.getStorageSync(EMBEDDED_LAUNCH_URL_KEY) || url
+    uni.removeStorageSync(EMBEDDED_LAUNCH_URL_KEY)
+  } catch {}
+  return url
+}
+
 export const getCachedPageUrl = () => cachedPageUrl.value
 export const getCachedPageOrderQuery = (url = cachedPageUrl.value) => parseQuery(url)
 export const getCachedPageSource = (url = cachedPageUrl.value) => {
@@ -45,12 +66,10 @@ export const activateEmbeddedPageHost = () => {
   if (embeddedHostActive) return
 
   embeddedHostActive = true
-  if (cachedPageStack.value.length === 0) {
-    cachedPageStack.value = [HOME_PATH]
-  }
-  if (!cachedPageStack.value.some((entry) => pagePath(entry) === HOME_PATH)) {
-    cachedPageStack.value = [HOME_PATH, ...cachedPageStack.value]
-  }
+  const launchUrl = consumeEmbeddedLaunchUrl()
+  cachedPageStack.value = launchUrl && pagePath(launchUrl) !== HOME_PATH
+    ? [HOME_PATH, launchUrl]
+    : [HOME_PATH]
   cachedPageUrl.value = cachedPageStack.value[cachedPageStack.value.length - 1] || HOME_PATH
   cachedVisitedPages.value = Array.from(new Set([
     HOME_PATH,
@@ -64,6 +83,11 @@ export const deactivateEmbeddedPageHost = () => {
 
 export const openCachedPage = (url: string) => {
   // #ifdef MP-WEIXIN || MP-TOUTIAO
+  if (!embeddedHostActive) {
+    persistEmbeddedLaunchUrl(url)
+    return uni.reLaunch({ url: HOME_PATH, animationType: 'none', animationDuration: 0 })
+  }
+
   if (embeddedHostActive) {
     const targetPath = pagePath(url)
     const targetIndex = cachedPageStack.value.findIndex((entry) => pagePath(entry) === targetPath)
@@ -95,6 +119,24 @@ export const openCachedPage = (url: string) => {
   }
 
   return uni.navigateTo({ url, animationType: 'none', animationDuration: 0 })
+}
+
+export const redirectEmbeddedLaunch = (path = '', query: Record<string, unknown> = {}) => {
+  // #ifdef MP-WEIXIN || MP-TOUTIAO
+  const targetPath = path.startsWith('/') ? path : `/${path}`
+  if (!targetPath || targetPath === '/' || targetPath === HOME_PATH || targetPath.startsWith('/pages/login/')) return false
+  const queryString = Object.entries(query)
+    .filter(([, value]) => value !== undefined && value !== null && value !== '')
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`)
+    .join('&')
+  const launchUrl = `${targetPath}${queryString ? `?${queryString}` : ''}`
+  if (launchUrl === lastEmbeddedLaunchUrl && !embeddedHostActive) return true
+  lastEmbeddedLaunchUrl = launchUrl
+  persistEmbeddedLaunchUrl(launchUrl)
+  uni.reLaunch({ url: HOME_PATH, animationType: 'none', animationDuration: 0 })
+  return true
+  // #endif
+  return false
 }
 
 export const goHome = () => {

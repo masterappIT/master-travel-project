@@ -213,7 +213,7 @@ class _OrderHallPageState extends State<OrderHallPage> {
 
 String _formatTripTime(dynamic value) {
   if (value == null) return '時間待確認';
-  final date = DateTime.tryParse(value.toString());
+  final date = DateTime.tryParse(value.toString())?.toLocal();
   if (date == null) return value.toString();
   return '${date.year}/${date.month.toString().padLeft(2, '0')}/${date.day.toString().padLeft(2, '0')} ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
 }

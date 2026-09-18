@@ -51,6 +51,14 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
 
   String _formatDateGroup(DateTime date) =>
       '${date.year}年${date.month}月${date.day}日';
+
+  String _formatDateTime(DateTime date) {
+    final local = date.toLocal();
+    String two(int number) => number.toString().padLeft(2, '0');
+    return '${local.year}/${two(local.month)}/${two(local.day)} '
+        '${two(local.hour)}:${two(local.minute)}';
+  }
+
   String _formatPrice(dynamic price, dynamic currency) {
     if (price is! num) return '待確認';
     final code = currency?.toString();
@@ -63,6 +71,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                 : '$code ';
     return '$symbol${price.toStringAsFixed(2)}';
   }
+
   Future<void> _loadTrips() async {
     try {
       final trips = await _api.trips();
@@ -141,7 +150,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                             item['scheduledAt']?.toString() ??
                             '');
                     final entry = _HistoryEntry(
-                        date: date?.toString() ?? '日期待確認',
+                        date: date == null ? '日期待確認' : _formatDateTime(date),
                         price: _formatPrice(item['price'], item['currency']),
                         origin: item['pickupAddress']?.toString() ?? '起點待確認',
                         destination:

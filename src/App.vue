@@ -13,7 +13,7 @@
 </template>
 
 <script>
-import { swipeBack } from './utils/navigation'
+import { redirectEmbeddedLaunch, swipeBack } from './utils/navigation'
 
 import { useCurrency } from './composables/useCurrency'
 
@@ -41,8 +41,9 @@ export default {
       swipeBack()
     },
   },
-  onLaunch() {
+  onLaunch(options) {
     console.log('App Launch')
+    redirectEmbeddedLaunch(options?.path, options?.query)
   },
   mounted() {
     // H5 routed pages may be mounted outside the App.vue shell.
@@ -64,8 +65,9 @@ export default {
     document.removeEventListener('touchend', this.handleTouchEnd)
     // #endif
   },
-  onShow() {
+  onShow(options) {
     console.log('App Show')
+    redirectEmbeddedLaunch(options?.path, options?.query)
   },
   onHide() {
     console.log('App Hide')

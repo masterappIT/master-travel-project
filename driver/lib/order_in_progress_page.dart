@@ -371,11 +371,54 @@ class _TripProgressCard extends StatelessWidget {
                     color: DriverColors.text)),
           ]),
           const Divider(height: 1, color: DriverColors.background),
-          _InfoRow(label: '出發地', value: origin),
-          _InfoRow(label: '目的地', value: destination),
+          _ProgressAddressPair(origin: origin, destination: destination),
           _InfoRow(label: '出發時間', value: scheduledAt),
           _InfoRow(label: '乘客', value: passenger),
           _InfoRow(label: '車資', value: price, bold: true),
+        ],
+      );
+}
+
+class _ProgressAddressPair extends StatelessWidget {
+  const _ProgressAddressPair({required this.origin, required this.destination});
+
+  final String origin;
+  final String destination;
+
+  @override
+  Widget build(BuildContext context) => Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(child: _ProgressAddressColumn(label: '出發地', value: origin)),
+          const SizedBox(width: DriverSpacing.md),
+          Expanded(
+              child: _ProgressAddressColumn(label: '目的地', value: destination)),
+        ],
+      );
+}
+
+class _ProgressAddressColumn extends StatelessWidget {
+  const _ProgressAddressColumn({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label,
+              style: const TextStyle(
+                  fontSize: DriverTypography.body,
+                  color: DriverColors.secondaryText)),
+          const SizedBox(height: DriverSpacing.xs),
+          Text(value,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                  fontSize: DriverTypography.body,
+                  fontWeight: FontWeight.w500,
+                  color: DriverColors.text)),
         ],
       );
 }
