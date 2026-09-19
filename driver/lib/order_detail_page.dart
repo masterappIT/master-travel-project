@@ -20,7 +20,8 @@ class OrderDetailPage extends StatefulWidget {
 class _OrderDetailPageState extends State<OrderDetailPage> {
   final _api = DriverApiClient.instance;
   Map<String, dynamic>? _trip;
-  Map<String, dynamic>? _currentVehicle;
+  List<Map<String, dynamic>> _vehicles = const [];
+  String? _selectedVehicleId;
   bool _loading = true;
   bool _accepting = false;
   String? _error;
@@ -46,18 +47,28 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
     });
     try {
       final trip = await _api.trip(id);
-      Map<String, dynamic>? currentVehicle;
-      if (trip['acceptedAt'] == null) {
+      var vehicles = <Map<String, dynamic>>[];
+      if (trip['acceptedAt'] == null &&
+          trip['executionPhase'] != 'DRIVER_PENDING_ACCEPTANCE') {
         final result = await _api.listDriverVehicles();
-        final vehicles = result['data'];
-        if (vehicles is List && vehicles.isNotEmpty && vehicles.first is Map) {
-          currentVehicle = Map<String, dynamic>.from(vehicles.first as Map);
+        final data = result['data'];
+        if (data is List) {
+          vehicles = data
+              .whereType<Map>()
+              .map((item) => Map<String, dynamic>.from(item))
+              .toList();
         }
       }
       if (mounted) {
         setState(() {
           _trip = trip;
-          _currentVehicle = currentVehicle;
+          _vehicles = vehicles;
+          _selectedVehicleId = vehicles.isEmpty
+              ? null
+              : vehicles
+                  .firstWhere((item) => item['isPrimary'] == true,
+                      orElse: () => vehicles.first)['id']
+                  ?.toString();
         });
       }
     } on DriverApiException catch (error) {
@@ -71,7 +82,10 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
     if (widget.tripId == null) return;
     setState(() => _accepting = true);
     try {
-      await _api.acceptTrip(widget.tripId!);
+      await _api.acceptTrip(widget.tripId!,
+          vehicleId: _trip?['executionPhase'] == 'DRIVER_PENDING_ACCEPTANCE'
+              ? null
+              : _selectedVehicleId);
       if (mounted) {
         DriverNavigation.push(
           context,
@@ -176,16 +190,20 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
     final passenger = _tripText('passengerName', '乘客');
     final scheduledAt = _formatDate(_trip?['scheduledAt']);
     final accepted = _trip?['acceptedAt'] != null;
-    final vehicle = selectTripVehicle(
-      accepted: accepted,
-      completed: widget.completed,
-      snapshot: _trip?['vehicle'],
-      currentVehicle: _currentVehicle,
-    );
-    final missingVehicleText =
-        accepted || widget.completed ? '歷史資料未記錄' : '車輛資料待確認';
     final pendingAssignment =
         _trip?['executionPhase'] == 'DRIVER_PENDING_ACCEPTANCE' && !accepted;
+    final currentVehicle = _vehicles.cast<Map<String, dynamic>?>().firstWhere(
+        (item) => item?['id']?.toString() == _selectedVehicleId,
+        orElse: () => null);
+    final vehicle = selectTripVehicle(
+      accepted: accepted || pendingAssignment,
+      completed: widget.completed,
+      snapshot: _trip?['vehicle'],
+      currentVehicle: currentVehicle,
+    );
+    final missingVehicleText = accepted || pendingAssignment || widget.completed
+        ? '歷史資料未記錄'
+        : '車輛資料待確認';
     final inProgress = _trip?['executionPhase'] == 'IN_PROGRESS';
 
     return DriverPageShell(
@@ -248,20 +266,49 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                     fontWeight: FontWeight.w700,
                     color: DriverColors.text)),
             const SizedBox(height: DriverSpacing.md),
-            _VehicleCard(
-              index: 0,
-              title:
-                  vehicle?['vehicleColor']?.toString().trim().isNotEmpty == true
-                      ? vehicle!['vehicleColor'].toString()
+            if (!accepted && !pendingAssignment)
+              for (var index = 0; index < _vehicles.length; index++) ...[
+                _VehicleCard(
+                  index: index,
+                  title: _vehicles[index]['vehicleColor']
+                              ?.toString()
+                              .trim()
+                              .isNotEmpty ==
+                          true
+                      ? _vehicles[index]['vehicleColor'].toString()
                       : missingVehicleText,
-              type: vehicle?['vehicleCategory']?.toString().trim().isNotEmpty ==
-                      true
-                  ? vehicle!['vehicleCategory'].toString()
-                  : missingVehicleText,
-              plate: _vehiclePlate(vehicle, missingVehicleText),
-              selected: true,
-              onTap: () {},
-            ),
+                  type: _vehicles[index]['vehicleCategory']
+                              ?.toString()
+                              .trim()
+                              .isNotEmpty ==
+                          true
+                      ? _vehicles[index]['vehicleCategory'].toString()
+                      : missingVehicleText,
+                  plate: _vehiclePlate(_vehicles[index], missingVehicleText),
+                  selected:
+                      _vehicles[index]['id']?.toString() == _selectedVehicleId,
+                  onTap: () => setState(() =>
+                      _selectedVehicleId = _vehicles[index]['id']?.toString()),
+                ),
+                if (index < _vehicles.length - 1)
+                  const SizedBox(height: DriverSpacing.md),
+              ]
+            else
+              _VehicleCard(
+                index: 0,
+                title: vehicle?['vehicleColor']?.toString().trim().isNotEmpty ==
+                        true
+                    ? vehicle!['vehicleColor'].toString()
+                    : missingVehicleText,
+                type:
+                    vehicle?['vehicleCategory']?.toString().trim().isNotEmpty ==
+                            true
+                        ? vehicle!['vehicleCategory'].toString()
+                        : missingVehicleText,
+                plate: _vehiclePlate(vehicle, missingVehicleText),
+                selected: true,
+                onTap: () {},
+              ),
             if (!widget.completed) ...[
               const SizedBox(height: DriverSpacing.xl),
               if (!accepted)
@@ -278,7 +325,11 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                   const SizedBox(width: DriverSpacing.md),
                   Expanded(
                       child: ElevatedButton(
-                          onPressed: _accepting ? null : _acceptTrip,
+                          onPressed: _accepting ||
+                                  (!pendingAssignment &&
+                                      _selectedVehicleId == null)
+                              ? null
+                              : _acceptTrip,
                           style: _primaryButtonStyle(),
                           child: Text(_accepting ? '處理中…' : '確認接單'))),
                 ])

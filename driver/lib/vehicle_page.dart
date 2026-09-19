@@ -21,6 +21,7 @@ class _VehiclePageState extends State<VehiclePage> {
   DriverApiClient get _api => widget._api ?? DriverApiClient.instance;
   List<VehicleFormData> _vehicles = const [];
   bool _loading = true;
+  String? _busyVehicleId;
   String? _error;
 
   @override
@@ -63,6 +64,54 @@ class _VehiclePageState extends State<VehiclePage> {
     if (updated == true && mounted) _loadVehicle();
   }
 
+  Future<void> _setPrimary(VehicleFormData data) async {
+    if (data.id == null || _busyVehicleId != null) return;
+    setState(() => _busyVehicleId = data.id);
+    try {
+      await _api.setPrimaryVehicle(data.id!);
+      await _loadVehicle();
+    } on DriverApiException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error.message)));
+      }
+    } finally {
+      if (mounted) setState(() => _busyVehicleId = null);
+    }
+  }
+
+  Future<void> _deleteVehicle(VehicleFormData data) async {
+    if (data.id == null || _busyVehicleId != null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('刪除車輛'),
+        content: const Text('刪除後不會影響已完成訂單的車輛紀錄。是否繼續？'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('取消')),
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('刪除')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _busyVehicleId = data.id);
+    try {
+      await _api.deleteVehicle(data.id!);
+      await _loadVehicle();
+    } on DriverApiException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error.message)));
+      }
+    } finally {
+      if (mounted) setState(() => _busyVehicleId = null);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
@@ -99,7 +148,10 @@ class _VehiclePageState extends State<VehiclePage> {
                 title: data.category.isEmpty ? '車輛' : data.category,
                 status: data.isPrimary ? '使用中' : '已登記',
                 active: data.isPrimary,
-                onEdit: () => _openVehicleEditor(data: data)),
+                busy: _busyVehicleId == data.id,
+                onSetPrimary: () => _setPrimary(data),
+                onEdit: () => _openVehicleEditor(data: data),
+                onDelete: () => _deleteVehicle(data)),
             const SizedBox(height: DriverSpacing.lg),
           ],
           OutlinedButton(
@@ -163,57 +215,69 @@ class _VehicleCard extends StatelessWidget {
       required this.title,
       required this.status,
       required this.active,
-      required this.onEdit});
+      required this.busy,
+      required this.onSetPrimary,
+      required this.onEdit,
+      required this.onDelete});
   final VehicleFormData data;
   final String title, status;
-  final bool active;
-  final VoidCallback onEdit;
+  final bool active, busy;
+  final VoidCallback onSetPrimary, onEdit, onDelete;
   @override
-  Widget build(BuildContext context) => InkWell(
-        onTap: onEdit,
-        borderRadius: BorderRadius.circular(DriverRadii.card),
-        child: Container(
-          padding: const EdgeInsets.all(DriverSpacing.lg),
-          decoration: BoxDecoration(
-              color: DriverColors.surface,
-              border: Border.all(color: DriverColors.divider),
-              borderRadius: BorderRadius.circular(DriverRadii.card),
-              boxShadow: const [
-                BoxShadow(
-                    color: Color(0x1238434a),
-                    blurRadius: 4,
-                    offset: Offset(0, 2))
-              ]),
-          child: Column(children: [
-            Row(children: [
-              Container(
-                  width: 36,
-                  height: 36,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                      color: DriverColors.infoBackground,
-                      borderRadius: BorderRadius.circular(18)),
-                  child: SvgPicture.asset('assets/vehicle-car-front.svg',
-                      width: 20, height: 20)),
-              const SizedBox(width: DriverSpacing.sm),
-              Expanded(
-                  child: Text(title,
-                      style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                          color: DriverColors.text))),
-              _StatusPill(label: status, active: active),
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.all(DriverSpacing.lg),
+        decoration: BoxDecoration(
+            color: DriverColors.surface,
+            border: Border.all(color: DriverColors.divider),
+            borderRadius: BorderRadius.circular(DriverRadii.card),
+            boxShadow: const [
+              BoxShadow(
+                  color: Color(0x1238434a), blurRadius: 4, offset: Offset(0, 2))
             ]),
-            const SizedBox(height: DriverSpacing.lg),
-            const Divider(height: 1, color: DriverColors.background),
-            const SizedBox(height: DriverSpacing.md),
-            _InfoRow(label: '香港車牌', value: data.hongKongPlate),
-            if (data.macauPlate.isNotEmpty)
-              _InfoRow(label: '澳門車牌', value: data.macauPlate),
-            _InfoRow(label: '內地車牌', value: data.mainlandPlate),
-            _InfoRow(label: '車輛顏色', value: data.color),
+        child: Column(children: [
+          Row(children: [
+            Container(
+                width: 36,
+                height: 36,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                    color: DriverColors.infoBackground,
+                    borderRadius: BorderRadius.circular(18)),
+                child: SvgPicture.asset('assets/vehicle-car-front.svg',
+                    width: 20, height: 20)),
+            const SizedBox(width: DriverSpacing.sm),
+            Expanded(
+                child: Text(title,
+                    style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: DriverColors.text))),
+            _StatusPill(label: status, active: active),
           ]),
-        ),
+          const SizedBox(height: DriverSpacing.lg),
+          const Divider(height: 1, color: DriverColors.background),
+          const SizedBox(height: DriverSpacing.md),
+          _InfoRow(label: '香港車牌', value: data.hongKongPlate),
+          if (data.macauPlate.isNotEmpty)
+            _InfoRow(label: '澳門車牌', value: data.macauPlate),
+          _InfoRow(label: '內地車牌', value: data.mainlandPlate),
+          _InfoRow(label: '車輛顏色', value: data.color),
+          const SizedBox(height: DriverSpacing.sm),
+          Row(children: [
+            if (!active)
+              Expanded(
+                child: TextButton(
+                  onPressed: busy ? null : onSetPrimary,
+                  child: const Text('設為主要車輛'),
+                ),
+              ),
+            if (!active) const SizedBox(width: DriverSpacing.sm),
+            TextButton(
+                onPressed: busy ? null : onEdit, child: const Text('編輯')),
+            TextButton(
+                onPressed: busy ? null : onDelete, child: const Text('刪除')),
+          ]),
+        ]),
       );
 }
 

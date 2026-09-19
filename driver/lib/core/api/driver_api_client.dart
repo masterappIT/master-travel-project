@@ -282,6 +282,17 @@ class DriverApiClient {
           headers: _headers,
           body: jsonEncode(fields)));
 
+  Future<Map<String, dynamic>> setPrimaryVehicle(String id) async =>
+      _decode(await _client.post(
+          Uri.parse(
+              '$baseUrl/driver/auth/vehicles/${Uri.encodeComponent(id)}/primary'),
+          headers: _headers));
+
+  Future<Map<String, dynamic>> deleteVehicle(String id) async =>
+      _decode(await _client.delete(
+          Uri.parse('$baseUrl/driver/auth/vehicles/${Uri.encodeComponent(id)}'),
+          headers: _headers));
+
   Future<Map<String, dynamic>> listVehicleCatalog() async => _decode(
       await _client.get(Uri.parse('$baseUrl/vehicles'), headers: _headers));
 
@@ -300,11 +311,13 @@ class DriverApiClient {
       _decode(await _client.get(
           Uri.parse('$baseUrl/driver/auth/trips/${Uri.encodeComponent(id)}'),
           headers: _headers));
-  Future<Map<String, dynamic>> acceptTrip(String id) async =>
+  Future<Map<String, dynamic>> acceptTrip(String id,
+          {String? vehicleId}) async =>
       _decode(await _client.post(
           Uri.parse(
               '$baseUrl/driver/auth/trips/${Uri.encodeComponent(id)}/accept'),
-          headers: _headers));
+          headers: _headers,
+          body: jsonEncode({if (vehicleId != null) 'vehicleId': vehicleId})));
   Future<Map<String, dynamic>> rejectTrip(String id) async =>
       _decode(await _client.post(
           Uri.parse(

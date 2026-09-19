@@ -405,7 +405,8 @@ void main() {
     expect(vehicles.last.macauPlate, 'AA-12-34');
   });
 
-  test('uses driver vehicle endpoints for list, create and update', () async {
+  test('uses driver vehicle endpoints for list, create, update and management',
+      () async {
     final requests = <http.Request>[];
     final api = DriverApiClient(
       baseUrl: 'https://driver.example.test',
@@ -425,13 +426,18 @@ void main() {
     await api.listDriverVehicles();
     await api.createVehicle(fields);
     await api.updateVehicle('vehicle/1', fields);
+    await api.setPrimaryVehicle('vehicle/1');
+    await api.deleteVehicle('vehicle/1');
 
-    expect(requests[0].method, 'GET');
-    expect(requests[0].url.path, '/driver/auth/vehicles');
-    expect(requests[1].method, 'POST');
-    expect(requests[1].url.path, '/driver/auth/vehicles');
-    expect(requests[2].method, 'PATCH');
-    expect(requests[2].url.path, '/driver/auth/vehicles/vehicle%2F1');
+    expect(requests.map((request) => request.method),
+        ['GET', 'POST', 'PATCH', 'POST', 'DELETE']);
+    expect(requests.map((request) => request.url.path), [
+      '/driver/auth/vehicles',
+      '/driver/auth/vehicles',
+      '/driver/auth/vehicles/vehicle%2F1',
+      '/driver/auth/vehicles/vehicle%2F1/primary',
+      '/driver/auth/vehicles/vehicle%2F1',
+    ]);
     expect(jsonDecode(requests[1].body), fields);
     expect(jsonDecode(requests[2].body), fields);
   });
@@ -455,7 +461,7 @@ void main() {
     await api.trips();
     await api.availableTrips();
     await api.trip('trip/1');
-    await api.acceptTrip('trip/1');
+    await api.acceptTrip('trip/1', vehicleId: 'vehicle/2');
 
     expect(requests.map((request) => request.method), [
       'GET',
@@ -469,6 +475,7 @@ void main() {
       '/driver/auth/trips/trip%2F1',
       '/driver/auth/trips/trip%2F1/accept',
     ]);
+    expect(jsonDecode(requests.last.body), {'vehicleId': 'vehicle/2'});
   });
 
   test('uses account notification preference and statistics endpoints',

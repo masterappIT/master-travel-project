@@ -355,8 +355,22 @@ function tripOfferIsExpired(scheduledAt: Date, now = new Date()) {
 async function requireActiveDriverVehicle(
   client: Pick<Prisma.TransactionClient, "driverVehicleAssignment">,
   driverId: string,
+  vehicleId?: string,
 ) {
-  const vehicle = await primaryDriverVehicle(client, driverId, true);
+  const assignment = vehicleId
+    ? await client.driverVehicleAssignment.findFirst({
+        where: {
+          driverId,
+          vehicleId,
+          enabled: true,
+          vehicle: { enabled: true },
+        },
+        include: { vehicle: true },
+      })
+    : null;
+  const vehicle = vehicleId
+    ? assignment?.vehicle
+    : await primaryDriverVehicle(client, driverId, true);
   if (!vehicle)
     throw new ForbiddenException(
       "An active assigned vehicle is required before accepting or operating trips",
@@ -3824,6 +3838,115 @@ class DriverAuthController {
     return driverVehicleResponse(created);
   }
 
+  @Post("vehicles/:id/primary")
+  async setPrimaryVehicle(@Req() req: RequestLike, @Param("id") id: string) {
+    const { session } = await reviewedDriverFrom(req);
+    await prisma.$transaction(async (tx) => {
+      const assignment = await tx.driverVehicleAssignment.findFirst({
+        where: {
+          driverId: session.sub,
+          vehicleId: id,
+          enabled: true,
+          vehicle: { enabled: true },
+        },
+        select: { id: true },
+      });
+      if (!assignment)
+        throw new HttpException("Vehicle not found", HttpStatus.NOT_FOUND);
+      const activeTrip = await tx.trip.findFirst({
+        where: {
+          driverId: session.sub,
+          status: { notIn: ["COMPLETED", "CANCELLED"] },
+          OR: [
+            {
+              executionPhase: {
+                in: ["DRIVER_PENDING_ACCEPTANCE", "DRIVER_ASSIGNED", "IN_PROGRESS"],
+              },
+            },
+            { acceptedAt: { not: null }, completedAt: null },
+          ],
+        },
+        select: { id: true },
+      });
+      if (activeTrip)
+        throw new HttpException(
+          "Primary vehicle cannot be changed during an active trip",
+          HttpStatus.CONFLICT,
+        );
+      await tx.driverVehicleAssignment.updateMany({
+        where: { driverId: session.sub },
+        data: { isPrimary: false },
+      });
+      await tx.driverVehicleAssignment.update({
+        where: { id: assignment.id },
+        data: { isPrimary: true },
+      });
+    });
+    return { ok: true };
+  }
+
+  @Delete("vehicles/:id")
+  async deleteMyVehicle(@Req() req: RequestLike, @Param("id") id: string) {
+    const { session, driver } = await reviewedDriverFrom(req);
+    await prisma.$transaction(async (tx) => {
+      const assignment = await tx.driverVehicleAssignment.findFirst({
+        where: {
+          driverId: session.sub,
+          vehicleId: id,
+          enabled: true,
+          vehicle: { enabled: true },
+        },
+        select: { id: true, isPrimary: true },
+      });
+      if (!assignment)
+        throw new HttpException("Vehicle not found", HttpStatus.NOT_FOUND);
+      const activeTrip = await tx.trip.findFirst({
+        where: {
+          driverId: session.sub,
+          vehicleId: id,
+          status: { notIn: ["COMPLETED", "CANCELLED"] },
+          OR: [
+            {
+              executionPhase: {
+                in: ["DRIVER_PENDING_ACCEPTANCE", "DRIVER_ASSIGNED", "IN_PROGRESS"],
+              },
+            },
+            { acceptedAt: { not: null }, completedAt: null },
+          ],
+        },
+        select: { id: true },
+      });
+      if (activeTrip)
+        throw new HttpException(
+          "Vehicle is assigned to an active trip",
+          HttpStatus.CONFLICT,
+        );
+      const remaining = await tx.driverVehicleAssignment.count({
+        where: {
+          driverId: session.sub,
+          enabled: true,
+          vehicleId: { not: id },
+          vehicle: { enabled: true },
+        },
+      });
+      if (assignment.isPrimary && remaining > 0)
+        throw new HttpException(
+          "Select another primary vehicle before deleting this vehicle",
+          HttpStatus.CONFLICT,
+        );
+      if (remaining === 0 && driver.isOnline)
+        throw new HttpException(
+          "Go offline before deleting the last active vehicle",
+          HttpStatus.CONFLICT,
+        );
+      await tx.driverVehicleAssignment.update({
+        where: { id: assignment.id },
+        data: { enabled: false, isPrimary: false },
+      });
+    });
+    return { ok: true };
+  }
+
   @Patch("vehicles/:id")
   async updateMyVehicle(
     @Req() req: RequestLike,
@@ -4385,7 +4508,11 @@ class DriverAuthController {
   }
 
   @Post("trips/:id/accept")
-  async accept(@Req() req: RequestLike, @Param("id") id: string) {
+  async accept(
+    @Req() req: RequestLike,
+    @Param("id") id: string,
+    @Body() body: { vehicleId?: unknown },
+  ) {
     const session = await driverSessionFrom(req);
     const driver = await prisma.driver.findUnique({
       where: { id: session.sub },
@@ -4413,7 +4540,25 @@ class DriverAuthController {
       if (!driver.isOnline)
         throw new ForbiddenException("Driver must be online to accept trips");
     }
-    const assignedVehicle = await requireActiveDriverVehicle(prisma, driver.id);
+    const requestedVehicleId =
+      typeof body.vehicleId === "string" && body.vehicleId.trim()
+        ? body.vehicleId.trim()
+        : undefined;
+    if (body.vehicleId !== undefined && !requestedVehicleId)
+      throw new HttpException("Valid vehicleId is required", HttpStatus.BAD_REQUEST);
+    if (assignedToDriver && requestedVehicleId && requestedVehicleId !== trip.vehicleId)
+      throw new HttpException(
+        "Assigned trips must use the dispatched vehicle",
+        HttpStatus.CONFLICT,
+      );
+    if (assignedToDriver && !trip.vehicleId)
+      throw new HttpException(
+        "Assigned trip does not have a vehicle snapshot",
+        HttpStatus.CONFLICT,
+      );
+    const assignedVehicle = assignedToDriver
+      ? null
+      : await requireActiveDriverVehicle(prisma, driver.id, requestedVehicleId);
     const result = await prisma.trip.updateMany({
       where: assignedToDriver
         ? {
@@ -4437,7 +4582,7 @@ class DriverAuthController {
         driverId: driver.id,
         driverName: driver.name,
         driverPhone: `${driver.phoneCountryCode} ${driver.phone}`,
-        ...tripVehicleSnapshot(assignedVehicle),
+        ...(assignedVehicle ? tripVehicleSnapshot(assignedVehicle) : {}),
         status: "CONFIRMED",
         executionPhase: "DRIVER_ASSIGNED",
         assignedAt: trip.assignedAt || now,
@@ -4499,8 +4644,18 @@ class DriverOrderUrlController {
   }
 
   @Post(":token/accept")
-  async accept(@Req() req: RequestLike, @Param("token") token: string) {
+  async accept(
+    @Req() req: RequestLike,
+    @Param("token") token: string,
+    @Body() body: { vehicleId?: unknown },
+  ) {
     const { session } = await reviewedDriverFrom(req);
+    const requestedVehicleId =
+      typeof body.vehicleId === "string" && body.vehicleId.trim()
+        ? body.vehicleId.trim()
+        : undefined;
+    if (body.vehicleId !== undefined && !requestedVehicleId)
+      throw new HttpException("Valid vehicleId is required", HttpStatus.BAD_REQUEST);
     const now = new Date();
     const result = await prisma.$transaction(async (tx) => {
       const item = await tx.tripOrderUrl.findUnique({
@@ -4519,7 +4674,11 @@ class DriverOrderUrlController {
         throw new ForbiddenException("Order URL is assigned to another driver");
       const driver = await tx.driver.findUnique({ where: { id: session.sub } });
       if (!driver) throw new UnauthorizedException("Driver not found");
-      const assignedVehicle = await requireActiveDriverVehicle(tx, driver.id);
+      const assignedVehicle = await requireActiveDriverVehicle(
+        tx,
+        driver.id,
+        requestedVehicleId,
+      );
       const trip = await tx.trip.findUnique({ where: { id: item.tripId } });
       if (
         !trip ||
