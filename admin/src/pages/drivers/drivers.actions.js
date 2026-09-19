@@ -10,12 +10,36 @@ function requiredVehiclePlateError({ vehicleOwnership, plateType, hkPlate, macau
 }
 
 export function createDriversActions({ driversApi, driverForm, selectedDriver, settlementForm, drivers, allVehicles, error, load, displayError, requestConfirmation, notify }) {
-  let vehiclePhotoUrl = null
+  const vehiclePhotoUrls = new Map()
+  const driverFormVehiclePhotoUrls = new Map()
   let driverFormPhotoUrl = null
   let vehicleFormPhotoUrl = null
+  let driverFormPhotoRequest = 0
+  let vehiclePhotoRequest = 0
   const vehicleForm = ref(null)
   const assignmentVehicle = ref(null)
   const vehicleAssignments = ref([])
+  function clearVehiclePhotoUrls(urls) {
+    urls.forEach(url => URL.revokeObjectURL(url))
+    urls.clear()
+  }
+  async function loadVehiclePhotos(vehicles, urls, requestIsCurrent) {
+    await Promise.all(vehicles.map(async vehicle => {
+      if (!vehicle.vehiclePhotos?.length) return
+      vehicle.vehiclePhotoLoading = true
+      vehicle.vehiclePhotoLoadError = false
+      try {
+        const photoUrl = URL.createObjectURL(await driversApi.vehiclePhotoByVehicle(vehicle.id))
+        if (!requestIsCurrent()) { URL.revokeObjectURL(photoUrl); return }
+        urls.set(vehicle.id, photoUrl)
+        vehicle.vehiclePhotoUrl = photoUrl
+      } catch {
+        if (requestIsCurrent()) vehicle.vehiclePhotoLoadError = true
+      } finally {
+        if (requestIsCurrent()) vehicle.vehiclePhotoLoading = false
+      }
+    }))
+  }
   function clearVehicleFormPhotoUrl() {
     if (vehicleFormPhotoUrl) URL.revokeObjectURL(vehicleFormPhotoUrl)
     vehicleFormPhotoUrl = null
@@ -72,34 +96,41 @@ export function createDriversActions({ driversApi, driverForm, selectedDriver, s
   }
 
   function resetDriver() {
+    driverFormPhotoRequest += 1
+    clearVehiclePhotoUrls(driverFormVehiclePhotoUrls)
     clearDriverFormPhotoUrl()
     driverForm.value = { id: '', driverType: '內部司機', name: '', affiliation: '香港', vehicleOwnership: '香港', plateType: '單牌', hkPlate: '', macauPlate: '', mainlandPlate: '', phoneCountryCode: '+852', phone: '', vehicleCategory: '', vehicleColor: '', vehiclePhotos: [], vehiclePhotoFile: null, vehiclePhotoPersisted: false, vehiclePhotoLoading: false, vehiclePhotoLoadError: false, removeVehiclePhoto: false }
   }
 
   function closeDriverForm() {
+    driverFormPhotoRequest += 1
+    clearVehiclePhotoUrls(driverFormVehiclePhotoUrls)
     clearDriverFormPhotoUrl()
     driverForm.value = null
     error.value = ''
   }
 
   async function editDriver(item) {
+    const request = ++driverFormPhotoRequest
+    clearVehiclePhotoUrls(driverFormVehiclePhotoUrls)
     clearDriverFormPhotoUrl()
     const vehicle = primaryDriverVehicle(item) || {}
     const vehicleOwnership = vehicle.vehicleOwnership || '香港'
     const hasVehiclePhoto = Boolean(vehicle.vehiclePhotos?.length)
-    const form = { driverType: '內部司機', affiliation: '香港', phoneCountryCode: '+852', ...item, vehicleOwnership, plateType: vehicle.plateType || '單牌', hkPlate: vehicle.hkPlate || '', macauPlate: formatMacauPlateInput(vehicle.macauPlate), mainlandPlate: mainlandPlateInput(vehicle.mainlandPlate, vehicleOwnership), vehicleCategory: vehicle.vehicleCategory || '', vehicleColor: vehicle.vehicleColor || '', vehiclePhotos: [], vehiclePhotoFile: null, vehiclePhotoPersisted: hasVehiclePhoto, vehiclePhotoLoading: hasVehiclePhoto, vehiclePhotoLoadError: false, removeVehiclePhoto: false }
+    const vehicles = (item.vehicles || []).map(itemVehicle => ({ ...itemVehicle, vehiclePhotoUrl: null, vehiclePhotoLoading: false, vehiclePhotoLoadError: false }))
+    const form = { driverType: '內部司機', affiliation: '香港', phoneCountryCode: '+852', ...item, vehicles, vehicleOwnership, plateType: vehicle.plateType || '單牌', hkPlate: vehicle.hkPlate || '', macauPlate: formatMacauPlateInput(vehicle.macauPlate), mainlandPlate: mainlandPlateInput(vehicle.mainlandPlate, vehicleOwnership), vehicleCategory: vehicle.vehicleCategory || '', vehicleColor: vehicle.vehicleColor || '', vehiclePhotos: [], vehiclePhotoFile: null, vehiclePhotoPersisted: hasVehiclePhoto, vehiclePhotoLoading: hasVehiclePhoto, vehiclePhotoLoadError: false, removeVehiclePhoto: false }
     driverForm.value = form
-    if (!hasVehiclePhoto) return
-    try {
-      const photoUrl = URL.createObjectURL(await driversApi.vehiclePhoto(item.id))
-      if (driverForm.value !== form) { URL.revokeObjectURL(photoUrl); return }
-      driverFormPhotoUrl = photoUrl
-      form.vehiclePhotos = [photoUrl]
-    } catch {
-      if (driverForm.value === form) form.vehiclePhotoLoadError = true
-    } finally {
-      if (driverForm.value === form) form.vehiclePhotoLoading = false
+    await loadVehiclePhotos(vehicles, driverFormVehiclePhotoUrls, () => driverFormPhotoRequest === request)
+    if (driverFormPhotoRequest !== request || !hasVehiclePhoto) return
+    const primaryPhotoUrl = driverFormVehiclePhotoUrls.get(vehicle.id)
+    if (primaryPhotoUrl) {
+      driverFormPhotoUrl = primaryPhotoUrl
+      driverFormVehiclePhotoUrls.delete(vehicle.id)
+      driverForm.value.vehiclePhotos = [primaryPhotoUrl]
+    } else {
+      driverForm.value.vehiclePhotoLoadError = true
     }
+    driverForm.value.vehiclePhotoLoading = false
   }
 
   function formatDriverHongKongPlate() {
@@ -132,6 +163,7 @@ export function createDriversActions({ driversApi, driverForm, selectedDriver, s
     const file = files[0]
     if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) { error.value = '車輛相片只支援 JPEG、PNG 或 WebP'; return }
     if (file.size > 2 * 1024 * 1024) { error.value = '車輛相片不可超過 2 MB'; return }
+    driverFormPhotoRequest += 1
     clearDriverFormPhotoUrl()
     driverFormPhotoUrl = URL.createObjectURL(file)
     driverForm.value.vehiclePhotoFile = file
@@ -144,6 +176,7 @@ export function createDriversActions({ driversApi, driverForm, selectedDriver, s
   }
 
   function removeDriverPhoto() {
+    driverFormPhotoRequest += 1
     clearDriverFormPhotoUrl()
     driverForm.value.vehiclePhotoFile = null
     driverForm.value.vehiclePhotos = []
@@ -224,8 +257,9 @@ export function createDriversActions({ driversApi, driverForm, selectedDriver, s
   async function refreshDriverVehicles(driver = selectedDriver.value) {
     if (!driver?.id) return
     try {
+      const currentVehicles = new Map((driver.vehicles || []).map(vehicle => [vehicle.id, vehicle]))
       const result = await driversApi.listVehicles(driver.id)
-      driver.vehicles = result.data || []
+      driver.vehicles = (result.data || []).map(vehicle => ({ ...currentVehicles.get(vehicle.id), ...vehicle }))
     } catch (err) { error.value = displayError(err) }
   }
 
@@ -251,30 +285,19 @@ export function createDriversActions({ driversApi, driverForm, selectedDriver, s
   }
 
   async function openDriverDetail(item) {
-    if (vehiclePhotoUrl) URL.revokeObjectURL(vehiclePhotoUrl)
-    vehiclePhotoUrl = null
-    const vehiclePhotoPersisted = Boolean(primaryDriverVehicle(item)?.vehiclePhotos?.length)
-    const detail = { ...item, vehiclePhotoUrl: null, vehiclePhotoPersisted, vehiclePhotoLoading: vehiclePhotoPersisted, vehiclePhotoLoadError: false }
+    const request = ++vehiclePhotoRequest
+    clearVehiclePhotoUrls(vehiclePhotoUrls)
+    const detail = { ...item, vehicles: (item.vehicles || []).map(vehicle => ({ ...vehicle, vehiclePhotoUrl: null, vehiclePhotoLoading: false, vehiclePhotoLoadError: false })) }
     selectedDriver.value = detail
-    await refreshDriverVehicles(detail)
-    if (selectedDriver.value !== detail) return
-    if (primaryDriverVehicle(item)?.vehiclePhotos?.length) {
-      try {
-        const photoUrl = URL.createObjectURL(await driversApi.vehiclePhoto(item.id))
-        if (selectedDriver.value !== detail) { URL.revokeObjectURL(photoUrl); return }
-        vehiclePhotoUrl = photoUrl
-        detail.vehiclePhotoUrl = photoUrl
-      } catch {
-        if (selectedDriver.value === detail) detail.vehiclePhotoLoadError = true
-      } finally {
-        if (selectedDriver.value === detail) detail.vehiclePhotoLoading = false
-      }
-    }
+    await refreshDriverVehicles(selectedDriver.value)
+    if (vehiclePhotoRequest !== request) return
+    selectedDriver.value.vehicles = (selectedDriver.value.vehicles || []).map(vehicle => ({ ...vehicle, vehiclePhotoUrl: null, vehiclePhotoLoading: false, vehiclePhotoLoadError: false }))
+    await loadVehiclePhotos(selectedDriver.value.vehicles, vehiclePhotoUrls, () => vehiclePhotoRequest === request)
   }
   function previewDriver(item) { openDriverDetail(item) }
   function closeDriverDetail() {
-    if (vehiclePhotoUrl) URL.revokeObjectURL(vehiclePhotoUrl)
-    vehiclePhotoUrl = null
+    vehiclePhotoRequest += 1
+    clearVehiclePhotoUrls(vehiclePhotoUrls)
     selectedDriver.value = null
     settlementForm.value = null
   }
@@ -288,7 +311,7 @@ export function createDriversActions({ driversApi, driverForm, selectedDriver, s
         : action === 'revision'
           ? await driversApi.requestRevision(item.id, reason)
           : await driversApi.reject(item.id, reason)
-      selectedDriver.value = { ...updated, vehiclePhotoUrl, vehiclePhotoLoading: false, vehiclePhotoLoadError: item.vehiclePhotoLoadError }
+      selectedDriver.value = { ...item, ...updated, vehicles: item.vehicles }
       notify(action === 'approve' ? '司機審核已通過' : action === 'revision' ? '已退回司機修改資料' : '已拒絕司機註冊')
       await load()
     } catch (err) { error.value = displayError(err); notify(error.value, 'error') }
