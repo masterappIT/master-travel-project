@@ -100,7 +100,7 @@ const isSuperAdministrator = computed(() => currentAdministrator.value?.role ===
 const timeOptions = createTimeOptions()
 
 
-const { api, usersApi, driversApi, tripsApi, addressesApi, vehiclesApi } = createAdminApi({ baseUrl: API, token })
+const { api, usersApi, driversApi, tripsApi, addressesApi, vehiclesApi } = createAdminApi({ baseUrl: API, token, currentAdministrator })
 let load
 const loadRequestState = { value: loadRequestId }
 const resourceLoader = createAdminResourceLoader({
@@ -175,7 +175,7 @@ const { editAddress, resetAddress, searchAddressPlaces, handleAddressRegionChang
 const driverActions = createDriversActions({ driversApi, driverForm, selectedDriver, settlementForm, drivers, allVehicles, error, load, displayError, requestConfirmation, notify })
 const { reviewStatusLabel, resetDriver, editDriver, closeDriverForm, formatDriverHongKongPlate, formatDriverMacauPlate, formatDriverMainlandPlate, changeDriverOwnership, uploadDriverPhotos, removeDriverPhoto, saveDriver, updateDriverStatus, removeDriver, openDriverDetail, previewDriver, closeDriverDetail, approveDriver, requestDriverRevision, rejectDriver, resetSettlement, saveSettlement, refreshDriverVehicles, updateVehicleStatus, removeVehicle: removeDriverVehicle, vehicleForm: driverVehicleForm, resetVehicleForm, editVehicle: editDriverVehicle, closeVehicleForm, changeVehicleOwnership: changeDriverVehicleOwnership, uploadVehiclePhoto, saveVehicle: saveDriverVehicle, manageVehicleAssignments, closeVehicleAssignments, bindVehicleDriver, setPrimaryVehicle, unbindVehicleDriver, vehicleAssignments, assignmentVehicle } = driverActions
 const administratorsActions = createAdministratorsActions({ api, administratorForm, load, error, displayError, requestConfirmation, notify })
-const { resetAdministrator, editAdministrator, saveAdministrator, disableAdministrator } = administratorsActions
+const { resetAdministrator, editAdministrator, saveAdministrator, disableAdministrator, unlockAdministrator, revokeAdministratorSessions } = administratorsActions
 const operationsStorage = createOperationsStorage({ personnel, entryItems, expenseItems })
 const persistOperations = operationsStorage.persist
 const seedOperations = operationsStorage.seed
@@ -345,7 +345,9 @@ const App = { setup() {
      resetAdministrator,
      editAdministrator,
      saveAdministrator,
-     disableAdministrator
+     disableAdministrator,
+     unlockAdministrator,
+     revokeAdministratorSessions
    })
    provide('adminVehiclePricingContext', {
      view,

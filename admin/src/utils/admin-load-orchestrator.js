@@ -44,9 +44,9 @@ export function createAdminResourceLoader({
       if (requestedView === 'route-pricing') await resourceLoaders.routePricing()
     } catch (requestError) {
       error.value = displayError(requestError)
-      if (requestError.message?.includes('session')) {
+      if (requestError.kind === 'unauthorized' || requestError.status === 401) {
         token.value = ''
-        localStorage.removeItem('admin_token')
+        currentAdministrator.value = null
       }
     } finally {
       if (requestId === requestSequence.value) loading.value = false

@@ -2,12 +2,10 @@ export function createAdminSessionActions({ api, token, username, password, curr
   async function apiLogin() {
     try {
       error.value = ''
-      localStorage.removeItem('admin_token')
       token.value = ''
       const result = await api('/admin/auth/login', { method: 'POST', body: JSON.stringify({ username: username.value, password: password.value }) })
-      token.value = result.token
+      token.value = 'cookie-session'
       currentAdministrator.value = result.administrator
-      localStorage.setItem('admin_token', token.value)
       password.value = ''
       load()
     } catch (e) {
@@ -21,7 +19,6 @@ export function createAdminSessionActions({ api, token, username, password, curr
     } catch {} finally {
       token.value = ''
       currentAdministrator.value = null
-      localStorage.removeItem('admin_token')
       view.value = 'dashboard'
     }
   }

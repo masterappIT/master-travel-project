@@ -7,6 +7,56 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Administrator {
+  id                  String          @id @default(cuid())
+  username            String
+  normalizedUsername  String          @unique
+  displayName         String
+  role                String
+  enabled             Boolean         @default(true)
+  passwordHash        String
+  failedLoginAttempts Int             @default(0)
+  lockedUntil         DateTime?
+  lastLoginAt         DateTime?
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  sessions            AdminSession[]
+  auditLogs            AdminAuditLog[]
+
+  @@index([enabled, role])
+}
+
+model AdminSession {
+  id              String        @id @default(cuid())
+  jti             String        @unique
+  administratorId String
+  expiresAt       DateTime
+  revokedAt       DateTime?
+  revokedReason   String?
+  createdAt       DateTime      @default(now())
+  administrator   Administrator @relation(fields: [administratorId], references: [id], onDelete: Cascade)
+
+  @@index([administratorId, revokedAt])
+  @@index([expiresAt])
+}
+
+model AdminAuditLog {
+  id              String         @id @default(cuid())
+  administratorId String?
+  username        String
+  action          String
+  resource        String
+  method          String
+  status          String
+  ip              String
+  createdAt       DateTime       @default(now())
+  administrator   Administrator? @relation(fields: [administratorId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([administratorId, createdAt])
+  @@index([status, createdAt])
+}
+
 model Notification {
   id           String    @id @default(cuid())
   title        String

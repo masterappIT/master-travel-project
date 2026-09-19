@@ -60,6 +60,8 @@ try {
 type RequestLike = {
   headers: {
     authorization?: string;
+    cookie?: string;
+    ["x-csrf-token"]?: string;
     ["user-agent"]?: string;
     host?: string;
     origin?: string;
@@ -82,6 +84,8 @@ interface Administrator {
   createdAt: string;
   updatedAt: string;
   lastLoginAt: string | null;
+  failedLoginAttempts: number;
+  lockedUntil: string | null;
 }
 interface AdminSession {
   sub: string;
@@ -2609,6 +2613,109 @@ function verifyPassword(password: string, stored: string) {
   const expected = Buffer.from(hash, "hex");
   return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
+const ADMIN_PASSWORD_MIN_LENGTH = 8;
+const ADMIN_LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const ADMIN_LOGIN_MAX_FAILURES = 10;
+const ADMIN_LOGIN_DELAY_THRESHOLD = 5;
+const ADMIN_LOGIN_MAX_DELAY_MS = 4000;
+const commonAdminPasswords = new Set([
+  "admin12345",
+  "administrator",
+  "password1234",
+  "qwerty123456",
+]);
+type LoginAttemptState = {
+  failures: number;
+  windowStartedAt: number;
+  lockedUntil: number;
+};
+const adminLoginAttempts = new Map<string, LoginAttemptState>();
+const fallbackAdminPasswordHash = hashPassword(randomBytes(32).toString("hex"));
+
+function validateAdminPassword(password: string, username: string) {
+  if (password.length < ADMIN_PASSWORD_MIN_LENGTH)
+    throw new BadRequestException(
+      `Password must contain at least ${ADMIN_PASSWORD_MIN_LENGTH} characters`,
+    );
+  if (password.length > 128)
+    throw new BadRequestException("Password must not exceed 128 characters");
+  const normalized = password.toLowerCase();
+  if (
+    normalized === username.toLowerCase() ||
+    commonAdminPasswords.has(normalized)
+  )
+    throw new BadRequestException("Password is too common or easy to guess");
+}
+
+function clearExpiredLoginAttempts(timestamp = Date.now()) {
+  for (const [key, state] of adminLoginAttempts) {
+    if (
+      timestamp - state.windowStartedAt >= ADMIN_LOGIN_WINDOW_MS &&
+      state.lockedUntil <= timestamp
+    )
+      adminLoginAttempts.delete(key);
+  }
+}
+
+function loginAttemptState(key: string, timestamp = Date.now()) {
+  const current = adminLoginAttempts.get(key);
+  if (!current || timestamp - current.windowStartedAt >= ADMIN_LOGIN_WINDOW_MS) {
+    const fresh = { failures: 0, windowStartedAt: timestamp, lockedUntil: 0 };
+    adminLoginAttempts.set(key, fresh);
+    return fresh;
+  }
+  return current;
+}
+
+function loginAttemptKeys(req: RequestLike, username: string) {
+  return [`ip:${req.ip || "unknown"}`, `account:${username.toLowerCase()}`];
+}
+
+function isLoginBlocked(req: RequestLike, username: string, timestamp = Date.now()) {
+  return loginAttemptKeys(req, username).some(
+    (key) => loginAttemptState(key, timestamp).lockedUntil > timestamp,
+  );
+}
+
+function recordLoginFailure(req: RequestLike, username: string, timestamp = Date.now()) {
+  let highestFailureCount = 0;
+  for (const key of loginAttemptKeys(req, username)) {
+    const state = loginAttemptState(key, timestamp);
+    state.failures += 1;
+    highestFailureCount = Math.max(highestFailureCount, state.failures);
+    if (state.failures >= ADMIN_LOGIN_MAX_FAILURES)
+      state.lockedUntil = timestamp + ADMIN_LOGIN_WINDOW_MS;
+  }
+  return highestFailureCount;
+}
+
+function clearLoginFailures(req: RequestLike, username: string) {
+  for (const key of loginAttemptKeys(req, username)) adminLoginAttempts.delete(key);
+}
+
+function loginFailureDelay(failures: number) {
+  if (failures < ADMIN_LOGIN_DELAY_THRESHOLD) return 0;
+  return Math.min(
+    500 * 2 ** (failures - ADMIN_LOGIN_DELAY_THRESHOLD),
+    ADMIN_LOGIN_MAX_DELAY_MS,
+  );
+}
+
+function wait(milliseconds: number) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+function assertProductionAdminConfiguration() {
+  if (process.env.NODE_ENV !== "production") return;
+  const missing = ["ADMIN_USERNAME", "ADMIN_PASSWORD", "ADMIN_SESSION_SECRET"].filter(
+    (name) => !process.env[name]?.trim(),
+  );
+  if (missing.length)
+    throw new Error(`Missing required production configuration: ${missing.join(", ")}`);
+  validateAdminPassword(process.env.ADMIN_PASSWORD!, process.env.ADMIN_USERNAME!);
+  if (process.env.ADMIN_SESSION_SECRET!.length < 32)
+    throw new Error("ADMIN_SESSION_SECRET must contain at least 32 characters");
+}
 const now = new Date().toISOString();
 const administrators: Administrator[] = [
   {
@@ -2621,33 +2728,139 @@ const administrators: Administrator[] = [
     createdAt: now,
     updatedAt: now,
     lastLoginAt: null,
+    failedLoginAttempts: 0,
+    lockedUntil: null,
   },
 ];
-const revokedAdminSessions = new Set<string>();
+const activeAdminSessions = new Map<string, number>();
+const revokedAdminSessions = new Map<string, number>();
 const adminAuditLogs: AdminAuditLog[] = [];
+
+async function hydrateAdminSecurityState() {
+  const storedAdministrators = await prisma.administrator.findMany({
+    orderBy: { createdAt: "asc" },
+  });
+  if (!storedAdministrators.length) {
+    const initial = administrators[0];
+    await prisma.administrator.create({
+      data: {
+        id: initial.id,
+        username: initial.username,
+        normalizedUsername: initial.username.toLowerCase(),
+        displayName: initial.displayName,
+        role: initial.role,
+        enabled: initial.enabled,
+        passwordHash: initial.passwordHash,
+        failedLoginAttempts: 0,
+        lastLoginAt: null,
+      },
+    });
+  } else {
+    administrators.splice(
+      0,
+      administrators.length,
+      ...storedAdministrators.map((item) => ({
+        id: item.id,
+        username: item.username,
+        displayName: item.displayName,
+        role: item.role as AdminRole,
+        enabled: item.enabled,
+        passwordHash: item.passwordHash,
+        createdAt: item.createdAt.toISOString(),
+        updatedAt: item.updatedAt.toISOString(),
+        lastLoginAt: item.lastLoginAt?.toISOString() || null,
+        failedLoginAttempts: item.failedLoginAttempts,
+        lockedUntil: item.lockedUntil?.toISOString() || null,
+      })),
+    );
+  }
+  const activeSessions = await prisma.adminSession.findMany({
+    where: { revokedAt: null, expiresAt: { gt: new Date() } },
+    select: { jti: true, expiresAt: true },
+  });
+  const revokedSessions = await prisma.adminSession.findMany({
+    where: { revokedAt: { not: null }, expiresAt: { gt: new Date() } },
+    select: { jti: true, expiresAt: true },
+  });
+  activeAdminSessions.clear();
+  revokedAdminSessions.clear();
+  for (const session of activeSessions)
+    activeAdminSessions.set(session.jti, session.expiresAt.getTime());
+  for (const session of revokedSessions)
+    revokedAdminSessions.set(session.jti, session.expiresAt.getTime());
+  const persistedAuditLogs = await prisma.adminAuditLog.findMany({
+    orderBy: { createdAt: "desc" },
+    take: 1000,
+  });
+  adminAuditLogs.splice(
+    0,
+    adminAuditLogs.length,
+    ...persistedAuditLogs.map((item) => ({
+      id: item.id,
+      administratorId: item.administratorId,
+      username: item.username,
+      action: item.action,
+      resource: item.resource,
+      method: item.method,
+      status: item.status as "SUCCESS" | "FAILED",
+      ip: item.ip,
+      createdAt: item.createdAt.toISOString(),
+    })),
+  );
+}
 function publicAdministrator(admin: Administrator) {
   const { passwordHash: _, ...safe } = admin;
   return safe;
 }
+const ADMIN_SESSION_COOKIE = "admin_session";
+const ADMIN_CSRF_COOKIE = "admin_csrf";
+const ADMIN_SESSION_MAX_AGE_MS = 8 * 60 * 60 * 1000;
+
 function secret() {
-  return (
-    process.env.ADMIN_SESSION_SECRET ||
-    process.env.ADMIN_PASSWORD ||
-    "development-admin-secret"
-  );
+  return process.env.ADMIN_SESSION_SECRET || "development-admin-secret";
 }
-function tokenFor(admin: Administrator) {
+function cookieValue(req: RequestLike, name: string) {
+  const encodedName = `${encodeURIComponent(name)}=`;
+  const item = req.headers.cookie
+    ?.split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(encodedName));
+  return item ? decodeURIComponent(item.slice(encodedName.length)) : "";
+}
+function cookieOptions(req: RequestLike, httpOnly: boolean, maxAge = ADMIN_SESSION_MAX_AGE_MS) {
+  const secure =
+    process.env.NODE_ENV === "production" ||
+    req.protocol === "https" ||
+    req.headers["x-forwarded-proto"] === "https";
+  return {
+    httpOnly,
+    secure,
+    sameSite: "strict" as const,
+    path: "/",
+    maxAge,
+  };
+}
+async function tokenFor(admin: Administrator) {
   const session: AdminSession = {
     sub: admin.id,
     role: admin.role,
     exp: Date.now() + 8 * 60 * 60 * 1000,
     jti: randomBytes(16).toString("hex"),
   };
+  await prisma.adminSession.create({
+    data: {
+      jti: session.jti,
+      administratorId: admin.id,
+      expiresAt: new Date(session.exp),
+    },
+  });
+  activeAdminSessions.set(session.jti, session.exp);
   const payload = Buffer.from(JSON.stringify(session)).toString("base64url");
   return `${payload}.${createHmac("sha256", secret()).update(payload).digest("base64url")}`;
 }
 function adminSessionFrom(req: RequestLike): AdminSession {
-  const value = req.headers.authorization?.replace(/^Bearer\s+/i, "");
+  const bearer = req.headers.authorization?.replace(/^Bearer\s+/i, "");
+  const value = bearer || cookieValue(req, ADMIN_SESSION_COOKIE);
   if (process.env.NODE_ENV !== "production" && value === "dev-bypass")
     return {
       sub: "admin-super",
@@ -2667,12 +2880,20 @@ function adminSessionFrom(req: RequestLike): AdminSession {
     const session = JSON.parse(
       Buffer.from(payload, "base64url").toString(),
     ) as AdminSession;
+    if (session.jti === "dev-bypass") return session;
+    const revokedUntil = revokedAdminSessions.get(session.jti);
+    if (revokedUntil && revokedUntil <= Date.now())
+      revokedAdminSessions.delete(session.jti);
+    const persistedUntil = activeAdminSessions.get(session.jti);
+    if (persistedUntil && persistedUntil <= Date.now())
+      activeAdminSessions.delete(session.jti);
     const admin = administrators.find((item) => item.id === session.sub);
     if (
       !admin ||
       !admin.enabled ||
       session.exp <= Date.now() ||
-      revokedAdminSessions.has(session.jti)
+      Boolean(revokedUntil) ||
+      !persistedUntil
     )
       throw new Error("invalid session");
     return { ...session, role: admin.role };
@@ -2689,6 +2910,26 @@ function requireRole(req: RequestLike, roles: AdminRole[]) {
     throw new ForbiddenException("Insufficient administrator permission");
   return session;
 }
+function persistAudit(log: AdminAuditLog) {
+  adminAuditLogs.unshift(log);
+  if (adminAuditLogs.length > 1000) adminAuditLogs.length = 1000;
+  void prisma.adminAuditLog
+    .create({
+      data: {
+        id: log.id,
+        administratorId: log.administratorId,
+        username: log.username,
+        action: log.action,
+        resource: log.resource,
+        method: log.method,
+        status: log.status,
+        ip: log.ip,
+        createdAt: new Date(log.createdAt),
+      },
+    })
+    .catch((error) => console.error("Failed to persist admin audit log", error));
+}
+
 function addAudit(
   req: RequestLike,
   status: "SUCCESS" | "FAILED",
@@ -2703,7 +2944,7 @@ function addAudit(
   const admin = session
     ? administrators.find((item) => item.id === session!.sub)
     : null;
-  adminAuditLogs.unshift({
+  persistAudit({
     id: `audit-${Date.now()}-${randomBytes(3).toString("hex")}`,
     administratorId: admin?.id || null,
     username: admin?.username || "anonymous",
@@ -2714,7 +2955,6 @@ function addAudit(
     ip: req.ip || "",
     createdAt: new Date().toISOString(),
   });
-  if (adminAuditLogs.length > 1000) adminAuditLogs.length = 1000;
 }
 
 @Injectable()
@@ -2724,17 +2964,32 @@ class AdminAccessInterceptor implements NestInterceptor {
     if (!req.url?.startsWith("/admin/") || req.url === "/admin/auth/login")
       return next.handle();
     const session = requireAuth(req);
+    const developmentBypass =
+      process.env.NODE_ENV !== "production" &&
+      req.headers.authorization?.replace(/^Bearer\s+/i, "") === "dev-bypass";
+    if (req.method !== "GET" && !developmentBypass) {
+      const csrfCookie = cookieValue(req, ADMIN_CSRF_COOKIE);
+      const csrfHeader = req.headers["x-csrf-token"] || "";
+      if (
+        csrfCookie.length < 32 ||
+        csrfHeader.length !== csrfCookie.length ||
+        !timingSafeEqual(Buffer.from(csrfHeader), Buffer.from(csrfCookie))
+      ) {
+        addAudit(req, "FAILED", session);
+        throw new ForbiddenException("Valid CSRF token required");
+      }
+    }
     if (req.method !== "GET" && session.role === "VIEWER") {
-      addAudit(req, "FAILED");
+      addAudit(req, "FAILED", session);
       throw new ForbiddenException("Viewer accounts are read-only");
     }
     return next.handle().pipe(
       tap({
         next: () => {
-          if (req.method !== "GET") addAudit(req, "SUCCESS");
+          if (req.method !== "GET") addAudit(req, "SUCCESS", session);
         },
         error: () => {
-          if (req.method !== "GET") addAudit(req, "FAILED");
+          if (req.method !== "GET") addAudit(req, "FAILED", session);
         },
       }),
     );
@@ -4860,22 +5115,48 @@ class SupportController {
 
 @Controller("admin/auth")
 class AdminAuthController {
-  @Post("login") login(
+  @Post("login") async login(
     @Req() req: RequestLike,
+    @Res({ passthrough: true }) response: Response,
     @Body() body: { username?: string; password?: string },
   ) {
-    const username = body.username?.trim();
+    const username = body.username?.trim() || "";
     const admin = administrators.find(
-      (item) => item.username.toLowerCase() === username?.toLowerCase(),
+      (item) => item.username.toLowerCase() === username.toLowerCase(),
     );
-    if (
-      !admin ||
-      !admin.enabled ||
-      !body.password ||
-      !verifyPassword(body.password, admin.passwordHash)
-    ) {
-      adminAuditLogs.unshift({
-        id: `audit-${Date.now()}`,
+    const timestamp = Date.now();
+    clearExpiredLoginAttempts(timestamp);
+    const lockedUntil = admin?.lockedUntil
+      ? new Date(admin.lockedUntil).getTime()
+      : 0;
+    const accountLocked = lockedUntil > timestamp;
+    const blocked = accountLocked || isLoginBlocked(req, username, timestamp);
+    const passwordMatches = body.password
+      ? verifyPassword(body.password, admin?.passwordHash || fallbackAdminPasswordHash)
+      : false;
+    if (blocked || !admin || !admin.enabled || !passwordMatches) {
+      const failures = accountLocked
+        ? admin!.failedLoginAttempts
+        : blocked
+          ? ADMIN_LOGIN_MAX_FAILURES
+          : recordLoginFailure(req, username, timestamp);
+      if (admin && !blocked && !accountLocked) {
+        admin.failedLoginAttempts = failures;
+        admin.lockedUntil =
+          failures >= ADMIN_LOGIN_MAX_FAILURES
+            ? new Date(timestamp + ADMIN_LOGIN_WINDOW_MS).toISOString()
+            : null;
+      }
+      if (admin)
+        await prisma.administrator.update({
+          where: { id: admin.id },
+          data: {
+            failedLoginAttempts: admin.failedLoginAttempts,
+            lockedUntil: admin.lockedUntil ? new Date(admin.lockedUntil) : null,
+          },
+        });
+      persistAudit({
+        id: `audit-${Date.now()}-${randomBytes(3).toString("hex")}`,
         administratorId: admin?.id || null,
         username: username || "anonymous",
         action: "LOGIN",
@@ -4885,12 +5166,27 @@ class AdminAuthController {
         ip: req.ip || "",
         createdAt: new Date().toISOString(),
       });
+      await wait(loginFailureDelay(failures));
       throw new UnauthorizedException("Invalid admin credentials");
     }
+    clearLoginFailures(req, username);
+    admin.failedLoginAttempts = 0;
+    admin.lockedUntil = null;
     admin.lastLoginAt = new Date().toISOString();
-    const token = tokenFor(admin);
-    adminAuditLogs.unshift({
-      id: `audit-${Date.now()}`,
+    await prisma.administrator.update({
+      where: { id: admin.id },
+      data: {
+        failedLoginAttempts: 0,
+        lockedUntil: null,
+        lastLoginAt: new Date(admin.lastLoginAt),
+      },
+    });
+    const token = await tokenFor(admin);
+    const csrfToken = randomBytes(32).toString("base64url");
+    response.cookie(ADMIN_SESSION_COOKIE, token, cookieOptions(req, true));
+    response.cookie(ADMIN_CSRF_COOKIE, csrfToken, cookieOptions(req, false));
+    persistAudit({
+      id: `audit-${Date.now()}-${randomBytes(3).toString("hex")}`,
       administratorId: admin.id,
       username: admin.username,
       action: "LOGIN",
@@ -4901,7 +5197,6 @@ class AdminAuthController {
       createdAt: admin.lastLoginAt,
     });
     return {
-      token,
       expiresIn: 28800,
       administrator: publicAdministrator(admin),
     };
@@ -4911,10 +5206,18 @@ class AdminAuthController {
     const admin = administrators.find((item) => item.id === session.sub)!;
     return publicAdministrator(admin);
   }
-  @Post("logout") logout(@Req() req: RequestLike) {
+  @Post("logout") async logout(
+    @Req() req: RequestLike,
+    @Res({ passthrough: true }) response: Response,
+  ) {
     const session = requireAuth(req);
-    addAudit(req, "SUCCESS", session);
-    revokedAdminSessions.add(session.jti);
+    revokedAdminSessions.set(session.jti, session.exp);
+    await prisma.adminSession.updateMany({
+      where: { jti: session.jti, revokedAt: null },
+      data: { revokedAt: new Date(), revokedReason: "logout" },
+    });
+    response.clearCookie(ADMIN_SESSION_COOKIE, cookieOptions(req, true, 0));
+    response.clearCookie(ADMIN_CSRF_COOKIE, cookieOptions(req, false, 0));
     return { ok: true };
   }
 }
@@ -5518,14 +5821,25 @@ class AdminController {
     return { ok: true };
   }
 
-  @Get("administrators") listAdministrators(@Req() req: RequestLike) {
+  @Get("administrators") async listAdministrators(@Req() req: RequestLike) {
     requireRole(req, ["SUPER_ADMIN"]);
+    const activeSessions = await prisma.adminSession.groupBy({
+      by: ["administratorId"],
+      where: { revokedAt: null, expiresAt: { gt: new Date() } },
+      _count: { _all: true },
+    });
+    const sessionCounts = new Map(
+      activeSessions.map((item) => [item.administratorId, item._count._all]),
+    );
     return {
-      data: administrators.map(publicAdministrator),
+      data: administrators.map((admin) => ({
+        ...publicAdministrator(admin),
+        activeSessionCount: sessionCounts.get(admin.id) || 0,
+      })),
       total: administrators.length,
     };
   }
-  @Post("administrators") saveAdministrator(
+  @Post("administrators") async saveAdministrator(
     @Req() req: RequestLike,
     @Body() body: Partial<Administrator> & { password?: string },
   ) {
@@ -5553,11 +5867,9 @@ class AdminController {
       : undefined;
     if (body.id && !existing)
       throw new HttpException("Administrator not found", HttpStatus.NOT_FOUND);
-    if (!existing && (!body.password || body.password.length < 8))
-      throw new HttpException(
-        "Password must contain at least 8 characters",
-        HttpStatus.BAD_REQUEST,
-      );
+    if (!existing && !body.password)
+      throw new BadRequestException("Password is required");
+    if (!existing) validateAdminPassword(body.password!, username);
     if (existing) {
       const removingSuperAccess =
         existing.role === "SUPER_ADMIN" &&
@@ -5578,18 +5890,39 @@ class AdminController {
           "Cannot remove your own super administrator access",
           HttpStatus.BAD_REQUEST,
         );
+      const revokeExistingSessions =
+        Boolean(body.password) || body.enabled === false || existing.role !== body.role;
       existing.username = username;
       existing.displayName = displayName;
       existing.role = body.role;
       existing.enabled = body.enabled ?? existing.enabled;
       existing.updatedAt = new Date().toISOString();
       if (body.password) {
-        if (body.password.length < 8)
-          throw new HttpException(
-            "Password must contain at least 8 characters",
-            HttpStatus.BAD_REQUEST,
-          );
+        validateAdminPassword(body.password, username);
         existing.passwordHash = hashPassword(body.password);
+      }
+      await prisma.administrator.update({
+        where: { id: existing.id },
+        data: {
+          username: existing.username,
+          normalizedUsername: existing.username.toLowerCase(),
+          displayName: existing.displayName,
+          role: existing.role,
+          enabled: existing.enabled,
+          passwordHash: existing.passwordHash,
+        },
+      });
+      if (revokeExistingSessions) {
+        const sessions = await prisma.adminSession.findMany({
+          where: { administratorId: existing.id, revokedAt: null },
+          select: { jti: true, expiresAt: true },
+        });
+        await prisma.adminSession.updateMany({
+          where: { administratorId: existing.id, revokedAt: null },
+          data: { revokedAt: new Date(), revokedReason: "administrator-changed" },
+        });
+        for (const item of sessions)
+          revokedAdminSessions.set(item.jti, item.expiresAt.getTime());
       }
       return publicAdministrator(existing);
     }
@@ -5603,11 +5936,70 @@ class AdminController {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       lastLoginAt: null,
+      failedLoginAttempts: 0,
+      lockedUntil: null,
     };
+    await prisma.administrator.create({
+      data: {
+        id: created.id,
+        username: created.username,
+        normalizedUsername: created.username.toLowerCase(),
+        displayName: created.displayName,
+        role: created.role,
+        enabled: created.enabled,
+        passwordHash: created.passwordHash,
+      },
+    });
     administrators.push(created);
     return publicAdministrator(created);
   }
-  @Delete("administrators/:id") disableAdministrator(
+  @Post("administrators/:id/unlock") async unlockAdministrator(
+    @Req() req: RequestLike,
+    @Param("id") id: string,
+  ) {
+    requireRole(req, ["SUPER_ADMIN"]);
+    const admin = administrators.find((item) => item.id === id);
+    if (!admin)
+      throw new HttpException("Administrator not found", HttpStatus.NOT_FOUND);
+    await prisma.administrator.update({
+      where: { id },
+      data: { failedLoginAttempts: 0, lockedUntil: null },
+    });
+    admin.failedLoginAttempts = 0;
+    admin.lockedUntil = null;
+    admin.updatedAt = new Date().toISOString();
+    return publicAdministrator(admin);
+  }
+
+  @Post("administrators/:id/revoke-sessions") async revokeAdministratorSessions(
+    @Req() req: RequestLike,
+    @Param("id") id: string,
+  ) {
+    const actor = requireRole(req, ["SUPER_ADMIN"]);
+    if (actor.sub === id)
+      throw new BadRequestException("Cannot revoke your own session");
+    const admin = administrators.find((item) => item.id === id);
+    if (!admin)
+      throw new HttpException("Administrator not found", HttpStatus.NOT_FOUND);
+    const activeSessionFilter = {
+      administratorId: id,
+      revokedAt: null,
+      expiresAt: { gt: new Date() },
+    };
+    const sessions = await prisma.adminSession.findMany({
+      where: activeSessionFilter,
+      select: { jti: true, expiresAt: true },
+    });
+    await prisma.adminSession.updateMany({
+      where: activeSessionFilter,
+      data: { revokedAt: new Date(), revokedReason: "manual-revocation" },
+    });
+    for (const item of sessions)
+      revokedAdminSessions.set(item.jti, item.expiresAt.getTime());
+    return { ok: true, revokedCount: sessions.length };
+  }
+
+  @Delete("administrators/:id") async disableAdministrator(
     @Req() req: RequestLike,
     @Param("id") id: string,
   ) {
@@ -5633,6 +6025,20 @@ class AdminController {
       );
     admin.enabled = false;
     admin.updatedAt = new Date().toISOString();
+    await prisma.administrator.update({
+      where: { id: admin.id },
+      data: { enabled: false },
+    });
+    const sessions = await prisma.adminSession.findMany({
+      where: { administratorId: admin.id, revokedAt: null },
+      select: { jti: true, expiresAt: true },
+    });
+    await prisma.adminSession.updateMany({
+      where: { administratorId: admin.id, revokedAt: null },
+      data: { revokedAt: new Date(), revokedReason: "administrator-disabled" },
+    });
+    for (const item of sessions)
+      revokedAdminSessions.set(item.jti, item.expiresAt.getTime());
     return { ok: true };
   }
   @Get("audit-logs") listAuditLogs(@Req() req: RequestLike) {
@@ -11245,7 +11651,9 @@ class HealthController {
 })
 class AppModule {}
 async function bootstrap() {
+  assertProductionAdminConfiguration();
   await prisma.$connect();
+  await hydrateAdminSecurityState();
   await ensureMembershipPlanDefaults();
   await ensurePricingDefaults();
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
@@ -11281,7 +11689,8 @@ async function bootstrap() {
     origin: (origin, callback) =>
       callback(null, !origin || allowedOrigins.has(origin)),
     methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-CSRF-Token"],
+    credentials: true,
   });
   await app.listen(
     Number(process.env.PORT) || 3010,

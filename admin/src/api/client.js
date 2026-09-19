@@ -1,13 +1,23 @@
+function cookieValue(name) {
+  const prefix = `${encodeURIComponent(name)}=`
+  const item = document.cookie.split(';').map(part => part.trim()).find(part => part.startsWith(prefix))
+  return item ? decodeURIComponent(item.slice(prefix.length)) : ''
+}
+
 export function createApiClient({ baseUrl, getToken, onUnauthorized }) {
   async function request(path, options = {}) {
     let response
     const isFormData = options.body instanceof FormData
+    const method = (options.method || 'GET').toUpperCase()
+    const csrfToken = method === 'GET' || method === 'HEAD' ? '' : cookieValue('admin_csrf')
     try {
       response = await fetch(`${baseUrl}${path}`, {
         ...options,
+        credentials: 'include',
         headers: {
           ...(!isFormData ? { 'Content-Type': 'application/json' } : {}),
           ...(getToken() ? { Authorization: 'Bearer ' + getToken() } : {}),
+          ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}),
           ...(options.headers || {})
         }
       })

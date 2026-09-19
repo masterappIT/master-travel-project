@@ -5,13 +5,13 @@ import { createTripsApi } from '../api/trips.js'
 import { createAddressesApi } from '../api/addresses.js'
 import { createVehiclesApi } from '../api/vehicles.js'
 
-export function createAdminApi({ baseUrl, token }) {
+export function createAdminApi({ baseUrl, token, currentAdministrator }) {
   const api = createApiClient({
     baseUrl,
-    getToken: () => token.value,
+    getToken: () => import.meta.env.DEV && token.value === 'dev-bypass' ? token.value : '',
     onUnauthorized: () => {
       token.value = ''
-      localStorage.removeItem('admin_token')
+      currentAdministrator.value = null
     }
   })
 
