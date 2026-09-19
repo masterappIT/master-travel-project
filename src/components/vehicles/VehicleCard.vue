@@ -1,7 +1,7 @@
 <template>
   <view class="vehicle-card" @tap="selectable && emit('select')">
     <view v-if="vehicle.brand" class="vehicle-name"><text class="brand">{{ vehicle.brand }}</text><text> {{ vehicle.model }}</text><text class="series">{{ vehicle.series }}</text></view>
-    <image v-if="selectable" class="radio" src="/static/vehicles/radio.svg" mode="aspectFit" />
+    <image v-if="vehicle.logo && !logoLoadFailed" class="radio" :src="vehicle.logo" mode="aspectFit" @error="logoLoadFailed = true" />
     <view class="vehicle-image-frame">
       <image class="vehicle-image" :class="`vehicle-${vehicle.id}`" :src="vehicle.image" mode="scaleToFill" />
     </view>
@@ -12,13 +12,15 @@
   </view>
 </template>
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import type { FareQuote } from '../../services/api'
 import type { Vehicle } from '../../types/vehicle'
 import { formatCurrencyAmount, normalizeCurrency, useCurrency } from '../../composables/useCurrency'
 
 const props = defineProps<{ vehicle: Vehicle; quote?: FareQuote | null; selectable?: boolean; selected?: boolean }>()
 const emit = defineEmits<{ select: [] }>()
+const logoLoadFailed = ref(false)
+watch(() => props.vehicle.logo, () => { logoLoadFailed.value = false })
 const payableFare = computed(() => props.quote?.total ?? props.vehicle.price)
 const payableFareCurrency = computed(() => props.quote?.currency)
 const discountAmount = computed(() => Math.abs(props.quote?.lines

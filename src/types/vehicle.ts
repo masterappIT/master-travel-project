@@ -7,6 +7,7 @@ export interface Vehicle {
   seats: number
   price?: number
   image: string
+  logo?: string | null
   colorLabel?: string
   modelChoiceLabel?: string
   imageClass?: string

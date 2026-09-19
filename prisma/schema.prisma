@@ -790,6 +790,8 @@ model Vehicle {
   image            String
   imageData        Bytes?
   imageMime        String?
+  logoData         Bytes?
+  logoMime         String?
   colorLabel       String
   modelChoiceLabel String
   enabled          Boolean          @default(true)
@@ -905,6 +907,7 @@ model FareQuoteVehicleSnapshot {
   series           String
   seats            Int
   image            String
+  logo             String?
   colorLabel       String
   modelChoiceLabel String
   quote            FareQuote @relation(fields: [quoteId], references: [id], onDelete: Cascade)

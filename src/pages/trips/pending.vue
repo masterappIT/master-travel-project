@@ -14,7 +14,7 @@
         <text class="countdown">{{ confirmationCountdownLabel }}</text>
       </view>
       <view v-else class="accepted-driver">
-        <image class="accepted-logo" src="/static/vehicles/trip-waiting/toyota.svg" mode="aspectFit" />
+        <image v-if="acceptedVehicleLogo && !logoLoadFailed" class="accepted-logo" :src="acceptedVehicleLogo" mode="aspectFit" @error="logoLoadFailed = true" />
         <view class="accepted-vehicle-copy"><text>{{ acceptedVehicleBrand }}</text><text>{{ acceptedVehicleSeries }}</text></view>
         <view class="accepted-driver-info"><image src="/static/vehicles/trip-waiting/avatar.svg" mode="aspectFit" /><view><text>{{ acceptedDriverName }}</text><view><image src="/static/vehicles/trip-waiting/star.svg" mode="aspectFit" /><text>5.0</text></view></view></view>
         <view class="accepted-actions"><view @tap="callAcceptedDriver"><image src="/static/vehicles/trip-waiting/phone.svg" mode="aspectFit" /><text>打電話</text></view><view><image src="/static/vehicles/trip-waiting/seat.svg" mode="aspectFit" /><text>{{ acceptedVehicleSeats }}座</text></view><view><text>白色</text></view></view>
@@ -58,6 +58,7 @@ const { responsiveStyle } = useResponsiveCanvas()
 const trip = ref<ClientTrip>()
 const tripId = ref('')
 const countdown = ref(0)
+const logoLoadFailed = ref(false)
 let countdownTimer: ReturnType<typeof setInterval> | undefined
 let pollTimer: ReturnType<typeof setInterval> | undefined
 let transitioning = false
@@ -74,6 +75,7 @@ const acceptedDriverName = computed(() => trip.value?.driver?.name || '—')
 const acceptedVehicleBrand = computed(() => trip.value?.vehicle ? `${trip.value.vehicle.brand} ${trip.value.vehicle.model}` : '—')
 const acceptedVehicleSeries = computed(() => trip.value?.vehicle?.series || '—')
 const acceptedVehicleSeats = computed(() => trip.value?.vehicle?.seats || 0)
+const acceptedVehicleLogo = computed(() => trip.value?.vehicle?.logo || '')
 const acceptedVehiclePlates = computed(() => layoutVehiclePlates(trip.value?.driver))
 const originLabel = computed(() => formatOrderDetailAddress(trip.value?.origin, '香港國際機場'))
 const destinationLabel = computed(() => formatOrderDetailAddress(trip.value?.destination, '深圳灣口岸'))
@@ -105,6 +107,7 @@ const loadTrip = async () => {
   if (!tripId.value || transitioning) return
   try {
     const loadedTrip = await getClientTrip(tripId.value)
+    if (loadedTrip.vehicle?.logo !== trip.value?.vehicle?.logo) logoLoadFailed.value = false
     if (!isPendingTrip(loadedTrip)) {
       transitioning = true
       stopTimers()

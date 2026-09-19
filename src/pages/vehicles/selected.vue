@@ -253,6 +253,9 @@ const refreshQuote = async (extraIds = selectedExtras.value) => {
 const loadExtras = async () => {
   try {
     const catalog = await listPublicVehicles()
+    const currentVehicle = tripStore.chosenVehicle
+    const refreshedVehicle = currentVehicle && catalog.data.find(item => item.id === currentVehicle.id)
+    if (refreshedVehicle) tripStore.setChosenVehicle({ ...refreshedVehicle, selectable: currentVehicle.selectable, modelChoice: Boolean(refreshedVehicle.modelChoiceLabel) })
     extras.value = [...catalog.extras].sort((a, b) => a.order - b.order)
     severeWeatherEnabled.value = catalog.severeWeatherEnabled
     syncRequiredExtras()

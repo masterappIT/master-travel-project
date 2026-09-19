@@ -6,7 +6,7 @@
       </view>
 
       <view class="driver-card">
-        <image class="toyota-logo" src="/static/vehicles/trip-progress/toyota.svg" mode="aspectFit" />
+        <image v-if="vehicleLogo && !logoLoadFailed" class="toyota-logo" :src="vehicleLogo" mode="aspectFit" @error="logoLoadFailed = true" />
         <view class="vehicle-copy">
           <text class="vehicle-brand">{{ vehicleBrand }}</text>
           <text class="vehicle-series">{{ vehicleSeries }}</text>
@@ -71,6 +71,7 @@ const { responsiveStyle } = useResponsiveCanvas()
 const trip = ref<ClientTrip | null>(null)
 const tripId = ref('')
 const fromProfilePending = ref(false)
+const logoLoadFailed = ref(false)
 let pollTimer: ReturnType<typeof setInterval> | undefined
 const originLabel = computed(() => formatOrderSummaryAddress(trip.value?.origin, '香港').split(' · ')[0])
 const destinationLabel = computed(() => formatOrderSummaryAddress(trip.value?.destination, '深圳').split(' · ')[0])
@@ -80,6 +81,7 @@ const vehicleBrand = computed(() => trip.value?.vehicle ? `${trip.value.vehicle.
 const vehicleSeries = computed(() => trip.value?.vehicle?.series || '30系')
 const vehicleSeats = computed(() => trip.value?.vehicle?.seats || 8)
 const vehicleImage = computed(() => '/static/vehicles/trip-waiting/vellfire.png')
+const vehicleLogo = computed(() => trip.value?.vehicle?.logo || '')
 const vehiclePlates = computed(() => layoutVehiclePlates(trip.value?.driver))
 const arrivalTime = computed(() => { const date = trip.value?.estimatedArrivalAt ? new Date(trip.value.estimatedArrivalAt) : null; return date && !Number.isNaN(date.valueOf()) ? `${date.getMonth() + 1}月${date.getDate()}日 ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}` : 'March 15 2024 14:00' })
 let transitioning = false
@@ -92,6 +94,7 @@ const loadTrip = async () => {
   if (!tripId.value || transitioning) return
   try {
     const nextTrip = await getClientTrip(tripId.value)
+    if (nextTrip.vehicle?.logo !== trip.value?.vehicle?.logo) logoLoadFailed.value = false
     trip.value = nextTrip
     if (isPendingTrip(nextTrip)) return
     if (!fromProfilePending.value && nextTrip.status !== 'COMPLETED') return

@@ -6,7 +6,7 @@
       </view>
 
       <view class="driver-card">
-        <image class="toyota-logo" src="/static/vehicles/trip-waiting/toyota.svg" mode="aspectFit" />
+        <image v-if="vehicleLogo && !logoLoadFailed" class="toyota-logo" :src="vehicleLogo" mode="aspectFit" @error="logoLoadFailed = true" />
         <view class="vehicle-copy">
           <text class="vehicle-brand">{{ vehicleBrand }}</text>
           <text class="vehicle-series">{{ vehicleSeries }}</text>
@@ -71,6 +71,7 @@ const { responsiveStyle } = useResponsiveCanvas()
 const trip = ref<ClientTrip | null>(null)
 const tripId = ref('')
 const fromProfilePending = ref(false)
+const logoLoadFailed = ref(false)
 let pollTimer: ReturnType<typeof setInterval> | undefined
 let transitioning = false
 const originLabel = computed(() => formatOrderCardAddress(trip.value?.origin, '香港'))
@@ -81,6 +82,7 @@ const vehicleBrand = computed(() => 'Toyota Alphard')
 const vehicleSeries = computed(() => '30系')
 const vehicleSeats = computed(() => trip.value?.vehicle?.seats || 8)
 const vehicleImage = computed(() => '/static/vehicles/trip-waiting/vellfire.png')
+const vehicleLogo = computed(() => trip.value?.vehicle?.logo || '')
 const vehiclePlates = computed(() => layoutVehiclePlates(trip.value?.driver))
 const bookingTime = computed(() => { const date = trip.value ? new Date(trip.value.scheduledAt) : null; return date && !Number.isNaN(date.valueOf()) ? `${date.getMonth() + 1}月${date.getDate()}日 ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}` : 'March 15 2024 14:00' })
 const stopPolling = () => { if (pollTimer) clearInterval(pollTimer); pollTimer = undefined }
@@ -92,6 +94,7 @@ const loadTrip = async () => {
   if (!tripId.value || transitioning) return
   try {
     const nextTrip = await getClientTrip(tripId.value)
+    if (nextTrip.vehicle?.logo !== trip.value?.vehicle?.logo) logoLoadFailed.value = false
     trip.value = nextTrip
     if (fromProfilePending.value && !isPendingTrip(nextTrip)) {
       transitioning = true

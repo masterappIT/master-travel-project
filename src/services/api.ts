@@ -370,6 +370,7 @@ export type PublicVehicle = {
   series: string
   seats: number
   image: string
+  logo: string | null
   colorLabel: string
   modelChoiceLabel: string
   enabled: boolean
@@ -377,6 +378,11 @@ export type PublicVehicle = {
 }
 export type PublicVehicleExtra = { id: string; name: string; label: string; price: number; currency: string; enabled: boolean; order: number; requiredForImmediate: boolean; requiredWithinMinutes: number | null; triggerType: 'NONE' | 'IMMEDIATE' | 'NIGHT' | 'WEATHER'; triggerEnabled: boolean; nightStartTime: string | null; nightEndTime: string | null }
 export type PublicVehicleCatalog = { categories: PublicVehicleCategory[]; data: PublicVehicle[]; extras: PublicVehicleExtra[]; severeWeatherEnabled: boolean }
+
+function resolvePublicAssetUrl(url: string | null | undefined): string {
+  if (!url) return ''
+  return url.startsWith('/') ? `${API_BASE_URL.replace(/\/$/, '')}${url}` : url
+}
 
 export async function listPublicVehicles(): Promise<PublicVehicleCatalog> {
   const response = await uni.request({ url: `${API_BASE_URL}/vehicles` })
@@ -386,7 +392,8 @@ export async function listPublicVehicles(): Promise<PublicVehicleCatalog> {
     ...catalog,
     data: catalog.data.map(vehicle => ({
       ...vehicle,
-      image: vehicle.image.startsWith('/') ? `${API_BASE_URL.replace(/\/$/, '')}${vehicle.image}` : vehicle.image
+      image: resolvePublicAssetUrl(vehicle.image),
+      logo: resolvePublicAssetUrl(vehicle.logo) || null
     }))
   }
 }
@@ -775,7 +782,7 @@ export type ClientTrip = {
   estimatedArrivalAt: string | null
   quote?: { total: number; currency: string; lines: Array<{ type: string; label: string; totalAmount: number; currency: string }> } | null
   passenger: { name: string; gender: string | null; countryCode: string; phoneNumber: string }
-  vehicle: { id: string; categoryId: string | null; categoryName: string | null; brand: string; model: string; series: string; seats: number; modelChoiceLabel: string } | null
+  vehicle: { id: string; categoryId: string | null; categoryName: string | null; brand: string; model: string; series: string; seats: number; modelChoiceLabel: string; logo: string | null } | null
   createdAt: string
   status: 'PENDING' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED'
   executionPhase: 'WAITING_DRIVER' | 'DRIVER_PENDING_ACCEPTANCE' | 'DRIVER_ASSIGNED' | 'IN_PROGRESS' | null
@@ -791,17 +798,23 @@ export type ClientTrip = {
   payment: Omit<ClientPayment, 'tripId' | 'refundedAt' | 'trip'> & { refundedAt?: string | null } | null
 }
 
+function normalizeClientTrip(trip: ClientTrip): ClientTrip {
+  return trip.vehicle
+    ? { ...trip, vehicle: { ...trip.vehicle, logo: resolvePublicAssetUrl(trip.vehicle.logo) || null } }
+    : trip
+}
+
 export async function listClientTrips(): Promise<ClientTrip[]> {
   const response = await uni.request({ url: `${API_BASE_URL}/client/trips`, header: authHeaders() })
   if (response.statusCode >= 400) throw apiError(response, '無法載入訂單')
-  return (response.data as { data: ClientTrip[] }).data
+  return (response.data as { data: ClientTrip[] }).data.map(normalizeClientTrip)
 }
 
 export async function getClientTrip(id: string): Promise<ClientTrip> {
   const response = await uni.request({ url: `${API_BASE_URL}/client/trips/${encodeURIComponent(id)}`, header: authHeaders() })
   if (response.statusCode === 404) throw new Error('訂單不存在或無權查看')
   if (response.statusCode >= 400) throw apiError(response, '無法載入訂單')
-  return response.data as ClientTrip
+  return normalizeClientTrip(response.data as ClientTrip)
 }
 
 export async function cancelClientTrip(id: string): Promise<ClientTrip> {

@@ -20,9 +20,10 @@ import {
   Res,
   UnauthorizedException,
   UploadedFile,
+  UploadedFiles,
   UseInterceptors,
 } from "@nestjs/common";
-import { FileInterceptor } from "@nestjs/platform-express";
+import { FileFieldsInterceptor, FileInterceptor } from "@nestjs/platform-express";
 import { NestExpressApplication } from "@nestjs/platform-express";
 import { Response } from "express";
 import { APP_INTERCEPTOR } from "@nestjs/core";
@@ -201,10 +202,13 @@ interface VehicleCatalogItem {
   image: string;
   imageData?: Prisma.Bytes | null;
   imageMime?: string | null;
+  logoData?: Prisma.Bytes | null;
+  logoMime?: string | null;
   colorLabel: string;
   modelChoiceLabel: string;
   enabled: boolean;
   order: number;
+  updatedAt?: Date | string;
 }
 type VehicleExtraTriggerType = "NONE" | "IMMEDIATE" | "NIGHT" | "WEATHER";
 interface VehicleExtraOption {
@@ -1151,10 +1155,22 @@ function vehicleCategoryResponse(category: VehicleCategory) {
     enabled: category.enabled,
   };
 }
+function vehicleAssetVersion(vehicle: VehicleCatalogItem) {
+  if (!vehicle.updatedAt) return "";
+  const version = vehicle.updatedAt instanceof Date
+    ? vehicle.updatedAt.getTime()
+    : new Date(vehicle.updatedAt).getTime();
+  return Number.isFinite(version) ? `?v=${version}` : "";
+}
 function vehicleImagePath(vehicle: VehicleCatalogItem) {
   return vehicle.imageData && vehicle.imageMime
-    ? `/vehicles/${encodeURIComponent(vehicle.id)}/image`
+    ? `/vehicles/${encodeURIComponent(vehicle.id)}/image${vehicleAssetVersion(vehicle)}`
     : vehicle.image;
+}
+function vehicleLogoPath(vehicle: VehicleCatalogItem) {
+  return vehicle.logoData && vehicle.logoMime
+    ? `/vehicles/${encodeURIComponent(vehicle.id)}/logo${vehicleAssetVersion(vehicle)}`
+    : null;
 }
 function vehicleResponse(vehicle: VehicleCatalogItem) {
   return {
@@ -1167,6 +1183,8 @@ function vehicleResponse(vehicle: VehicleCatalogItem) {
     image: vehicleImagePath(vehicle),
     fallbackImage: vehicle.image,
     hasStoredImage: Boolean(vehicle.imageData && vehicle.imageMime),
+    logo: vehicleLogoPath(vehicle),
+    hasStoredLogo: Boolean(vehicle.logoData && vehicle.logoMime),
     colorLabel: vehicle.colorLabel,
     modelChoiceLabel: vehicle.modelChoiceLabel,
     enabled: vehicle.enabled,
@@ -7052,28 +7070,36 @@ class AdminController {
   }
   @Post("vehicles")
   @UseInterceptors(
-    FileInterceptor("vehicleImage", {
-      limits: { fileSize: 2 * 1024 * 1024 },
-      fileFilter: (_req, file, callback) => {
-        if (!/^image\/(jpeg|png|webp)$/.test(file.mimetype)) {
-          callback(
-            new BadRequestException(
-              "Vehicle image must be JPEG, PNG, or WebP",
-            ),
-            false,
-          );
-          return;
-        }
-        callback(null, true);
+    FileFieldsInterceptor(
+      [
+        { name: "vehicleImage", maxCount: 1 },
+        { name: "vehicleLogo", maxCount: 1 },
+      ],
+      {
+        limits: { fileSize: 2 * 1024 * 1024 },
+        fileFilter: (_req, file, callback) => {
+          if (!/^image\/(jpeg|png|webp)$/.test(file.mimetype)) {
+            callback(
+              new BadRequestException(
+                "Vehicle image and logo must be JPEG, PNG, or WebP",
+              ),
+              false,
+            );
+            return;
+          }
+          callback(null, true);
+        },
       },
-    }),
+    ),
   )
   async saveVehicle(
     @Req() req: RequestLike,
-    @Body() body: Omit<Partial<VehicleCatalogItem>, "enabled"> & { enabled?: boolean | string; removeVehicleImage?: string },
-    @UploadedFile() vehicleImage?: Express.Multer.File,
+    @Body() body: Omit<Partial<VehicleCatalogItem>, "enabled"> & { enabled?: boolean | string; removeVehicleImage?: string; removeVehicleLogo?: string },
+    @UploadedFiles() files?: { vehicleImage?: Express.Multer.File[]; vehicleLogo?: Express.Multer.File[] },
   ) {
     requireAuth(req);
+    const vehicleImage = files?.vehicleImage?.[0];
+    const vehicleLogo = files?.vehicleLogo?.[0];
     const [category, existing] = await Promise.all([
       prisma.vehicleCategory.findUnique({
         where: { id: body.categoryId || "" },
@@ -7083,6 +7109,7 @@ class AdminController {
     const seats = Number(body.seats);
     const image = body.image?.trim() || existing?.image || "";
     const removeVehicleImage = body.removeVehicleImage === "true";
+    const removeVehicleLogo = body.removeVehicleLogo === "true";
     const hasImage = Boolean(
       vehicleImage ||
       image ||
@@ -7100,6 +7127,7 @@ class AdminController {
         "Valid vehicle fields are required",
         HttpStatus.BAD_REQUEST,
       );
+    const vehicleId = body.id;
     const enabled = typeof body.enabled === "string" ? body.enabled === "true" : body.enabled ?? true;
     const values = {
       categoryId: body.categoryId!,
@@ -7110,6 +7138,8 @@ class AdminController {
       image,
       ...(vehicleImage ? { imageData: new Uint8Array(vehicleImage.buffer), imageMime: vehicleImage.mimetype } : {}),
       ...(!vehicleImage && removeVehicleImage ? { imageData: null, imageMime: null } : {}),
+      ...(vehicleLogo ? { logoData: new Uint8Array(vehicleLogo.buffer), logoMime: vehicleLogo.mimetype } : {}),
+      ...(!vehicleLogo && removeVehicleLogo ? { logoData: null, logoMime: null } : {}),
       colorLabel: body.colorLabel?.trim() || "不限顏色",
       modelChoiceLabel: body.modelChoiceLabel?.trim() || "",
       enabled,
@@ -7118,14 +7148,22 @@ class AdminController {
         existing?.order ||
         (await prisma.vehicle.count()) + 1,
     };
-    return vehicleResponse(
-      existing
-        ? await prisma.vehicle.update({
+    return prisma.$transaction(async (tx) => {
+      const vehicle = existing
+        ? await tx.vehicle.update({
             where: { id: existing.id },
             data: values,
           })
-        : await prisma.vehicle.create({ data: { id: body.id, ...values } }),
-    );
+        : await tx.vehicle.create({ data: { id: vehicleId, ...values } });
+      await tx.fareQuoteVehicleSnapshot.updateMany({
+        where: { vehicleId: vehicle.id },
+        data: {
+          image: vehicleImagePath(vehicle),
+          logo: vehicleLogoPath(vehicle),
+        },
+      });
+      return vehicleResponse(vehicle);
+    });
   }
   @Delete("vehicles/:id") async deleteVehicle(
     @Req() req: RequestLike,
@@ -7833,6 +7871,19 @@ class PublicPromotionsController {
 
 @Controller("vehicles")
 class PublicVehiclesController {
+  @Get(":id/logo") async vehicleLogo(
+    @Param("id") id: string,
+    @Res() response: Response,
+  ) {
+    const vehicle = await prisma.vehicle.findUnique({
+      where: { id },
+      select: { logoData: true, logoMime: true },
+    });
+    if (!vehicle?.logoData || !vehicle.logoMime)
+      throw new HttpException("Vehicle logo not found", HttpStatus.NOT_FOUND);
+    response.type(vehicle.logoMime).send(Buffer.from(vehicle.logoData));
+  }
+
   @Get(":id/image") async vehicleImage(
     @Param("id") id: string,
     @Res() response: Response,
@@ -8404,6 +8455,7 @@ class PublicQuotesController {
               series: vehicle.series,
               seats: vehicle.seats,
               image: vehicleImagePath(vehicle),
+              logo: vehicleLogoPath(vehicle),
               colorLabel: vehicle.colorLabel,
               modelChoiceLabel: vehicle.modelChoiceLabel,
             },
@@ -9884,6 +9936,9 @@ function clientTripResponse(
           series: vehicle.series,
           seats: vehicle.seats,
           modelChoiceLabel: vehicle.modelChoiceLabel,
+          logo:
+            vehicle.logo ||
+            `/vehicles/${encodeURIComponent(vehicle.vehicleId)}/logo`,
         }
       : null,
     executionPhase: trip.executionPhase || null,

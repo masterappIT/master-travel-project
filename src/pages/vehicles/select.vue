@@ -30,7 +30,8 @@
   </view>
 </template>
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { useTripStore } from '../../stores/trip'
 import { openCachedPage, closeCachedPage } from '../../utils/navigation'
@@ -108,7 +109,7 @@ const loadCatalog = async () => {
     catalogError.value = error instanceof Error ? error.message : '車型資料暫時無法載入'
   }
 }
-onMounted(loadCatalog)
+onShow(() => { void loadCatalog() })
 watch([currency, () => tripStore.activeDraft.distanceMeters], () => { void loadQuotes() })
 const cityName = (value: string | undefined, fallback: string) => {
   const text = value?.trim() || ''

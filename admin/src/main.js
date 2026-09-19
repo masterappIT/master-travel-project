@@ -168,7 +168,7 @@ const { promotionDiscountHint, promotionStackingHint, filteredPromotions, toggle
 const routePricingActions = createRoutePricingActions({ api, pricingCurrency, distancePricing, routeMinimumFareForm, error, load, displayError, requestConfirmation, notify, t })
 const { addPricingTier, removePricingTier, syncPreviousTier, syncNextTier, saveDistancePricing, switchPricingCurrency, resetRouteMinimumFare, editRouteMinimumFare, saveRouteMinimumFare, removeRouteMinimumFare } = routePricingActions
 const vehiclesActions = createVehiclesActions({ api, vehiclesApi, view, categories, vehicles, extras, distancePricing, routeMinimumFareForm, categoryForm, vehicleForm, extraForm, pricingCurrency, severeWeatherEnabled, extraSortId, load, error, displayError, requestConfirmation, notify, t })
-const { editExtra, resetExtra, saveExtra, moveExtra, showOnlyExtra, toggleSevereWeather, removeExtra, editVehicle: editCatalogVehicle, editCategory, resetCategory, resetVehicle, uploadVehicleImage, removeVehicleImage, closeVehicleForm: closeCatalogVehicleForm, saveCategory, toggleCategory, saveVehicle, toggleVehicle, removeCategory, removeVehicle } = vehiclesActions
+const { editExtra, resetExtra, saveExtra, moveExtra, showOnlyExtra, toggleSevereWeather, removeExtra, editVehicle: editCatalogVehicle, editCategory, resetCategory, resetVehicle, uploadVehicleImage, uploadVehicleLogo, removeVehicleImage, removeVehicleLogo, closeVehicleForm: closeCatalogVehicleForm, saveCategory, toggleCategory, saveVehicle, toggleVehicle, removeCategory, removeVehicle } = vehiclesActions
 const addressesActions = createAddressesActions({ addressesApi, addresses, addressForm, mainlandCities, mainlandCityForm, addressSearchKeyword, addressSearchResults, addressSearching, error, load, displayError, displayMainlandCity, apiMainlandCity, displayPlaceName, requestConfirmation, notify, t })
 const { editAddress, resetAddress, searchAddressPlaces, handleAddressRegionChange, handleAddressCityChange, selectAddressSearchResult, saveAddress, removeAddress, resetMainlandCity, editMainlandCity, saveMainlandCity, removeMainlandCity } = addressesActions
 const driverActions = createDriversActions({ driversApi, driverForm, selectedDriver, settlementForm, drivers, allVehicles, error, load, displayError, requestConfirmation, notify })
@@ -374,9 +374,12 @@ const App = { setup() {
      resetVehicle,
      editVehicle: editCatalogVehicle,
      uploadVehicleImage,
+     uploadVehicleLogo,
      removeVehicleImage,
+     removeVehicleLogo,
      closeVehicleForm: closeCatalogVehicleForm,
      vehicleImageUrl: vehiclesApi.imageUrl,
+     vehicleLogoUrl: vehiclesApi.logoUrl,
      saveVehicle,
      toggleVehicle,
      removeVehicle,
