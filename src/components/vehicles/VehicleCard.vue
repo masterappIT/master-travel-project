@@ -7,7 +7,7 @@
     </view>
     <view class="spec seat"><image src="/static/vehicles/seat.svg" mode="aspectFit"/><text>{{ vehicle.seats }}座</text></view><view class="spec color">{{ vehicle.colorLabel || '不限颜色' }}</view><view v-if="vehicle.modelChoice" class="spec model-choice">{{ vehicle.modelChoiceLabel || '不限車款' }}</view>
     <view v-if="payableFare !== undefined" class="price">{{ formatPayableFare(payableFare, payableFareCurrency) }}</view>
-    <view v-else class="price quote-price">暫無報價</view>
+    <view v-else class="price quote-price">{{ quoteStatusLabel }}</view>
     <view v-if="discountAmount > 0" class="discount">已減 {{ formatPayableFare(discountAmount, payableFareCurrency) }}</view>
   </view>
 </template>
@@ -17,12 +17,13 @@ import type { FareQuote } from '../../services/api'
 import type { Vehicle } from '../../types/vehicle'
 import { formatCurrencyAmount, normalizeCurrency, useCurrency } from '../../composables/useCurrency'
 
-const props = defineProps<{ vehicle: Vehicle; quote?: FareQuote | null; selectable?: boolean; selected?: boolean }>()
+const props = defineProps<{ vehicle: Vehicle; quote?: FareQuote | null; quoteStatus?: 'idle' | 'loading' | 'error'; selectable?: boolean; selected?: boolean }>()
 const emit = defineEmits<{ select: [] }>()
 const logoLoadFailed = ref(false)
 watch(() => props.vehicle.logo, () => { logoLoadFailed.value = false })
 const payableFare = computed(() => props.quote?.total ?? props.vehicle.price)
 const payableFareCurrency = computed(() => props.quote?.currency)
+const quoteStatusLabel = computed(() => props.quoteStatus === 'loading' ? '載入中' : props.quoteStatus === 'error' ? '報價失敗' : '暫無報價')
 const discountAmount = computed(() => Math.abs(props.quote?.lines
   .filter(line => line.type === 'DISCOUNT')
   .reduce((sum, line) => sum + Math.min(0, line.totalAmount), 0) || 0))

@@ -10,11 +10,14 @@
       </view>
       <view class="tabs"><view v-for="tab in tabs" :key="tab.value" :class="['tab',{active:activeCategory===tab.value}]" @tap="activeCategory=tab.value"><text>{{ tab.label }}</text><image v-if="activeCategory===tab.value" src="/static/vehicles/tab-line.svg" mode="scaleToFill" /></view></view>
     </view>
-    <view v-if="catalogError" class="catalog-message" @tap="loadCatalog">{{ catalogError }}，點擊重試</view>
-    <scroll-view v-else class="vehicle-scroll" scroll-y :show-scrollbar="false">
+    <view v-if="catalogLoading" class="page-state"><text>正在載入車型</text></view>
+    <view v-else-if="catalogError" class="page-state page-state-error"><text>{{ catalogError }}</text><button @tap="loadCatalog">重新載入</button></view>
+    <view v-else-if="!visibleGroups.length" class="page-state"><text>目前沒有可選車型</text><button @tap="loadCatalog">重新載入</button></view>
+    <scroll-view v-show="!catalogLoading && !catalogError && visibleGroups.length" class="vehicle-scroll" scroll-y :show-scrollbar="false">
+      <view v-if="quoteError" class="quote-message"><text>{{ quoteError }}</text><button @tap="loadQuotes">重試報價</button></view>
       <view v-for="group in visibleGroups" :key="group.category" class="vehicle-group">
         <text class="group-label">{{ group.title }}</text>
-        <VehicleCard v-for="vehicle in group.vehicles" :key="`${group.category}-${vehicle.id}`" :vehicle="vehicle" :quote="tripStore.fareQuotes[vehicle.id]" :selectable="vehicle.selectable" :selected="selectedVehicleId === vehicle.id" @select="selectVehicle(vehicle)" />
+        <VehicleCard v-for="vehicle in group.vehicles" :key="`${group.category}-${vehicle.id}`" :vehicle="vehicle" :quote="tripStore.fareQuotes[vehicle.id]" :quote-status="quoteStatusFor(vehicle.id)" :selectable="vehicle.selectable" :selected="selectedVehicleId === vehicle.id" @select="selectVehicle(vehicle)" />
       </view><view class="bottom-space" />
     </scroll-view>
     <TripEditSheet
@@ -49,7 +52,10 @@ const { currency } = useCurrency()
 const activeCategory = ref<Category>('all')
 const editSheetOpen = ref(false)
 const catalog = ref<PublicVehicleCatalog>({ categories: [], data: [], extras: [] })
+const catalogLoading = ref(true)
 const catalogError = ref('')
+const quoteLoading = ref(false)
+const quoteError = ref('')
 const tabs = computed(() => [{ label: '全部', value: 'all' as Category }, ...catalog.value.categories.map(category => ({ label: category.tabLabel, value: category.id }))])
 const groups = computed<VehicleGroup[]>(() => catalog.value.categories.map(category => ({
   category: category.id,
@@ -71,19 +77,25 @@ const routeRegion = (value: string | undefined, fallback: string) => {
 let quoteRequestId = 0
 const loadQuotes = async () => {
   const requestId = ++quoteRequestId
+  quoteError.value = ''
   const distanceMeters = tripStore.activeDraft.distanceMeters
   const vehicles = catalog.value.data.filter(vehicle => vehicle.categoryId)
   if (!Number.isFinite(distanceMeters) || !vehicles.length) {
-    if (requestId === quoteRequestId) tripStore.setFareQuotes([])
+    if (requestId === quoteRequestId) {
+      quoteLoading.value = false
+      tripStore.setFareQuotes([])
+    }
     return
   }
 
+  quoteLoading.value = true
   const results = await Promise.allSettled(vehicles.map(vehicle => createFareQuote({
     categoryId: vehicle.categoryId!,
     vehicleId: vehicle.id,
     distanceMeters: distanceMeters!,
     durationSeconds: (tripStore.activeDraft.durationHours || 0) * 3600,
-    originRegion: tripStore.activeDraft.route.originCity,
+    originRegion: tripStore.activeDraft.route.originRegion || routeRegion(tripStore.activeDraft.route.origin, ''),
+    originCity: tripStore.activeDraft.route.originCity,
     destinationRegion: tripStore.activeDraft.route.destinationRegion || routeRegion(tripStore.activeDraft.route.destination, ''),
     destinationCity: tripStore.activeDraft.route.destinationCity,
     scheduledAt: tripStore.departureTime,
@@ -91,24 +103,35 @@ const loadQuotes = async () => {
     displayCurrency: currency.value
   })))
   if (requestId !== quoteRequestId) return
+  quoteLoading.value = false
   const rejected = results.find((result): result is PromiseRejectedResult => result.status === 'rejected')
-  if (rejected && results.every(result => result.status === 'rejected')) {
-    catalogError.value = rejected.reason instanceof Error ? rejected.reason.message : '報價暫時無法取得'
-  }
+  if (rejected) quoteError.value = results.every(result => result.status === 'rejected')
+    ? (rejected.reason instanceof Error ? rejected.reason.message : '報價暫時無法取得')
+    : '部分車型報價暫時無法取得'
   tripStore.setFareQuotes(results
     .filter((result): result is PromiseFulfilledResult<FareQuote> => result.status === 'fulfilled')
     .map(result => result.value))
 }
 const loadCatalog = async () => {
+  catalogLoading.value = true
   catalogError.value = ''
   try {
     catalog.value = await listPublicVehicles()
     if (activeCategory.value !== 'all' && !catalog.value.categories.some(category => category.id === activeCategory.value)) activeCategory.value = 'all'
-    await loadQuotes()
+    void loadQuotes()
   } catch (error) {
     catalogError.value = error instanceof Error ? error.message : '車型資料暫時無法載入'
+  } finally {
+    catalogLoading.value = false
   }
 }
+const quoteStatusFor = (vehicleId: string) => tripStore.fareQuotes[vehicleId]
+  ? 'idle' as const
+  : quoteLoading.value
+    ? 'loading' as const
+    : quoteError.value
+      ? 'error' as const
+      : 'idle' as const
 onShow(() => { void loadCatalog() })
 watch([currency, () => tripStore.activeDraft.distanceMeters], () => { void loadQuotes() })
 const cityName = (value: string | undefined, fallback: string) => {
@@ -191,5 +214,5 @@ const saveTripChanges = async (
 const goBack = () => closeCachedPage('/pages/index/index')
 </script>
 <style scoped>
-:global(html),:global(body),:global(#app){width:100%;min-width:0;height:100%;margin:0;overflow:hidden;overscroll-behavior:none}.page{position:fixed;top:0;left:0;width:430px;height:var(--mobile-height, 932px);overflow:hidden;border-radius:35px;background:#56657e;color:#38434a;font-family:'Noto Sans TC',sans-serif;transform:scale(var(--mobile-scale, 1));transform-origin:top left}.header{position:absolute;z-index:3;top:0;left:0;width:430px;height:155px;overflow:hidden;border-radius:25px;background:#56657e;color:#fff}.back-button{position:absolute;top:53px;left:25px;width:28px;height:40px;display:flex;align-items:center;justify-content:center}.back-button image{width:16px;height:29px}.route-summary{position:absolute;top:56px;left:53px;width:324px;height:59px}.origin-icon{position:absolute;top:12px;left:69px;width:8px;height:14.517px}.origin{position:absolute;top:9px;left:94px;font-size:14px;font-weight:700;line-height:20px}.route-icon{position:absolute;top:4px;left:139px;width:30px;height:30px}.destination-icon{position:absolute;top:13px;left:186px;width:8px;height:11.978px}.destination{position:absolute;top:9px;left:214px;font-size:14px;font-weight:700;line-height:20px}.booking-time{position:absolute;top:39px;left:0;width:324px;text-align:center;font-size:14px;font-weight:100;line-height:20px;white-space:nowrap}.tabs{position:absolute;bottom:0;left:26px;width:378px;height:30px;display:flex;justify-content:space-between}.tab{position:relative;height:30px;font-size:14px;line-height:20px;white-space:nowrap}.tab.active{color:#1effaa;font-weight:700}.tab image{position:absolute;bottom:1px;left:0;width:32px;height:2px}.vehicle-scroll{position:absolute;top:155px;left:0;width:430px;height:calc(100% - 155px)}.vehicle-group{padding-top:10px}.group-label{display:flex;width:max-content;height:18px;margin:0 0 5px 24px;padding:0 6px;align-items:center;border-radius:25px;background:#d9d9d9;font-size:8px;font-weight:500;line-height:12px}.vehicle-card{position:relative;width:380px;height:180px;margin:0 auto 10px;overflow:hidden;border-radius:25px;background:#fff;color:#25292f}.vehicle-name{position:absolute;z-index:2;top:43px;left:27px;width:95px;font-size:8px;font-weight:900;line-height:12px}.vehicle-name .brand{font-weight:100}.vehicle-name .series{display:block;margin-left:7px;font-size:12px;line-height:17px}.radio{position:absolute;z-index:2;top:24px;left:43px;width:20px;height:20px}.vehicle-image{position:absolute;top:0;left:150px;width:230px;height:153px}.vehicle-image.tesla-s{height:132px}.double-image{position:absolute;top:0;left:0;width:380px;height:153px;display:flex}.double-image image{width:230px;height:153px;flex:none}.double-image image+image{margin-left:-80px}.spec{position:absolute;z-index:2;top:141px;height:20px;display:flex;align-items:center;justify-content:center;box-sizing:border-box;border-radius:25px;background:#d9d9d9;color:#000;font-size:10px;line-height:14px}.seat{left:27px;width:54px}.seat image{width:16px;height:16px;margin-right:6px}.color{left:85px;width:54px;font-weight:350}.model-choice{left:145px;width:54px;background:#fff;font-weight:700}.price{position:absolute;z-index:2;top:141px;left:255px;width:98px;height:20px;border-radius:25px;background:#1effaa;font-size:14px;font-weight:700;line-height:20px;text-align:center}.discount{position:absolute;z-index:2;top:161px;left:276px;color:#f95c5c;font-size:12px;line-height:17px}.vehicle-group:first-child .spec,.vehicle-group:first-child .price{top:143px}.bottom-space{height:20px}@media (max-width:599px){.page{top:0;left:0;height:var(--mobile-height,100dvh);border-radius:0;transform:scale(var(--mobile-scale,1));transform-origin:top left}}
+:global(html),:global(body),:global(#app){width:100%;min-width:0;height:100%;margin:0;overflow:hidden;overscroll-behavior:none}.page{position:fixed;top:0;left:0;width:430px;height:var(--mobile-height, 932px);overflow:hidden;border-radius:35px;background:#56657e;color:#38434a;font-family:'Noto Sans TC',sans-serif;transform:scale(var(--mobile-scale, 1));transform-origin:top left}.header{position:absolute;z-index:3;top:0;left:0;width:430px;height:155px;overflow:hidden;border-radius:25px;background:#56657e;color:#fff}.back-button{position:absolute;top:53px;left:25px;width:28px;height:40px;display:flex;align-items:center;justify-content:center}.back-button image{width:16px;height:29px}.route-summary{position:absolute;top:56px;left:53px;width:324px;height:59px}.origin-icon{position:absolute;top:12px;left:69px;width:8px;height:14.517px}.origin{position:absolute;top:9px;left:94px;font-size:14px;font-weight:700;line-height:20px}.route-icon{position:absolute;top:4px;left:139px;width:30px;height:30px}.destination-icon{position:absolute;top:13px;left:186px;width:8px;height:11.978px}.destination{position:absolute;top:9px;left:214px;font-size:14px;font-weight:700;line-height:20px}.booking-time{position:absolute;top:39px;left:0;width:324px;text-align:center;font-size:14px;font-weight:100;line-height:20px;white-space:nowrap}.tabs{position:absolute;bottom:0;left:26px;width:378px;height:30px;display:flex;justify-content:space-between}.tab{position:relative;height:30px;font-size:14px;line-height:20px;white-space:nowrap}.tab.active{color:#1effaa;font-weight:700}.tab image{position:absolute;bottom:1px;left:0;width:32px;height:2px}.vehicle-scroll{position:absolute;top:155px;left:0;width:430px;height:calc(100% - 155px)}.page-state{position:absolute;top:155px;left:0;width:430px;height:calc(100% - 155px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;box-sizing:border-box;padding:24px;color:#fff;font-size:14px;text-align:center}.page-state button,.quote-message button{margin:0;padding:0 14px;border:0;border-radius:8px;background:#1effaa;color:#25292f;font-size:12px;line-height:30px}.page-state button::after,.quote-message button::after{border:0}.quote-message{display:flex;min-height:46px;align-items:center;justify-content:center;gap:10px;padding:8px 20px;box-sizing:border-box;color:#fff;font-size:12px;text-align:center}.quote-message button{flex:none;line-height:28px}.vehicle-group{padding-top:10px}.group-label{display:flex;width:max-content;height:18px;margin:0 0 5px 24px;padding:0 6px;align-items:center;border-radius:25px;background:#d9d9d9;font-size:8px;font-weight:500;line-height:12px}.vehicle-card{position:relative;width:380px;height:180px;margin:0 auto 10px;overflow:hidden;border-radius:25px;background:#fff;color:#25292f}.vehicle-name{position:absolute;z-index:2;top:43px;left:27px;width:95px;font-size:8px;font-weight:900;line-height:12px}.vehicle-name .brand{font-weight:100}.vehicle-name .series{display:block;margin-left:7px;font-size:12px;line-height:17px}.radio{position:absolute;z-index:2;top:24px;left:43px;width:20px;height:20px}.vehicle-image{position:absolute;top:0;left:150px;width:230px;height:153px}.vehicle-image.tesla-s{height:132px}.double-image{position:absolute;top:0;left:0;width:380px;height:153px;display:flex}.double-image image{width:230px;height:153px;flex:none}.double-image image+image{margin-left:-80px}.spec{position:absolute;z-index:2;top:141px;height:20px;display:flex;align-items:center;justify-content:center;box-sizing:border-box;border-radius:25px;background:#d9d9d9;color:#000;font-size:10px;line-height:14px}.seat{left:27px;width:54px}.seat image{width:16px;height:16px;margin-right:6px}.color{left:85px;width:54px;font-weight:350}.model-choice{left:145px;width:54px;background:#fff;font-weight:700}.price{position:absolute;z-index:2;top:141px;left:255px;width:98px;height:20px;border-radius:25px;background:#1effaa;font-size:14px;font-weight:700;line-height:20px;text-align:center}.discount{position:absolute;z-index:2;top:161px;left:276px;color:#f95c5c;font-size:12px;line-height:17px}.vehicle-group:first-child .spec,.vehicle-group:first-child .price{top:143px}.bottom-space{height:20px}@media (max-width:599px){.page{top:0;left:0;height:var(--mobile-height,100dvh);border-radius:0;transform:scale(var(--mobile-scale,1));transform-origin:top left}}
 </style>

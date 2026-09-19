@@ -5,6 +5,7 @@ let API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://192.168.0.185:30
 // #ifdef H5
 API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api'
 // #endif
+const REQUEST_TIMEOUT_MS = 10000
 const apiError = (response: UniApp.RequestSuccessCallbackResult, fallback: string) => {
   if (response.statusCode === 401) {
     clearAuthentication()
@@ -14,6 +15,14 @@ const apiError = (response: UniApp.RequestSuccessCallbackResult, fallback: strin
     ? String((response.data as { message?: unknown }).message || '')
     : ''
   return new Error(message || `${fallback}（HTTP ${response.statusCode || 0}，請確認小程序可連線至 ${API_BASE_URL}）`)
+}
+
+const networkError = (error: unknown, fallback: string) => {
+  const detail = typeof error === 'object' && error !== null && 'errMsg' in error
+    ? String((error as { errMsg?: unknown }).errMsg || '')
+    : ''
+  const readableDetail = detail.replace(/^request:fail\s*/i, '').trim()
+  return new Error(readableDetail ? `${fallback}：${readableDetail}` : fallback)
 }
 
 const authHeaders = () => {
@@ -385,8 +394,9 @@ function resolvePublicAssetUrl(url: string | null | undefined): string {
 }
 
 export async function listPublicVehicles(): Promise<PublicVehicleCatalog> {
-  const response = await uni.request({ url: `${API_BASE_URL}/vehicles` })
-  if (response.statusCode >= 400) throw new Error('車型資料暫時無法載入')
+  const response = await uni.request({ url: `${API_BASE_URL}/vehicles`, timeout: REQUEST_TIMEOUT_MS })
+    .catch(error => { throw networkError(error, '無法連接伺服器，車型資料載入失敗') })
+  if (response.statusCode >= 400) throw apiError(response, '車型資料暫時無法載入')
   const catalog = response.data as PublicVehicleCatalog
   return {
     ...catalog,
@@ -415,8 +425,9 @@ export type FareQuote = {
 }
 
 export async function createFareQuote(input: { categoryId: string; vehicleId: string; distanceMeters: number; durationSeconds: number; extraIds?: string[]; displayCurrency?: 'RMB' | 'HKD'; couponCode?: string; originRegion?: string; originCity?: string; destinationRegion?: string; destinationCity?: string; scheduledAt?: string }): Promise<FareQuote> {
-  const response = await uni.request({ url: `${API_BASE_URL}/quotes`, method: 'POST', data: input })
-  if (response.statusCode >= 400) throw new Error((response.data as { message?: string })?.message || '報價暫時無法取得')
+  const response = await uni.request({ url: `${API_BASE_URL}/quotes`, method: 'POST', data: input, timeout: REQUEST_TIMEOUT_MS })
+    .catch(error => { throw networkError(error, '無法連接伺服器，報價取得失敗') })
+  if (response.statusCode >= 400) throw apiError(response, '報價暫時無法取得')
   return response.data as FareQuote
 }
 
