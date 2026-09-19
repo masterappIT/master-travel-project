@@ -31,6 +31,7 @@ import { createUsersActions } from './pages/users/users.actions.js'
 import { DriversPage } from './pages/drivers/DriversPage.js'
 import { DriverVehiclesPage } from './pages/drivers/DriverVehiclesPage.js'
 import { createDriversActions } from './pages/drivers/drivers.actions.js'
+import { isEligibleVehicleDriver } from './utils/drivers.js'
 import { TripsPage } from './pages/trips/TripsPage.js'
 import { createTripsActions } from './pages/trips/trips.actions.js'
 import { SettlementsPage } from './pages/settlements/SettlementsPage.js'
@@ -75,6 +76,7 @@ const { exchangeRate, pricingCurrency, severeWeatherEnabled, adminLogo, paymentS
 const { users, selectedUser, walletTransactions, topUpWithdrawalHistory, trips, charterOrders, addresses, mainlandCities, addressSearchKeyword, addressSearchResults, addressSearching, categories, vehicles, extras, distancePricing, routeMinimumFares, routeMinimumFareForm, membershipPlans, membershipOrders, promotions, promotionForm, promotionSaving, promotionDeletingId, promotionTogglingId, mileageRules, mileageRewards, mileageAccounts, mileageRewardForm, mileageLedger, mileageSelectedAccount, mileageSaving, invitationSettings, invitationWalletCurrency, invitationSummary, invitationRecords, invitationSaving } = createAdminResourceState()
 const { administrators, auditLogs, notifications, notificationTemplates, notificationUsers, notificationDrivers, personnel, entryItems, drivers, selectedDriver, expenseItems } = createAdminAuxiliaryState()
 const allVehicles = ref([])
+const eligibleVehicleDrivers = computed(() => drivers.value.filter(isEligibleVehicleDriver))
 const { orderUrls, createdOrderUrl, tripCatalog, tripQuote, vehicleCategories, tripBookingStep, tripPaymentMethod, tripUseFareBalance, tripUseCashBalance, tripLocationKeyword, tripLocationResults, tripLocationSearching, tripLocationTarget } = createAdminInteractionState()
 const { toasts, confirmDialog, dismissToast, notify, requestConfirmation, resolveConfirmation } = createFeedbackController()
 const paymentsPageState = createPaymentsPageState()
@@ -170,7 +172,7 @@ const { editExtra, resetExtra, saveExtra, moveExtra, showOnlyExtra, toggleSevere
 const addressesActions = createAddressesActions({ addressesApi, addresses, addressForm, mainlandCities, mainlandCityForm, addressSearchKeyword, addressSearchResults, addressSearching, error, load, displayError, displayMainlandCity, apiMainlandCity, displayPlaceName, requestConfirmation, notify, t })
 const { editAddress, resetAddress, searchAddressPlaces, handleAddressRegionChange, handleAddressCityChange, selectAddressSearchResult, saveAddress, removeAddress, resetMainlandCity, editMainlandCity, saveMainlandCity, removeMainlandCity } = addressesActions
 const driverActions = createDriversActions({ driversApi, driverForm, selectedDriver, settlementForm, drivers, allVehicles, error, load, displayError, requestConfirmation, notify })
-const { reviewStatusLabel, resetDriver, editDriver, formatDriverHongKongPlate, formatDriverMacauPlate, formatDriverMainlandPlate, changeDriverOwnership, uploadDriverPhotos, removeDriverPhoto, saveDriver, updateDriverStatus, removeDriver, openDriverDetail, previewDriver, closeDriverDetail, approveDriver, requestDriverRevision, rejectDriver, resetSettlement, saveSettlement, refreshDriverVehicles, updateVehicleStatus, removeVehicle: removeDriverVehicle, vehicleForm: driverVehicleForm, resetVehicleForm, editVehicle: editDriverVehicle, closeVehicleForm, changeVehicleOwnership: changeDriverVehicleOwnership, saveVehicle: saveDriverVehicle, manageVehicleAssignments, closeVehicleAssignments, bindVehicleDriver, unbindVehicleDriver, vehicleAssignments, assignmentVehicle } = driverActions
+const { reviewStatusLabel, resetDriver, editDriver, formatDriverHongKongPlate, formatDriverMacauPlate, formatDriverMainlandPlate, changeDriverOwnership, uploadDriverPhotos, removeDriverPhoto, saveDriver, updateDriverStatus, removeDriver, openDriverDetail, previewDriver, closeDriverDetail, approveDriver, requestDriverRevision, rejectDriver, resetSettlement, saveSettlement, refreshDriverVehicles, updateVehicleStatus, removeVehicle: removeDriverVehicle, vehicleForm: driverVehicleForm, resetVehicleForm, editVehicle: editDriverVehicle, closeVehicleForm, changeVehicleOwnership: changeDriverVehicleOwnership, saveVehicle: saveDriverVehicle, manageVehicleAssignments, closeVehicleAssignments, bindVehicleDriver, setPrimaryVehicle, unbindVehicleDriver, vehicleAssignments, assignmentVehicle } = driverActions
 const administratorsActions = createAdministratorsActions({ api, administratorForm, load, error, displayError, requestConfirmation, notify })
 const { resetAdministrator, editAdministrator, saveAdministrator, disableAdministrator } = administratorsActions
 const operationsStorage = createOperationsStorage({ personnel, entryItems, expenseItems })
@@ -542,8 +544,9 @@ const App = { setup() {
       manageVehicleAssignments,
       closeVehicleAssignments,
       bindVehicleDriver,
+      setPrimaryVehicle,
       unbindVehicleDriver,
-      availableDrivers: drivers,
+      availableDrivers: eligibleVehicleDrivers,
       editVehicleFromRegistry: vehicle => { editDriverVehicle(vehicle); view.value = 'driver-vehicles' },
       openDriver: driverId => { view.value = 'drivers'; const driver = drivers.value.find(item => item.id === driverId); if (driver) openDriverDetail(driver) }
     })

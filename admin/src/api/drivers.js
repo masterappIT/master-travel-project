@@ -17,6 +17,10 @@ export const createDriversApi = api => ({
     method: 'POST',
     body: JSON.stringify({ enabled })
   }),
+  updateSettlement: (id, payload) => api(`/admin/drivers/${id}/settlement`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload)
+  }),
   approve: id => api(`/admin/drivers/${id}/review/approve`, { method: 'POST' }),
   requestRevision: (id, reason) => api(`/admin/drivers/${id}/review/revision`, { method: 'POST', body: JSON.stringify({ reason }) }),
   reject: (id, reason) => api(`/admin/drivers/${id}/review/reject`, { method: 'POST', body: JSON.stringify({ reason }) }),
@@ -35,6 +39,7 @@ export const createDriversApi = api => ({
   updateVehicleStatus: (id, enabled) => api(`/admin/driver-vehicles/${id}/status`, { method: 'POST', body: JSON.stringify({ enabled }) }),
   listVehicleAssignments: id => api(`/admin/driver-vehicles/${id}/assignments`),
   bindVehicle: (driverId, id) => api(`/admin/drivers/${driverId}/vehicles/${id}/bind`, { method: 'POST' }),
+  setPrimaryVehicle: (driverId, id) => api(`/admin/drivers/${driverId}/vehicles/${id}/primary`, { method: 'POST' }),
   unbindVehicle: (driverId, id) => api(`/admin/drivers/${driverId}/vehicles/${id}/bind`, { method: 'DELETE' }),
   removeVehicle: id => api(`/admin/driver-vehicles/${id}`, { method: 'DELETE' }),
 })
