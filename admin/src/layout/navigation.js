@@ -4,6 +4,7 @@ export const primaryNavigation = Object.freeze([
   { id: 'drivers', label: 'drivers' },
   { id: 'trips', label: 'trips' },
   { id: 'dispatch', label: 'dispatch' },
+  { id: 'settlements', label: 'settlements' },
   { id: 'charters', label: 'charters' },
   { id: 'addresses', label: 'addresses' },
   { id: 'vehicles', label: 'vehicleManagement' },
@@ -19,7 +20,6 @@ export const primaryNavigation = Object.freeze([
 export const operationsNavigation = Object.freeze([
   { id: 'operations-personnel', label: 'personnelManagement' },
   { id: 'drivers', label: 'drivers' },
-  { id: 'vehicles', label: 'vehicleManagement' },
   { id: 'entries', label: 'entryItems' },
   { id: 'income', label: 'incomeReport' },
   { id: 'expenses', label: 'expenseDetails' }

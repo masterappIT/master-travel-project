@@ -31,6 +31,7 @@ export function createAdminResourceLoader({
       if (['users', 'trips', 'charters'].includes(requestedView)) await resourceLoaders.coreUsers()
       if (requestedView === 'drivers') await resourceLoaders.drivers()
       if (requestedView === 'dispatch') await resourceLoaders.dispatch()
+      if (requestedView === 'settlements') await resourceLoaders.settlements()
       if (requestedView === 'trips') await resourceLoaders.trips()
       if (requestedView === 'charters') await resourceLoaders.charters()
       if (requestedView === 'addresses') error.value = await resourceLoaders.addresses()

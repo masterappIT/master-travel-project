@@ -155,11 +155,6 @@ class _CompletionHeader extends StatelessWidget {
                   fontSize: 24,
                   fontWeight: FontWeight.w700,
                   color: DriverColors.text)),
-          SizedBox(height: 12),
-          Text('請與乘客確認車資並完成收款',
-              style: TextStyle(
-                  fontSize: DriverTypography.body,
-                  color: DriverColors.secondaryText)),
         ],
       );
 }

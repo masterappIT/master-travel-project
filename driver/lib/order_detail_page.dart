@@ -214,7 +214,6 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
               destination: destination,
               scheduledAt: scheduledAt,
               price: _formatPrice(_trip?['price'], _trip?['currency']),
-              showFullAddresses: widget.completed,
             ),
             const SizedBox(height: DriverSpacing.xl),
             const Text('接單車輛',
@@ -367,7 +366,7 @@ class _MapLabel extends StatelessWidget {
               color: DriverColors.surface)));
 }
 
-class _OrderInfoCard extends StatelessWidget {
+class _OrderInfoCard extends StatefulWidget {
   const _OrderInfoCard({
     required this.passenger,
     required this.routeOrigin,
@@ -376,7 +375,6 @@ class _OrderInfoCard extends StatelessWidget {
     required this.destination,
     required this.scheduledAt,
     required this.price,
-    required this.showFullAddresses,
   });
   final String passenger;
   final String routeOrigin;
@@ -385,84 +383,124 @@ class _OrderInfoCard extends StatelessWidget {
   final String destination;
   final String scheduledAt;
   final String price;
-  final bool showFullAddresses;
 
   @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-            color: DriverColors.surface,
-            border: Border.all(color: DriverColors.divider),
-            borderRadius: BorderRadius.circular(DriverRadii.card),
-            boxShadow: const [
-              BoxShadow(
-                  color: Color(0x1238434a), blurRadius: 4, offset: Offset(0, 2))
-            ]),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                    color: DriverColors.background,
-                    borderRadius: BorderRadius.circular(DriverRadii.input)),
+  State<_OrderInfoCard> createState() => _OrderInfoCardState();
+}
+
+class _OrderInfoCardState extends State<_OrderInfoCard> {
+  bool _expanded = false;
+
+  bool _exceedsTwoLines(String value, double width, TextStyle style) {
+    final painter = TextPainter(
+      text: TextSpan(text: value, style: style),
+      maxLines: 2,
+      textDirection: TextDirection.ltr,
+    )..layout(maxWidth: width);
+    return painter.didExceedMaxLines;
+  }
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+        builder: (context, constraints) {
+          const valueStyle = TextStyle(
+              fontSize: DriverTypography.body, color: DriverColors.text);
+          final hasOverflow = _exceedsTwoLines(
+                  widget.origin, constraints.maxWidth, valueStyle) ||
+              _exceedsTwoLines(
+                  widget.destination, constraints.maxWidth, valueStyle);
+
+          return Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+                color: DriverColors.surface,
+                border: Border.all(color: DriverColors.divider),
+                borderRadius: BorderRadius.circular(DriverRadii.card),
+                boxShadow: const [
+                  BoxShadow(
+                      color: Color(0x1238434a),
+                      blurRadius: 4,
+                      offset: Offset(0, 2))
+                ]),
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                        color: DriverColors.background,
+                        borderRadius: BorderRadius.circular(DriverRadii.input)),
+                  ),
+                  const SizedBox(width: DriverSpacing.md),
+                  Expanded(
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(widget.passenger,
+                              style: const TextStyle(
+                                  fontSize: DriverTypography.bodyLarge,
+                                  fontWeight: FontWeight.w700,
+                                  color: DriverColors.text)),
+                          const SizedBox(height: 4),
+                          Text(
+                              '${widget.routeOrigin} → ${widget.routeDestination}',
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                  fontSize: DriverTypography.label,
+                                  color: Color(0xff57667d))),
+                          const SizedBox(height: 4),
+                          Text(widget.scheduledAt,
+                              style: const TextStyle(
+                                  fontSize: DriverTypography.label,
+                                  color: DriverColors.secondaryText))
+                        ]),
+                  ),
+                ],
               ),
-              const SizedBox(width: DriverSpacing.md),
-              Expanded(
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(passenger,
-                          style: const TextStyle(
-                              fontSize: DriverTypography.bodyLarge,
-                              fontWeight: FontWeight.w700,
-                              color: DriverColors.text)),
-                      const SizedBox(height: 4),
-                      Text('$routeOrigin → $routeDestination',
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              fontSize: DriverTypography.label,
-                              color: Color(0xff57667d))),
-                      const SizedBox(height: 4),
-                      Text(scheduledAt,
-                          style: const TextStyle(
-                              fontSize: DriverTypography.label,
-                              color: DriverColors.secondaryText))
-                    ]),
+              const SizedBox(height: DriverSpacing.md),
+              _AddressRow(
+                asset: 'assets/order-detail-origin.svg',
+                label: widget.origin,
+                expanded: _expanded,
               ),
-            ],
-          ),
-          const SizedBox(height: DriverSpacing.md),
-          _AddressRow(
-            asset: 'assets/order-detail-origin.svg',
-            label: origin,
-            showFullText: showFullAddresses,
-          ),
-          const SizedBox(height: DriverSpacing.md),
-          _AddressRow(
-            asset: 'assets/order-detail-destination.svg',
-            label: destination,
-            showFullText: showFullAddresses,
-          ),
-          const SizedBox(height: DriverSpacing.md),
-          Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-            Expanded(
-                child: Text('出發時間  $scheduledAt',
-                    overflow: TextOverflow.ellipsis,
+              const SizedBox(height: DriverSpacing.md),
+              _AddressRow(
+                asset: 'assets/order-detail-destination.svg',
+                label: widget.destination,
+                expanded: _expanded,
+              ),
+              if (hasOverflow) ...[
+                const SizedBox(height: DriverSpacing.sm),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton(
+                    onPressed: () => setState(() => _expanded = !_expanded),
+                    child: Text(_expanded ? '收起地址' : '查看完整地址'),
+                  ),
+                ),
+              ],
+              const SizedBox(height: DriverSpacing.md),
+              Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+                Expanded(
+                    child: Text('出發時間  ${widget.scheduledAt}',
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontSize: DriverTypography.label,
+                            color: DriverColors.secondaryText))),
+                const SizedBox(width: 12),
+                Text(widget.price,
                     style: const TextStyle(
-                        fontSize: DriverTypography.label,
-                        color: DriverColors.secondaryText))),
-            const SizedBox(width: 12),
-            Text(price,
-                style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                    color: DriverColors.success))
-          ]),
-        ]),
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        color: DriverColors.success))
+              ]),
+            ]),
+          );
+        },
       );
 }
 
@@ -470,11 +508,11 @@ class _AddressRow extends StatelessWidget {
   const _AddressRow({
     required this.asset,
     required this.label,
-    required this.showFullText,
+    required this.expanded,
   });
   final String asset;
   final String label;
-  final bool showFullText;
+  final bool expanded;
   @override
   Widget build(BuildContext context) => Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -487,9 +525,8 @@ class _AddressRow extends StatelessWidget {
           Expanded(
             child: Text(
               label,
-              maxLines: showFullText ? null : 1,
-              overflow:
-                  showFullText ? TextOverflow.visible : TextOverflow.ellipsis,
+              maxLines: expanded ? null : 2,
+              overflow: expanded ? TextOverflow.visible : TextOverflow.ellipsis,
               style: const TextStyle(
                 fontSize: DriverTypography.body,
                 color: DriverColors.text,

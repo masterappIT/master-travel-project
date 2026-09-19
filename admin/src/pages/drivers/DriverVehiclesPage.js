@@ -1,0 +1,7 @@
+import { inject } from 'vue'
+
+export const DriverVehiclesPage = {
+  name: 'DriverVehiclesPage',
+  setup() { return inject('adminDriverVehiclesContext') },
+  template: String.raw`<section v-if="view==='driver-vehicles'" class="vehicle-admin"><div class="driver-page-heading"><div><span class="eyebrow">VEHICLE MANAGEMENT</span><h2>車輛管理</h2><p class="muted">獨立管理司機登記車輛及綁定關係，不影響車型定價資料。</p></div><button type="button" v-if="canWrite" class="driver-primary-action" @click="openFirstVehicleForm">＋ 新增車輛</button></div><div class="panel"><div class="admin-toolbar"><h2>登記車輛</h2><button type="button" @click="refresh">重新整理</button></div><table><thead><tr><th>車牌</th><th>歸屬地</th><th>類別</th><th>顏色</th><th>綁定司機</th><th>狀態</th><th>操作</th></tr></thead><tbody><tr v-for="vehicle in vehicles" :key="vehicle.id"><td>{{vehicle.hkPlate || vehicle.macauPlate || vehicle.mainlandPlate || '未設定'}}</td><td>{{vehicle.vehicleOwnership || '—'}}</td><td>{{vehicle.vehicleCategory || '—'}}</td><td>{{vehicle.vehicleColor || '—'}}</td><td>{{vehicle.driverName || '—'}}</td><td>{{vehicle.enabled === false ? '已停用' : '啟用中'}}</td><td class="row-actions"><button type="button" v-if="canWrite" @click="editVehicleFromRegistry(vehicle)">編輯</button><button type="button" @click="openDriver(vehicle.driverId)">查看司機</button></td></tr><tr v-if="!vehicles.length"><td colspan="7" class="muted driver-empty">尚未建立登記車輛</td></tr></tbody></table></div></section>`
+}

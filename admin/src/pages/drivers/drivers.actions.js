@@ -1,8 +1,34 @@
+import { ref } from 'vue'
 import { composeMainlandPlate, formatHongKongPlateInput, formatMacauPlateInput, formatMainlandPlateInput, mainlandPlateInput, normalizeVehiclePlates, vehiclePlateError } from './vehicle-plates.js'
 
 export function createDriversActions({ driversApi, driverForm, selectedDriver, settlementForm, drivers, error, load, displayError, requestConfirmation, notify }) {
   let vehiclePhotoUrl = null
   let driverFormPhotoUrl = null
+  const vehicleForm = ref(null)
+  function resetVehicleForm() {
+    const driver = selectedDriver.value
+    vehicleForm.value = { id: '', driverId: driver?.id || '', plateType: '單牌', hkPlate: '', macauPlate: '', mainlandPlate: '', vehicleOwnership: '香港', vehicleCategory: '', vehicleColor: '', vehiclePhotoFile: null, vehiclePhotos: [] }
+  }
+  function editVehicle(vehicle) { vehicleForm.value = { ...vehicle, vehiclePhotoFile: null, vehiclePhotos: [] } }
+  function closeVehicleForm() { vehicleForm.value = null }
+  function changeVehicleOwnership() {
+    if (!vehicleForm.value) return
+    if (vehicleForm.value.vehicleOwnership === '中國內地') vehicleForm.value.plateType = '兩地牌'
+    vehicleForm.value.hkPlate = ''; vehicleForm.value.macauPlate = ''; vehicleForm.value.mainlandPlate = ''
+  }
+  async function saveVehicle() {
+    const form = vehicleForm.value
+    if (!form || !selectedDriver.value) return
+    const plates = normalizeVehiclePlates({ ...form, mainlandPlate: composeMainlandPlate(form.mainlandPlate, form.vehicleOwnership) })
+    const plateError = vehiclePlateError({ ...plates, vehicleOwnership: form.vehicleOwnership })
+    if (plateError || !form.vehicleCategory || !form.vehicleColor) { error.value = plateError || '請填寫車輛類別及顏色'; return }
+    try {
+      await driversApi.saveVehicle(selectedDriver.value.id, { ...form, ...plates, id: form.id || undefined })
+      closeVehicleForm(); await refreshDriverVehicles(selectedDriver.value); await load(); notify('車輛已儲存')
+    } catch (err) { error.value = displayError(err); notify(error.value, 'error') }
+  }
+
+
   const reviewStatusLabel = status => ({ PENDING: '待審核', APPROVED: '已通過', REVISION_REQUIRED: '退回修改', REJECTED: '已拒絕' }[status] || status || '待審核')
 
   function clearDriverFormPhotoUrl() {
@@ -115,10 +141,41 @@ export function createDriversActions({ driversApi, driverForm, selectedDriver, s
     } catch (err) { error.value = displayError(err); notify(error.value, 'error') }
   }
 
+  async function refreshDriverVehicles(driver = selectedDriver.value) {
+    if (!driver?.id) return
+    try {
+      const result = await driversApi.listVehicles(driver.id)
+      driver.vehicles = result.data || []
+    } catch (err) { error.value = displayError(err) }
+  }
+
+  async function updateVehicleStatus(vehicle) {
+    const driver = selectedDriver.value
+    if (!driver || !vehicle) return
+    try {
+      const updated = await driversApi.updateVehicleStatus(driver.id, vehicle.id, vehicle.enabled === false)
+      Object.assign(vehicle, updated)
+      notify(vehicle.enabled ? '車輛已恢復' : '車輛已停用')
+    } catch (err) { error.value = displayError(err); notify(error.value, 'error') }
+  }
+
+  async function removeVehicle(vehicle) {
+    const driver = selectedDriver.value
+    if (!driver || !vehicle) return
+    if (!await requestConfirmation({ title: '刪除車輛', message: `確定刪除車牌「${vehicle.hkPlate || vehicle.macauPlate || vehicle.mainlandPlate || '未設定'}」？`, confirmLabel: '刪除', danger: true })) return
+    try {
+      await driversApi.removeVehicle(driver.id, vehicle.id)
+      driver.vehicles = (driver.vehicles || []).filter(item => item.id !== vehicle.id)
+      notify('車輛已刪除')
+      await load()
+    } catch (err) { error.value = displayError(err); notify(error.value, 'error') }
+  }
+
   async function openDriverDetail(item) {
     if (vehiclePhotoUrl) URL.revokeObjectURL(vehiclePhotoUrl)
     vehiclePhotoUrl = null
     selectedDriver.value = { ...item, vehiclePhotoUrl: null }
+    await refreshDriverVehicles(selectedDriver.value)
     if (item.vehiclePhotos?.length) {
       try {
         vehiclePhotoUrl = URL.createObjectURL(await driversApi.vehiclePhoto(item.id))
@@ -180,5 +237,5 @@ export function createDriversActions({ driversApi, driverForm, selectedDriver, s
     } catch (err) { error.value = displayError(err) }
   }
 
-  return { reviewStatusLabel, resetDriver, editDriver, formatDriverHongKongPlate, formatDriverMacauPlate, formatDriverMainlandPlate, changeDriverOwnership, uploadDriverPhotos, removeDriverPhoto, saveDriver, updateDriverStatus, removeDriver, openDriverDetail, previewDriver, closeDriverDetail, approveDriver, requestDriverRevision, rejectDriver, resetSettlement, saveSettlement }
+  return { reviewStatusLabel, resetDriver, editDriver, formatDriverHongKongPlate, formatDriverMacauPlate, formatDriverMainlandPlate, changeDriverOwnership, uploadDriverPhotos, removeDriverPhoto, saveDriver, updateDriverStatus, removeDriver, openDriverDetail, previewDriver, closeDriverDetail, approveDriver, requestDriverRevision, rejectDriver, resetSettlement, saveSettlement, refreshDriverVehicles, updateVehicleStatus, removeVehicle, vehicleForm, resetVehicleForm, editVehicle, closeVehicleForm, changeVehicleOwnership, saveVehicle }
 }

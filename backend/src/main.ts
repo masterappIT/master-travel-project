@@ -1914,6 +1914,32 @@ function quoteResponse(quote: PersistedQuote) {
     })),
   };
 }
+function driverVehicleResponse(vehicle: {
+  id: string;
+  driverId: string;
+  plateType: string;
+  hkPlate: string | null;
+  mainlandPlate: string | null;
+  macauPlate: string | null;
+  vehicleOwnership: string;
+  vehicleCategory: string;
+  vehicleColor: string;
+  vehiclePhotos: unknown;
+  vehiclePhotoData?: Uint8Array | null;
+  vehiclePhotoMime?: string | null;
+  enabled: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}) {
+  const { vehiclePhotoData, vehiclePhotoMime, ...publicVehicle } = vehicle;
+  return {
+    ...publicVehicle,
+    vehiclePhotos: vehiclePhotoData && vehiclePhotoMime ? [`/admin/drivers/${vehicle.driverId}/vehicles/${vehicle.id}/photo`] : [],
+    createdAt: vehicle.createdAt.toISOString(),
+    updatedAt: vehicle.updatedAt.toISOString(),
+  };
+}
+
 function driverResponse(driver: {
   id: string;
   driverType: string;
@@ -4292,11 +4318,13 @@ class AdminController {
   @Get("drivers") async listDrivers(@Req() req: RequestLike) {
     requireAuth(req);
     const data = await prisma.driver.findMany({
+      include: { vehicles: { orderBy: { createdAt: "asc" } } },
       orderBy: { createdAt: "desc" },
     });
     return {
       data: data.map((driver) => ({
         ...driverResponse(driver),
+        vehicles: driver.vehicles.map(driverVehicleResponse),
         vehiclePhotos:
           driver.vehiclePhotoData && driver.vehiclePhotoMime
             ? [`/admin/drivers/${driver.id}/vehicle-photo`]
@@ -4305,21 +4333,108 @@ class AdminController {
       total: data.length,
     };
   }
-  @Get("drivers/:id/vehicle-photo") async driverVehiclePhoto(
+  @Get("drivers/:id/vehicle-photo") async adminDriverVehiclePhoto(
     @Req() req: RequestLike,
     @Param("id") id: string,
     @Res() response: Response,
   ) {
     requireAuth(req);
-    const driver = await prisma.driver.findUnique({
-      where: { id },
-      select: { vehiclePhotoData: true, vehiclePhotoMime: true },
-    });
-    if (!driver?.vehiclePhotoData || !driver.vehiclePhotoMime)
-      throw new HttpException("Vehicle photo not found", HttpStatus.NOT_FOUND);
-    response
-      .type(driver.vehiclePhotoMime)
-      .send(Buffer.from(driver.vehiclePhotoData));
+    const driver = await prisma.driver.findUnique({ where: { id }, select: { vehiclePhotoData: true, vehiclePhotoMime: true } });
+    if (!driver?.vehiclePhotoData || !driver.vehiclePhotoMime) throw new HttpException("Vehicle photo not found", HttpStatus.NOT_FOUND);
+    response.type(driver.vehiclePhotoMime).send(Buffer.from(driver.vehiclePhotoData));
+  }
+
+  @Get("drivers/:id/vehicles") async listDriverVehicles(
+    @Req() req: RequestLike,
+    @Param("id") id: string,
+  ) {
+    requireAuth(req);
+    const data = await prisma.driverVehicle.findMany({ where: { OR: [{ driverId: id }, { assignments: { some: { driverId: id, enabled: true } } }] }, orderBy: { createdAt: "asc" } });
+    return { data: data.map(driverVehicleResponse), total: data.length };
+  }
+  @Post("drivers/:driverId/vehicles/:id/bind") async bindDriverVehicle(
+    @Req() req: RequestLike,
+    @Param("driverId") driverId: string,
+    @Param("id") id: string,
+  ) {
+    requireRole(req, ["SUPER_ADMIN", "OPERATOR"]);
+    const [driver, vehicle] = await Promise.all([
+      prisma.driver.findUnique({ where: { id: driverId }, select: { id: true } }),
+      prisma.driverVehicle.findUnique({ where: { id }, select: { id: true } }),
+    ]);
+    if (!driver || !vehicle) throw new HttpException("Driver or vehicle not found", HttpStatus.NOT_FOUND);
+    await prisma.driverVehicleAssignment.upsert({ where: { driverId_vehicleId: { driverId, vehicleId: id } }, create: { driverId, vehicleId: id }, update: { enabled: true } });
+    return driverVehicleResponse(await prisma.driverVehicle.findUniqueOrThrow({ where: { id } }));
+  }
+  @Post("drivers/:id/vehicles")
+  @UseInterceptors(FileInterceptor("vehiclePhoto", { limits: { fileSize: 2 * 1024 * 1024 }, fileFilter: (_req, file, cb) => cb(null, /^image\/(jpeg|png|webp)$/.test(file.mimetype)) }))
+  async saveDriverVehicle(
+    @Req() req: RequestLike,
+    @Param("id") driverId: string,
+    @Body() body: Partial<Prisma.DriverVehicleCreateInput> & { id?: string; removeVehiclePhoto?: string },
+    @UploadedFile() vehiclePhoto?: Express.Multer.File,
+  ) {
+    requireRole(req, ["SUPER_ADMIN", "OPERATOR"]);
+    const driver = await prisma.driver.findUnique({ where: { id: driverId }, select: { id: true } });
+    if (!driver) throw new HttpException("Driver not found", HttpStatus.NOT_FOUND);
+    if (!body.plateType || !body.vehicleCategory || !body.vehicleColor)
+      throw new HttpException("Valid vehicle fields are required", HttpStatus.BAD_REQUEST);
+    const normalized = normalizeVehiclePlateData({ ...body, vehicleOwnership: body.vehicleOwnership || "香港" });
+    const data = {
+      plateType: normalized.plateType,
+      hkPlate: normalized.hkPlate || null,
+      macauPlate: normalized.macauPlate || null,
+      mainlandPlate: normalized.mainlandPlate || null,
+      vehicleOwnership: normalized.vehicleOwnership,
+      vehicleCategory: body.vehicleCategory.trim(),
+      vehicleColor: body.vehicleColor.trim(),
+      vehiclePhotos: [],
+      ...(vehiclePhoto ? { vehiclePhotoData: new Uint8Array(vehiclePhoto.buffer), vehiclePhotoMime: vehiclePhoto.mimetype } : {}),
+      ...(body.removeVehiclePhoto === "true" ? { vehiclePhotoData: null, vehiclePhotoMime: null } : {}),
+    };
+    const vehicle = body.id
+      ? await prisma.driverVehicle.updateMany({ where: { id: body.id, driverId }, data })
+      : null;
+    if (body.id) {
+      if (!vehicle?.count) throw new HttpException("Vehicle not found", HttpStatus.NOT_FOUND);
+      return driverVehicleResponse(await prisma.driverVehicle.findUniqueOrThrow({ where: { id: body.id } }));
+    }
+    const createdVehicle = await prisma.driverVehicle.create({ data: { id: `vehicle-${Date.now()}-${randomBytes(4).toString("hex")}`, driverId, ...data } });
+    await prisma.driverVehicleAssignment.create({ data: { driverId, vehicleId: createdVehicle.id } });
+    return driverVehicleResponse(createdVehicle);
+  }
+  @Post("drivers/:driverId/vehicles/:id/status") async updateDriverVehicleStatus(
+    @Req() req: RequestLike,
+    @Param("driverId") driverId: string,
+    @Param("id") id: string,
+    @Body() body: { enabled?: boolean },
+  ) {
+    requireRole(req, ["SUPER_ADMIN", "OPERATOR"]);
+    if (typeof body.enabled !== "boolean") throw new HttpException("Enabled status is required", HttpStatus.BAD_REQUEST);
+    const vehicle = await prisma.driverVehicle.updateMany({ where: { id, driverId }, data: { enabled: body.enabled } });
+    if (!vehicle.count) throw new HttpException("Vehicle not found", HttpStatus.NOT_FOUND);
+    return driverVehicleResponse(await prisma.driverVehicle.findUniqueOrThrow({ where: { id } }));
+  }
+  @Delete("drivers/:driverId/vehicles/:id") async deleteDriverVehicle(
+    @Req() req: RequestLike,
+    @Param("driverId") driverId: string,
+    @Param("id") id: string,
+  ) {
+    requireRole(req, ["SUPER_ADMIN", "OPERATOR"]);
+    const result = await prisma.driverVehicle.deleteMany({ where: { id, driverId } });
+    if (!result.count) throw new HttpException("Vehicle not found", HttpStatus.NOT_FOUND);
+    return { ok: true };
+  }
+  @Get("drivers/:driverId/vehicles/:id/photo") async driverVehiclePhoto(
+    @Req() req: RequestLike,
+    @Param("driverId") driverId: string,
+    @Param("id") id: string,
+    @Res() response: Response,
+  ) {
+    requireAuth(req);
+    const vehicle = await prisma.driverVehicle.findFirst({ where: { id, driverId }, select: { vehiclePhotoData: true, vehiclePhotoMime: true } });
+    if (!vehicle?.vehiclePhotoData || !vehicle.vehiclePhotoMime) throw new HttpException("Vehicle photo not found", HttpStatus.NOT_FOUND);
+    response.type(vehicle.vehiclePhotoMime).send(Buffer.from(vehicle.vehiclePhotoData));
   }
   @Post("drivers/:id/review/approve") async approveDriver(
     @Req() req: RequestLike,
@@ -10025,43 +10140,45 @@ class ClientOrdersController {
 
       const payment = trip.payment;
       if (payment && payment.status === "PAID") {
-        const user = await tx.user.findUniqueOrThrow({
-          where: { id: session.sub },
-        });
-        const fareBalance = roundMoney(user.fareBalance + payment.fareAmount);
-        const cashBalance = roundMoney(user.cashBalance + payment.cashAmount);
-        await tx.user.update({
-          where: { id: user.id },
-          data: { fareBalance, cashBalance },
-        });
-        await tx.payment.update({
-          where: { id: payment.id },
+        const refundClaim = await tx.payment.updateMany({
+          where: { id: payment.id, status: "PAID" },
           data: { status: "REFUNDED", refundedAt: new Date() },
         });
-        if (payment.fareAmount > 0)
-          await tx.walletTransaction.create({
-            data: {
-              userId: user.id,
-              wallet: "FARE",
-              type: "REFUND",
-              amount: payment.fareAmount,
-              balanceAfter: fareBalance,
-              reason: `訂單退款 - 車費餘額 (訂單: ${trip.id.slice(-8)})`,
-              paymentId: payment.id,
-            },
+        if (refundClaim.count === 1) {
+          const user = await tx.user.findUniqueOrThrow({
+            where: { id: session.sub },
           });
-        if (payment.cashAmount > 0)
-          await tx.walletTransaction.create({
-            data: {
-              userId: user.id,
-              wallet: "CASH",
-              type: "REFUND",
-              amount: payment.cashAmount,
-              balanceAfter: cashBalance,
-              reason: `訂單退款 - 現金餘額 (訂單: ${trip.id.slice(-8)})`,
-              paymentId: payment.id,
-            },
+          const fareBalance = roundMoney(user.fareBalance + payment.fareAmount);
+          const cashBalance = roundMoney(user.cashBalance + payment.cashAmount);
+          await tx.user.update({
+            where: { id: user.id },
+            data: { fareBalance, cashBalance },
           });
+          if (payment.fareAmount > 0)
+            await tx.walletTransaction.create({
+              data: {
+                userId: user.id,
+                wallet: "FARE",
+                type: "REFUND",
+                amount: payment.fareAmount,
+                balanceAfter: fareBalance,
+                reason: `訂單退款 - 車費餘額 (訂單: ${trip.id.slice(-8)})`,
+                paymentId: payment.id,
+              },
+            });
+          if (payment.cashAmount > 0)
+            await tx.walletTransaction.create({
+              data: {
+                userId: user.id,
+                wallet: "CASH",
+                type: "REFUND",
+                amount: payment.cashAmount,
+                balanceAfter: cashBalance,
+                reason: `訂單退款 - 現金餘額 (訂單: ${trip.id.slice(-8)})`,
+                paymentId: payment.id,
+              },
+            });
+        }
       }
       const updated = await tx.trip.update({
         where: { id: trip.id },

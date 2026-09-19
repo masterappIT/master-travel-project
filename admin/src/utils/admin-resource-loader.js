@@ -112,6 +112,12 @@ export async function loadDispatchResources({ tripsApi, driversApi, trips, drive
   tripPage.value = 1
 }
 
+export async function loadSettlementResources({ tripsApi, driversApi, trips, drivers }) {
+  const [tripResult, driverResult] = await Promise.all([tripsApi.list(), driversApi.list()])
+  trips.value = tripResult.data
+  drivers.value = driverResult.data
+}
+
 export async function loadTripsResources({ tripsApi, driversApi, api, trips, drivers, tripPage, tripCatalog }) {
   const [tripResult, catalogResult, driverResult] = await Promise.all([tripsApi.list(), api('/vehicles'), driversApi.list()])
   trips.value = tripResult.data

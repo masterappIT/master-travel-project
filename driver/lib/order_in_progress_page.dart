@@ -379,29 +379,71 @@ class _TripProgressCard extends StatelessWidget {
       );
 }
 
-class _ProgressAddressPair extends StatelessWidget {
+class _ProgressAddressPair extends StatefulWidget {
   const _ProgressAddressPair({required this.origin, required this.destination});
 
   final String origin;
   final String destination;
 
   @override
-  Widget build(BuildContext context) => Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(child: _ProgressAddressColumn(label: '出發地', value: origin)),
-          const SizedBox(width: DriverSpacing.md),
-          Expanded(
-              child: _ProgressAddressColumn(label: '目的地', value: destination)),
-        ],
+  State<_ProgressAddressPair> createState() => _ProgressAddressPairState();
+}
+
+class _ProgressAddressPairState extends State<_ProgressAddressPair> {
+  bool _expanded = false;
+
+  bool _exceedsTwoLines(String value, double width, TextStyle style) {
+    final painter = TextPainter(
+      text: TextSpan(text: value, style: style),
+      maxLines: 2,
+      textDirection: TextDirection.ltr,
+    )..layout(maxWidth: width);
+    return painter.didExceedMaxLines;
+  }
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+        builder: (context, constraints) {
+          const valueStyle = TextStyle(
+              fontSize: DriverTypography.body,
+              fontWeight: FontWeight.w500,
+              color: DriverColors.text);
+          final hasOverflow = _exceedsTwoLines(
+                  widget.origin, constraints.maxWidth, valueStyle) ||
+              _exceedsTwoLines(
+                  widget.destination, constraints.maxWidth, valueStyle);
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _ProgressAddressColumn(
+                  label: '出發地', value: widget.origin, expanded: _expanded),
+              const SizedBox(height: DriverSpacing.lg),
+              _ProgressAddressColumn(
+                  label: '目的地', value: widget.destination, expanded: _expanded),
+              if (hasOverflow) ...[
+                const SizedBox(height: DriverSpacing.sm),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton(
+                    onPressed: () => setState(() => _expanded = !_expanded),
+                    child: Text(_expanded ? '收起地址' : '查看完整地址'),
+                  ),
+                ),
+              ],
+            ],
+          );
+        },
       );
 }
 
 class _ProgressAddressColumn extends StatelessWidget {
-  const _ProgressAddressColumn({required this.label, required this.value});
+  const _ProgressAddressColumn(
+      {required this.label, required this.value, required this.expanded});
 
   final String label;
   final String value;
+  final bool expanded;
 
   @override
   Widget build(BuildContext context) => Column(
@@ -413,8 +455,8 @@ class _ProgressAddressColumn extends StatelessWidget {
                   color: DriverColors.secondaryText)),
           const SizedBox(height: DriverSpacing.xs),
           Text(value,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
+              maxLines: expanded ? null : 2,
+              overflow: expanded ? TextOverflow.visible : TextOverflow.ellipsis,
               style: const TextStyle(
                   fontSize: DriverTypography.body,
                   fontWeight: FontWeight.w500,

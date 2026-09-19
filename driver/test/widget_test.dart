@@ -370,7 +370,7 @@ void main() {
     await tester.pumpWidget(testApp(const OrderCompletedPage()));
 
     expect(find.text('行程已抵達目的地'), findsOneWidget);
-    expect(find.text('請與乘客確認車資並完成收款'), findsOneWidget);
+    expect(find.text('請與乘客確認車資並完成收款'), findsNothing);
     expect(find.text('城市天際線預覽'), findsOneWidget);
     expect(find.text('訂單詳情'), findsOneWidget);
     expect(find.text('車資明細'), findsOneWidget);

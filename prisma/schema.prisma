@@ -632,11 +632,52 @@ model Driver {
   sessions                 DriverSession[]
   notifications            Notification[]
   orderUrls                TripOrderUrl[]
+  vehicles                 DriverVehicle[]
+  vehicleAssignments       DriverVehicleAssignment[]
 
   @@unique([hongKongMacauCountryCode, hongKongMacauPhone])
   @@index([reviewStatus])
   @@index([phone])
   @@index([vehicleCategory])
+}
+
+model DriverVehicle {
+  id               String   @id
+  driverId         String
+  plateType        String
+  hkPlate          String?
+  mainlandPlate    String?
+  macauPlate       String?
+  vehicleOwnership String   @default("香港")
+  vehicleCategory  String
+  vehicleColor     String
+  vehiclePhotos    Json
+  vehiclePhotoData Bytes?
+  vehiclePhotoMime String?
+  enabled          Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  driver           Driver   @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  assignments      DriverVehicleAssignment[]
+
+  @@index([driverId, enabled])
+  @@index([hkPlate])
+  @@index([mainlandPlate])
+  @@index([macauPlate])
+}
+
+model DriverVehicleAssignment {
+  id        String        @id @default(cuid())
+  driverId  String
+  vehicleId String
+  enabled   Boolean       @default(true)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  driver    Driver        @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  vehicle   DriverVehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@unique([driverId, vehicleId])
+  @@index([vehicleId, enabled])
 }
 
 model DriverSettlement {

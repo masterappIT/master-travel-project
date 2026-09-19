@@ -38,8 +38,12 @@ export function createTripsActions({ api, tripsApi, addressesApi, tripForm, sele
   function showTrip(item) { tripForm.value = null; selectedTrip.value = item }
   function closeTrip() { selectedTrip.value = null }
   async function updateTripStatus(item, status) {
-    if (!canWrite.value || item.status === status) return
-    try { await tripsApi.update(item.id, { ...item, status }); await load(); selectedTrip.value = trips.value.find(trip => trip.id === item.id) || null } catch (err) { error.value = displayError(err) }
+    const currentStatus = item.executionPhase === 'IN_PROGRESS' ? 'IN_PROGRESS' : item.status
+    if (!canWrite.value || currentStatus === status) return
+    const payload = status === 'IN_PROGRESS'
+      ? { ...item, status: 'CONFIRMED', executionPhase: 'IN_PROGRESS' }
+      : { ...item, status, executionPhase: status === 'CONFIRMED' ? (item.executionPhase === 'IN_PROGRESS' ? 'WAITING_DRIVER' : item.executionPhase) : null }
+    try { await tripsApi.update(item.id, payload); await load(); selectedTrip.value = trips.value.find(trip => trip.id === item.id) || null } catch (err) { error.value = displayError(err) }
   }
   async function prepareTripQuote() {
     if (!tripForm.value || tripForm.value.id) return

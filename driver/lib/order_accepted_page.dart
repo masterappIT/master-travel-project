@@ -407,28 +407,71 @@ class _AcceptedOrderCard extends StatelessWidget {
       );
 }
 
-class _AddressPair extends StatelessWidget {
+class _AddressPair extends StatefulWidget {
   const _AddressPair({required this.origin, required this.destination});
 
   final String origin;
   final String destination;
 
   @override
-  Widget build(BuildContext context) => Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(child: _AddressColumn(label: '出發地', value: origin)),
-          const SizedBox(width: DriverSpacing.md),
-          Expanded(child: _AddressColumn(label: '目的地', value: destination)),
-        ],
+  State<_AddressPair> createState() => _AddressPairState();
+}
+
+class _AddressPairState extends State<_AddressPair> {
+  bool _expanded = false;
+
+  bool _exceedsTwoLines(String value, double width, TextStyle style) {
+    final painter = TextPainter(
+      text: TextSpan(text: value, style: style),
+      maxLines: 2,
+      textDirection: TextDirection.ltr,
+    )..layout(maxWidth: width);
+    return painter.didExceedMaxLines;
+  }
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+        builder: (context, constraints) {
+          const valueStyle = TextStyle(
+              fontSize: DriverTypography.body,
+              fontWeight: FontWeight.w500,
+              color: DriverColors.text);
+          final hasOverflow = _exceedsTwoLines(
+                  widget.origin, constraints.maxWidth, valueStyle) ||
+              _exceedsTwoLines(
+                  widget.destination, constraints.maxWidth, valueStyle);
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _AddressColumn(
+                  label: '出發地', value: widget.origin, expanded: _expanded),
+              const SizedBox(height: DriverSpacing.lg),
+              _AddressColumn(
+                  label: '目的地', value: widget.destination, expanded: _expanded),
+              if (hasOverflow) ...[
+                const SizedBox(height: DriverSpacing.sm),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton(
+                    onPressed: () => setState(() => _expanded = !_expanded),
+                    child: Text(_expanded ? '收起地址' : '查看完整地址'),
+                  ),
+                ),
+              ],
+            ],
+          );
+        },
       );
 }
 
 class _AddressColumn extends StatelessWidget {
-  const _AddressColumn({required this.label, required this.value});
+  const _AddressColumn(
+      {required this.label, required this.value, required this.expanded});
 
   final String label;
   final String value;
+  final bool expanded;
 
   @override
   Widget build(BuildContext context) => Column(
@@ -440,8 +483,8 @@ class _AddressColumn extends StatelessWidget {
                   color: DriverColors.secondaryText)),
           const SizedBox(height: DriverSpacing.xs),
           Text(value,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
+              maxLines: expanded ? null : 2,
+              overflow: expanded ? TextOverflow.visible : TextOverflow.ellipsis,
               style: const TextStyle(
                   fontSize: DriverTypography.body,
                   fontWeight: FontWeight.w500,

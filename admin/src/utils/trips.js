@@ -1,4 +1,5 @@
 import { formatOrderNumber } from './formatters.js'
+import { getPassengerTripStatus } from './trip-status.js'
 
 const sortByNewestCreatedAt = items => [...items].sort((left, right) => {
   const leftCreatedAt = Date.parse(left.createdAt || '')
@@ -12,7 +13,7 @@ export const filterTrips = (items, searchQuery, statusFilter = 'ALL', dateFilter
     const displayId = formatOrderNumber(item.id).toLowerCase()
     const matchesQuery = !query || [item.id, displayId, item.origin, item.destination, item.user?.name, item.user?.phoneNumber]
       .some(value => String(value || '').toLowerCase().includes(query))
-    const matchesStatus = statusFilter === 'ALL' || item.status === statusFilter
+    const matchesStatus = statusFilter === 'ALL' || getPassengerTripStatus(item) === statusFilter
     const matchesDate = !dateFilter || String(item.scheduledAt || '').slice(0, 10) === dateFilter
     return matchesQuery && matchesStatus && matchesDate
   }))

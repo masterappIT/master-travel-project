@@ -2,6 +2,7 @@ import { createUsersPageState } from '../pages/users/users.state.js'
 import { createAddressesPageState } from '../pages/addresses/addresses.state.js'
 import { createPromotionsPageState } from '../pages/promotions/promotions.state.js'
 import { createTripsPageState } from '../pages/trips/trips.state.js'
+import { createSettlementsPageState } from '../pages/settlements/settlements.state.js'
 import { createDriversPageState } from '../pages/drivers/drivers.state.js'
 import { createOperationsPageState } from '../pages/operations/operations.state.js'
 
@@ -10,6 +11,7 @@ export function createAdminPageStates({ users, addresses, promotions, trips, dri
   const addressesPageState = createAddressesPageState(addresses)
   const promotionsPageState = createPromotionsPageState(promotions)
   const tripsPageState = createTripsPageState(trips, 10)
+  const settlementsPageState = createSettlementsPageState(trips, drivers, 10)
   const driversPageState = createDriversPageState(drivers)
   const operationsPageState = createOperationsPageState(personnel, entryItems, expenseItems)
 
@@ -18,6 +20,7 @@ export function createAdminPageStates({ users, addresses, promotions, trips, dri
     addressesPageState,
     promotionsPageState,
     tripsPageState,
+    settlementsPageState,
     driversPageState,
     operationsPageState,
     addressRegionFilter: addressesPageState.regionFilter,
