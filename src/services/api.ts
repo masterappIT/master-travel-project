@@ -125,10 +125,9 @@ export type ClientProfile = AuthUser & { avatarUrl: string | null; displayName: 
 
 export async function getClientProfile(): Promise<ClientProfile> {
   const response = await uni.request({ url: `${API_BASE_URL}/client/me`, header: authHeaders() })
+  if (response.statusCode >= 400) throw apiError(response, '無法載入個人資料')
   const profile = response.data as ClientProfile
-  // #ifdef H5
-  profile.avatarUrl = await resolveClientAvatarUrl(profile.avatarUrl)
-  // #endif
+  profile.avatarUrl = resolveClientAvatarUrl(profile.avatarUrl)
   return profile
 }
 
@@ -183,16 +182,10 @@ export async function unlinkClientProvider(provider: 'wechat' | 'apple'): Promis
   return response.data as ClientSecurity
 }
 
-export async function resolveClientAvatarUrl(url: string | null | undefined): Promise<string> {
+export function resolveClientAvatarUrl(url: string | null | undefined): string {
   if (!url) return ''
-  // #ifdef H5
-  if (url.startsWith('/client/me/avatar')) {
-    const response = await fetch(`${API_BASE_URL}${url}`, { headers: authHeaders() })
-    if (!response.ok) throw new Error(`頭像載入失敗（HTTP ${response.status}）`)
-    return URL.createObjectURL(await response.blob())
-  }
-  // #endif
-  return url
+  if (/^https?:\/\//i.test(url)) return url
+  return `${API_BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`
 }
 
 export async function uploadClientAvatar(filePath: string): Promise<ClientProfile> {
@@ -204,14 +197,18 @@ export async function uploadClientAvatar(filePath: string): Promise<ClientProfil
   const response = await fetch(`${API_BASE_URL}/client/me/avatar`, { method: 'POST', headers: authHeaders(), body: form })
   if (!response.ok) throw new Error(`頭像上傳失敗（HTTP ${response.status}）`)
   const profile = await response.json() as ClientProfile
-  profile.avatarUrl = await resolveClientAvatarUrl(profile.avatarUrl)
+  profile.avatarUrl = resolveClientAvatarUrl(profile.avatarUrl)
   return profile
   // #endif
   // #ifndef H5
   return new Promise((resolve, reject) => {
     uni.uploadFile({ url: `${API_BASE_URL}/client/me/avatar`, filePath, name: 'file', header: authHeaders(), success: (response) => {
       if (response.statusCode >= 400) { reject(new Error(`頭像上傳失敗（HTTP ${response.statusCode}）`)); return }
-      try { resolve(JSON.parse(response.data) as ClientProfile) } catch { reject(new Error('頭像回應格式錯誤')) }
+      try {
+        const profile = JSON.parse(response.data) as ClientProfile
+        profile.avatarUrl = resolveClientAvatarUrl(profile.avatarUrl)
+        resolve(profile)
+      } catch { reject(new Error('頭像回應格式錯誤')) }
     }, fail: reject })
   })
   // #endif
@@ -265,7 +262,9 @@ export type ClientProfileUpdate = {
 export async function updateClientProfile(profile: ClientProfileUpdate): Promise<ClientProfile> {
   const response = await uni.request({ url: `${API_BASE_URL}/client/me`, method: 'PATCH' as UniApp.RequestOptions['method'], header: authHeaders(), data: profile })
   if (response.statusCode >= 400) throw apiError(response, '個人資料保存失敗')
-  return response.data as ClientProfile
+  const updated = response.data as ClientProfile
+  updated.avatarUrl = resolveClientAvatarUrl(updated.avatarUrl)
+  return updated
 }
 
 export async function getHealth(): Promise<{ status: string }> {

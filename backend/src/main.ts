@@ -1367,6 +1367,25 @@ function loginMethods(user: ManagedUser) {
     if (identity.provider === "apple") methods.push("Apple");
   return [...new Set(methods)];
 }
+const avatarUrlLifetimeMs = 5 * 60 * 1000;
+function avatarUrlFor(userId: string) {
+  const expires = Date.now() + avatarUrlLifetimeMs;
+  const payload = `${userId}.${expires}`;
+  const signature = createHmac("sha256", clientSecret())
+    .update(payload)
+    .digest("base64url");
+  return `/client/avatar/${encodeURIComponent(userId)}?expires=${expires}&signature=${signature}`;
+}
+function validAvatarSignature(userId: string, expires: number, signature: string) {
+  const now = Date.now();
+  if (!Number.isSafeInteger(expires) || expires <= now || expires > now + avatarUrlLifetimeMs) return false;
+  const expected = createHmac("sha256", clientSecret())
+    .update(`${userId}.${expires}`)
+    .digest("base64url");
+  const actualBuffer = Buffer.from(signature);
+  const expectedBuffer = Buffer.from(expected);
+  return actualBuffer.length === expectedBuffer.length && timingSafeEqual(actualBuffer, expectedBuffer);
+}
 function userResponse(user: ManagedUser) {
   return {
     id: user.id,
@@ -1375,7 +1394,7 @@ function userResponse(user: ManagedUser) {
     phone: `${user.countryCode} ${user.phoneNumber}`,
     name: user.name,
     displayName: user.displayName,
-    avatarUrl: user.avatarData ? "/client/me/avatar" : null,
+    avatarUrl: user.avatarData ? avatarUrlFor(user.id) : null,
     email: user.email,
     gender: user.gender,
     region: user.region,
@@ -10525,16 +10544,24 @@ class ClientOrdersController {
     return userResponse(user);
   }
 
-  @Get("me/avatar")
-  async getAvatar(@Req() req: RequestLike, @Res() response: Response) {
-    const session = await clientSessionFrom(req);
+  @Get("avatar/:userId")
+  async getAvatar(
+    @Param("userId") userId: string,
+    @Req() req: RequestLike,
+    @Res() response: Response,
+  ) {
+    const expires = Number(req.query?.expires);
+    const signature = req.query?.signature || "";
+    if (!validAvatarSignature(userId, expires, signature))
+      throw new UnauthorizedException("Valid avatar URL required");
     const user = await prisma.user.findUnique({
-      where: { id: session.sub },
+      where: { id: userId },
       select: { avatarData: true, avatarMimeType: true },
     });
     if (!user?.avatarData || !user.avatarMimeType)
       throw new HttpException("Avatar not found", HttpStatus.NOT_FOUND);
-    response.type(user.avatarMimeType).send(user.avatarData);
+    response.setHeader("Cache-Control", "private, no-store");
+    response.type(user.avatarMimeType).send(Buffer.from(user.avatarData));
   }
 
   @Get("me")

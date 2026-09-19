@@ -19,6 +19,18 @@ export const clearUserCache = () => {
   USER_CACHE_KEYS.forEach((key) => uni.removeStorageSync(key))
 }
 
+const persistedAuthUser = (user: AuthUser): AuthUser => {
+  const { avatarUrl: _avatarUrl, ...persisted } = user
+  return persisted
+}
+
+const removePersistedAvatarUrl = <T extends Record<string, unknown>>(key: string, value: T): T => {
+  if (!Object.prototype.hasOwnProperty.call(value, 'avatarUrl')) return value
+  const { avatarUrl: _avatarUrl, ...persisted } = value
+  uni.setStorageSync(key, persisted)
+  return persisted as T
+}
+
 export const setAuthenticated = (token?: string, user?: AuthUser) => {
   const previousUser = getAuthUser()
   const hasCachedUserData = USER_CACHE_KEYS.some((key) => uni.getStorageSync(key) !== undefined && uni.getStorageSync(key) !== null && uni.getStorageSync(key) !== '')
@@ -27,7 +39,7 @@ export const setAuthenticated = (token?: string, user?: AuthUser) => {
   uni.setStorageSync(AUTH_STATE_KEY, true)
   if (token) uni.setStorageSync(AUTH_TOKEN_KEY, token)
   if (user) {
-    uni.setStorageSync(AUTH_USER_KEY, user)
+    uni.setStorageSync(AUTH_USER_KEY, persistedAuthUser(user))
     profileListeners.forEach((listener) => listener(user))
   }
 }
@@ -40,7 +52,11 @@ export const clearAuthentication = () => {
 }
 
 export const getAuthToken = () => String(uni.getStorageSync(AUTH_TOKEN_KEY) || '')
-export const getAuthUser = () => uni.getStorageSync(AUTH_USER_KEY) as AuthUser | null
+export const getAuthUser = () => {
+  const user = uni.getStorageSync(AUTH_USER_KEY) as AuthUser | null
+  if (!user || typeof user !== 'object') return null
+  return removePersistedAvatarUrl(AUTH_USER_KEY, user)
+}
 export const subscribeAuthUser = (listener: (user: AuthUser) => void) => {
   profileListeners.add(listener)
   return () => profileListeners.delete(listener)

@@ -12,7 +12,7 @@
     </view>
 
     <template v-if="activeTab === 'profile'">
-      <view class="avatar-wrap" @tap="chooseAvatar"><image class="avatar" :src="avatarUrl || '/static/account/avatar.svg'" mode="aspectFill" /></view>
+      <view class="avatar-wrap" @tap="chooseAvatar"><image class="avatar" :src="avatarUrl || '/static/account/avatar.svg'" mode="aspectFill" @error="avatarUrl = ''" /></view>
       <view class="form-card">
         <view class="field"><image src="/static/account/name.svg" mode="aspectFit" /><text>姓名</text><input class="value-input" :class="{ filled: !!form.name.trim(), empty: !form.name.trim() }" v-model="form.name" /></view>
         <view class="field"><image src="/static/account/display-name.svg" mode="aspectFit" /><text>顯示名稱</text><input class="value-input" :class="{ filled: !!form.displayName.trim(), empty: !form.displayName.trim() }" v-model="form.displayName" /></view>
@@ -73,7 +73,8 @@ const stored = uni.getStorageSync('account-profile') || {}
 const storedSecurity = uni.getStorageSync('account-security') || {}
 const authenticatedUser = getAuthUser()
 const activeTab = ref<'profile' | 'security'>('profile')
-const avatarUrl = ref<string>(stored.avatarUrl || '')
+const avatarUrl = ref('')
+const cachedProfile = () => ({ ...form })
 const form = reactive({ name: stored.name || '', displayName: stored.displayName || '', gender: stored.gender || '先生', region: stored.region || '香港', birthday: stored.birthday || '1990-01-01' })
 const registeredPhone = authenticatedUser?.countryCode && authenticatedUser.phoneNumber ? `${authenticatedUser.countryCode} ${authenticatedUser.phoneNumber}` : ''
 const security = reactive({ phone: registeredPhone || storedSecurity.phone || '', password: '', email: storedSecurity.email || '', passwordSet: storedSecurity.passwordSet ?? false, appleLinked: storedSecurity.appleLinked ?? false, wechatLinked: storedSecurity.wechatLinked ?? true })
@@ -228,7 +229,7 @@ const chooseAvatar = () => uni.chooseImage({ count: 1, sizeType: ['compressed'],
   try {
     const user = await uploadClientAvatar(filePath)
     avatarUrl.value = user.avatarUrl || ''
-    uni.setStorageSync('account-profile', { ...form, avatarUrl: avatarUrl.value })
+    uni.setStorageSync('account-profile', cachedProfile())
     setAuthenticated(undefined, user)
     uni.showToast({ title: '頭像已更新', icon: 'success' })
   } catch (error) {
@@ -248,7 +249,7 @@ const save = async () => {
     countryCode.value = user.countryCode || countryCode.value
     phoneNumber.value = user.phoneNumber || phoneNumber.value
     security.phone = `${countryCode.value} ${phoneNumber.value}`
-    uni.setStorageSync('account-profile', { ...form, avatarUrl: avatarUrl.value })
+    uni.setStorageSync('account-profile', cachedProfile())
     setAuthenticated(undefined, user)
     uni.showToast({ title: '已保存', icon: 'success' })
   } catch {
@@ -286,7 +287,7 @@ onMounted(async () => {
     countryCode.value = user.countryCode || countryCode.value
     phoneNumber.value = user.phoneNumber || phoneNumber.value
     security.phone = `${countryCode.value} ${phoneNumber.value}`
-    uni.setStorageSync('account-profile', { ...form, avatarUrl: avatarUrl.value })
+    uni.setStorageSync('account-profile', cachedProfile())
     uni.setStorageSync('account-security', { ...security })
     setAuthenticated(undefined, user)
     void loadSecurity()
@@ -304,7 +305,7 @@ onShow(() => {
     countryCodeIndex.value = Math.max(0, countryCodes.indexOf(user.countryCode))
     phoneNumber.value = user.phoneNumber
     security.phone = `${user.countryCode} ${user.phoneNumber}`
-    uni.setStorageSync('account-profile', { ...form, avatarUrl: avatarUrl.value })
+    uni.setStorageSync('account-profile', cachedProfile())
     uni.setStorageSync('account-security', { ...security })
     setAuthenticated(undefined, user)
     void loadSecurity()

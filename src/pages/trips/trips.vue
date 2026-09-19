@@ -49,24 +49,20 @@ const cashBalance = ref(0)
 const fareBalance = ref(0)
 const authenticated = ref(false)
 let profilePollTimer: ReturnType<typeof setInterval> | undefined
-const avatarWithCacheBust = (url: string | null | undefined) => {
-  if (!url) return ''
-  return `${url}${url.includes('?') ? '&' : '?'}v=${encodeURIComponent(url)}`
-}
 
 const refreshProfile = async () => {
   authenticated.value = isAuthenticated()
   const profile = uni.getStorageSync('account-profile')
   const authUser = getAuthUser()
-  avatarUrl.value = profile?.avatarUrl || authUser?.avatarUrl || ''
+  avatarUrl.value = ''
   displayName.value = profile?.name || profile?.displayName || authUser?.name || authUser?.displayName || ''
   if (authenticated.value) {
     try {
       const remote = await getClientProfile()
       displayName.value = remote.name || remote.displayName || displayName.value
-      avatarUrl.value = avatarWithCacheBust(remote.avatarUrl)
-      uni.setStorageSync('account-profile', { ...profile, name: remote.name || '', displayName: remote.displayName || '', avatarUrl: remote.avatarUrl || '' })
-      uni.setStorageSync('client-auth-user', remote)
+      avatarUrl.value = remote.avatarUrl || ''
+      const { avatarUrl: _cachedAvatarUrl, ...cachedProfile } = profile || {}
+      uni.setStorageSync('account-profile', { ...cachedProfile, name: remote.name || '', displayName: remote.displayName || '' })
       const wallet = readWallet()
       cashBalance.value = Number(remote.cashBalance) || 0
       fareBalance.value = Number(remote.fareBalance) || 0
@@ -87,7 +83,6 @@ void refreshProfile()
 const unsubscribeAuthUser = subscribeAuthUser((user) => {
   displayName.value = user.name || user.displayName || ''
   avatarUrl.value = user.avatarUrl || ''
-  uni.setStorageSync('client-auth-user', user)
 })
 onUnmounted(unsubscribeAuthUser)
 

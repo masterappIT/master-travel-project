@@ -1,6 +1,6 @@
 <template>
   <view class="profile-header">
-    <image class="avatar" :class="{ 'avatar-guest': !authenticated }" :src="avatarUrl || '/static/profile/avatar-empty.svg'" mode="aspectFit" @tap="$emit(authenticated ? 'avatar' : 'login')" />
+    <image class="avatar" :class="{ 'avatar-guest': !authenticated }" :src="resolvedAvatarUrl" mode="aspectFit" @error="avatarFailed = true" @tap="$emit(authenticated ? 'avatar' : 'login')" />
     <text class="profile-title">Profile</text>
     <view class="settings-button" aria-label="設定" @tap="$emit('settings')">
       <image class="notification" src="/static/profile/notification.svg" mode="aspectFit" />
@@ -15,10 +15,14 @@
   </view>
 </template>
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, toRefs, watch } from 'vue'
 
-const { avatarUrl, displayName, authenticated } = withDefaults(defineProps<{ avatarUrl?: string; displayName?: string; unreadCount?: number; authenticated?: boolean }>(), { avatarUrl: '', displayName: '', unreadCount: 0, authenticated: true })
-const greeting = computed(() => displayName.trim() ? `Hi, ${displayName.trim()}` : 'Hi,')
+const props = withDefaults(defineProps<{ avatarUrl?: string; displayName?: string; unreadCount?: number; authenticated?: boolean }>(), { avatarUrl: '', displayName: '', unreadCount: 0, authenticated: true })
+const { avatarUrl, displayName, unreadCount, authenticated } = toRefs(props)
+const avatarFailed = ref(false)
+watch(avatarUrl, () => { avatarFailed.value = false })
+const resolvedAvatarUrl = computed(() => !avatarFailed.value && avatarUrl.value ? avatarUrl.value : '/static/profile/avatar-empty.svg')
+const greeting = computed(() => displayName.value.trim() ? `Hi, ${displayName.value.trim()}` : 'Hi,')
 defineEmits<{ notifications: []; avatar: []; settings: []; login: [] }>()
 </script>
 <style scoped>
