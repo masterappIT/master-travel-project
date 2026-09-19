@@ -9,7 +9,7 @@ export function createVehiclesActions({ api, view, categories, vehicles, extras,
   function editVehicle(item) { vehicleForm.value = { ...item } }
   function editCategory(item) { categoryForm.value = { ...item } }
   function resetCategory() { categoryForm.value = { id: '', name: '', tabLabel: '', order: categories.value.length + 1, enabled: true } }
-  function resetVehicle() { vehicleForm.value = { id: '', categoryId: categories.value[0]?.id || '', brand: '', model: '', series: '', seats: 4, image: '', colorLabel: '不限顏色', modelChoiceLabel: '', enabled: true, order: 1 } }
+  function resetVehicle() { vehicleForm.value = { id: crypto.randomUUID(), categoryId: categories.value[0]?.id || '', brand: '', model: '', series: '', seats: 4, image: '', colorLabel: '不限顏色', modelChoiceLabel: '', enabled: true, order: 1 } }
   async function saveCategory() { try { await api('/admin/vehicle-categories', { method: 'POST', body: JSON.stringify(categoryForm.value) }); categoryForm.value = null; await load() } catch (err) { error.value = displayError(err) } }
   async function toggleCategory(item) { try { await api('/admin/vehicle-categories', { method: 'POST', body: JSON.stringify({ ...item, enabled: !item.enabled }) }); await load() } catch (err) { error.value = displayError(err) } }
   async function saveVehicle() { try { await api('/admin/vehicles', { method: 'POST', body: JSON.stringify(vehicleForm.value) }); vehicleForm.value = null; await load() } catch (err) { error.value = displayError(err) } }
