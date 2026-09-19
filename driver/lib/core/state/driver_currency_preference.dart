@@ -1,6 +1,6 @@
-import 'dart:html' as html;
-
 import 'package:flutter/foundation.dart';
+
+import '../platform/browser_storage.dart';
 
 class DriverCurrencyPreference extends ValueNotifier<String> {
   DriverCurrencyPreference._() : super(_readStoredCurrency());
@@ -9,7 +9,7 @@ class DriverCurrencyPreference extends ValueNotifier<String> {
   static final instance = DriverCurrencyPreference._();
 
   static String _readStoredCurrency() {
-    final stored = html.window.localStorage[_storageKey];
+    final stored = readBrowserValue(_storageKey);
     return stored == 'CNY' ? 'CNY' : 'HKD';
   }
 
@@ -17,7 +17,7 @@ class DriverCurrencyPreference extends ValueNotifier<String> {
   set value(String next) {
     final normalized = next == 'CNY' ? 'CNY' : 'HKD';
     super.value = normalized;
-    html.window.localStorage[_storageKey] = normalized;
+    writeBrowserValue(_storageKey, normalized);
   }
 
   String get code => value;

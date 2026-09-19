@@ -1,10 +1,10 @@
 import 'dart:convert';
-import 'dart:html' as html;
-import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 
+import '../platform/browser_storage.dart';
 import '../state/driver_status.dart';
 
 Map<String, dynamic>? selectTripVehicle({
@@ -50,7 +50,12 @@ class DriverApiClient {
             .replaceAll(RegExp(r'/$'), ''),
         _client = client ?? http.Client();
 
-  static final DriverApiClient instance = DriverApiClient();
+  static DriverApiClient _instance = DriverApiClient();
+
+  static DriverApiClient get instance => _instance;
+
+  @visibleForTesting
+  static set instance(DriverApiClient client) => _instance = client;
 
   static const _tokenStorageKey = 'driver_session_token';
 
@@ -64,7 +69,7 @@ class DriverApiClient {
   bool get isApproved => _currentDriver?['reviewStatus'] == 'APPROVED';
 
   Future<void> restoreSession() async {
-    final storedToken = html.window.localStorage[_tokenStorageKey];
+    final storedToken = readBrowserValue(_tokenStorageKey);
     if (storedToken == null || storedToken.isEmpty) return;
     _token = storedToken;
     try {
@@ -77,12 +82,12 @@ class DriverApiClient {
   void clearSession() {
     _token = null;
     _currentDriver = null;
-    html.window.localStorage.remove(_tokenStorageKey);
+    removeBrowserValue(_tokenStorageKey);
   }
 
   Map<String, String> get _headers => {
         'Content-Type': 'application/json',
-        if (_token != null) 'Authorization': 'Bearer ' + _token!,
+        if (_token != null) 'Authorization': 'Bearer $_token',
       };
 
   Future<Map<String, dynamic>> requestRegistrationCode(
@@ -153,7 +158,7 @@ class DriverApiClient {
     final session = DriverSession.fromJson(_decode(response));
     _token = session.token;
     _currentDriver = session.driver;
-    html.window.localStorage[_tokenStorageKey] = session.token;
+    writeBrowserValue(_tokenStorageKey, session.token);
     return session;
   }
 
@@ -214,7 +219,7 @@ class DriverApiClient {
         body: jsonEncode({'challengeId': challengeId, 'code': code}))));
     _token = session.token;
     _currentDriver = session.driver;
-    html.window.localStorage[_tokenStorageKey] = session.token;
+    writeBrowserValue(_tokenStorageKey, session.token);
     return session;
   }
 
@@ -311,7 +316,7 @@ class DriverApiClient {
   }) async {
     final request = http.MultipartRequest(method, uri)
       ..headers.addAll({
-        if (_token != null) 'Authorization': 'Bearer ' + _token!,
+        if (_token != null) 'Authorization': 'Bearer $_token',
       })
       ..fields.addAll({
         for (final entry in fields.entries)

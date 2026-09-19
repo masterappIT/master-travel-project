@@ -234,7 +234,7 @@ class _ToggleRow extends StatelessWidget {
                         fontSize: DriverTypography.bodyLarge,
                         fontWeight: FontWeight.w600,
                         color: DriverColors.text)),
-                const SizedBox(height: 4),
+                const SizedBox(height: DriverSpacing.xs),
                 Text(detail,
                     style: const TextStyle(
                         fontSize: DriverTypography.caption,

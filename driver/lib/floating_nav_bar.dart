@@ -19,7 +19,8 @@ class FloatingNavBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
         height: 76,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.symmetric(
+            horizontal: DriverSpacing.md, vertical: DriverSpacing.sm),
         decoration: BoxDecoration(
           color: DriverColors.surface.withAlpha(224),
           backgroundBlendMode: BlendMode.srcOver,
@@ -67,7 +68,8 @@ class _NavItem extends StatelessWidget {
             onTap: onTap,
             borderRadius: BorderRadius.circular(22),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: DriverSpacing.md, vertical: DriverSpacing.sm),
               decoration: BoxDecoration(
                 color: selected
                     ? DriverColors.infoBackground.withAlpha(220)

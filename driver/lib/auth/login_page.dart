@@ -146,8 +146,8 @@ class _LoginPageState extends State<LoginPage> {
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 430),
               child: SingleChildScrollView(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: DriverSpacing.xl, vertical: DriverSpacing.lg),
                 child: ConstrainedBox(
                   constraints: BoxConstraints(
                     minHeight: constraints.maxHeight > 32
@@ -283,7 +283,7 @@ class _VerificationCard extends StatelessWidget {
           const SizedBox(height: DriverSpacing.sm),
           Container(
             height: 50,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.symmetric(horizontal: DriverSpacing.lg),
             decoration: _fieldDecoration(),
             child: Row(children: [
               InkWell(
@@ -412,7 +412,7 @@ class _ActionCard extends StatelessWidget {
           Row(children: [
             const Expanded(child: Divider(color: DriverColors.border)),
             const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 12),
+                padding: EdgeInsets.symmetric(horizontal: DriverSpacing.md),
                 child: Text('或',
                     style: TextStyle(
                         fontSize: DriverTypography.label,
@@ -446,7 +446,7 @@ class _Card extends StatelessWidget {
   final List<Widget> children;
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(DriverSpacing.lg),
         decoration: BoxDecoration(
             color: DriverColors.surface,
             border: Border.all(color: DriverColors.divider),
@@ -495,7 +495,8 @@ class _PrimaryButton extends StatelessWidget {
             shadowColor: Colors.transparent,
             shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(DriverRadii.input)),
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            padding: const EdgeInsets.symmetric(
+                horizontal: 20, vertical: DriverSpacing.lg),
           ).copyWith(
             overlayColor: WidgetStatePropertyAll(
                 DriverColors.onPrimary.withValues(alpha: .12)),
@@ -544,7 +545,7 @@ class _SocialLogo extends StatelessWidget {
           onTap: onPressed,
           customBorder: const CircleBorder(),
           child: Padding(
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.all(DriverSpacing.sm),
             child: SvgPicture.asset(
               asset,
               width: width,
@@ -564,5 +565,6 @@ BoxDecoration _fieldDecoration() => BoxDecoration(
 InputDecoration _inputDecoration(String hint) => InputDecoration(
       hintText: hint,
       border: InputBorder.none,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      contentPadding: const EdgeInsets.symmetric(
+          horizontal: DriverSpacing.lg, vertical: 14),
     );

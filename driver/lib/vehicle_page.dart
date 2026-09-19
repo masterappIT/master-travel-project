@@ -293,7 +293,8 @@ class _StatusPill extends StatelessWidget {
               : DriverColors.warningBackground,
           borderRadius: BorderRadius.circular(DriverRadii.pill)),
       child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          padding: const EdgeInsets.symmetric(
+              horizontal: 10, vertical: DriverSpacing.xs),
           child: Text(label,
               style: TextStyle(
                   fontSize: DriverTypography.caption,

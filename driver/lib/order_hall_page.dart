@@ -148,7 +148,7 @@ class _OrderHallPageState extends State<OrderHallPage> {
                 ),
                 const SizedBox(height: DriverSpacing.lg),
                 Container(
-                  padding: const EdgeInsets.all(4),
+                  padding: const EdgeInsets.all(DriverSpacing.xs),
                   decoration: BoxDecoration(
                     color: DriverColors.panelTint,
                     borderRadius: BorderRadius.circular(DriverRadii.input),
@@ -265,7 +265,8 @@ class _OnlineBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        padding: const EdgeInsets.symmetric(
+            horizontal: DriverSpacing.md, vertical: DriverSpacing.xs),
         decoration: BoxDecoration(
             color: isOnline
                 ? DriverColors.activeBlue
@@ -323,7 +324,8 @@ class _OrderTab extends StatelessWidget {
             borderRadius: BorderRadius.circular(DriverRadii.input),
             onTap: onTap,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: DriverSpacing.lg, vertical: 14),
               decoration: BoxDecoration(
                 color: selected
                     ? DriverColors.infoBackground
@@ -370,7 +372,8 @@ class _OrderCard extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(DriverRadii.card),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          padding: const EdgeInsets.symmetric(
+              horizontal: DriverSpacing.lg, vertical: DriverSpacing.lg),
           decoration: BoxDecoration(
             color: DriverColors.surface,
             border: Border.all(color: DriverColors.divider),
@@ -440,7 +443,8 @@ class _OrderCard extends StatelessWidget {
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(DriverRadii.card)),
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
+                        horizontal: DriverSpacing.lg,
+                        vertical: DriverSpacing.md),
                   ),
                   child: Text(actionLabel,
                       style: const TextStyle(
@@ -478,7 +482,7 @@ class _EmptyAcceptedOrders extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(DriverSpacing.xl),
         decoration: BoxDecoration(
             color: DriverColors.surface,
             border: Border.all(color: DriverColors.divider),

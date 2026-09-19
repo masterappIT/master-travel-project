@@ -120,11 +120,11 @@ class _ProfilePageState extends State<ProfilePage> {
         builder: (context) => SafeArea(
           child: ListView(
             shrinkWrap: true,
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(DriverSpacing.xl),
             children: [
               const Text('通知',
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 12),
+              const SizedBox(height: DriverSpacing.md),
               if (items.isEmpty) const Text('目前沒有通知'),
               ...items.map((item) {
                 final notification = Map<String, dynamic>.from(item as Map);
@@ -380,7 +380,8 @@ class _ProfileHeader extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          padding: const EdgeInsets.symmetric(
+              horizontal: 10, vertical: DriverSpacing.xs),
           decoration: BoxDecoration(
               color: DriverColors.successBackground,
               borderRadius: BorderRadius.circular(DriverRadii.pill)),
@@ -472,7 +473,7 @@ class _BalanceTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(DriverSpacing.lg),
         decoration: BoxDecoration(
             color: background,
             borderRadius: BorderRadius.circular(DriverRadii.input)),
@@ -625,7 +626,7 @@ class _CardShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(DriverSpacing.lg),
         decoration: BoxDecoration(
             color: DriverColors.surface,
             border: Border.all(color: DriverColors.divider),
@@ -649,7 +650,7 @@ class _LogoutButton extends StatelessWidget {
         child: InkWell(
           onTap: onTap,
           child: const Padding(
-            padding: EdgeInsets.symmetric(vertical: 16),
+            padding: EdgeInsets.symmetric(vertical: DriverSpacing.lg),
             child: Center(
               child: Text(
                 '登出帳號',

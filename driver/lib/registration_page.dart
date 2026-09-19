@@ -1,12 +1,9 @@
-import 'dart:async';
-import 'dart:typed_data';
-import 'dart:html' as html;
-
 import 'package:flutter/material.dart';
 
 import 'app/route_names.dart';
 import 'core/api/driver_api_client.dart';
 import 'core/navigation/driver_navigation.dart';
+import 'core/platform/browser_image_picker.dart';
 import 'core/vehicle_plate_rules.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -165,115 +162,25 @@ class _RegistrationPageState extends State<RegistrationPage> {
     }
   }
 
-  Future<Uint8List> _readBlob(html.Blob blob) {
-    final completer = Completer<Uint8List>();
-    final reader = html.FileReader();
-    reader.onLoad.listen((_) {
-      final result = reader.result;
-      if (result is ByteBuffer) {
-        completer.complete(result.asUint8List());
-      } else if (result is Uint8List) {
-        completer.complete(result);
-      } else {
-        completer.completeError(StateError('無法讀取圖片'));
-      }
-    });
-    reader.onError.listen((_) => completer.completeError(StateError('無法讀取圖片')));
-    reader.readAsArrayBuffer(blob);
-    return completer.future;
-  }
-
-  Future<Uint8List> _compressVehiclePhoto(html.File file) async {
-    const maxBytes = 2 * 1024 * 1024;
-    final objectUrl = html.Url.createObjectUrl(file);
-    try {
-      final image = html.ImageElement(src: objectUrl);
-      await image.onLoad.first;
-      var width = image.naturalWidth;
-      var height = image.naturalHeight;
-      if (width <= 0 || height <= 0) throw StateError('無法解碼圖片');
-      const maxDimension = 2048;
-      if (width > maxDimension || height > maxDimension) {
-        final ratio = maxDimension / (width > height ? width : height);
-        width = (width * ratio).round();
-        height = (height * ratio).round();
-      }
-      var quality = 0.88;
-      for (var attempt = 0; attempt < 12; attempt++) {
-        final canvas = html.CanvasElement(width: width, height: height);
-        canvas.context2D
-          ..fillStyle = '#FFFFFF'
-          ..fillRect(0, 0, width, height)
-          ..drawImageScaled(image, 0, 0, width, height);
-        final blob = await canvas.toBlob('image/jpeg', quality);
-        final bytes = await _readBlob(blob);
-        if (bytes.length <= maxBytes) return bytes;
-        if (quality > 0.52) {
-          quality -= 0.09;
-        } else {
-          width = (width * 0.82).round();
-          height = (height * 0.82).round();
-          quality = 0.72;
-        }
-      }
-      throw StateError('圖片壓縮後仍超過 2 MB，請選擇較小的圖片');
-    } finally {
-      html.Url.revokeObjectUrl(objectUrl);
-    }
-  }
-
   Future<void> _selectVehiclePhoto() async {
     if (_processingVehiclePhoto) return;
-    final input = html.FileUploadInputElement()
-      ..accept = 'image/jpeg,image/png,image/webp'
-      ..multiple = false;
-    input.style
-      ..position = 'fixed'
-      ..left = '0'
-      ..top = '0'
-      ..width = '1px'
-      ..height = '1px'
-      ..opacity = '0'
-      ..zIndex = '2147483647';
-    html.document.body?.append(input);
+    setState(() => _processingVehiclePhoto = true);
     try {
-      final selectionChanged = input.onChange.first;
-      input.click();
-      await selectionChanged;
-      final files = input.files;
-      final file = files == null || files.isEmpty ? null : files.first;
-      if (file == null) return;
-      if (!const ['image/jpeg', 'image/png', 'image/webp']
-          .contains(file.type)) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('只支援 JPEG、PNG 或 WebP 圖片')));
-        }
-        return;
-      }
-      setState(() => _processingVehiclePhoto = true);
-      try {
-        const maxBytes = 2 * 1024 * 1024;
-        final bytes = file.size <= maxBytes
-            ? await _readBlob(file)
-            : await _compressVehiclePhoto(file);
-        if (!mounted) return;
-        setState(() {
-          _vehiclePhotoBytes = bytes;
-          _vehiclePhotoName =
-              file.size <= maxBytes ? file.name : '${file.name}.jpg';
-          _vehiclePhotoMime = file.size <= maxBytes ? file.type : 'image/jpeg';
-        });
-      } on Object catch (error) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: Text(error is StateError ? error.message : '圖片處理失敗')));
-        }
-      } finally {
-        if (mounted) setState(() => _processingVehiclePhoto = false);
+      final image = await pickBrowserImage();
+      if (image == null || !mounted) return;
+      setState(() {
+        _vehiclePhotoBytes = image.bytes;
+        _vehiclePhotoName =
+            image.compressed ? '${image.fileName}.jpg' : image.fileName;
+        _vehiclePhotoMime = image.mimeType;
+      });
+    } on Object catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(error is StateError ? error.message : '圖片處理失敗')));
       }
     } finally {
-      input.remove();
+      if (mounted) setState(() => _processingVehiclePhoto = false);
     }
   }
 
@@ -601,7 +508,8 @@ class _RegistrationPageState extends State<RegistrationPage> {
                               borderRadius:
                                   BorderRadius.circular(DriverRadii.card)),
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 24, vertical: 16),
+                              horizontal: DriverSpacing.xl,
+                              vertical: DriverSpacing.lg),
                         ),
                         child: Text(
                           _registrationStep == 1
@@ -677,7 +585,7 @@ class _PhoneVerificationCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(DriverSpacing.lg),
         decoration: BoxDecoration(
             color: DriverColors.surface,
             border: Border.all(color: DriverColors.divider),
@@ -772,7 +680,7 @@ class _RegistrationCardState extends State<_RegistrationCard> {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(DriverSpacing.lg),
         decoration: BoxDecoration(
           color: DriverColors.surface,
           border: Border.all(color: DriverColors.divider),
@@ -901,7 +809,8 @@ class _SelectFieldSection extends StatelessWidget {
               borderRadius: BorderRadius.circular(DriverRadii.input),
               child: Container(
                 height: 50,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: DriverSpacing.lg),
                 decoration: _registrationFieldDecoration(),
                 child: Row(
                   children: [
@@ -968,8 +877,8 @@ class _TextFieldSection extends StatelessWidget {
                 hintStyle: const TextStyle(
                     fontSize: 15, color: DriverColors.secondaryText),
                 border: InputBorder.none,
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                contentPadding: const EdgeInsets.symmetric(
+                    horizontal: DriverSpacing.lg, vertical: 14),
               ),
               style: const TextStyle(fontSize: 15, color: DriverColors.text),
             ),
@@ -1039,7 +948,8 @@ class _ChoiceChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        padding: const EdgeInsets.symmetric(
+            horizontal: DriverSpacing.lg, vertical: 10),
         decoration: BoxDecoration(
           color: selected ? DriverColors.activeBlue : const Color(0xfff5f7fa),
           border: Border.all(
@@ -1226,8 +1136,8 @@ class _VerificationCodeSection extends StatelessWidget {
                     hintStyle: TextStyle(
                         fontSize: 15, color: DriverColors.secondaryText),
                     border: InputBorder.none,
-                    contentPadding:
-                        EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    contentPadding: EdgeInsets.symmetric(
+                        horizontal: DriverSpacing.lg, vertical: 14),
                   ),
                   style:
                       const TextStyle(fontSize: 15, color: DriverColors.text),
@@ -1277,7 +1187,7 @@ class _PhoneField extends StatelessWidget {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('選擇區號'),
-        contentPadding: const EdgeInsets.symmetric(vertical: 8),
+        contentPadding: const EdgeInsets.symmetric(vertical: DriverSpacing.sm),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1328,7 +1238,8 @@ class _PhoneField extends StatelessWidget {
                         onTap:
                             readOnly ? null : () => _showRegionPicker(context),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: DriverSpacing.sm),
                           decoration: _registrationFieldDecoration(),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
@@ -1365,7 +1276,7 @@ class _PhoneField extends StatelessWidget {
                   decoration: _registrationInputDecoration(
                     hintText: prefix == '+86' ? '11位電話號碼' : '8位電話號碼',
                     contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 14),
+                        horizontal: DriverSpacing.md, vertical: 14),
                   ),
                 ),
               ),
@@ -1493,7 +1404,8 @@ InputDecoration _registrationInputDecoration({
       filled: true,
       fillColor: DriverColors.surface,
       contentPadding: contentPadding ??
-          const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          const EdgeInsets.symmetric(
+              horizontal: DriverSpacing.lg, vertical: 14),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(DriverRadii.input),
         borderSide: const BorderSide(color: DriverColors.border),

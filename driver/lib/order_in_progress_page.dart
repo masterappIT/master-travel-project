@@ -137,8 +137,8 @@ class _OrderInProgressPageState extends State<OrderInProgressPage> {
                 ),
               ),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: DriverSpacing.md, vertical: DriverSpacing.xs),
                 decoration: BoxDecoration(
                     color: DriverColors.infoBackground,
                     borderRadius: BorderRadius.circular(DriverRadii.pill)),
@@ -213,11 +213,17 @@ class _ProgressMapPreview extends StatelessWidget {
                 style: TextStyle(
                     fontSize: DriverTypography.label,
                     color: Color(0xb3ffffff))),
-            SizedBox(height: 12),
+            SizedBox(height: DriverSpacing.md),
             _RouteText(origin: origin, destination: destination),
           ])),
-          const Positioned(top: 16, left: 16, child: _MapLabel('起點')),
-          const Positioned(top: 16, right: 16, child: _MapLabel('終點')),
+          const Positioned(
+              top: DriverSpacing.lg,
+              left: DriverSpacing.lg,
+              child: _MapLabel('起點')),
+          const Positioned(
+              top: DriverSpacing.lg,
+              right: DriverSpacing.lg,
+              child: _MapLabel('終點')),
         ]),
       );
 }
@@ -308,7 +314,7 @@ class _PassengerCard extends StatelessWidget {
                   Row(children: [
                     SvgPicture.asset('assets/in-progress-star.svg',
                         width: 12, height: 12),
-                    SizedBox(width: 4),
+                    SizedBox(width: DriverSpacing.xs),
                     Text('乘客好評度 4.9',
                         style: TextStyle(
                             fontSize: DriverTypography.label,

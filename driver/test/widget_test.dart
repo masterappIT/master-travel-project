@@ -28,14 +28,114 @@ Widget testApp(Widget home) {
   return MaterialApp(home: home, routes: routes);
 }
 
+http.Response _jsonResponse(Object body) =>
+    http.Response.bytes(utf8.encode(jsonEncode(body)), 200,
+        headers: {'content-type': 'application/json; charset=utf-8'});
+
+Future<http.Response> _driverFixtureResponse(http.Request request) async {
+  final path = request.url.path;
+  if (path == '/vehicles') {
+    return _jsonResponse({
+      'categories': [
+        {'name': '轎車', 'enabled': true},
+        {'name': '七座商務車', 'enabled': true},
+      ],
+    });
+  }
+  if (path == '/driver/auth/me') {
+    return _jsonResponse({
+      'driver': {
+        'name': '陳大文',
+        'isOnline': true,
+        'reviewStatus': 'APPROVED',
+        'phoneCountryCode': '+852',
+        'phone': '91234567',
+      },
+    });
+  }
+  if (path == '/driver/auth/vehicles') {
+    return _jsonResponse({
+      'data': [
+        {
+          'id': 'vehicle-primary',
+          'isPrimary': true,
+          'vehicleOwnership': '香港',
+          'plateType': '兩地牌',
+          'vehicleCategory': '轎車',
+          'vehicleColor': '白色',
+          'hkPlate': 'AB 1234',
+        },
+      ],
+    });
+  }
+  if (path == '/driver/auth/statistics') {
+    return _jsonResponse({
+      'today': {'earnings': 0, 'currency': 'HKD', 'completedTrips': 0},
+      'month': {'earnings': 0, 'currency': 'HKD'},
+      'rating': {'average': 5},
+      'recentOrders': [],
+      'settlement': {'settledEarnings': 0, 'unsettledEarnings': 0},
+    });
+  }
+  if (path == '/driver/auth/trips' || path == '/driver/auth/trips/available') {
+    return _jsonResponse([
+      {
+        'id': 'trip-available',
+        'pickupAddress': '香港中環置地廣場東門大堂',
+        'dropoffAddress': '深圳福田口岸',
+        'price': 280,
+        'currency': 'HKD',
+        'scheduledAt': '2024-03-20T10:00:00Z',
+        'passengerName': '陳',
+        'driverId': null,
+        'acceptedAt': null,
+      },
+      {
+        'id': 'trip-completed',
+        'pickupAddress': '香港中環',
+        'dropoffAddress': '深圳',
+        'price': 680,
+        'currency': 'HKD',
+        'completedAt': '2024-03-01T10:00:00Z',
+        'scheduledAt': '2024-03-01T08:00:00Z',
+        'passengerName': '陳',
+        'driverId': 'driver-1',
+        'acceptedAt': '2024-03-01T08:00:00Z',
+        'settlement': {'method': '微信支付'},
+      },
+    ]);
+  }
+  if (path.startsWith('/driver/auth/trips/')) {
+    return _jsonResponse({
+      'id': 'trip-1',
+      'pickupAddress': '香港中環',
+      'dropoffAddress': '深圳',
+      'price': 280,
+      'currency': 'HKD',
+      'scheduledAt': '2024-03-20T10:00:00Z',
+      'passengerName': '陳大文',
+    });
+  }
+  return _jsonResponse(<String, dynamic>{});
+}
+
 void main() {
+  setUp(() async {
+    DriverLanguagePreference.instance
+        .select(DriverLanguagePreference.traditionalChinese);
+    DriverApiClient.instance = DriverApiClient(
+      client: MockClient(_driverFixtureResponse),
+    );
+    await DriverApiClient.instance.me();
+  });
+
   testWidgets('renders the driver login page', (WidgetTester tester) async {
     await tester.pumpWidget(
       const DriverApp(initialRoute: DriverRouteNames.login),
     );
 
-    expect(find.text('跨境出行'), findsOneWidget);
-    expect(find.text('司機端登入 / 註冊'), findsOneWidget);
+    expect(find.bySemanticsLabel('Master App'), findsOneWidget);
+    expect(find.text('司機工作台 · 安全接送每一程'), findsOneWidget);
     expect(find.text('登入 / 註冊'), findsOneWidget);
   });
 
@@ -84,7 +184,11 @@ void main() {
 
   testWidgets('uses mainland and Hong Kong plates for mainland ownership',
       (WidgetTester tester) async {
-    await tester.pumpWidget(testApp(const RegistrationPage()));
+    await tester.pumpWidget(testApp(const RegistrationPage(
+      verificationChallengeId: 'challenge',
+      verificationCode: '00000',
+    )));
+    await tester.pumpAndSettle();
 
     await tester.tap(find.text('中國內地'));
     await tester.pump();
@@ -99,7 +203,11 @@ void main() {
 
   testWidgets('updates plate fields from region and plate type selections',
       (WidgetTester tester) async {
-    await tester.pumpWidget(testApp(const RegistrationPage()));
+    await tester.pumpWidget(testApp(const RegistrationPage(
+      verificationChallengeId: 'challenge',
+      verificationCode: '00000',
+    )));
+    await tester.pumpAndSettle();
 
     expect(find.text('香港車牌'), findsOneWidget);
     expect(find.text('澳門車牌'), findsNothing);
@@ -168,6 +276,7 @@ void main() {
   testWidgets('renders the driver home page and toggles online status',
       (WidgetTester tester) async {
     await tester.pumpWidget(testApp(const HomePage()));
+    await tester.pumpAndSettle();
 
     expect(find.text('陳大文'), findsOneWidget);
     expect(find.text('今日收入'), findsOneWidget);
@@ -211,6 +320,7 @@ void main() {
   testWidgets('renders the driver profile page and navigation',
       (WidgetTester tester) async {
     await tester.pumpWidget(testApp(const ProfilePage()));
+    await tester.pumpAndSettle();
 
     expect(find.text('陳大文'), findsOneWidget);
     expect(find.text('結算概覽'), findsOneWidget);
@@ -222,6 +332,7 @@ void main() {
   testWidgets('switches between available and accepted orders',
       (WidgetTester tester) async {
     await tester.pumpWidget(testApp(const OrderHallPage()));
+    await tester.pumpAndSettle();
 
     expect(find.text('接單大廳'), findsOneWidget);
     expect(find.text('線上接單中'), findsOneWidget);
@@ -291,7 +402,9 @@ void main() {
 
   testWidgets('renders in-progress order page content',
       (WidgetTester tester) async {
-    await tester.pumpWidget(testApp(const OrderInProgressPage()));
+    await tester
+        .pumpWidget(testApp(const OrderInProgressPage(tripId: 'trip-1')));
+    await tester.pumpAndSettle();
 
     expect(find.text('進行中'), findsNWidgets(2));
     expect(find.text('香港中環 → 深圳'), findsOneWidget);
@@ -302,16 +415,18 @@ void main() {
     expect(find.text('出發時間'), findsOneWidget);
     expect(find.text('乘客'), findsOneWidget);
     expect(find.text('車資'), findsOneWidget);
-    expect(find.text('\$280.00'), findsOneWidget);
-    expect(find.text('完成'), findsOneWidget);
+    expect(find.text('HK\$280.00'), findsOneWidget);
+    expect(find.text('確認到達目的地'), findsOneWidget);
   });
 
   testWidgets('opens completed page from in-progress action',
       (WidgetTester tester) async {
-    await tester.pumpWidget(testApp(const OrderInProgressPage()));
+    await tester
+        .pumpWidget(testApp(const OrderInProgressPage(tripId: 'trip-1')));
+    await tester.pumpAndSettle();
 
-    await tester.ensureVisible(find.text('完成'));
-    await tester.tap(find.text('完成'));
+    await tester.ensureVisible(find.text('確認到達目的地'));
+    await tester.tap(find.text('確認到達目的地'));
     await tester.pumpAndSettle();
 
     expect(find.text('行程已抵達目的地'), findsOneWidget);
@@ -321,14 +436,15 @@ void main() {
   testWidgets('renders order history page content',
       (WidgetTester tester) async {
     await tester.pumpWidget(testApp(const OrderHistoryPage()));
+    await tester.pumpAndSettle();
 
     expect(find.text('接單紀錄'), findsOneWidget);
-    expect(find.text('已結算'), findsNWidgets(3));
-    expect(find.text('未結算'), findsNWidgets(3));
-    expect(find.text('2024年3月'), findsOneWidget);
+    expect(find.text('已結算'), findsWidgets);
+    expect(find.text('未結算'), findsWidgets);
+    expect(find.text('2024年3月1日'), findsOneWidget);
     expect(find.text('出發：香港中環'), findsOneWidget);
     expect(find.text('目的：深圳'), findsOneWidget);
-    expect(find.text('\$680.00'), findsOneWidget);
+    expect(find.text('HK\$680.00'), findsOneWidget);
 
     await tester.tap(find.text('未結算').first);
     await tester.pump();
@@ -338,18 +454,20 @@ void main() {
   testWidgets('opens order history from profile menu',
       (WidgetTester tester) async {
     await tester.pumpWidget(testApp(const ProfilePage()));
+    await tester.pumpAndSettle();
 
     await tester.ensureVisible(find.text('接單紀錄'));
     await tester.tap(find.text('接單紀錄'));
     await tester.pumpAndSettle();
 
-    expect(find.text('2024年3月'), findsOneWidget);
+    expect(find.text('2024年3月1日'), findsOneWidget);
     expect(find.text('出發：香港中環'), findsOneWidget);
   });
 
   testWidgets('opens profile from the bottom navigation',
       (WidgetTester tester) async {
     await tester.pumpWidget(testApp(const HomePage()));
+    await tester.pumpAndSettle();
 
     await tester.tap(find.text('我的'));
     await tester.pumpAndSettle();
@@ -361,14 +479,16 @@ void main() {
   testWidgets('opens vehicle preview from the profile menu',
       (WidgetTester tester) async {
     await tester.pumpWidget(testApp(const ProfilePage()));
+    await tester.pumpAndSettle();
 
     await tester.ensureVisible(find.text('車輛資料'));
     await tester.tap(find.text('車輛資料'));
     await tester.pumpAndSettle();
 
     expect(find.text('車輛資料'), findsOneWidget);
-    expect(find.text('兩地牌轎車'), findsOneWidget);
-    expect(find.text('車牌類型'), findsNothing);
+    expect(find.text('轎車'), findsOneWidget);
+    expect(find.text('使用中'), findsOneWidget);
+    expect(find.text('AB 1234'), findsOneWidget);
   });
 
   test('maps assigned vehicle fields and primary status', () {
@@ -542,8 +662,9 @@ void main() {
   testWidgets('navigates from order history to order hall',
       (WidgetTester tester) async {
     await tester.pumpWidget(testApp(const OrderHistoryPage()));
+    await tester.pumpAndSettle();
 
-    await tester.tap(find.text('接單').last);
+    await tester.tap(find.text('接單'));
     await tester.pumpAndSettle();
 
     expect(find.text('接單大廳'), findsOneWidget);
@@ -551,18 +672,17 @@ void main() {
 
   testWidgets('renders completed order page content',
       (WidgetTester tester) async {
-    await tester.pumpWidget(testApp(const OrderCompletedPage()));
+    await tester
+        .pumpWidget(testApp(const OrderCompletedPage(tripId: 'trip-1')));
+    await tester.pumpAndSettle();
 
     expect(find.text('行程已抵達目的地'), findsOneWidget);
     expect(find.text('請與乘客確認車資並完成收款'), findsNothing);
     expect(find.text('城市天際線預覽'), findsOneWidget);
     expect(find.text('訂單詳情'), findsOneWidget);
-    expect(find.text('車資明細'), findsOneWidget);
-    expect(find.text('起步價'), findsOneWidget);
-    expect(find.text('里程費 (6.4 km × \$15)'), findsOneWidget);
-    expect(find.text('時間費 (19.5 分鐘 × \$2.5)'), findsOneWidget);
+    expect(find.text('車資'), findsOneWidget);
     expect(find.text('總計應收'), findsOneWidget);
-    expect(find.text('\$280.00'), findsOneWidget);
+    expect(find.text('HK\$280.00'), findsOneWidget);
     expect(find.text('確認完成'), findsOneWidget);
 
     await tester.ensureVisible(find.text('確認完成'));
@@ -571,5 +691,35 @@ void main() {
 
     expect(find.text('接單大廳'), findsOneWidget);
     expect(find.text('可接單'), findsOneWidget);
+  });
+
+  testWidgets('renders core pages without viewport exceptions',
+      (WidgetTester tester) async {
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    tester.view.devicePixelRatio = 1;
+
+    const widths = [320.0, 430.0, 768.0, 1440.0];
+    const pages = <Widget>[
+      HomePage(),
+      OrderHallPage(),
+      OrderHistoryPage(),
+      ProfilePage(),
+    ];
+
+    for (final width in widths) {
+      tester.view.physicalSize = Size(width, 932);
+      for (final page in pages) {
+        await tester.pumpWidget(KeyedSubtree(
+          key: UniqueKey(),
+          child: testApp(page),
+        ));
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull,
+            reason: '${page.runtimeType} failed at ${width.toInt()}px');
+      }
+    }
   });
 }

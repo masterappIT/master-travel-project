@@ -162,7 +162,8 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                         settlementMethod:
                             item['settlement']?['method']?.toString() ?? '未設定');
                     return Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
+                        padding:
+                            const EdgeInsets.only(bottom: DriverSpacing.md),
                         child: _HistoryCard(
                           entry: entry,
                           onTap: () => DriverNavigation.push(
@@ -260,7 +261,8 @@ class _HistoryTab extends StatelessWidget {
           onTap: onTap,
           borderRadius: BorderRadius.circular(DriverRadii.input),
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: const EdgeInsets.symmetric(
+                horizontal: DriverSpacing.lg, vertical: DriverSpacing.md),
             decoration: BoxDecoration(
                 border: Border.all(
                     color:
@@ -309,7 +311,7 @@ class _HistoryCard extends StatelessWidget {
           onTap: onTap,
           borderRadius: BorderRadius.circular(DriverRadii.card),
           child: Container(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(DriverSpacing.lg),
             decoration: BoxDecoration(
                 border: Border.all(color: DriverColors.border),
                 borderRadius: BorderRadius.circular(DriverRadii.card)),
@@ -362,7 +364,7 @@ class _HistoryCard extends StatelessWidget {
                       alignment: Alignment.centerRight,
                       child: Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 2),
+                            horizontal: DriverSpacing.sm, vertical: 2),
                         decoration: BoxDecoration(
                             color: entry.settled
                                 ? DriverColors.successBackground

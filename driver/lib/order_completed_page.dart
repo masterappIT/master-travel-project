@@ -149,7 +149,7 @@ class _CompletionHeader extends StatelessWidget {
   Widget build(BuildContext context) => const Column(
         children: [
           _CheckBadge(),
-          SizedBox(height: 12),
+          SizedBox(height: DriverSpacing.md),
           Text('行程已抵達目的地',
               style: TextStyle(
                   fontSize: 24,
@@ -207,11 +207,17 @@ class _CompletedMapPreview extends StatelessWidget {
                 style: TextStyle(
                     fontSize: DriverTypography.label,
                     color: Color(0xb3ffffff))),
-            const SizedBox(height: 8),
+            const SizedBox(height: DriverSpacing.sm),
             _CompletedRouteText(origin: origin, destination: destination),
           ])),
-          const Positioned(top: 16, left: 16, child: _MapLabel('起點')),
-          const Positioned(top: 16, right: 16, child: _MapLabel('終點')),
+          const Positioned(
+              top: DriverSpacing.lg,
+              left: DriverSpacing.lg,
+              child: _MapLabel('起點')),
+          const Positioned(
+              top: DriverSpacing.lg,
+              right: DriverSpacing.lg,
+              child: _MapLabel('終點')),
         ]),
       );
 }
@@ -400,7 +406,8 @@ ButtonStyle _completeStyle() => ElevatedButton.styleFrom(
       foregroundColor: DriverColors.surface,
       backgroundColor: DriverColors.activeBlue,
       elevation: 0,
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      padding: const EdgeInsets.symmetric(
+          horizontal: DriverSpacing.xl, vertical: DriverSpacing.lg),
       shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(DriverRadii.card)),
       textStyle: const TextStyle(

@@ -41,21 +41,25 @@ class _LanguageSettingsPageState extends State<LanguageSettingsPage> {
                         side: const BorderSide(color: DriverColors.divider),
                         borderRadius: BorderRadius.circular(DriverRadii.card)),
                     clipBehavior: Clip.antiAlias,
-                    child: Column(children: [
-                      for (var i = 0;
-                          i < DriverLanguagePreference.languages.length;
-                          i++) ...[
-                        RadioListTile<String>(
-                            title: Text(DriverLanguagePreference.languages[i]),
-                            value: DriverLanguagePreference.languages[i],
-                            groupValue: language,
-                            onChanged: (value) {
-                              if (value != null) _selectLanguage(value);
-                            }),
-                        if (i < DriverLanguagePreference.languages.length - 1)
-                          const Divider(height: 1, color: DriverColors.divider),
-                      ]
-                    ]),
+                    child: RadioGroup<String>(
+                      groupValue: language,
+                      onChanged: (value) {
+                        if (value != null) _selectLanguage(value);
+                      },
+                      child: Column(children: [
+                        for (var i = 0;
+                            i < DriverLanguagePreference.languages.length;
+                            i++) ...[
+                          RadioListTile<String>(
+                              title:
+                                  Text(DriverLanguagePreference.languages[i]),
+                              value: DriverLanguagePreference.languages[i]),
+                          if (i < DriverLanguagePreference.languages.length - 1)
+                            const Divider(
+                                height: 1, color: DriverColors.divider),
+                        ]
+                      ]),
+                    ),
                   ),
                   const SizedBox(height: DriverSpacing.sm),
                   Text(

@@ -209,8 +209,8 @@ class _OrderAcceptedPageState extends State<OrderAcceptedPage> {
                 ]),
               ),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: DriverSpacing.md, vertical: DriverSpacing.xs),
                 decoration: BoxDecoration(
                     color: DriverColors.successBackground,
                     borderRadius: BorderRadius.circular(DriverRadii.pill)),
@@ -310,11 +310,17 @@ class _AcceptedMapPreview extends StatelessWidget {
                 style: TextStyle(
                     fontSize: DriverTypography.label,
                     color: Color(0xb3ffffff))),
-            const SizedBox(height: 12),
+            const SizedBox(height: DriverSpacing.md),
             _MapRouteText(origin: origin, destination: destination),
           ])),
-          const Positioned(top: 16, left: 16, child: _MapLabel('起點')),
-          const Positioned(top: 16, right: 16, child: _MapLabel('終點')),
+          const Positioned(
+              top: DriverSpacing.lg,
+              left: DriverSpacing.lg,
+              child: _MapLabel('起點')),
+          const Positioned(
+              top: DriverSpacing.lg,
+              right: DriverSpacing.lg,
+              child: _MapLabel('終點')),
         ]),
       );
 }

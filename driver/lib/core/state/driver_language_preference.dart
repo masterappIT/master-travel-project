@@ -1,10 +1,10 @@
-import 'dart:html' as html;
-
 import 'package:flutter/foundation.dart';
+
+import '../platform/browser_storage.dart';
 
 class DriverLanguagePreference extends ValueNotifier<String> {
   DriverLanguagePreference._()
-      : super(html.window.localStorage[_storageKey] ?? traditionalChinese);
+      : super(readBrowserValue(_storageKey) ?? traditionalChinese);
 
   static final instance = DriverLanguagePreference._();
   static const _storageKey = 'driver_language';
@@ -16,7 +16,7 @@ class DriverLanguagePreference extends ValueNotifier<String> {
   void select(String language) {
     if (!languages.contains(language) || value == language) return;
     value = language;
-    html.window.localStorage[_storageKey] = language;
+    writeBrowserValue(_storageKey, language);
   }
 
   String text(String traditional, String simplified, String englishText) {

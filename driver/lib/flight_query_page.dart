@@ -113,7 +113,7 @@ class _FlightQueryPageState extends State<FlightQueryPage> {
           ]),
           const SizedBox(height: DriverSpacing.md),
           Container(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(DriverSpacing.lg),
             decoration: BoxDecoration(
               color: DriverColors.surface,
               borderRadius: BorderRadius.circular(DriverRadii.card),
@@ -212,7 +212,7 @@ class _FlightTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
         margin: const EdgeInsets.only(bottom: DriverSpacing.md),
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(DriverSpacing.lg),
         decoration: BoxDecoration(
             color: DriverColors.surface,
             borderRadius: BorderRadius.circular(DriverRadii.card),

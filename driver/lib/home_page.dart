@@ -109,11 +109,11 @@ class _HomePageState extends State<HomePage> {
         builder: (context) => SafeArea(
           child: ListView(
             shrinkWrap: true,
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(DriverSpacing.xl),
             children: [
               const Text('通知',
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 12),
+              const SizedBox(height: DriverSpacing.md),
               if (items.isEmpty) const Text('目前沒有通知'),
               ...items.map((item) {
                 final notification = Map<String, dynamic>.from(item as Map);
@@ -263,14 +263,14 @@ class _ProfileHeader extends StatelessWidget {
                               fontWeight: FontWeight.w700,
                               color: DriverColors.text)),
                     ),
-                    SizedBox(width: 8),
+                    SizedBox(width: DriverSpacing.sm),
                     DecoratedBox(
                       decoration: BoxDecoration(
                           color: DriverColors.successBackground,
                           borderRadius: BorderRadius.all(Radius.circular(100))),
                       child: Padding(
-                        padding:
-                            EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        padding: EdgeInsets.symmetric(
+                            horizontal: DriverSpacing.sm, vertical: 2),
                         child: Text(
                             driverText('已認證司機', '已认证司机', 'Verified driver'),
                             style: TextStyle(
@@ -281,7 +281,7 @@ class _ProfileHeader extends StatelessWidget {
                     ),
                   ],
                 ),
-                SizedBox(height: 4),
+                SizedBox(height: DriverSpacing.xs),
                 Text(vehicleSummary,
                     style: TextStyle(
                         fontSize: DriverTypography.label,
@@ -322,7 +322,8 @@ class _StatusCard extends StatelessWidget {
         onTap: () => onChanged(!isOnline),
         borderRadius: BorderRadius.circular(DriverRadii.card),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+          padding: const EdgeInsets.symmetric(
+              horizontal: 18, vertical: DriverSpacing.lg),
           decoration: BoxDecoration(
             color:
                 isOnline ? DriverColors.infoBackground : DriverColors.surface,
@@ -466,7 +467,7 @@ class _QuickStatsRow extends StatelessWidget {
             child: _Card(
                 padding: 16,
                 child: Center(child: CircularProgressIndicator()))),
-        SizedBox(width: 16),
+        SizedBox(width: DriverSpacing.lg),
         Expanded(
             child: _Card(
                 padding: 16, child: Center(child: CircularProgressIndicator())))
@@ -483,7 +484,7 @@ class _QuickStatsRow extends StatelessWidget {
                       label: '本月收入',
                       value: error == null ? monthValue : '—',
                       valueSize: 20))),
-          const SizedBox(width: 16),
+          const SizedBox(width: DriverSpacing.lg),
           Expanded(
               child: _Card(
                   padding: 16,
@@ -537,9 +538,9 @@ class _RecentOrdersSection extends StatelessWidget {
                     color: DriverColors.activeBlue)),
           ),
         ]),
-        const SizedBox(height: 12),
+        const SizedBox(height: DriverSpacing.md),
         ...orders.map((order) => Padding(
-              padding: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.only(bottom: DriverSpacing.md),
               child: _RecentOrderCard(
                 time: _formatCompletedAt(order['completedAt']),
                 price: order['price'] is num

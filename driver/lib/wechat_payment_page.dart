@@ -1,11 +1,10 @@
-import 'dart:async';
-import 'dart:html' as html;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
 import 'core/api/driver_api_client.dart';
 import 'core/layout/driver_page_shell.dart';
+import 'core/platform/browser_image_picker.dart';
 import 'core/tokens/driver_tokens.dart';
 
 class WechatPaymentPage extends StatefulWidget {
@@ -61,115 +60,21 @@ class _WechatPaymentPageState extends State<WechatPaymentPage> {
 
   Future<void> _selectQrCode() async {
     if (_selecting) return;
-    final input = html.FileUploadInputElement()
-      ..accept = 'image/jpeg,image/png,image/webp'
-      ..multiple = false;
-    input.style
-      ..position = 'fixed'
-      ..left = '0'
-      ..top = '0'
-      ..width = '1px'
-      ..height = '1px'
-      ..opacity = '0';
-    html.document.body?.append(input);
+    setState(() => _selecting = true);
     try {
-      setState(() => _selecting = true);
-      final changed = input.onChange.first;
-      input.click();
-      await changed;
-      final files = input.files;
-      final file = files == null || files.isEmpty ? null : files.first;
-      if (file == null) return;
-      if (!const ['image/jpeg', 'image/png', 'image/webp']
-          .contains(file.type)) {
-        throw StateError('只支援 JPEG、PNG 或 WebP 圖片');
-      }
-      final compressed = file.size > 2 * 1024 * 1024;
-      final bytes =
-          compressed ? await _compressQrCode(file) : await _readFile(file);
-      if (!mounted) return;
+      final image = await pickBrowserImage();
+      if (image == null || !mounted) return;
       setState(() {
-        _qrCodeBytes = bytes;
-        _fileName = compressed ? 'wechat-qr-code.jpg' : file.name;
-        _mimeType = compressed ? 'image/jpeg' : file.type;
+        _qrCodeBytes = image.bytes;
+        _fileName = image.compressed ? 'wechat-qr-code.jpg' : image.fileName;
+        _mimeType = image.mimeType;
       });
     } on Object catch (error) {
       if (mounted) {
         setState(() => _error = error is StateError ? error.message : '圖片處理失敗');
       }
     } finally {
-      input.remove();
       if (mounted) setState(() => _selecting = false);
-    }
-  }
-
-  Future<Uint8List> _readFile(html.File file) async {
-    final reader = html.FileReader();
-    final done = reader.onLoad.first;
-    reader.readAsArrayBuffer(file);
-    await done;
-    final result = reader.result;
-    if (result is ByteBuffer) return Uint8List.view(result);
-    if (result is Uint8List) return result;
-    throw StateError('無法讀取圖片');
-  }
-
-  Future<Uint8List> _readBlob(html.Blob blob) {
-    final completer = Completer<Uint8List>();
-    final reader = html.FileReader();
-    reader.onLoad.listen((_) {
-      final result = reader.result;
-      if (result is ByteBuffer) {
-        completer.complete(Uint8List.view(result));
-      } else if (result is Uint8List) {
-        completer.complete(result);
-      } else {
-        completer.completeError(StateError('無法讀取壓縮圖片'));
-      }
-    });
-    reader.onError.listen((_) => completer.completeError(
-          StateError('無法讀取壓縮圖片'),
-        ));
-    reader.readAsArrayBuffer(blob);
-    return completer.future;
-  }
-
-  Future<Uint8List> _compressQrCode(html.File file) async {
-    const maxBytes = 2 * 1024 * 1024;
-    final objectUrl = html.Url.createObjectUrl(file);
-    try {
-      final image = html.ImageElement(src: objectUrl);
-      await image.onLoad.first;
-      var width = image.naturalWidth;
-      var height = image.naturalHeight;
-      if (width <= 0 || height <= 0) throw StateError('無法解碼圖片');
-      const maxDimension = 2048;
-      if (width > maxDimension || height > maxDimension) {
-        final ratio = maxDimension / (width > height ? width : height);
-        width = (width * ratio).round();
-        height = (height * ratio).round();
-      }
-      var quality = 0.88;
-      for (var attempt = 0; attempt < 12; attempt++) {
-        final canvas = html.CanvasElement(width: width, height: height);
-        canvas.context2D
-          ..fillStyle = '#FFFFFF'
-          ..fillRect(0, 0, width, height)
-          ..drawImageScaled(image, 0, 0, width, height);
-        final blob = await canvas.toBlob('image/jpeg', quality);
-        final bytes = await _readBlob(blob);
-        if (bytes.length <= maxBytes) return bytes;
-        if (quality > 0.52) {
-          quality -= 0.09;
-        } else {
-          width = (width * 0.82).round();
-          height = (height * 0.82).round();
-          quality = 0.72;
-        }
-      }
-      throw StateError('圖片壓縮後仍超過 2 MB，請選擇較小的圖片');
-    } finally {
-      html.Url.revokeObjectUrl(objectUrl);
     }
   }
 

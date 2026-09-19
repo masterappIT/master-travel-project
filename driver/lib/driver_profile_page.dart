@@ -300,7 +300,8 @@ class _ProfileIdentity extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            padding: const EdgeInsets.symmetric(
+                horizontal: 10, vertical: DriverSpacing.xs),
             decoration: BoxDecoration(
               color: DriverColors.successBackground,
               borderRadius: BorderRadius.circular(DriverRadii.pill),
@@ -434,7 +435,8 @@ class _ProfilePhoneField extends StatelessWidget {
                         borderRadius: BorderRadius.circular(DriverRadii.input),
                         onTap: () => _showRegionPicker(context),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: DriverSpacing.sm),
                           decoration: _profileFieldDecoration(),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
@@ -469,7 +471,8 @@ class _ProfilePhoneField extends StatelessWidget {
                       )
                     : Container(
                         alignment: Alignment.centerLeft,
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: DriverSpacing.md),
                         decoration: _profileFieldDecoration(),
                         child: Text(controller.text,
                             maxLines: 1,
@@ -489,8 +492,8 @@ class _ProfilePhoneField extends StatelessWidget {
   InputDecoration _profileInputDecoration(String hintText) => InputDecoration(
         isDense: true,
         hintText: hintText,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(
+            horizontal: DriverSpacing.md, vertical: 14),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(DriverRadii.input),
           borderSide: const BorderSide(color: DriverColors.border),

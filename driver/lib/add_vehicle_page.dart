@@ -1,12 +1,9 @@
-import 'dart:async';
-import 'dart:html' as html;
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import 'core/api/driver_api_client.dart';
+import 'core/platform/browser_image_picker.dart';
 import 'core/vehicle_plate_rules.dart';
 import 'core/layout/driver_page_shell.dart';
 import 'core/tokens/driver_tokens.dart';
@@ -170,108 +167,26 @@ class _AddVehiclePageState extends State<AddVehiclePage> {
     });
   }
 
-  Future<Uint8List> _readBlob(html.Blob blob) {
-    final completer = Completer<Uint8List>();
-    final reader = html.FileReader();
-    reader.onLoad.listen((_) {
-      final result = reader.result;
-      if (result is ByteBuffer) {
-        completer.complete(result.asUint8List());
-      } else if (result is Uint8List) {
-        completer.complete(result);
-      } else {
-        completer.completeError(StateError('無法讀取圖片'));
-      }
-    });
-    reader.onError.listen((_) => completer.completeError(StateError('無法讀取圖片')));
-    reader.readAsArrayBuffer(blob);
-    return completer.future;
-  }
-
-  Future<Uint8List> _compressVehiclePhoto(html.File file) async {
-    const maxBytes = 2 * 1024 * 1024;
-    final objectUrl = html.Url.createObjectUrl(file);
-    try {
-      final image = html.ImageElement(src: objectUrl);
-      await image.onLoad.first;
-      var width = image.naturalWidth;
-      var height = image.naturalHeight;
-      if (width <= 0 || height <= 0) throw StateError('無法解碼圖片');
-      const maxDimension = 2048;
-      if (width > maxDimension || height > maxDimension) {
-        final ratio = maxDimension / (width > height ? width : height);
-        width = (width * ratio).round();
-        height = (height * ratio).round();
-      }
-      var quality = 0.88;
-      for (var attempt = 0; attempt < 12; attempt++) {
-        final canvas = html.CanvasElement(width: width, height: height);
-        canvas.context2D
-          ..fillStyle = '#FFFFFF'
-          ..fillRect(0, 0, width, height)
-          ..drawImageScaled(image, 0, 0, width, height);
-        final bytes =
-            await _readBlob(await canvas.toBlob('image/jpeg', quality));
-        if (bytes.length <= maxBytes) return bytes;
-        if (quality > 0.52) {
-          quality -= 0.09;
-        } else {
-          width = (width * 0.82).round();
-          height = (height * 0.82).round();
-          quality = 0.72;
-        }
-      }
-      throw StateError('圖片壓縮後仍超過 2 MB，請選擇較小的圖片');
-    } finally {
-      html.Url.revokeObjectUrl(objectUrl);
-    }
-  }
-
   Future<void> _selectVehiclePhoto() async {
     if (_isProcessingPhoto) return;
-    final input = html.FileUploadInputElement()
-      ..accept = 'image/jpeg,image/png,image/webp'
-      ..multiple = false;
-    html.document.body?.append(input);
+    setState(() => _isProcessingPhoto = true);
     try {
-      input.click();
-      await input.onChange.first;
-      final files = input.files;
-      final file = files == null || files.isEmpty ? null : files.first;
-      if (file == null) return;
-      if (!const ['image/jpeg', 'image/png', 'image/webp']
-          .contains(file.type)) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('只支援 JPEG、PNG 或 WebP 圖片')));
-        }
-        return;
-      }
-      setState(() => _isProcessingPhoto = true);
-      try {
-        const maxBytes = 2 * 1024 * 1024;
-        final compressed = file.size > maxBytes;
-        final bytes = compressed
-            ? await _compressVehiclePhoto(file)
-            : await _readBlob(file);
-        if (!mounted) return;
-        setState(() {
-          _vehiclePhotoBytes = bytes;
-          _vehiclePhotoName = compressed
-              ? '${file.name.replaceFirst(RegExp(r'\.[^.]+$'), '')}.jpg'
-              : file.name;
-          _vehiclePhotoMime = compressed ? 'image/jpeg' : file.type;
-        });
-      } on Object catch (error) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: Text(error is StateError ? error.message : '圖片處理失敗')));
-        }
-      } finally {
-        if (mounted) setState(() => _isProcessingPhoto = false);
+      final image = await pickBrowserImage();
+      if (image == null || !mounted) return;
+      setState(() {
+        _vehiclePhotoBytes = image.bytes;
+        _vehiclePhotoName = image.compressed
+            ? '${image.fileName.replaceFirst(RegExp(r'\.[^.]+$'), '')}.jpg'
+            : image.fileName;
+        _vehiclePhotoMime = image.mimeType;
+      });
+    } on Object catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(error is StateError ? error.message : '圖片處理失敗')));
       }
     } finally {
-      input.remove();
+      if (mounted) setState(() => _isProcessingPhoto = false);
     }
   }
 
@@ -660,11 +575,11 @@ class _TextField extends StatelessWidget {
               suffixIcon: icon == null
                   ? null
                   : Padding(
-                      padding: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.all(DriverSpacing.lg),
                       child: SvgPicture.asset(icon!, width: 16, height: 16)),
               filled: true,
               fillColor: DriverColors.surface,
-              contentPadding: const EdgeInsets.all(16),
+              contentPadding: const EdgeInsets.all(DriverSpacing.lg),
               border: border,
               enabledBorder: border,
               focusedBorder: OutlineInputBorder(

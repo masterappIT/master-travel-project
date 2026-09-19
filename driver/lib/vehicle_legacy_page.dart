@@ -18,7 +18,7 @@ class VehicleLegacyPage extends StatelessWidget {
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 430),
               child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
+                padding: const EdgeInsets.all(DriverSpacing.xl),
                 child: ConstrainedBox(
                   constraints: BoxConstraints(
                     minHeight: constraints.maxHeight - 48,
@@ -48,8 +48,8 @@ class VehicleLegacyPage extends StatelessWidget {
                                   BorderRadius.circular(DriverRadii.input),
                             ),
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 24,
-                              vertical: 16,
+                              horizontal: DriverSpacing.xl,
+                              vertical: DriverSpacing.lg,
                             ),
                           ),
                           child: const Text(
@@ -125,7 +125,7 @@ class _VehicleCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(DriverSpacing.lg),
         decoration: BoxDecoration(
           color: DriverColors.surface,
           border: Border.all(color: DriverColors.divider),
