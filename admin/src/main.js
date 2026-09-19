@@ -1,4 +1,4 @@
-import { createApp, computed, nextTick, onMounted, watch, provide } from 'vue'
+import { createApp, computed, ref, nextTick, onMounted, watch, provide } from 'vue'
 import { createAdminApi } from './utils/admin-api.js'
 import { LoadingState, ErrorState, ToastHost, ConfirmDialog } from './components/index.js'
 import { DriverReviewActions } from './components/DriverReviewActions.js'
@@ -74,6 +74,7 @@ let loadRequestId = 0
 const { exchangeRate, pricingCurrency, severeWeatherEnabled, adminLogo, paymentSettings } = createAdminSettingsState()
 const { users, selectedUser, walletTransactions, topUpWithdrawalHistory, trips, charterOrders, addresses, mainlandCities, addressSearchKeyword, addressSearchResults, addressSearching, categories, vehicles, extras, distancePricing, routeMinimumFares, routeMinimumFareForm, membershipPlans, membershipOrders, promotions, promotionForm, promotionSaving, promotionDeletingId, promotionTogglingId, mileageRules, mileageRewards, mileageAccounts, mileageRewardForm, mileageLedger, mileageSelectedAccount, mileageSaving, invitationSettings, invitationWalletCurrency, invitationSummary, invitationRecords, invitationSaving } = createAdminResourceState()
 const { administrators, auditLogs, notifications, notificationTemplates, notificationUsers, notificationDrivers, personnel, entryItems, drivers, selectedDriver, expenseItems } = createAdminAuxiliaryState()
+const allVehicles = ref([])
 const { orderUrls, createdOrderUrl, tripCatalog, tripQuote, vehicleCategories, tripBookingStep, tripPaymentMethod, tripUseFareBalance, tripUseCashBalance, tripLocationKeyword, tripLocationResults, tripLocationSearching, tripLocationTarget } = createAdminInteractionState()
 const { toasts, confirmDialog, dismissToast, notify, requestConfirmation, resolveConfirmation } = createFeedbackController()
 const paymentsPageState = createPaymentsPageState()
@@ -114,7 +115,7 @@ const resourceLoader = createAdminResourceLoader({
   settings: { exchangeRate, pricingCurrency, severeWeatherEnabled, adminLogo, paymentSettings },
   resourceLoaders: {
     coreUsers: () => import('./utils/admin-resource-loader.js').then(({ loadCoreUsers }) => loadCoreUsers({ usersApi, users })),
-    drivers: () => import('./utils/admin-resource-loader.js').then(({ loadDriversResources }) => loadDriversResources({ driversApi, vehicleCategories, drivers })),
+    drivers: () => import('./utils/admin-resource-loader.js').then(({ loadDriversResources }) => loadDriversResources({ driversApi, vehicleCategories, drivers, allVehicles })),
     dispatch: () => import('./utils/admin-resource-loader.js').then(({ loadDispatchResources }) => loadDispatchResources({ tripsApi, driversApi, trips, drivers, orderUrls, tripPage })),
     settlements: () => import('./utils/admin-resource-loader.js').then(({ loadSettlementResources }) => loadSettlementResources({ tripsApi, driversApi, trips, drivers })),
     trips: () => import('./utils/admin-resource-loader.js').then(({ loadTripsResources }) => loadTripsResources({ tripsApi, driversApi, api, trips, drivers, tripPage, tripCatalog })),
@@ -168,11 +169,11 @@ const vehiclesActions = createVehiclesActions({ api, view, categories, vehicles,
 const { editExtra, resetExtra, saveExtra, moveExtra, showOnlyExtra, toggleSevereWeather, removeExtra, editVehicle: editCatalogVehicle, editCategory, resetCategory, resetVehicle, saveCategory, toggleCategory, saveVehicle, toggleVehicle, removeCategory, removeVehicle } = vehiclesActions
 const addressesActions = createAddressesActions({ addressesApi, addresses, addressForm, mainlandCities, mainlandCityForm, addressSearchKeyword, addressSearchResults, addressSearching, error, load, displayError, displayMainlandCity, apiMainlandCity, displayPlaceName, requestConfirmation, notify, t })
 const { editAddress, resetAddress, searchAddressPlaces, handleAddressRegionChange, handleAddressCityChange, selectAddressSearchResult, saveAddress, removeAddress, resetMainlandCity, editMainlandCity, saveMainlandCity, removeMainlandCity } = addressesActions
-const driverActions = createDriversActions({ driversApi, driverForm, selectedDriver, settlementForm, drivers, error, load, displayError, requestConfirmation, notify })
-const { reviewStatusLabel, resetDriver, editDriver, formatDriverHongKongPlate, formatDriverMacauPlate, formatDriverMainlandPlate, changeDriverOwnership, uploadDriverPhotos, removeDriverPhoto, saveDriver, updateDriverStatus, removeDriver, openDriverDetail, previewDriver, closeDriverDetail, approveDriver, requestDriverRevision, rejectDriver, resetSettlement, saveSettlement, refreshDriverVehicles, updateVehicleStatus, removeVehicle: removeDriverVehicle, vehicleForm: driverVehicleForm, resetVehicleForm, editVehicle: editDriverVehicle, closeVehicleForm, changeVehicleOwnership: changeDriverVehicleOwnership, saveVehicle: saveDriverVehicle } = driverActions
+const driverActions = createDriversActions({ driversApi, driverForm, selectedDriver, settlementForm, drivers, allVehicles, error, load, displayError, requestConfirmation, notify })
+const { reviewStatusLabel, resetDriver, editDriver, formatDriverHongKongPlate, formatDriverMacauPlate, formatDriverMainlandPlate, changeDriverOwnership, uploadDriverPhotos, removeDriverPhoto, saveDriver, updateDriverStatus, removeDriver, openDriverDetail, previewDriver, closeDriverDetail, approveDriver, requestDriverRevision, rejectDriver, resetSettlement, saveSettlement, refreshDriverVehicles, updateVehicleStatus, removeVehicle: removeDriverVehicle, vehicleForm: driverVehicleForm, resetVehicleForm, editVehicle: editDriverVehicle, closeVehicleForm, changeVehicleOwnership: changeDriverVehicleOwnership, saveVehicle: saveDriverVehicle, manageVehicleAssignments, closeVehicleAssignments, bindVehicleDriver, unbindVehicleDriver, vehicleAssignments, assignmentVehicle } = driverActions
 const administratorsActions = createAdministratorsActions({ api, administratorForm, load, error, displayError, requestConfirmation, notify })
 const { resetAdministrator, editAdministrator, saveAdministrator, disableAdministrator } = administratorsActions
-const operationsStorage = createOperationsStorage({ personnel, entryItems, expenseItems, drivers })
+const operationsStorage = createOperationsStorage({ personnel, entryItems, expenseItems })
 const persistOperations = operationsStorage.persist
 const seedOperations = operationsStorage.seed
 const operationsActions = createOperationsActions({ personnel, personnelForm, entryItems, entryForm, expenseItems, expenseForm, persistOperations, requestConfirmation, notify })
@@ -518,14 +519,32 @@ const App = { setup() {
      editVehicle: editDriverVehicle,
      closeVehicleForm,
      changeVehicleOwnership: changeDriverVehicleOwnership,
-     saveVehicle: saveDriverVehicle   })
+     saveVehicle: saveDriverVehicle,
+     saveDriverVehicle
+    })
    provide('adminDriverVehiclesContext', {
       view,
       canWrite,
-      vehicles: computed(() => drivers.value.flatMap(driver => (driver.vehicles || []).map(vehicle => ({ ...vehicle, driverId: driver.id, driverName: driver.name })))),
+      vehicles: computed(() => allVehicles.value.map(vehicle => ({ ...vehicle, driverName: vehicle.assignments?.map(item => item.driver?.name).filter(Boolean).join('、') || '—' }))),
+      drivers,
+      vehicleCategories,
+      vehicleForm: driverVehicleForm,
+      resetVehicleForm,
+      closeVehicleForm,
+      changeVehicleOwnership: changeDriverVehicleOwnership,
+      saveVehicle: saveDriverVehicle,
       refresh: () => load(),
-      openFirstVehicleForm: () => { view.value = 'drivers'; resetVehicleForm() },
-      editVehicleFromRegistry: vehicle => { view.value = 'drivers'; const driver = drivers.value.find(item => item.id === vehicle.driverId); if (driver) { selectedDriver.value = driver; openDriverDetail(driver); editDriverVehicle(vehicle) } },
+      openFirstVehicleForm: () => { resetVehicleForm(); view.value = 'driver-vehicles' },
+      updateVehicleStatus,
+      removeVehicle: removeDriverVehicle,
+      assignmentVehicle,
+      vehicleAssignments,
+      manageVehicleAssignments,
+      closeVehicleAssignments,
+      bindVehicleDriver,
+      unbindVehicleDriver,
+      availableDrivers: drivers,
+      editVehicleFromRegistry: vehicle => { editDriverVehicle(vehicle); view.value = 'driver-vehicles' },
       openDriver: driverId => { view.value = 'drivers'; const driver = drivers.value.find(item => item.id === driverId); if (driver) openDriverDetail(driver) }
     })
 
@@ -713,7 +732,7 @@ const App = { setup() {
  }, template: `<ToastHost :items="toasts" @dismiss="dismissToast" /><ConfirmDialog v-bind="confirmDialog" @confirm="resolveConfirmation(true)" @cancel="resolveConfirmation(false)" /><div v-if="!token" class="login"><button type="button" class="login-language" @click="toggleLocale" :aria-label="t('languageLabel')">中 / EN</button><div class="login-orb login-orb-one"></div><div class="login-orb login-orb-two"></div><form @submit.prevent="apiLogin"><div class="brand"><img v-if="adminLogo" :src="adminLogo" width="180" height="56" alt="Admin logo"/><span v-else>{{t('brand')}}</span></div><h1>{{t('welcome')}}</h1><p>{{t('signInPrompt')}}</p><input v-model="username" :placeholder="t('adminUsername')" autocomplete="username" required/><input v-model="password" type="password" :placeholder="t('password')" autocomplete="current-password" required/><button type="submit">{{t('signIn')}}</button><small v-if="error">{{error}}</small></form><footer class="login-footer">© 2026 IM MASTER INC. LIMITED All Rights Reserved.</footer></div><div v-else class="shell"><aside :class="{ 'mobile-nav-open': mobileNavOpen }"><div class="brand"><img v-if="adminLogo" :src="adminLogo" width="180" height="56" alt="Admin logo"/><span v-else>{{t('brand')}}</span></div><button type="button" class="mobile-nav-toggle" :aria-expanded="mobileNavOpen ? 'true' : 'false'" aria-controls="admin-navigation" @click="mobileNavOpen = !mobileNavOpen"><span aria-hidden="true">☰</span><span>{{mobileNavOpen ? '關閉選單' : '開啟選單'}}</span></button><nav id="admin-navigation" @click="mobileNavOpen = false">
   <button type="button" :class="{active:view==='dashboard'}" @click="navigate('dashboard')">{{t('dashboard')}}</button>
   <button type="button" :class="{active:view==='users'}" @click="navigate('users')">{{t('users')}}</button>
-  <button type="button" :class="{active:view==='drivers'}" @click="navigate('drivers')">{{t('drivers')}}</button><button type="button" :class="{active:view==='driver-vehicles'}" @click="navigate('driver-vehicles')">車輛管理</button>
+  <div class="nav-group"><button class="nav-group-toggle" type="button">{{t('drivers')}} <span>⌄</span></button><div class="nav-group-items"><button type="button" :class="{active:view==='drivers'}" @click="navigate('drivers')">{{t('drivers')}}</button><button type="button" :class="{active:view==='driver-vehicles'}" @click="navigate('driver-vehicles')">車輛管理</button></div></div>
   <button type="button" :class="{active:view==='trips'}" @click="navigate('trips')">{{t('trips')}}</button>
   <button type="button" :class="{active:view==='dispatch'}" @click="navigate('dispatch')">{{t('dispatch')}}</button>
   <button type="button" :class="{active:view==='settlements'}" @click="navigate('settlements')">{{t('settlements')}}</button>
@@ -737,7 +756,7 @@ const App = { setup() {
   <div class="nav-group operations-nav">
     <button class="nav-group-toggle" type="button">{{t('operations')}} <span>⌄</span></button>
     <div class="nav-group-items">
-      <button type="button" :class="{active:view==='operations-personnel'}" @click="navigate('operations-personnel')">{{t('personnelManagement')}}</button><button type="button" :class="{active:view==='drivers'}" @click="navigate('drivers')">{{t('drivers')}}</button>
+      <button type="button" :class="{active:view==='operations-personnel'}" @click="navigate('operations-personnel')">{{t('personnelManagement')}}</button>
       <button type="button" :class="{active:view==='entries'}" @click="navigate('entries')">{{t('entryItems')}}</button>
       <button type="button" :class="{active:view==='income'}" @click="navigate('income')">{{t('incomeReport')}}</button>
       <button type="button" :class="{active:view==='expenses'}" @click="navigate('expenses')">{{t('expenseDetails')}}</button>

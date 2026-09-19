@@ -1,0 +1,6 @@
+ALTER TABLE "Driver"
+  ALTER COLUMN "plateType" DROP NOT NULL,
+  ALTER COLUMN "vehicleOwnership" DROP NOT NULL,
+  ALTER COLUMN "vehicleCategory" DROP NOT NULL,
+  ALTER COLUMN "vehicleColor" DROP NOT NULL,
+  ALTER COLUMN "vehiclePhotos" DROP NOT NULL;

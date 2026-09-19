@@ -1916,7 +1916,7 @@ function quoteResponse(quote: PersistedQuote) {
 }
 function driverVehicleResponse(vehicle: {
   id: string;
-  driverId: string;
+  driverId?: string | null;
   plateType: string;
   hkPlate: string | null;
   mainlandPlate: string | null;
@@ -1934,7 +1934,7 @@ function driverVehicleResponse(vehicle: {
   const { vehiclePhotoData, vehiclePhotoMime, ...publicVehicle } = vehicle;
   return {
     ...publicVehicle,
-    vehiclePhotos: vehiclePhotoData && vehiclePhotoMime ? [`/admin/drivers/${vehicle.driverId}/vehicles/${vehicle.id}/photo`] : [],
+    vehiclePhotos: vehiclePhotoData && vehiclePhotoMime ? [`/admin/vehicles/${vehicle.id}/photo`] : [],
     createdAt: vehicle.createdAt.toISOString(),
     updatedAt: vehicle.updatedAt.toISOString(),
   };
@@ -1945,21 +1945,11 @@ function driverResponse(driver: {
   driverType: string;
   name: string;
   affiliation: string;
-  plateType: string;
-  hkPlate: string | null;
-  mainlandPlate: string | null;
-  macauPlate: string | null;
-  vehicleOwnership: string;
   phoneCountryCode: string;
   phone: string;
   hongKongMacauCountryCode: string | null;
   hongKongMacauPhone: string | null;
   mainlandPhone: string | null;
-  vehicleCategory: string;
-  vehicleColor: string;
-  vehiclePhotos: unknown;
-  vehiclePhotoData?: Uint8Array | null;
-  vehiclePhotoMime?: string | null;
   reviewStatus: string;
   reviewReason?: string | null;
   reviewSubmittedAt?: Date;
@@ -1976,8 +1966,6 @@ function driverResponse(driver: {
   updatedAt: Date;
 }) {
   const {
-    vehiclePhotoData,
-    vehiclePhotoMime,
     wechatQrCodeData,
     wechatQrCodeMime,
     ...publicDriver
@@ -1985,10 +1973,6 @@ function driverResponse(driver: {
   return {
     ...publicDriver,
     isOnline: driver.isOnline ?? false,
-    vehiclePhotos:
-      vehiclePhotoData && vehiclePhotoMime
-        ? ["/driver/auth/me/vehicle-photo"]
-        : [],
     wechatQrCodeUrl:
       wechatQrCodeData && wechatQrCodeMime
         ? "/driver/auth/me/wechat-qr-code"
@@ -2101,7 +2085,7 @@ function validVehiclePlateData(body: {
     : Boolean(localPlate && mainlandPlate);
 }
 
-function validDriverPayload(body: Partial<Prisma.DriverCreateInput>) {
+function validDriverPayload(body: Partial<Prisma.DriverCreateInput> & Record<string, unknown>) {
   const required = [
     "name",
     "affiliation",
@@ -3109,33 +3093,42 @@ class DriverAuthController {
         "Driver phone number is already registered",
         HttpStatus.CONFLICT,
       );
-    const driver = await prisma.driver.create({
-      data: {
-        id: `driver-${Date.now()}-${randomBytes(4).toString("hex")}`,
-        name,
-        affiliation: vehicleOwnership,
-        vehicleOwnership,
-        plateType,
-        hkPlate: hkPlate || null,
-        macauPlate: macauPlate || null,
-        mainlandPlate: mainlandPlate || null,
-        phoneCountryCode: identity.countryCode,
-        phone: identity.phoneNumber,
-        hongKongMacauCountryCode: hongKongMacauIdentity.countryCode,
-        hongKongMacauPhone: hongKongMacauIdentity.phoneNumber,
-        mainlandPhone: mainlandIdentity.phoneNumber,
-        vehicleCategory,
-        vehicleColor,
-        vehiclePhotos: [],
-        vehiclePhotoData: new Uint8Array(vehiclePhoto.buffer),
-        vehiclePhotoMime: vehiclePhoto.mimetype,
-        reviewStatus: "PENDING",
-        reviewSubmittedAt: new Date(),
-      },
-    });
-    await prisma.driverOtpChallenge.update({
-      where: { id: challenge.id },
-      data: { consumedAt: new Date(), driverId: driver.id },
+    const driver = await prisma.$transaction(async (tx) => {
+      const created = await tx.driver.create({
+        data: {
+          id: `driver-${Date.now()}-${randomBytes(4).toString("hex")}`,
+          name,
+          affiliation: vehicleOwnership,
+          phoneCountryCode: identity.countryCode,
+          phone: identity.phoneNumber,
+          hongKongMacauCountryCode: hongKongMacauIdentity.countryCode,
+          hongKongMacauPhone: hongKongMacauIdentity.phoneNumber,
+          mainlandPhone: mainlandIdentity.phoneNumber,
+          reviewStatus: "PENDING",
+          reviewSubmittedAt: new Date(),
+        },
+      });
+      await tx.driverVehicle.create({
+        data: {
+          id: `vehicle-${Date.now()}-${randomBytes(4).toString("hex")}`,
+          vehicleOwnership,
+          plateType,
+          hkPlate: hkPlate || null,
+          macauPlate: macauPlate || null,
+          mainlandPlate: mainlandPlate || null,
+          vehicleCategory,
+          vehicleColor,
+          vehiclePhotos: [],
+          vehiclePhotoData: new Uint8Array(vehiclePhoto.buffer),
+          vehiclePhotoMime: vehiclePhoto.mimetype,
+          assignments: { create: { driverId: created.id } },
+        },
+      });
+      await tx.driverOtpChallenge.update({
+        where: { id: challenge.id },
+        data: { consumedAt: new Date(), driverId: created.id },
+      });
+      return created;
     });
     return driverAuthResponse(driver);
   }
@@ -3314,15 +3307,15 @@ class DriverAuthController {
   @Get("me/vehicle-photo")
   async vehiclePhoto(@Req() req: RequestLike, @Res() response: Response) {
     const session = await driverSessionFrom(req);
-    const driver = await prisma.driver.findUnique({
-      where: { id: session.sub },
-      select: { vehiclePhotoData: true, vehiclePhotoMime: true },
+    const vehicle = await prisma.driverVehicle.findFirst({
+      where: { enabled: true, assignments: { some: { driverId: session.sub, enabled: true } } },
+      orderBy: { createdAt: "asc" },
     });
-    if (!driver?.vehiclePhotoData || !driver.vehiclePhotoMime)
+    if (!vehicle?.vehiclePhotoData || !vehicle.vehiclePhotoMime)
       throw new HttpException("Vehicle photo not found", HttpStatus.NOT_FOUND);
     response
-      .type(driver.vehiclePhotoMime)
-      .send(Buffer.from(driver.vehiclePhotoData));
+      .type(vehicle.vehiclePhotoMime)
+      .send(Buffer.from(vehicle.vehiclePhotoData));
   }
 
   @Get("me")
@@ -3373,6 +3366,11 @@ class DriverAuthController {
       where: { id: session.sub },
     });
     if (!current) throw new UnauthorizedException("Driver not found");
+    const currentVehicle = await prisma.driverVehicle.findFirst({
+      where: { assignments: { some: { driverId: current.id, enabled: true } } },
+      orderBy: { createdAt: "asc" },
+    });
+    if (!currentVehicle) throw new HttpException("Assigned vehicle not found", HttpStatus.NOT_FOUND);
     if (current.reviewStatus === "REJECTED")
       throw new ForbiddenException(
         "Rejected registration cannot be resubmitted",
@@ -3387,17 +3385,17 @@ class DriverAuthController {
     const name = value(body.name, current.name);
     const { vehicleOwnership, plateType, hkPlate, macauPlate, mainlandPlate } =
       normalizeVehiclePlateData({
-        vehicleOwnership: body.vehicleOwnership ?? current.vehicleOwnership,
-        plateType: body.plateType ?? current.plateType,
-        hkPlate: body.hkPlate ?? current.hkPlate,
-        macauPlate: body.macauPlate ?? current.macauPlate,
-        mainlandPlate: body.mainlandPlate ?? current.mainlandPlate,
+        vehicleOwnership: body.vehicleOwnership ?? currentVehicle.vehicleOwnership,
+        plateType: body.plateType ?? currentVehicle.plateType,
+        hkPlate: body.hkPlate ?? currentVehicle.hkPlate,
+        macauPlate: body.macauPlate ?? currentVehicle.macauPlate,
+        mainlandPlate: body.mainlandPlate ?? currentVehicle.mainlandPlate,
       });
     const vehicleCategory = value(
       body.vehicleCategory,
-      current.vehicleCategory,
+      currentVehicle.vehicleCategory || "",
     )!;
-    const vehicleColor = value(body.vehicleColor, current.vehicleColor)!;
+    const vehicleColor = value(body.vehicleColor, currentVehicle.vehicleColor || "")!;
     if (
       !name ||
       !vehicleCategory ||
@@ -3423,31 +3421,43 @@ class DriverAuthController {
         "Vehicle category is not available",
         HttpStatus.BAD_REQUEST,
       );
-    const driver = await prisma.driver.update({
-      where: { id: current.id },
-      data: {
-        name,
-        affiliation: vehicleOwnership,
-        vehicleOwnership,
-        plateType,
-        hkPlate: hkPlate || null,
-        macauPlate: macauPlate || null,
-        mainlandPlate: mainlandPlate || null,
-        vehicleCategory,
-        vehicleColor,
-        ...(vehiclePhoto
-          ? {
-              vehiclePhotoData: new Uint8Array(vehiclePhoto.buffer),
-              vehiclePhotoMime: vehiclePhoto.mimetype,
-            }
-          : {}),
-        reviewStatus: "PENDING",
-        reviewReason: null,
-        reviewSubmittedAt: new Date(),
-        reviewedAt: null,
-        reviewedBy: null,
-        isOnline: false,
-      },
+    const driver = await prisma.$transaction(async (tx) => {
+      const vehicle = await tx.driverVehicle.findFirst({
+        where: { assignments: { some: { driverId: current.id, enabled: true } } },
+        orderBy: { createdAt: "asc" },
+      });
+      if (!vehicle) throw new HttpException("Assigned vehicle not found", HttpStatus.NOT_FOUND);
+      await tx.driverVehicle.update({
+        where: { id: vehicle.id },
+        data: {
+          vehicleOwnership,
+          plateType,
+          hkPlate: hkPlate || null,
+          macauPlate: macauPlate || null,
+          mainlandPlate: mainlandPlate || null,
+          vehicleCategory,
+          vehicleColor,
+          ...(vehiclePhoto
+            ? {
+                vehiclePhotoData: new Uint8Array(vehiclePhoto.buffer),
+                vehiclePhotoMime: vehiclePhoto.mimetype,
+              }
+            : {}),
+        },
+      });
+      return tx.driver.update({
+        where: { id: current.id },
+        data: {
+          name,
+          affiliation: vehicleOwnership,
+          reviewStatus: "PENDING",
+          reviewReason: null,
+          reviewSubmittedAt: new Date(),
+          reviewedAt: null,
+          reviewedBy: null,
+          isOnline: false,
+        },
+      });
     });
     return driverResponse(driver);
   }
@@ -3477,6 +3487,16 @@ class DriverAuthController {
   ) {
     const session = await driverSessionFrom(req);
     const data: Prisma.DriverUpdateInput = {};
+    const vehicleData: Record<string, unknown> = {};
+    const vehicleFields = new Set([
+      "vehicleCategory",
+      "vehicleColor",
+      "vehicleOwnership",
+      "hkPlate",
+      "macauPlate",
+      "mainlandPlate",
+      "plateType",
+    ]);
     const textFields = [
       "name",
       "phoneCountryCode",
@@ -3513,7 +3533,8 @@ class DriverAuthController {
             `${field} cannot be null`,
             HttpStatus.BAD_REQUEST,
           );
-        (data as Record<string, unknown>)[field] =
+        const target = vehicleFields.has(field) ? vehicleData : data;
+        (target as Record<string, unknown>)[field] =
           body[field] === null
             ? null
             : field === "hkPlate"
@@ -3534,13 +3555,8 @@ class DriverAuthController {
           "vehiclePhotos must be an array of strings",
           HttpStatus.BAD_REQUEST,
         );
-      data.vehiclePhotos = body.vehiclePhotos;
+      vehicleData.vehiclePhotos = body.vehiclePhotos;
     }
-    if (Object.keys(data).length === 0)
-      throw new HttpException(
-        "No profile fields supplied",
-        HttpStatus.BAD_REQUEST,
-      );
     if (
       [
         "vehicleOwnership",
@@ -3553,16 +3569,21 @@ class DriverAuthController {
       const current = await prisma.driver.findUnique({
         where: { id: session.sub },
       });
+      const currentVehicle = await prisma.driverVehicle.findFirst({
+        where: { assignments: { some: { driverId: session.sub, enabled: true } } },
+        orderBy: { createdAt: "asc" },
+      });
       if (!current) throw new UnauthorizedException("Driver not found");
+      if (!currentVehicle) throw new HttpException("Assigned vehicle not found", HttpStatus.NOT_FOUND);
       const normalized = normalizeVehiclePlateData({
-        vehicleOwnership: body.vehicleOwnership ?? current.vehicleOwnership,
-        plateType: body.plateType ?? current.plateType,
-        hkPlate: body.hkPlate === undefined ? current.hkPlate : body.hkPlate,
+        vehicleOwnership: body.vehicleOwnership ?? currentVehicle.vehicleOwnership,
+        plateType: body.plateType ?? currentVehicle.plateType,
+        hkPlate: body.hkPlate === undefined ? currentVehicle.hkPlate : body.hkPlate,
         macauPlate:
-          body.macauPlate === undefined ? current.macauPlate : body.macauPlate,
+          body.macauPlate === undefined ? currentVehicle.macauPlate : body.macauPlate,
         mainlandPlate:
           body.mainlandPlate === undefined
-            ? current.mainlandPlate
+            ? currentVehicle.mainlandPlate
             : body.mainlandPlate,
       });
       if (!validVehiclePlateData(normalized))
@@ -3570,15 +3591,38 @@ class DriverAuthController {
           "Valid vehicle plate fields are required",
           HttpStatus.BAD_REQUEST,
         );
-      data.vehicleOwnership = normalized.vehicleOwnership;
-      data.plateType = normalized.plateType;
-      data.hkPlate = normalized.hkPlate || null;
-      data.macauPlate = normalized.macauPlate || null;
-      data.mainlandPlate = normalized.mainlandPlate || null;
+      vehicleData.vehicleOwnership = normalized.vehicleOwnership;
+      vehicleData.plateType = normalized.plateType;
+      vehicleData.hkPlate = normalized.hkPlate || null;
+      vehicleData.macauPlate = normalized.macauPlate || null;
+      vehicleData.mainlandPlate = normalized.mainlandPlate || null;
     }
-    const driver = await prisma.driver.update({
-      where: { id: session.sub },
-      data,
+    if (body.vehiclePhotos !== undefined) {
+      if (
+        !Array.isArray(body.vehiclePhotos) ||
+        body.vehiclePhotos.some((item) => typeof item !== "string")
+      )
+        throw new HttpException(
+          "vehiclePhotos must be an array of strings",
+          HttpStatus.BAD_REQUEST,
+        );
+      vehicleData.vehiclePhotos = body.vehiclePhotos;
+    }
+    if (Object.keys(data).length === 0 && Object.keys(vehicleData).length === 0)
+      throw new HttpException(
+        "No profile fields supplied",
+        HttpStatus.BAD_REQUEST,
+      );
+    const driver = await prisma.$transaction(async (tx) => {
+      if (Object.keys(vehicleData).length) {
+        const vehicle = await tx.driverVehicle.findFirst({
+          where: { assignments: { some: { driverId: session.sub, enabled: true } } },
+          orderBy: { createdAt: "asc" },
+        });
+        if (!vehicle) throw new HttpException("Assigned vehicle not found", HttpStatus.NOT_FOUND);
+        await tx.driverVehicle.update({ where: { id: vehicle.id }, data: vehicleData });
+      }
+      return tx.driver.update({ where: { id: session.sub }, data });
     });
     return driverResponse(driver);
   }
@@ -4033,7 +4077,10 @@ class DriverAuthController {
       if (!driver.isOnline)
         throw new ForbiddenException("Driver must be online to accept trips");
     }
-    const now = new Date();
+    const assignedVehicle = await prisma.driverVehicle.findFirst({
+      where: { enabled: true, assignments: { some: { driverId: driver.id, enabled: true } } },
+      orderBy: { createdAt: "asc" },
+    });
     const result = await prisma.trip.updateMany({
       where: assignedToDriver
         ? {
@@ -4055,10 +4102,10 @@ class DriverAuthController {
         driverId: driver.id,
         driverName: driver.name,
         driverPhone: `${driver.phoneCountryCode} ${driver.phone}`,
-        vehiclePlate: driver.hkPlate,
-        vehicleHkPlate: driver.hkPlate,
-        vehicleMacauPlate: driver.macauPlate,
-        vehicleMainlandPlate: driver.mainlandPlate,
+        vehiclePlate: assignedVehicle?.hkPlate || assignedVehicle?.macauPlate || assignedVehicle?.mainlandPlate || null,
+        vehicleHkPlate: assignedVehicle?.hkPlate || null,
+        vehicleMacauPlate: assignedVehicle?.macauPlate || null,
+        vehicleMainlandPlate: assignedVehicle?.mainlandPlate || null,
         status: "CONFIRMED",
         executionPhase: "DRIVER_ASSIGNED",
         assignedAt: trip.assignedAt || now,
@@ -4137,6 +4184,10 @@ class DriverOrderUrlController {
         throw new ForbiddenException("Order URL is assigned to another driver");
       const driver = await tx.driver.findUnique({ where: { id: session.sub } });
       if (!driver) throw new UnauthorizedException("Driver not found");
+      const assignedVehicle = await tx.driverVehicle.findFirst({
+        where: { enabled: true, assignments: { some: { driverId: driver.id, enabled: true } } },
+        orderBy: { createdAt: "asc" },
+      });
       const trip = await tx.trip.findUnique({ where: { id: item.tripId } });
       if (
         !trip ||
@@ -4170,10 +4221,10 @@ class DriverOrderUrlController {
           driverId: driver.id,
           driverName: driver.name,
           driverPhone: `${driver.phoneCountryCode} ${driver.phone}`,
-          vehiclePlate: driver.hkPlate,
-          vehicleHkPlate: driver.hkPlate,
-          vehicleMacauPlate: driver.macauPlate,
-          vehicleMainlandPlate: driver.mainlandPlate,
+          vehiclePlate: assignedVehicle?.hkPlate || assignedVehicle?.macauPlate || assignedVehicle?.mainlandPlate || null,
+          vehicleHkPlate: assignedVehicle?.hkPlate || null,
+          vehicleMacauPlate: assignedVehicle?.macauPlate || null,
+          vehicleMainlandPlate: assignedVehicle?.mainlandPlate || null,
           status: "CONFIRMED",
           executionPhase: "DRIVER_ASSIGNED",
           assignedAt: now,
@@ -4318,30 +4369,45 @@ class AdminController {
   @Get("drivers") async listDrivers(@Req() req: RequestLike) {
     requireAuth(req);
     const data = await prisma.driver.findMany({
-      include: { vehicles: { orderBy: { createdAt: "asc" } } },
+      include: {
+        vehicleAssignments: {
+          where: { enabled: true },
+          include: { vehicle: true },
+          orderBy: { createdAt: "asc" },
+        },
+      },
       orderBy: { createdAt: "desc" },
     });
     return {
       data: data.map((driver) => ({
         ...driverResponse(driver),
-        vehicles: driver.vehicles.map(driverVehicleResponse),
-        vehiclePhotos:
-          driver.vehiclePhotoData && driver.vehiclePhotoMime
-            ? [`/admin/drivers/${driver.id}/vehicle-photo`]
-            : [],
+        vehicles: driver.vehicleAssignments.map(({ vehicle }) => driverVehicleResponse(vehicle)),
       })),
       total: data.length,
     };
   }
+  @Get("vehicles") async listAllVehicles(@Req() req: RequestLike) {
+    requireAuth(req);
+    const data = await prisma.driverVehicle.findMany({
+      include: { assignments: { where: { enabled: true }, include: { driver: { select: { id: true, name: true, phone: true, enabled: true } } }, orderBy: { createdAt: "asc" } } },
+      orderBy: { createdAt: "asc" },
+    });
+    return { data: data.map(vehicle => ({ ...driverVehicleResponse(vehicle), assignments: vehicle.assignments.map(({ driver, ...assignment }) => ({ ...assignment, driver })) })), total: data.length };
+  }
+
   @Get("drivers/:id/vehicle-photo") async adminDriverVehiclePhoto(
     @Req() req: RequestLike,
     @Param("id") id: string,
     @Res() response: Response,
   ) {
     requireAuth(req);
-    const driver = await prisma.driver.findUnique({ where: { id }, select: { vehiclePhotoData: true, vehiclePhotoMime: true } });
-    if (!driver?.vehiclePhotoData || !driver.vehiclePhotoMime) throw new HttpException("Vehicle photo not found", HttpStatus.NOT_FOUND);
-    response.type(driver.vehiclePhotoMime).send(Buffer.from(driver.vehiclePhotoData));
+    const vehicle = await prisma.driverVehicle.findFirst({
+      where: { assignments: { some: { driverId: id, enabled: true } } },
+      orderBy: { createdAt: "asc" },
+      select: { vehiclePhotoData: true, vehiclePhotoMime: true },
+    });
+    if (!vehicle?.vehiclePhotoData || !vehicle.vehiclePhotoMime) throw new HttpException("Vehicle photo not found", HttpStatus.NOT_FOUND);
+    response.type(vehicle.vehiclePhotoMime).send(Buffer.from(vehicle.vehiclePhotoData));
   }
 
   @Get("drivers/:id/vehicles") async listDriverVehicles(
@@ -4349,7 +4415,7 @@ class AdminController {
     @Param("id") id: string,
   ) {
     requireAuth(req);
-    const data = await prisma.driverVehicle.findMany({ where: { OR: [{ driverId: id }, { assignments: { some: { driverId: id, enabled: true } } }] }, orderBy: { createdAt: "asc" } });
+    const data = await prisma.driverVehicle.findMany({ where: { assignments: { some: { driverId: id, enabled: true } } }, orderBy: { createdAt: "asc" } });
     return { data: data.map(driverVehicleResponse), total: data.length };
   }
   @Post("drivers/:driverId/vehicles/:id/bind") async bindDriverVehicle(
@@ -4365,6 +4431,87 @@ class AdminController {
     if (!driver || !vehicle) throw new HttpException("Driver or vehicle not found", HttpStatus.NOT_FOUND);
     await prisma.driverVehicleAssignment.upsert({ where: { driverId_vehicleId: { driverId, vehicleId: id } }, create: { driverId, vehicleId: id }, update: { enabled: true } });
     return driverVehicleResponse(await prisma.driverVehicle.findUniqueOrThrow({ where: { id } }));
+  }
+  @Post("vehicles")
+  @UseInterceptors(FileInterceptor("vehiclePhoto", { limits: { fileSize: 2 * 1024 * 1024 }, fileFilter: (_req, file, cb) => cb(null, /^image\/(jpeg|png|webp)$/.test(file.mimetype)) }))
+  async createAdminVehicle(
+    @Req() req: RequestLike,
+    @Body() body: Partial<Prisma.DriverVehicleCreateInput> & { driverId?: string; removeVehiclePhoto?: string },
+    @UploadedFile() vehiclePhoto?: Express.Multer.File,
+  ) {
+    requireRole(req, ["SUPER_ADMIN", "OPERATOR"]);
+    if (!body.plateType || !body.vehicleCategory || !body.vehicleColor) throw new HttpException("Valid vehicle fields are required", HttpStatus.BAD_REQUEST);
+    const normalized = normalizeVehiclePlateData({ ...body, vehicleOwnership: body.vehicleOwnership || "香港" });
+    const vehicle = await prisma.driverVehicle.create({ data: {
+      id: `vehicle-${Date.now()}-${randomBytes(4).toString("hex")}`,
+      plateType: normalized.plateType, hkPlate: normalized.hkPlate || null, macauPlate: normalized.macauPlate || null,
+      mainlandPlate: normalized.mainlandPlate || null, vehicleOwnership: normalized.vehicleOwnership,
+      vehicleCategory: String(body.vehicleCategory).trim(), vehicleColor: String(body.vehicleColor).trim(), vehiclePhotos: [],
+      ...(vehiclePhoto ? { vehiclePhotoData: new Uint8Array(vehiclePhoto.buffer), vehiclePhotoMime: vehiclePhoto.mimetype } : {}),
+    } });
+    if (body.driverId) {
+      const driver = await prisma.driver.findUnique({ where: { id: body.driverId }, select: { id: true } });
+      if (!driver) throw new HttpException("Driver not found", HttpStatus.NOT_FOUND);
+      await prisma.driverVehicleAssignment.create({ data: { driverId: body.driverId, vehicleId: vehicle.id } });
+    }
+    return driverVehicleResponse(vehicle);
+  }
+  @Patch("vehicles/:id")
+  @UseInterceptors(FileInterceptor("vehiclePhoto", { limits: { fileSize: 2 * 1024 * 1024 }, fileFilter: (_req, file, cb) => cb(null, /^image\/(jpeg|png|webp)$/.test(file.mimetype)) }))
+  async updateAdminVehicle(@Req() req: RequestLike, @Param("id") id: string, @Body() body: Partial<Prisma.DriverVehicleCreateInput> & { removeVehiclePhoto?: string }, @UploadedFile() vehiclePhoto?: Express.Multer.File) {
+    requireRole(req, ["SUPER_ADMIN", "OPERATOR"]);
+    if (!body.plateType || !body.vehicleCategory || !body.vehicleColor) throw new HttpException("Valid vehicle fields are required", HttpStatus.BAD_REQUEST);
+    const normalized = normalizeVehiclePlateData({ ...body, vehicleOwnership: body.vehicleOwnership || "香港" });
+    const result = await prisma.driverVehicle.updateMany({ where: { id }, data: {
+      plateType: normalized.plateType, hkPlate: normalized.hkPlate || null, macauPlate: normalized.macauPlate || null,
+      mainlandPlate: normalized.mainlandPlate || null, vehicleOwnership: normalized.vehicleOwnership,
+      vehicleCategory: String(body.vehicleCategory).trim(), vehicleColor: String(body.vehicleColor).trim(), vehiclePhotos: [],
+      ...(vehiclePhoto ? { vehiclePhotoData: new Uint8Array(vehiclePhoto.buffer), vehiclePhotoMime: vehiclePhoto.mimetype } : {}),
+      ...(body.removeVehiclePhoto === "true" ? { vehiclePhotoData: null, vehiclePhotoMime: null } : {}),
+    } });
+    if (!result.count) throw new HttpException("Vehicle not found", HttpStatus.NOT_FOUND);
+    return driverVehicleResponse(await prisma.driverVehicle.findUniqueOrThrow({ where: { id } }));
+  }
+  @Post("vehicles/:id/status") async updateAdminVehicleStatus(@Req() req: RequestLike, @Param("id") id: string, @Body() body: { enabled?: boolean }) {
+    requireRole(req, ["SUPER_ADMIN", "OPERATOR"]);
+    if (typeof body.enabled !== "boolean") throw new HttpException("Enabled status is required", HttpStatus.BAD_REQUEST);
+    const result = await prisma.driverVehicle.updateMany({ where: { id }, data: { enabled: body.enabled } });
+    if (!result.count) throw new HttpException("Vehicle not found", HttpStatus.NOT_FOUND);
+    return driverVehicleResponse(await prisma.driverVehicle.findUniqueOrThrow({ where: { id } }));
+  }
+  @Delete("vehicles/:id") async deleteAdminVehicle(@Req() req: RequestLike, @Param("id") id: string) {
+    requireRole(req, ["SUPER_ADMIN", "OPERATOR"]);
+    const result = await prisma.driverVehicle.deleteMany({ where: { id } });
+    if (!result.count) throw new HttpException("Vehicle not found", HttpStatus.NOT_FOUND);
+    return { ok: true };
+  }
+  @Get("vehicles/:id/photo") async adminVehiclePhoto(@Req() req: RequestLike, @Param("id") id: string, @Res() response: Response) {
+    requireAuth(req);
+    const vehicle = await prisma.driverVehicle.findUnique({ where: { id }, select: { vehiclePhotoData: true, vehiclePhotoMime: true } });
+    if (!vehicle?.vehiclePhotoData || !vehicle.vehiclePhotoMime) throw new HttpException("Vehicle photo not found", HttpStatus.NOT_FOUND);
+    response.type(vehicle.vehiclePhotoMime).send(Buffer.from(vehicle.vehiclePhotoData));
+  }
+  @Get("vehicles/:id/assignments") async listVehicleAssignments(
+    @Req() req: RequestLike,
+    @Param("id") id: string,
+  ) {
+    requireAuth(req);
+    const assignments = await prisma.driverVehicleAssignment.findMany({
+      where: { vehicleId: id, enabled: true },
+      include: { driver: { select: { id: true, name: true, phone: true, enabled: true } } },
+      orderBy: { createdAt: "asc" },
+    });
+    return { data: assignments.map(({ driver, ...assignment }) => ({ ...assignment, driver })), total: assignments.length };
+  }
+  @Delete("drivers/:driverId/vehicles/:id/bind") async unbindDriverVehicle(
+    @Req() req: RequestLike,
+    @Param("driverId") driverId: string,
+    @Param("id") id: string,
+  ) {
+    requireRole(req, ["SUPER_ADMIN", "OPERATOR"]);
+    const result = await prisma.driverVehicleAssignment.updateMany({ where: { driverId, vehicleId: id, enabled: true }, data: { enabled: false } });
+    if (!result.count) throw new HttpException("Vehicle binding not found", HttpStatus.NOT_FOUND);
+    return { ok: true };
   }
   @Post("drivers/:id/vehicles")
   @UseInterceptors(FileInterceptor("vehiclePhoto", { limits: { fileSize: 2 * 1024 * 1024 }, fileFilter: (_req, file, cb) => cb(null, /^image\/(jpeg|png|webp)$/.test(file.mimetype)) }))
@@ -4393,13 +4540,16 @@ class AdminController {
       ...(body.removeVehiclePhoto === "true" ? { vehiclePhotoData: null, vehiclePhotoMime: null } : {}),
     };
     const vehicle = body.id
-      ? await prisma.driverVehicle.updateMany({ where: { id: body.id, driverId }, data })
+      ? await prisma.driverVehicle.updateMany({
+          where: { id: body.id, assignments: { some: { driverId, enabled: true } } },
+          data,
+        })
       : null;
     if (body.id) {
       if (!vehicle?.count) throw new HttpException("Vehicle not found", HttpStatus.NOT_FOUND);
       return driverVehicleResponse(await prisma.driverVehicle.findUniqueOrThrow({ where: { id: body.id } }));
     }
-    const createdVehicle = await prisma.driverVehicle.create({ data: { id: `vehicle-${Date.now()}-${randomBytes(4).toString("hex")}`, driverId, ...data } });
+    const createdVehicle = await prisma.driverVehicle.create({ data: { id: `vehicle-${Date.now()}-${randomBytes(4).toString("hex")}`, ...data } });
     await prisma.driverVehicleAssignment.create({ data: { driverId, vehicleId: createdVehicle.id } });
     return driverVehicleResponse(createdVehicle);
   }
@@ -4411,7 +4561,7 @@ class AdminController {
   ) {
     requireRole(req, ["SUPER_ADMIN", "OPERATOR"]);
     if (typeof body.enabled !== "boolean") throw new HttpException("Enabled status is required", HttpStatus.BAD_REQUEST);
-    const vehicle = await prisma.driverVehicle.updateMany({ where: { id, driverId }, data: { enabled: body.enabled } });
+    const vehicle = await prisma.driverVehicle.updateMany({ where: { id, assignments: { some: { driverId, enabled: true } } }, data: { enabled: body.enabled } });
     if (!vehicle.count) throw new HttpException("Vehicle not found", HttpStatus.NOT_FOUND);
     return driverVehicleResponse(await prisma.driverVehicle.findUniqueOrThrow({ where: { id } }));
   }
@@ -4421,7 +4571,7 @@ class AdminController {
     @Param("id") id: string,
   ) {
     requireRole(req, ["SUPER_ADMIN", "OPERATOR"]);
-    const result = await prisma.driverVehicle.deleteMany({ where: { id, driverId } });
+    const result = await prisma.driverVehicle.deleteMany({ where: { id, assignments: { some: { driverId, enabled: true } } } });
     if (!result.count) throw new HttpException("Vehicle not found", HttpStatus.NOT_FOUND);
     return { ok: true };
   }
@@ -4432,7 +4582,7 @@ class AdminController {
     @Res() response: Response,
   ) {
     requireAuth(req);
-    const vehicle = await prisma.driverVehicle.findFirst({ where: { id, driverId }, select: { vehiclePhotoData: true, vehiclePhotoMime: true } });
+    const vehicle = await prisma.driverVehicle.findFirst({ where: { id, assignments: { some: { driverId, enabled: true } } }, select: { vehiclePhotoData: true, vehiclePhotoMime: true } });
     if (!vehicle?.vehiclePhotoData || !vehicle.vehiclePhotoMime) throw new HttpException("Vehicle photo not found", HttpStatus.NOT_FOUND);
     response.type(vehicle.vehiclePhotoMime).send(Buffer.from(vehicle.vehiclePhotoData));
   }
@@ -4535,7 +4685,7 @@ class AdminController {
   async saveDriver(
     @Req() req: RequestLike,
     @Body()
-    body: Partial<Prisma.DriverCreateInput> & {
+    body: Partial<Prisma.DriverCreateInput> & Record<string, unknown> & {
       id?: string;
       removeVehiclePhoto?: string;
     },
@@ -4555,36 +4705,56 @@ class AdminController {
       driverType: body.driverType?.trim() || "內部司機",
       name: body.name!.trim(),
       affiliation: body.affiliation!.trim(),
-      plateType: normalized.plateType,
-      hkPlate: normalized.hkPlate || null,
-      macauPlate: normalized.macauPlate || null,
-      mainlandPlate: normalized.mainlandPlate || null,
-      vehicleOwnership: normalized.vehicleOwnership,
       phoneCountryCode: body.phoneCountryCode?.trim() || "+852",
       phone: body.phone!.trim(),
-      vehicleCategory: body.vehicleCategory!.trim(),
-      vehicleColor: body.vehicleColor!.trim(),
-      vehiclePhotos: [],
-      ...(vehiclePhoto
-        ? {
-            vehiclePhotoData: new Uint8Array(vehiclePhoto.buffer),
-            vehiclePhotoMime: vehiclePhoto.mimetype,
-          }
-        : {}),
-      ...(body.removeVehiclePhoto === "true"
-        ? { vehiclePhotoData: null, vehiclePhotoMime: null }
-        : {}),
       settlementMethod: body.settlementMethod?.trim() || null,
       settlementAccount: body.settlementAccount?.trim() || null,
     };
-    const driver = body.id
-      ? await prisma.driver.update({ where: { id: body.id }, data })
-      : await prisma.driver.create({
+    const driver = await prisma.$transaction(async (tx) => {
+      const savedDriver = body.id
+        ? await tx.driver.update({ where: { id: body.id }, data })
+        : await tx.driver.create({
+            data: {
+              id: `driver-${Date.now()}-${randomBytes(4).toString("hex")}`,
+              ...data,
+            },
+          });
+      const existingVehicle = await tx.driverVehicle.findFirst({
+        where: { assignments: { some: { driverId: savedDriver.id, enabled: true } } },
+        orderBy: { createdAt: "asc" },
+      });
+      const vehicleData = {
+        plateType: normalized.plateType,
+        hkPlate: normalized.hkPlate || null,
+        macauPlate: normalized.macauPlate || null,
+        mainlandPlate: normalized.mainlandPlate || null,
+        vehicleOwnership: normalized.vehicleOwnership,
+        vehicleCategory: String(body.vehicleCategory).trim(),
+        vehicleColor: String(body.vehicleColor).trim(),
+        vehiclePhotos: [],
+        ...(vehiclePhoto
+          ? {
+              vehiclePhotoData: new Uint8Array(vehiclePhoto.buffer),
+              vehiclePhotoMime: vehiclePhoto.mimetype,
+            }
+          : {}),
+        ...(body.removeVehiclePhoto === "true"
+          ? { vehiclePhotoData: null, vehiclePhotoMime: null }
+          : {}),
+      };
+      if (existingVehicle) {
+        await tx.driverVehicle.update({ where: { id: existingVehicle.id }, data: vehicleData });
+      } else {
+        await tx.driverVehicle.create({
           data: {
-            id: `driver-${Date.now()}-${randomBytes(4).toString("hex")}`,
-            ...data,
+            id: `vehicle-${Date.now()}-${randomBytes(4).toString("hex")}`,
+            ...vehicleData,
+            assignments: { create: { driverId: savedDriver.id } },
           },
         });
+      }
+      return savedDriver;
+    });
     return driverResponse(driver);
   }
   @Post("drivers/:id/status") async updateDriverStatus(
@@ -5937,14 +6107,21 @@ class AdminController {
             name: true,
             phoneCountryCode: true,
             phone: true,
-            hkPlate: true,
-            macauPlate: true,
-            mainlandPlate: true,
+            vehicleAssignments: {
+              where: { enabled: true, vehicle: { enabled: true } },
+              orderBy: { createdAt: "asc" },
+              take: 1,
+              select: {
+                vehicle: {
+                  select: { hkPlate: true, macauPlate: true, mainlandPlate: true },
+                },
+              },
+            },
           },
         })
       : null;
-    if (body.driverId && !requestedDriver)
-      throw new HttpException("Driver not found", HttpStatus.BAD_REQUEST);
+    if (body.driverId && (!requestedDriver || !requestedDriver.vehicleAssignments[0]))
+      throw new HttpException("Driver or assigned vehicle not found", HttpStatus.BAD_REQUEST);
     if (
       body.status === "CANCELLED" &&
       (existing.status === "COMPLETED" ||
@@ -5954,6 +6131,7 @@ class AdminController {
         "Completed or in-progress trips cannot be cancelled",
         HttpStatus.CONFLICT,
       );
+    const requestedVehicle = requestedDriver?.vehicleAssignments[0]?.vehicle;
     const assigningNewDriver = Boolean(
       requestedDriver && requestedDriver.id !== existing.driverId,
     );
@@ -6032,16 +6210,16 @@ class AdminController {
             ? `${requestedDriver!.phoneCountryCode} ${requestedDriver!.phone}`
             : (body.driverPhone ?? existing.driverPhone),
           vehiclePlate: assigningNewDriver
-            ? requestedDriver!.hkPlate
+            ? requestedVehicle!.hkPlate
             : (body.vehiclePlate ?? existing.vehiclePlate),
           vehicleHkPlate: assigningNewDriver
-            ? requestedDriver!.hkPlate
+            ? requestedVehicle!.hkPlate
             : undefined,
           vehicleMacauPlate: assigningNewDriver
-            ? requestedDriver!.macauPlate
+            ? requestedVehicle!.macauPlate
             : undefined,
           vehicleMainlandPlate: assigningNewDriver
-            ? requestedDriver!.mainlandPlate
+            ? requestedVehicle!.mainlandPlate
             : undefined,
           acceptedAt: assigningNewDriver ? null : undefined,
           assignedAt: assigningNewDriver ? new Date() : undefined,
@@ -6194,16 +6372,20 @@ class AdminController {
         "Only paid trips can be dispatched",
         HttpStatus.CONFLICT,
       );
+    const assignedVehicle = await prisma.driverVehicle.findFirst({
+      where: { enabled: true, assignments: { some: { driverId: driver.id, enabled: true } } },
+      orderBy: { createdAt: "asc" },
+    });
     const updated = await prisma.trip.update({
       where: { id },
       data: {
         driverId: driver.id,
         driverName: driver.name,
         driverPhone: `${driver.phoneCountryCode} ${driver.phone}`,
-        vehiclePlate: driver.hkPlate,
-        vehicleHkPlate: driver.hkPlate,
-        vehicleMacauPlate: driver.macauPlate,
-        vehicleMainlandPlate: driver.mainlandPlate,
+        vehiclePlate: assignedVehicle?.hkPlate || assignedVehicle?.macauPlate || assignedVehicle?.mainlandPlate || null,
+        vehicleHkPlate: assignedVehicle?.hkPlate || null,
+        vehicleMacauPlate: assignedVehicle?.macauPlate || null,
+        vehicleMainlandPlate: assignedVehicle?.mainlandPlate || null,
         driverPayoutAmount: roundMoney(driverPayoutAmount),
         driverPayoutCurrency:
           trip.driverPayoutCurrency || trip.payment.currency,

@@ -29,7 +29,7 @@ export function createAdminResourceLoader({
 
       if (requestedView === 'dashboard') dashboard.value = await api('/admin/dashboard')
       if (['users', 'trips', 'charters'].includes(requestedView)) await resourceLoaders.coreUsers()
-      if (requestedView === 'drivers') await resourceLoaders.drivers()
+      if (['drivers', 'driver-vehicles'].includes(requestedView)) await resourceLoaders.drivers()
       if (requestedView === 'dispatch') await resourceLoaders.dispatch()
       if (requestedView === 'settlements') await resourceLoaders.settlements()
       if (requestedView === 'trips') await resourceLoaders.trips()

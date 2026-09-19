@@ -1,10 +1,12 @@
 import { ref } from 'vue'
 import { composeMainlandPlate, formatHongKongPlateInput, formatMacauPlateInput, formatMainlandPlateInput, mainlandPlateInput, normalizeVehiclePlates, vehiclePlateError } from './vehicle-plates.js'
 
-export function createDriversActions({ driversApi, driverForm, selectedDriver, settlementForm, drivers, error, load, displayError, requestConfirmation, notify }) {
+export function createDriversActions({ driversApi, driverForm, selectedDriver, settlementForm, drivers, allVehicles, error, load, displayError, requestConfirmation, notify }) {
   let vehiclePhotoUrl = null
   let driverFormPhotoUrl = null
   const vehicleForm = ref(null)
+  const assignmentVehicle = ref(null)
+  const vehicleAssignments = ref([])
   function resetVehicleForm() {
     const driver = selectedDriver.value
     vehicleForm.value = { id: '', driverId: driver?.id || '', plateType: '單牌', hkPlate: '', macauPlate: '', mainlandPlate: '', vehicleOwnership: '香港', vehicleCategory: '', vehicleColor: '', vehiclePhotoFile: null, vehiclePhotos: [] }
@@ -18,13 +20,13 @@ export function createDriversActions({ driversApi, driverForm, selectedDriver, s
   }
   async function saveVehicle() {
     const form = vehicleForm.value
-    if (!form || !selectedDriver.value) return
+    if (!form) return
     const plates = normalizeVehiclePlates({ ...form, mainlandPlate: composeMainlandPlate(form.mainlandPlate, form.vehicleOwnership) })
     const plateError = vehiclePlateError({ ...plates, vehicleOwnership: form.vehicleOwnership })
     if (plateError || !form.vehicleCategory || !form.vehicleColor) { error.value = plateError || '請填寫車輛類別及顏色'; return }
     try {
-      await driversApi.saveVehicle(selectedDriver.value.id, { ...form, ...plates, id: form.id || undefined })
-      closeVehicleForm(); await refreshDriverVehicles(selectedDriver.value); await load(); notify('車輛已儲存')
+      await driversApi.saveVehicle({ ...form, ...plates, id: form.id || undefined })
+      closeVehicleForm(); await load(); notify('車輛已儲存')
     } catch (err) { error.value = displayError(err); notify(error.value, 'error') }
   }
 
@@ -141,6 +143,21 @@ export function createDriversActions({ driversApi, driverForm, selectedDriver, s
     } catch (err) { error.value = displayError(err); notify(error.value, 'error') }
   }
 
+  async function manageVehicleAssignments(vehicle) {
+    assignmentVehicle.value = vehicle
+    try { vehicleAssignments.value = (await driversApi.listVehicleAssignments(vehicle.id)).data || [] } catch (err) { error.value = displayError(err); notify(error.value, 'error') }
+  }
+  function closeVehicleAssignments() { assignmentVehicle.value = null; vehicleAssignments.value = [] }
+  async function bindVehicleDriver(driverId) {
+    if (!assignmentVehicle.value || !driverId) return
+    try { await driversApi.bindVehicle(driverId, assignmentVehicle.value.id); await manageVehicleAssignments(assignmentVehicle.value); await load(); notify('司機已綁定車輛') } catch (err) { error.value = displayError(err); notify(error.value, 'error') }
+  }
+  async function unbindVehicleDriver(driverId) {
+    if (!assignmentVehicle.value || !driverId) return
+    if (!await requestConfirmation({ title: '解除車輛綁定', message: '確定解除這名司機與車輛的綁定？車輛資料不會被刪除。', confirmLabel: '解除綁定', danger: true })) return
+    try { await driversApi.unbindVehicle(driverId, assignmentVehicle.value.id); await manageVehicleAssignments(assignmentVehicle.value); await load(); notify('已解除司機綁定') } catch (err) { error.value = displayError(err); notify(error.value, 'error') }
+  }
+
   async function refreshDriverVehicles(driver = selectedDriver.value) {
     if (!driver?.id) return
     try {
@@ -150,22 +167,21 @@ export function createDriversActions({ driversApi, driverForm, selectedDriver, s
   }
 
   async function updateVehicleStatus(vehicle) {
-    const driver = selectedDriver.value
-    if (!driver || !vehicle) return
+    if (!vehicle) return
     try {
-      const updated = await driversApi.updateVehicleStatus(driver.id, vehicle.id, vehicle.enabled === false)
+      const updated = await driversApi.updateVehicleStatus(vehicle.id, vehicle.enabled === false)
       Object.assign(vehicle, updated)
+      const matchingVehicle = allVehicles?.value?.find(item => item.id === vehicle.id)
+      if (matchingVehicle && matchingVehicle !== vehicle) Object.assign(matchingVehicle, updated)
+      if (selectedDriver.value) await refreshDriverVehicles(selectedDriver.value)
       notify(vehicle.enabled ? '車輛已恢復' : '車輛已停用')
     } catch (err) { error.value = displayError(err); notify(error.value, 'error') }
   }
 
   async function removeVehicle(vehicle) {
-    const driver = selectedDriver.value
-    if (!driver || !vehicle) return
+    if (!vehicle) return
     if (!await requestConfirmation({ title: '刪除車輛', message: `確定刪除車牌「${vehicle.hkPlate || vehicle.macauPlate || vehicle.mainlandPlate || '未設定'}」？`, confirmLabel: '刪除', danger: true })) return
-    try {
-      await driversApi.removeVehicle(driver.id, vehicle.id)
-      driver.vehicles = (driver.vehicles || []).filter(item => item.id !== vehicle.id)
+    try { await driversApi.removeVehicle(vehicle.id)
       notify('車輛已刪除')
       await load()
     } catch (err) { error.value = displayError(err); notify(error.value, 'error') }
@@ -237,5 +253,5 @@ export function createDriversActions({ driversApi, driverForm, selectedDriver, s
     } catch (err) { error.value = displayError(err) }
   }
 
-  return { reviewStatusLabel, resetDriver, editDriver, formatDriverHongKongPlate, formatDriverMacauPlate, formatDriverMainlandPlate, changeDriverOwnership, uploadDriverPhotos, removeDriverPhoto, saveDriver, updateDriverStatus, removeDriver, openDriverDetail, previewDriver, closeDriverDetail, approveDriver, requestDriverRevision, rejectDriver, resetSettlement, saveSettlement, refreshDriverVehicles, updateVehicleStatus, removeVehicle, vehicleForm, resetVehicleForm, editVehicle, closeVehicleForm, changeVehicleOwnership, saveVehicle }
+  return { reviewStatusLabel, resetDriver, editDriver, formatDriverHongKongPlate, formatDriverMacauPlate, formatDriverMainlandPlate, changeDriverOwnership, uploadDriverPhotos, removeDriverPhoto, saveDriver, updateDriverStatus, removeDriver, openDriverDetail, previewDriver, closeDriverDetail, approveDriver, requestDriverRevision, rejectDriver, resetSettlement, saveSettlement, refreshDriverVehicles, manageVehicleAssignments, closeVehicleAssignments, bindVehicleDriver, unbindVehicleDriver, vehicleAssignments, assignmentVehicle, updateVehicleStatus, removeVehicle, vehicleForm, resetVehicleForm, editVehicle, closeVehicleForm, changeVehicleOwnership, saveVehicle }
 }

@@ -97,11 +97,11 @@ export async function loadCoreUsers({ usersApi, users }) {
 }
 
 
-export async function loadDriversResources({ driversApi, vehicleCategories, drivers }) {
-  const [categoryResult, driverResult] = await Promise.all([driversApi.categories(), driversApi.list()])
+export async function loadDriversResources({ driversApi, vehicleCategories, drivers, allVehicles }) {
+  const [categoryResult, driverResult, vehicleResult] = await Promise.all([driversApi.categories(), driversApi.list(), driversApi.listAllVehicles()])
   vehicleCategories.value = categoryResult.data.filter(item => item.enabled !== false)
   drivers.value = driverResult.data
-  localStorage.setItem('admin_drivers', JSON.stringify(drivers.value))
+  allVehicles.value = vehicleResult.data
 }
 
 export async function loadDispatchResources({ tripsApi, driversApi, trips, drivers, orderUrls, tripPage }) {
