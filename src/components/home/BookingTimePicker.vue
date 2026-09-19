@@ -29,19 +29,27 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 
+const props = withDefaults(defineProps<{ value?: string }>(), { value: '' })
 const emit = defineEmits<{ close: []; confirm: [value: string] }>()
 const now = new Date()
 const earliest = new Date(now.getTime() + 60 * 60 * 1000)
 earliest.setMinutes(Math.ceil(earliest.getMinutes() / 10) * 10, 0, 0)
-const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
 const dates = Array.from({ length: 30 }, (_, index) => new Date(now.getFullYear(), now.getMonth(), now.getDate() + index))
 const dateOptions = dates.map((date, index) => `${index === 0 ? '今天' : index === 1 ? '明天' : ''}${index < 2 ? ' · ' : ''}${date.getMonth() + 1}月${date.getDate()}日`)
-const initialDateIndex = Math.min(29, Math.max(0, Math.floor((new Date(earliest.getFullYear(), earliest.getMonth(), earliest.getDate()).getTime() - startOfToday.getTime()) / 86400000)))
-const dateIndex = ref(initialDateIndex)
-const timeIndex = ref(0)
+const requestedDate = props.value ? new Date(props.value) : null
+const lastAvailableDate = dates[dates.length - 1]
+const initialDate = requestedDate && !Number.isNaN(requestedDate.valueOf()) && requestedDate >= earliest && requestedDate <= new Date(lastAvailableDate.getFullYear(), lastAvailableDate.getMonth(), lastAvailableDate.getDate(), 23, 59, 59, 999)
+  ? requestedDate
+  : earliest
+const sameDay = (left: Date, right: Date) => left.getFullYear() === right.getFullYear() && left.getMonth() === right.getMonth() && left.getDate() === right.getDate()
+const initialDateIndex = dates.findIndex(date => sameDay(date, initialDate))
+const dateIndex = ref(Math.max(0, initialDateIndex))
+const initialFirstMinutes = sameDay(initialDate, earliest) ? earliest.getHours() * 60 + earliest.getMinutes() : 0
+const initialMinutes = initialDate.getHours() * 60 + initialDate.getMinutes()
+const timeIndex = ref(Math.max(0, Math.round((initialMinutes - initialFirstMinutes) / 10)))
 const timeOptions = computed(() => {
   const selected = dates[dateIndex.value]
-  const isEarliestDay = selected.getFullYear() === earliest.getFullYear() && selected.getMonth() === earliest.getMonth() && selected.getDate() === earliest.getDate()
+  const isEarliestDay = sameDay(selected, earliest)
   const firstMinutes = isEarliestDay ? earliest.getHours() * 60 + earliest.getMinutes() : 0
   return Array.from({ length: Math.floor((24 * 60 - firstMinutes) / 10) }, (_, index) => {
     const minutes = firstMinutes + index * 10
