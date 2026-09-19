@@ -35,7 +35,7 @@ import { computed, ref, onMounted, watch } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { useTripStore } from '../../stores/trip'
-import { closeCachedPage, cachedPageUrl, cachedPageStack, openCachedPage } from '../../utils/navigation'
+import { closeCachedPage, cachedPageUrl, cachedPageStack, openCachedPage, returnToBookingSuccess } from '../../utils/navigation'
 import OrdersBackButton from '../../components/orders/OrdersBackButton.vue'
 import { formatOrderDetailAddress } from '../../utils/orderAddress'
 import { getClientTrip, type ClientTrip } from '../../services/api'
@@ -127,7 +127,7 @@ const goBack = () => {
   const source = getCurrentPageSource()
   if (source === 'transactions') return closeCachedPage(`/pages/transactions/expense-detail?tripId=${encodeURIComponent(storedOrder.value?.id || '')}`)
   if (source === 'profile') return closeCachedPage('/pages/trips/trips')
-  if (source === 'booking-success') return closeCachedPage(`/pages/vehicles/booking-success?id=${encodeURIComponent(storedOrder.value?.id || '')}`)
+  if (source === 'booking-success') return returnToBookingSuccess(`/pages/vehicles/booking-success?id=${encodeURIComponent(storedOrder.value?.id || '')}`)
   const currentIndex = cachedPageStack.value.findIndex(entry => (entry || '').split('?')[0] === '/pages/orders/traveling-detail')
   const previous = currentIndex > 0 ? (cachedPageStack.value[currentIndex - 1] || '').split('?')[0] : ''
   return closeCachedPage(previous === '/pages/trips/trips' ? previous : '/pages/orders/orders')

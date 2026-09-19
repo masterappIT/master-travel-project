@@ -1,10 +1,1 @@
-<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
-<g id="Frame" clip-path="url(#clip0_0_9)">
-<path id="Vector" d="M6.46275 8.53665C5.12625 7.20105 3.84885 5.65365 4.46145 5.04195C5.3364 4.1661 6.09915 3.627 4.54845 1.6965C2.9976 -0.23385 1.9632 1.2486 1.1145 2.09745C0.1365 3.0762 1.0629 6.72435 4.66905 10.3312C8.27505 13.9365 11.9241 14.8645 12.9028 13.885C13.7517 13.0371 15.2332 12.0034 13.3036 10.452C11.374 8.9004 10.834 9.66315 9.9582 10.5388C9.34575 11.1487 7.79925 9.87225 6.46275 8.53665Z" fill="#38434A"/>
-</g>
-<defs>
-<clipPath id="clip0_0_9">
-<rect width="15" height="15" fill="white"/>
-</clipPath>
-</defs>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="none" overflow="visible" preserveAspectRatio="none" style="display:block" viewBox="0 0 15 15"><g clip-path="url(#a)"><path fill="#38434a" d="M6.463 8.537C5.126 7.2 3.849 5.654 4.46 5.042c.875-.876 1.638-1.415.087-3.345s-2.585-.448-3.433.4c-.978.98-.052 4.627 3.554 8.234 3.606 3.606 7.255 4.534 8.234 3.554.849-.848 2.33-1.882.4-3.433-1.929-1.552-2.469-.789-3.345.087-.612.61-2.159-.667-3.495-2.002"/></g><defs><clipPath id="a"><path fill="#fff" d="M0 0h15v15H0z"/></clipPath></defs></svg>

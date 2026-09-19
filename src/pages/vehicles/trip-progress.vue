@@ -79,7 +79,7 @@ const driverRating = computed(() => '5.0')
 const vehicleBrand = computed(() => trip.value?.vehicle ? `${trip.value.vehicle.brand} ${trip.value.vehicle.model}` : 'Toyota Alphard')
 const vehicleSeries = computed(() => trip.value?.vehicle?.series || '30系')
 const vehicleSeats = computed(() => trip.value?.vehicle?.seats || 8)
-const vehicleImage = computed(() => '/static/vehicles/trip-progress/vellfire.png')
+const vehicleImage = computed(() => '/static/vehicles/trip-waiting/vellfire.png')
 const vehiclePlates = computed(() => layoutVehiclePlates(trip.value?.driver))
 const arrivalTime = computed(() => { const date = trip.value?.estimatedArrivalAt ? new Date(trip.value.estimatedArrivalAt) : null; return date && !Number.isNaN(date.valueOf()) ? `${date.getMonth() + 1}月${date.getDate()}日 ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}` : 'March 15 2024 14:00' })
 let transitioning = false

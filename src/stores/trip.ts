@@ -103,6 +103,10 @@ export const useTripStore = defineStore('trip', () => {
   }
 
   function setDepartureTime(value: string) {
+    if (activeDraft.value.departureTime !== value) {
+      fareQuotes.value = {}
+      activeDraft.value.estimatedFare = undefined
+    }
     activeDraft.value.departureTime = value
   }
 

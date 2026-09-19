@@ -1,10 +1,1 @@
-<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="38" height="38" viewBox="0 0 38 38" fill="none" xmlns="http://www.w3.org/2000/svg">
-<g id="Frame" clip-path="url(#clip0_0_4)">
-<path id="Vector" d="M19 38C8.50666 38 0 29.4933 0 19C0 8.50666 8.50666 0 19 0C29.4933 0 38 8.50666 38 19C38 29.4933 29.4933 38 19 38ZM10.0938 10.0938V13.0625H25.5312V10.0938H10.0938ZM10.0938 17.8125V20.7812H19V17.8125H10.0938ZM10.0938 24.9375V27.9062H19V24.9375H10.0938ZM23.0791 19.776L20.8584 21.7449L25.6185 27.116L32.5316 20.0373L30.4071 17.9627L25.7242 22.759L23.0803 19.776H23.0791Z" fill="#285CFC"/>
-</g>
-<defs>
-<clipPath id="clip0_0_4">
-<rect width="38" height="38" fill="white"/>
-</clipPath>
-</defs>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="38" height="38" fill="none" overflow="visible" preserveAspectRatio="none" style="display:block" viewBox="0 0 38 38"><g clip-path="url(#a)"><path fill="#285cfc" d="M19 38C8.507 38 0 29.493 0 19S8.507 0 19 0s19 8.507 19 19-8.507 19-19 19m-8.906-27.906v2.969H25.53v-2.97zm0 7.719v2.968H19v-2.968zm0 7.125v2.968H19v-2.968zm12.985-5.162-2.22 1.969 4.76 5.371 6.913-7.079-2.125-2.074-4.683 4.796-2.644-2.983"/></g><defs><clipPath id="a"><path fill="#fff" d="M0 0h38v38H0z"/></clipPath></defs></svg>

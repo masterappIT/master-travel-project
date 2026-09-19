@@ -1,6 +1,1 @@
-<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
-<g id="Frame 191">
-<circle id="Ellipse 14" cx="9" cy="9" r="8" stroke="white" stroke-width="2"/>
-<circle id="Ellipse 29" cx="9" cy="9" r="6" fill="white"/>
-</g>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" overflow="visible" preserveAspectRatio="none" style="display:block" viewBox="0 0 18 18"><circle cx="9" cy="9" r="8" stroke="#fff" stroke-width="2"/><circle cx="9" cy="9" r="6" fill="#fff"/></svg>

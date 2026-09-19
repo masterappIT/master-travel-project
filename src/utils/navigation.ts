@@ -121,6 +121,26 @@ export const openCachedPage = (url: string) => {
   return uni.navigateTo({ url, animationType: 'none', animationDuration: 0 })
 }
 
+export const returnToBookingSuccess = (url: string) => {
+  const targetPath = pagePath(url)
+  if (targetPath !== '/pages/vehicles/booking-success') return openCachedPage(url)
+
+  // #ifdef MP-WEIXIN || MP-TOUTIAO
+  if (embeddedHostActive) {
+    // A completed booking is a terminal flow. Rebuild the embedded stack from
+    // the host root so stale vehicle-selection pages cannot become reachable.
+    cachedPageStack.value = [HOME_PATH, url]
+    cachedPageUrl.value = url
+    if (!cachedVisitedPages.value.includes(targetPath)) {
+      cachedVisitedPages.value = [...cachedVisitedPages.value, targetPath]
+    }
+    return
+  }
+  // #endif
+
+  return openCachedPage(url)
+}
+
 export const redirectEmbeddedLaunch = (path = '', query: Record<string, unknown> = {}) => {
   // #ifdef MP-WEIXIN || MP-TOUTIAO
   const targetPath = path.startsWith('/') ? path : `/${path}`
