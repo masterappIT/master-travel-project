@@ -1,0 +1,116 @@
+name: Deploy Customer
+
+on:
+  push:
+    branches: [customer]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: customer
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build:h5
+
+      - name: Package H5 artifact
+        run: tar -C dist/build/h5 -czf customer-h5.tar.gz .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: customer-h5-${{ github.sha }}
+          path: customer-h5.tar.gz
+          if-no-files-found: error
+          retention-days: 14
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: customer
+    env:
+      DEPLOY_HOST: ${{ secrets.CUSTOMER_VM_HOST }}
+      DEPLOY_USER: ${{ secrets.CUSTOMER_VM_USER }}
+      DEPLOY_PORT: ${{ vars.CUSTOMER_VM_PORT }}
+      DEPLOY_PATH: ${{ vars.CUSTOMER_DEPLOY_PATH }}
+      SITE_URL: ${{ vars.CUSTOMER_SITE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: customer-h5-${{ github.sha }}
+
+      - name: Validate deployment configuration
+        run: |
+          set -euo pipefail
+          : "${DEPLOY_HOST:?Missing CUSTOMER_VM_HOST secret}"
+          : "${DEPLOY_USER:?Missing CUSTOMER_VM_USER secret}"
+          : "${DEPLOY_PATH:?Missing CUSTOMER_DEPLOY_PATH variable}"
+          : "${SITE_URL:?Missing CUSTOMER_SITE_URL variable}"
+          if [[ ! "$DEPLOY_HOST" =~ ^[a-zA-Z0-9.-]+$ ]]; then
+            echo "CUSTOMER_VM_HOST contains unsupported characters" >&2
+            exit 1
+          fi
+          if [[ ! "$DEPLOY_USER" =~ ^[a-z_][a-z0-9_-]*$ ]]; then
+            echo "CUSTOMER_VM_USER is not a valid Linux username" >&2
+            exit 1
+          fi
+          if [[ "$DEPLOY_PATH" != /* || "$DEPLOY_PATH" == *$'\n'* ]]; then
+            echo "CUSTOMER_DEPLOY_PATH must be a single-line absolute path" >&2
+            exit 1
+          fi
+          if [[ ! "$SITE_URL" =~ ^https://[^[:space:]]+$ ]]; then
+            echo "CUSTOMER_SITE_URL must be an HTTPS URL" >&2
+            exit 1
+          fi
+          if [[ -z "$DEPLOY_PORT" ]]; then
+            echo "DEPLOY_PORT=22" >> "$GITHUB_ENV"
+          elif [[ ! "$DEPLOY_PORT" =~ ^[0-9]+$ ]] || (( DEPLOY_PORT < 1 || DEPLOY_PORT > 65535 )); then
+            echo "CUSTOMER_VM_PORT must be between 1 and 65535" >&2
+            exit 1
+          fi
+
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.CUSTOMER_VM_SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.CUSTOMER_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          : "${SSH_PRIVATE_KEY:?Missing CUSTOMER_VM_SSH_PRIVATE_KEY secret}"
+          : "${SSH_KNOWN_HOSTS:?Missing CUSTOMER_VM_KNOWN_HOSTS secret}"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+
+      - name: Upload release
+        run: |
+          set -euo pipefail
+          remote_archive="/tmp/customer-h5-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz"
+          remote_script="/tmp/deploy-customer-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.sh"
+          scp -P "$DEPLOY_PORT" customer-h5.tar.gz \
+            "${DEPLOY_USER}@${DEPLOY_HOST}:${remote_archive}"
+          scp -P "$DEPLOY_PORT" deploy/deploy-customer.sh \
+            "${DEPLOY_USER}@${DEPLOY_HOST}:${remote_script}"
+          printf 'REMOTE_ARCHIVE=%s\nREMOTE_SCRIPT=%s\n' \
+            "$remote_archive" "$remote_script" >> "$GITHUB_ENV"
+
+      - name: Activate and verify release
+        run: |
+          set -euo pipefail
+          printf -v command 'bash %q %q %q %q %q' \
+            "$REMOTE_SCRIPT" "$REMOTE_ARCHIVE" "$DEPLOY_PATH" "$GITHUB_SHA" "$SITE_URL"
+          ssh -p "$DEPLOY_PORT" "${DEPLOY_USER}@${DEPLOY_HOST}" "$command"

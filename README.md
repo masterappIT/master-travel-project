@@ -86,6 +86,26 @@ H5 與管理後台使用固定連接埠；若連接埠已被其他程序占用�
 
 H5 靜態檔案與 `/api/` 同源反向代理可參考 `deploy/nginx.h5.conf`。正式 API 使用 Cloud Run + Cloud SQL，migration、發布、smoke test、回滾、監控與備份還原流程定義於 `deploy/cloud-run/README.md`；應用程式啟動不會修改資料庫 schema。
 
+## 客戶環境部署
+
+`customer` 分支的每次 push 會觸發 `Deploy Customer` workflow。Workflow 以 Node.js 20 建置 H5、保存 14 天的部署成品，再透過 SSH 上傳至 VM。VM 將每個 commit 放在獨立版本目錄，以 `current` symbolic link 切換版本；網站健康檢查失敗時會自動恢復上一版，並保留最近五版。
+
+GitHub 必須先建立 `customer` Environment，並設定以下資料：
+
+| 類型 | 名稱 | 用途 |
+| --- | --- | --- |
+| Secret | `CUSTOMER_VM_HOST` | VM hostname 或 IP |
+| Secret | `CUSTOMER_VM_USER` | 權限受限的部署帳號 |
+| Secret | `CUSTOMER_VM_SSH_PRIVATE_KEY` | 部署帳號的 Ed25519 私鑰 |
+| Secret | `CUSTOMER_VM_KNOWN_HOSTS` | 經管理員確認的 VM SSH host key |
+| Variable | `CUSTOMER_VM_PORT` | SSH port；未設定時使用 `22` |
+| Variable | `CUSTOMER_DEPLOY_PATH` | 絕對部署路徑，例如 `/var/www/master-travel-project/customer` |
+| Variable | `CUSTOMER_SITE_URL` | 部署後檢查的 HTTPS 網址 |
+
+VM 首次設定時，由管理員建立部署目錄並將擁有者設為部署帳號。Nginx 的網站根目錄必須指向 `${CUSTOMER_DEPLOY_PATH}/current`，部署帳號不需要 sudo 權限。`CUSTOMER_VM_KNOWN_HOSTS` 應從可信管道取得並核對 fingerprint，不要在 Workflow 中動態信任 `ssh-keyscan` 結果。
+
+部署前先從 `main` 建立 `develop`，再從已包含部署 Workflow 的版本建立 `customer`。一般修改依序透過 PR 合併 `feature/* → develop → customer`，不要直接在 VM 或 `customer` 分支修改程式。
+
 ## 環境變數
 
 | 變數 | 用途 |
