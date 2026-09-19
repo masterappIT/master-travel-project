@@ -15,18 +15,14 @@ export const normalizeExchangeRate = (value: unknown): number | null => {
 
 const legacyStoredCurrency = uni.getStorageSync('display-currency')
 const storedCurrency = legacyStoredCurrency === 'HKD' || legacyStoredCurrency === 'RMB' ? legacyStoredCurrency : null
-const hasStoredCurrency = storedCurrency !== null
+let hasUserCurrency = storedCurrency !== null
 if (legacyStoredCurrency !== undefined && storedCurrency === null) uni.removeStorageSync('display-currency')
 const storedRate = uni.getStorageSync('exchange-rate')
 const normalizedStoredRate = normalizeExchangeRate(storedRate)
 const exchangeRate = ref(normalizedStoredRate || 0.92)
 if (storedRate !== undefined && normalizedStoredRate === null) uni.removeStorageSync('exchange-rate')
 if (normalizedStoredRate !== null && normalizedStoredRate !== Number(storedRate)) uni.setStorageSync('exchange-rate', normalizedStoredRate)
-// #ifdef MP-WEIXIN
-const currency = ref<Currency>('RMB')
-// #else
 const currency = ref<Currency>(storedCurrency || 'HKD')
-// #endif
 let loaded = false
 
 export function useCurrency() {
@@ -44,7 +40,13 @@ export function useCurrency() {
     formatCurrencyAmount(convertAmount(amount, source), currency.value, decimals)
   const format = (rmbAmount: number, decimals = 0) => formatCurrencyAmount(convert(rmbAmount), currency.value, decimals)
   const formatOriginal = (amount: number, source: Currency | string, decimals = 2) => formatCurrencyAmount(amount, source, decimals)
-  const setCurrency = (value: Currency | null) => { const normalized = normalizeCurrency(value); if (!normalized) return; currency.value = normalized; uni.setStorageSync('display-currency', normalized) }
+  const setCurrency = (value: Currency | null) => {
+    const normalized = normalizeCurrency(value)
+    if (!normalized) return
+    hasUserCurrency = true
+    currency.value = normalized
+    uni.setStorageSync('display-currency', normalized)
+  }
   const setExchangeRate = (value: number | undefined) => {
     const normalized = normalizeExchangeRate(value)
     if (normalized === null) return
@@ -57,7 +59,7 @@ export function useCurrency() {
     try {
       const settings = await getSettings()
       const savedCurrency = normalizeCurrency(settings.currency)
-      if (savedCurrency && !hasStoredCurrency) setCurrency(savedCurrency)
+      if (savedCurrency && !hasUserCurrency) currency.value = savedCurrency
       if (settings.exchangeRate) setExchangeRate(settings.exchangeRate)
     } catch { /* use cached defaults */ }
   }
