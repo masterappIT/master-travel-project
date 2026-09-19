@@ -145,7 +145,7 @@ export const AuditLogsPage = {
               <td><div class="audit-log-action"><strong>{{actionLabel(item)}}</strong><span><code>{{item.method || '—'}}</code>{{cleanResource(item.resource)}}</span></div></td>
               <td><span class="audit-log-status" :class="item.status === 'SUCCESS' ? 'is-success' : 'is-failed'"><i></i>{{statusLabel(item.status)}}</span></td>
               <td><code class="audit-log-ip">{{item.ip || '—'}}</code></td>
-              <td><button type="button" class="audit-log-detail-action" @click="openDetail(item, $event)">查看</button></td>
+              <td class="audit-log-detail-cell"><button type="button" class="audit-log-detail-action" @click="openDetail(item, $event)" :aria-label="'查看 ' + actionLabel(item) + ' 詳情'">查看</button></td>
             </tr>
             <tr v-if="!pagedLogs.length"><td colspan="6" class="audit-log-empty"><strong>{{auditLogs.length ? '找不到符合條件的日誌' : '目前沒有操作日誌'}}</strong><span>{{auditLogs.length ? '請調整搜尋內容或篩選條件。' : '管理員操作後，記錄會顯示在這裡。'}}</span></td></tr>
           </tbody></table>
@@ -160,7 +160,11 @@ export const AuditLogsPage = {
         <aside ref="detailDrawer" class="audit-log-drawer" role="dialog" aria-modal="true" aria-labelledby="audit-log-detail-title" @keydown.esc="closeDetail">
           <header><div><span class="audit-log-eyebrow">LOG DETAIL</span><h2 id="audit-log-detail-title">操作詳情</h2><p>{{formatDate(selectedLog.createdAt,true)}}</p></div><button ref="detailCloseButton" type="button" class="audit-log-close" @click="closeDetail" aria-label="關閉操作詳情">×</button></header>
           <div class="audit-log-detail-body">
-            <div class="audit-log-detail-summary"><span class="audit-log-status" :class="selectedLog.status === 'SUCCESS' ? 'is-success' : 'is-failed'"><i></i>{{statusLabel(selectedLog.status)}}</span><strong>{{actionLabel(selectedLog)}}</strong></div>
+            <div class="audit-log-detail-summary">
+              <div class="audit-log-detail-summary-top"><span class="audit-log-status" :class="selectedLog.status === 'SUCCESS' ? 'is-success' : 'is-failed'"><i></i>{{statusLabel(selectedLog.status)}}</span><code class="audit-log-method">{{selectedLog.method || '—'}}</code></div>
+              <strong>{{actionLabel(selectedLog)}}</strong>
+              <code class="audit-log-detail-resource">{{cleanResource(selectedLog.resource)}}</code>
+            </div>
             <dl>
               <div><dt>管理員</dt><dd>{{selectedLog.username || 'anonymous'}}</dd></div>
               <div><dt>操作時間</dt><dd>{{formatDate(selectedLog.createdAt,true)}}</dd></div>
