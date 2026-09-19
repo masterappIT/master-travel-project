@@ -342,14 +342,14 @@ async function primaryDriverVehicle(
   return assignment?.vehicle ?? null;
 }
 
-const tripOfferGracePeriodMs = 60 * 60 * 1000;
+const tripOfferLeadTimeMs = 60 * 60 * 1000;
 
 function tripOfferCutoff(now = new Date()) {
-  return new Date(now.getTime() - tripOfferGracePeriodMs);
+  return new Date(now.getTime() + tripOfferLeadTimeMs);
 }
 
 function tripOfferIsExpired(scheduledAt: Date, now = new Date()) {
-  return scheduledAt < tripOfferCutoff(now);
+  return scheduledAt <= tripOfferCutoff(now);
 }
 
 async function requireActiveDriverVehicle(
@@ -362,6 +362,28 @@ async function requireActiveDriverVehicle(
       "An active assigned vehicle is required before accepting or operating trips",
     );
   return vehicle;
+}
+
+function tripVehicleSnapshot(vehicle: {
+  id: string;
+  vehicleCategory: string;
+  vehicleColor: string;
+  plateType: string;
+  hkPlate: string | null;
+  macauPlate: string | null;
+  mainlandPlate: string | null;
+}) {
+  return {
+    vehicleId: vehicle.id,
+    vehicleCategory: vehicle.vehicleCategory,
+    vehicleColor: vehicle.vehicleColor,
+    vehiclePlateType: vehicle.plateType,
+    vehiclePlate:
+      vehicle.hkPlate || vehicle.macauPlate || vehicle.mainlandPlate || null,
+    vehicleHkPlate: vehicle.hkPlate,
+    vehicleMacauPlate: vehicle.macauPlate,
+    vehicleMainlandPlate: vehicle.mainlandPlate,
+  };
 }
 
 async function promotePrimaryDriverVehicle(
@@ -2282,6 +2304,14 @@ function driverTripResponse(trip: {
   status: string;
   executionPhase: string | null;
   driverId?: string | null;
+  vehicleId: string | null;
+  vehicleCategory: string | null;
+  vehicleColor: string | null;
+  vehiclePlateType: string | null;
+  vehiclePlate: string | null;
+  vehicleHkPlate: string | null;
+  vehicleMacauPlate: string | null;
+  vehicleMainlandPlate: string | null;
   driverPayoutAmount: number | null;
   driverPayoutCurrency: string | null;
   user?: { id: string; name: string | null; displayName: string | null };
@@ -2309,6 +2339,23 @@ function driverTripResponse(trip: {
     status: trip.status,
     executionPhase: trip.executionPhase,
     driverId: trip.driverId,
+    vehicle:
+      trip.vehicleId ||
+      trip.vehiclePlate ||
+      trip.vehicleHkPlate ||
+      trip.vehicleMacauPlate ||
+      trip.vehicleMainlandPlate
+        ? {
+            id: trip.vehicleId,
+            vehicleCategory: trip.vehicleCategory,
+            vehicleColor: trip.vehicleColor,
+            plateType: trip.vehiclePlateType,
+            vehiclePlate: trip.vehiclePlate,
+            hkPlate: trip.vehicleHkPlate,
+            macauPlate: trip.vehicleMacauPlate,
+            mainlandPlate: trip.vehicleMainlandPlate,
+          }
+        : null,
     price: trip.driverPayoutAmount,
     currency: trip.driverPayoutCurrency,
     settlement: trip.settlement
@@ -4033,6 +4080,10 @@ class DriverAuthController {
         driverId: null,
         driverName: null,
         driverPhone: null,
+        vehicleId: null,
+        vehicleCategory: null,
+        vehicleColor: null,
+        vehiclePlateType: null,
         vehiclePlate: null,
         vehicleHkPlate: null,
         vehicleMacauPlate: null,
@@ -4072,6 +4123,10 @@ class DriverAuthController {
         driverId: null,
         driverName: null,
         driverPhone: null,
+        vehicleId: null,
+        vehicleCategory: null,
+        vehicleColor: null,
+        vehiclePlateType: null,
         vehiclePlate: null,
         vehicleHkPlate: null,
         vehicleMacauPlate: null,
@@ -4294,7 +4349,7 @@ class DriverAuthController {
         driverId: null,
         status: "CONFIRMED",
         executionPhase: "WAITING_DRIVER",
-        scheduledAt: { gte: tripOfferCutoff() },
+        scheduledAt: { gt: tripOfferCutoff() },
         payment: { is: { status: "PAID" } },
       },
       include: { user: true },
@@ -4367,7 +4422,7 @@ class DriverAuthController {
             status: "CONFIRMED",
             executionPhase: "DRIVER_PENDING_ACCEPTANCE",
             acceptedAt: null,
-            scheduledAt: { gte: tripOfferCutoff(now) },
+            scheduledAt: { gt: tripOfferCutoff(now) },
             payment: { is: { status: "PAID" } },
           }
         : {
@@ -4375,17 +4430,14 @@ class DriverAuthController {
             driverId: null,
             status: "CONFIRMED",
             executionPhase: "WAITING_DRIVER",
-            scheduledAt: { gte: tripOfferCutoff(now) },
+            scheduledAt: { gt: tripOfferCutoff(now) },
             payment: { is: { status: "PAID" } },
           },
       data: {
         driverId: driver.id,
         driverName: driver.name,
         driverPhone: `${driver.phoneCountryCode} ${driver.phone}`,
-        vehiclePlate: assignedVehicle?.hkPlate || assignedVehicle?.macauPlate || assignedVehicle?.mainlandPlate || null,
-        vehicleHkPlate: assignedVehicle?.hkPlate || null,
-        vehicleMacauPlate: assignedVehicle?.macauPlate || null,
-        vehicleMainlandPlate: assignedVehicle?.mainlandPlate || null,
+        ...tripVehicleSnapshot(assignedVehicle),
         status: "CONFIRMED",
         executionPhase: "DRIVER_ASSIGNED",
         assignedAt: trip.assignedAt || now,
@@ -4504,16 +4556,13 @@ class DriverOrderUrlController {
           status: "CONFIRMED",
           acceptedAt: null,
           completedAt: null,
-          scheduledAt: { gte: tripOfferCutoff(now) },
+          scheduledAt: { gt: tripOfferCutoff(now) },
         },
         data: {
           driverId: driver.id,
           driverName: driver.name,
           driverPhone: `${driver.phoneCountryCode} ${driver.phone}`,
-          vehiclePlate: assignedVehicle.hkPlate || assignedVehicle.macauPlate || assignedVehicle.mainlandPlate || null,
-          vehicleHkPlate: assignedVehicle.hkPlate || null,
-          vehicleMacauPlate: assignedVehicle.macauPlate || null,
-          vehicleMainlandPlate: assignedVehicle.mainlandPlate || null,
+          ...tripVehicleSnapshot(assignedVehicle),
           status: "CONFIRMED",
           executionPhase: "DRIVER_ASSIGNED",
           assignedAt: now,
@@ -4530,7 +4579,7 @@ class DriverOrderUrlController {
         include: { user: true, driver: true },
       });
     });
-    return tripResponse(result);
+    return driverTripResponse(result);
   }
 }
 
@@ -6822,17 +6871,14 @@ class AdminController {
         "Only paid trips can be dispatched",
         HttpStatus.CONFLICT,
       );
-    const assignedVehicle = await primaryDriverVehicle(prisma, driver.id, true);
+    const assignedVehicle = await requireActiveDriverVehicle(prisma, driver.id);
     const updated = await prisma.trip.update({
       where: { id },
       data: {
         driverId: driver.id,
         driverName: driver.name,
         driverPhone: `${driver.phoneCountryCode} ${driver.phone}`,
-        vehiclePlate: assignedVehicle?.hkPlate || assignedVehicle?.macauPlate || assignedVehicle?.mainlandPlate || null,
-        vehicleHkPlate: assignedVehicle?.hkPlate || null,
-        vehicleMacauPlate: assignedVehicle?.macauPlate || null,
-        vehicleMainlandPlate: assignedVehicle?.mainlandPlate || null,
+        ...tripVehicleSnapshot(assignedVehicle),
         driverPayoutAmount: roundMoney(driverPayoutAmount),
         driverPayoutCurrency:
           trip.driverPayoutCurrency || trip.payment.currency,

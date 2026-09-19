@@ -20,6 +20,7 @@ class OrderDetailPage extends StatefulWidget {
 class _OrderDetailPageState extends State<OrderDetailPage> {
   final _api = DriverApiClient.instance;
   Map<String, dynamic>? _trip;
+  Map<String, dynamic>? _currentVehicle;
   bool _loading = true;
   bool _accepting = false;
   String? _error;
@@ -45,7 +46,20 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
     });
     try {
       final trip = await _api.trip(id);
-      if (mounted) setState(() => _trip = trip);
+      Map<String, dynamic>? currentVehicle;
+      if (trip['acceptedAt'] == null) {
+        final result = await _api.listDriverVehicles();
+        final vehicles = result['data'];
+        if (vehicles is List && vehicles.isNotEmpty && vehicles.first is Map) {
+          currentVehicle = Map<String, dynamic>.from(vehicles.first as Map);
+        }
+      }
+      if (mounted) {
+        setState(() {
+          _trip = trip;
+          _currentVehicle = currentVehicle;
+        });
+      }
     } on DriverApiException catch (error) {
       if (mounted) setState(() => _error = error.message);
     } finally {
@@ -140,12 +154,17 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
     return value.isEmpty ? fallback : value;
   }
 
-  String _vehiclePlate(Map<String, dynamic>? driver) {
-    for (final key in ['hkPlate', 'macauPlate', 'mainlandPlate']) {
-      final value = driver?[key]?.toString().trim();
+  String _vehiclePlate(Map<String, dynamic>? vehicle, String fallback) {
+    for (final key in [
+      'vehiclePlate',
+      'hkPlate',
+      'macauPlate',
+      'mainlandPlate'
+    ]) {
+      final value = vehicle?[key]?.toString().trim();
       if (value != null && value.isNotEmpty) return value;
     }
-    return '車牌待確認';
+    return fallback;
   }
 
   @override
@@ -156,8 +175,15 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
     final destinationRegion = _region(destination, '終點待確認');
     final passenger = _tripText('passengerName', '乘客');
     final scheduledAt = _formatDate(_trip?['scheduledAt']);
-    final driver = _api.currentDriver;
     final accepted = _trip?['acceptedAt'] != null;
+    final snapshot = _trip?['vehicle'];
+    final vehicle = accepted || widget.completed
+        ? snapshot is Map
+            ? Map<String, dynamic>.from(snapshot)
+            : null
+        : _currentVehicle;
+    final missingVehicleText =
+        accepted || widget.completed ? '歷史資料未記錄' : '車輛資料待確認';
     final pendingAssignment =
         _trip?['executionPhase'] == 'DRIVER_PENDING_ACCEPTANCE' && !accepted;
     final inProgress = _trip?['executionPhase'] == 'IN_PROGRESS';
@@ -225,11 +251,14 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
             _VehicleCard(
               index: 0,
               title:
-                  driver?['vehicleColor']?.toString().trim().isNotEmpty == true
-                      ? driver!['vehicleColor'].toString()
-                      : '已登記車輛',
-              type: driver?['vehicleCategory']?.toString() ?? '車型待確認',
-              plate: _vehiclePlate(driver),
+                  vehicle?['vehicleColor']?.toString().trim().isNotEmpty == true
+                      ? vehicle!['vehicleColor'].toString()
+                      : missingVehicleText,
+              type: vehicle?['vehicleCategory']?.toString().trim().isNotEmpty ==
+                      true
+                  ? vehicle!['vehicleCategory'].toString()
+                  : missingVehicleText,
+              plate: _vehiclePlate(vehicle, missingVehicleText),
               selected: true,
               onTap: () {},
             ),

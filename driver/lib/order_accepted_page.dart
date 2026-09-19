@@ -176,7 +176,9 @@ class _OrderAcceptedPageState extends State<OrderAcceptedPage> {
   Widget build(BuildContext context) {
     final origin = _tripText('pickupAddress', '起點待確認');
     final destination = _tripText('dropoffAddress', '終點待確認');
-    final driver = _api.currentDriver;
+    final snapshot = _trip?['vehicle'];
+    final vehicle =
+        snapshot is Map ? Map<String, dynamic>.from(snapshot) : null;
 
     return DriverPageShell(
       selectedIndex: 1,
@@ -239,7 +241,7 @@ class _OrderAcceptedPageState extends State<OrderAcceptedPage> {
               price: _formatPrice(_trip?['price'], _trip?['currency']),
             ),
             const SizedBox(height: DriverSpacing.xl),
-            _AcceptedVehicleCard(driver: driver),
+            _AcceptedVehicleCard(vehicle: vehicle),
             const SizedBox(height: DriverSpacing.xl),
           ],
           if (!_loading && _error == null)
@@ -519,20 +521,25 @@ class _InfoRow extends StatelessWidget {
 }
 
 class _AcceptedVehicleCard extends StatelessWidget {
-  const _AcceptedVehicleCard({required this.driver});
-  final Map<String, dynamic>? driver;
+  const _AcceptedVehicleCard({required this.vehicle});
+  final Map<String, dynamic>? vehicle;
 
   String _text(String key, String fallback) {
-    final value = driver?[key]?.toString().trim();
+    final value = vehicle?[key]?.toString().trim();
     return value == null || value.isEmpty ? fallback : value;
   }
 
   String _plate() {
-    for (final key in ['hkPlate', 'macauPlate', 'mainlandPlate']) {
-      final value = driver?[key]?.toString().trim();
+    for (final key in [
+      'vehiclePlate',
+      'hkPlate',
+      'macauPlate',
+      'mainlandPlate'
+    ]) {
+      final value = vehicle?[key]?.toString().trim();
       if (value != null && value.isNotEmpty) return value;
     }
-    return '車牌待確認';
+    return '歷史資料未記錄';
   }
 
   @override
@@ -551,7 +558,7 @@ class _AcceptedVehicleCard extends StatelessWidget {
                     width: 20, height: 20)),
             const SizedBox(width: 10),
             Expanded(
-                child: Text(_text('vehicleCategory', '已登記車輛'),
+                child: Text(_text('vehicleCategory', '歷史資料未記錄'),
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         fontSize: 18,
@@ -560,7 +567,8 @@ class _AcceptedVehicleCard extends StatelessWidget {
           ]),
           const Divider(height: 1, color: DriverColors.background),
           _VehicleInfoRow(label: '車牌', value: _plate()),
-          _VehicleInfoRow(label: '車輛顏色', value: _text('vehicleColor', '顏色待確認')),
+          _VehicleInfoRow(
+              label: '車輛顏色', value: _text('vehicleColor', '歷史資料未記錄')),
         ],
       );
 }

@@ -453,6 +453,10 @@ model Trip {
   driverPayoutCurrency         String?
   driverName                   String?
   driverPhone                  String?
+  vehicleId                    String?
+  vehicleCategory              String?
+  vehicleColor                 String?
+  vehiclePlateType             String?
   vehiclePlate                 String?
   vehicleHkPlate               String?
   vehicleMacauPlate            String?
