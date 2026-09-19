@@ -126,6 +126,7 @@ const resourceLoader = createAdminResourceLoader({
     membership: () => import('./utils/admin-resource-loader.js').then(({ loadMembershipResources }) => loadMembershipResources({ api, membershipPlans, membershipOrders })),
     promotions: () => import('./utils/admin-resource-loader.js').then(({ loadPromotionResources }) => loadPromotionResources({ api, promotions, mileageRules, mileageRewards, mileageAccounts, invitationSettings, invitationWalletCurrency, invitationSummary, invitationRecords })),
     administrators: () => import('./utils/admin-resource-loader.js').then(({ loadAdministratorResources }) => loadAdministratorResources({ api, administrators })),
+    auditLogs: () => import('./utils/admin-resource-loader.js').then(({ loadAuditLogResources }) => loadAuditLogResources({ api, auditLogs })),
     notifications: () => import('./utils/admin-resource-loader.js').then(({ loadNotificationResources }) => loadNotificationResources({ api, usersApi, driversApi, notifications, notificationTemplates, notificationUsers, notificationDrivers })),
     vehicles: () => import('./utils/admin-resource-loader.js').then(({ loadVehicleResources }) => loadVehicleResources({ api, vehiclesApi, categories, vehicles, extras, distancePricing, sortByOrder })),
     routePricing: () => import('./utils/admin-resource-loader.js').then(({ loadRoutePricingResources }) => loadRoutePricingResources({ api, categories, routeMinimumFares }))
@@ -340,6 +341,7 @@ const App = { setup() {
      administrators,
      administratorForm,
      auditLogs,
+     refreshAuditLogs: load,
      resetAdministrator,
      editAdministrator,
      saveAdministrator,

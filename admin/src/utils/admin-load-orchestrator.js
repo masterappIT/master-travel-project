@@ -38,6 +38,7 @@ export function createAdminResourceLoader({
       if (requestedView === 'membership') await resourceLoaders.membership()
       if (requestedView === 'promotions') await resourceLoaders.promotions()
       if (requestedView === 'administrators') await resourceLoaders.administrators()
+      if (requestedView === 'auditLogs') await resourceLoaders.auditLogs()
       if (requestedView === 'notifications') await resourceLoaders.notifications()
       if (requestedView === 'vehicles') await resourceLoaders.vehicles()
       if (requestedView === 'route-pricing') await resourceLoaders.routePricing()

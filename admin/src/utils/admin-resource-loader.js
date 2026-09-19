@@ -143,3 +143,7 @@ export async function loadCharterResources({ api, charterOrders }) {
 export async function loadAdministratorResources({ api, administrators }) {
   administrators.value = (await api('/admin/administrators')).data
 }
+
+export async function loadAuditLogResources({ api, auditLogs }) {
+  auditLogs.value = (await api('/admin/audit-logs')).data
+}
