@@ -381,7 +381,14 @@ export type PublicVehicleCatalog = { categories: PublicVehicleCategory[]; data: 
 export async function listPublicVehicles(): Promise<PublicVehicleCatalog> {
   const response = await uni.request({ url: `${API_BASE_URL}/vehicles` })
   if (response.statusCode >= 400) throw new Error('車型資料暫時無法載入')
-  return response.data as PublicVehicleCatalog
+  const catalog = response.data as PublicVehicleCatalog
+  return {
+    ...catalog,
+    data: catalog.data.map(vehicle => ({
+      ...vehicle,
+      image: vehicle.image.startsWith('/') ? `${API_BASE_URL.replace(/\/$/, '')}${vehicle.image}` : vehicle.image
+    }))
+  }
 }
 
 export type FareQuote = {

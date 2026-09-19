@@ -788,6 +788,8 @@ model Vehicle {
   series           String
   seats            Int
   image            String
+  imageData        Bytes?
+  imageMime        String?
   colorLabel       String
   modelChoiceLabel String
   enabled          Boolean          @default(true)

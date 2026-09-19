@@ -3,6 +3,7 @@ import { createUsersApi } from '../api/users.js'
 import { createDriversApi } from '../api/drivers.js'
 import { createTripsApi } from '../api/trips.js'
 import { createAddressesApi } from '../api/addresses.js'
+import { createVehiclesApi } from '../api/vehicles.js'
 
 export function createAdminApi({ baseUrl, token }) {
   const api = createApiClient({
@@ -19,6 +20,7 @@ export function createAdminApi({ baseUrl, token }) {
     usersApi: createUsersApi(api),
     driversApi: createDriversApi(api),
     tripsApi: createTripsApi(api),
-    addressesApi: createAddressesApi(api)
+    addressesApi: createAddressesApi(api),
+    vehiclesApi: createVehiclesApi(api, baseUrl)
   }
 }

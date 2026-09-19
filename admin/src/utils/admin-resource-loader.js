@@ -45,10 +45,10 @@ export async function loadNotificationResources({ api, usersApi, driversApi, not
   notificationDrivers.value = driverResult.data
 }
 
-export async function loadVehicleResources({ api, categories, vehicles, extras, distancePricing, sortByOrder }) {
+export async function loadVehicleResources({ api, vehiclesApi, categories, vehicles, extras, distancePricing, sortByOrder }) {
   const [categoryResult, vehicleResult, extraResult, pricingResult] = await Promise.all([
     api('/admin/vehicle-categories'),
-    api('/admin/vehicles'),
+    vehiclesApi.list(),
     api('/admin/vehicle-extras'),
     api('/admin/distance-pricing')
   ])

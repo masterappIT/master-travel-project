@@ -1,5 +1,6 @@
 import { NestFactory } from "@nestjs/core";
 import {
+  BadRequestException,
   Body,
   CallHandler,
   Controller,
@@ -198,6 +199,8 @@ interface VehicleCatalogItem {
   series: string;
   seats: number;
   image: string;
+  imageData?: Prisma.Bytes | null;
+  imageMime?: string | null;
   colorLabel: string;
   modelChoiceLabel: string;
   enabled: boolean;
@@ -1148,6 +1151,11 @@ function vehicleCategoryResponse(category: VehicleCategory) {
     enabled: category.enabled,
   };
 }
+function vehicleImagePath(vehicle: VehicleCatalogItem) {
+  return vehicle.imageData && vehicle.imageMime
+    ? `/vehicles/${encodeURIComponent(vehicle.id)}/image`
+    : vehicle.image;
+}
 function vehicleResponse(vehicle: VehicleCatalogItem) {
   return {
     id: vehicle.id,
@@ -1156,7 +1164,9 @@ function vehicleResponse(vehicle: VehicleCatalogItem) {
     model: vehicle.model,
     series: vehicle.series,
     seats: vehicle.seats,
-    image: vehicle.image,
+    image: vehicleImagePath(vehicle),
+    fallbackImage: vehicle.image,
+    hasStoredImage: Boolean(vehicle.imageData && vehicle.imageMime),
     colorLabel: vehicle.colorLabel,
     modelChoiceLabel: vehicle.modelChoiceLabel,
     enabled: vehicle.enabled,
@@ -6904,9 +6914,28 @@ class AdminController {
     ]);
     return { data: data.map(vehicleResponse), total };
   }
-  @Post("vehicles") async saveVehicle(
+  @Post("vehicles")
+  @UseInterceptors(
+    FileInterceptor("vehicleImage", {
+      limits: { fileSize: 2 * 1024 * 1024 },
+      fileFilter: (_req, file, callback) => {
+        if (!/^image\/(jpeg|png|webp)$/.test(file.mimetype)) {
+          callback(
+            new BadRequestException(
+              "Vehicle image must be JPEG, PNG, or WebP",
+            ),
+            false,
+          );
+          return;
+        }
+        callback(null, true);
+      },
+    }),
+  )
+  async saveVehicle(
     @Req() req: RequestLike,
-    @Body() body: Partial<VehicleCatalogItem>,
+    @Body() body: Omit<Partial<VehicleCatalogItem>, "enabled"> & { enabled?: boolean | string; removeVehicleImage?: string },
+    @UploadedFile() vehicleImage?: Express.Multer.File,
   ) {
     requireAuth(req);
     const [category, existing] = await Promise.all([
@@ -6916,28 +6945,38 @@ class AdminController {
       body.id ? prisma.vehicle.findUnique({ where: { id: body.id } }) : null,
     ]);
     const seats = Number(body.seats);
+    const image = body.image?.trim() || existing?.image || "";
+    const removeVehicleImage = body.removeVehicleImage === "true";
+    const hasImage = Boolean(
+      vehicleImage ||
+      image ||
+      (!removeVehicleImage && existing?.imageData && existing.imageMime),
+    );
     if (
       !category ||
       !body.id ||
       !body.model?.trim() ||
       !Number.isInteger(seats) ||
       seats <= 0 ||
-      !body.image?.trim()
+      !hasImage
     )
       throw new HttpException(
         "Valid vehicle fields are required",
         HttpStatus.BAD_REQUEST,
       );
+    const enabled = typeof body.enabled === "string" ? body.enabled === "true" : body.enabled ?? true;
     const values = {
       categoryId: body.categoryId!,
       brand: body.brand?.trim() || "",
       model: body.model.trim(),
       series: body.series?.trim() || "",
       seats,
-      image: body.image.trim(),
+      image,
+      ...(vehicleImage ? { imageData: new Uint8Array(vehicleImage.buffer), imageMime: vehicleImage.mimetype } : {}),
+      ...(!vehicleImage && removeVehicleImage ? { imageData: null, imageMime: null } : {}),
       colorLabel: body.colorLabel?.trim() || "不限顏色",
       modelChoiceLabel: body.modelChoiceLabel?.trim() || "",
-      enabled: body.enabled ?? true,
+      enabled,
       order:
         Number(body.order) ||
         existing?.order ||
@@ -7658,6 +7697,19 @@ class PublicPromotionsController {
 
 @Controller("vehicles")
 class PublicVehiclesController {
+  @Get(":id/image") async vehicleImage(
+    @Param("id") id: string,
+    @Res() response: Response,
+  ) {
+    const vehicle = await prisma.vehicle.findUnique({
+      where: { id },
+      select: { imageData: true, imageMime: true },
+    });
+    if (!vehicle?.imageData || !vehicle.imageMime)
+      throw new HttpException("Vehicle image not found", HttpStatus.NOT_FOUND);
+    response.type(vehicle.imageMime).send(Buffer.from(vehicle.imageData));
+  }
+
   @Get() async listPublicVehicles() {
     const [categories, data, extras, settings] = await Promise.all([
       prisma.vehicleCategory.findMany({
@@ -8215,7 +8267,7 @@ class PublicQuotesController {
               model: vehicle.model,
               series: vehicle.series,
               seats: vehicle.seats,
-              image: vehicle.image,
+              image: vehicleImagePath(vehicle),
               colorLabel: vehicle.colorLabel,
               modelChoiceLabel: vehicle.modelChoiceLabel,
             },

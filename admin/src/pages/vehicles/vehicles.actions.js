@@ -1,4 +1,9 @@
-export function createVehiclesActions({ api, view, categories, vehicles, extras, distancePricing, routeMinimumFareForm, categoryForm, vehicleForm, extraForm, pricingCurrency, severeWeatherEnabled, extraSortId, load, error, displayError, requestConfirmation, notify, t }) {
+export function createVehiclesActions({ api, vehiclesApi, view, categories, vehicles, extras, distancePricing, routeMinimumFareForm, categoryForm, vehicleForm, extraForm, pricingCurrency, severeWeatherEnabled, extraSortId, load, error, displayError, requestConfirmation, notify, t }) {
+  let vehicleImageUrl = null
+  function clearVehicleImageUrl() {
+    if (vehicleImageUrl) URL.revokeObjectURL(vehicleImageUrl)
+    vehicleImageUrl = null
+  }
   function editExtra(item) { extraForm.value = { triggerType: item.triggerType || (item.requiredForImmediate ? 'IMMEDIATE' : 'NONE'), triggerEnabled: item.triggerEnabled !== false, nightStartTime: item.nightStartTime || '22:00', nightEndTime: item.nightEndTime || '06:00', ...item } }
   function resetExtra() { extraForm.value = { id: '', label: '', price: 0, currency: pricingCurrency.value === 'HKD' ? 'HKD$' : 'RMB¥', enabled: true, order: extras.value.length + 1, requiredForImmediate: false, requiredWithinMinutes: null, triggerType: 'NONE', triggerEnabled: true, nightStartTime: '22:00', nightEndTime: '06:00' } }
   async function saveExtra() { const currentView = view.value; try { const form = extraForm.value; await api('/admin/vehicle-extras', { method: 'POST', body: JSON.stringify({ ...form, requiredForImmediate: form.triggerType === 'IMMEDIATE' }) }); if (form.triggerType === 'WEATHER') await api('/settings', { method: 'POST', body: JSON.stringify({ severeWeatherEnabled: severeWeatherEnabled.value }) }); extraForm.value = null; view.value = currentView; await load(); view.value = currentView } catch (err) { view.value = currentView; error.value = displayError(err) } }
@@ -6,15 +11,54 @@ export function createVehiclesActions({ api, view, categories, vehicles, extras,
   async function showOnlyExtra(item) { const currentView = view.value; try { await Promise.all(extras.value.filter(extra => extra.id !== item.id && extra.enabled !== false).map(extra => api('/admin/vehicle-extras', { method: 'POST', body: JSON.stringify({ ...extra, enabled: false }) }))); await api('/admin/vehicle-extras', { method: 'POST', body: JSON.stringify({ ...item, enabled: true }) }); await load(); view.value = currentView } catch (err) { error.value = displayError(err) } }
   async function toggleSevereWeather() { try { const updated = await api('/settings', { method: 'POST', body: JSON.stringify({ severeWeatherEnabled: !severeWeatherEnabled.value }) }); severeWeatherEnabled.value = Boolean(updated.severeWeatherEnabled) } catch (err) { error.value = displayError(err) } }
   async function removeExtra(item) { if (!await requestConfirmation({ title: '刪除額外服務', message: `${t('remove')} ${item.label}?`, confirmLabel: '刪除', danger: true })) return; try { await api(`/admin/vehicle-extras/${item.id}`, { method: 'DELETE' }); notify('額外服務已刪除'); await load() } catch (err) { error.value = displayError(err); notify(error.value, 'error') } }
-  function editVehicle(item) { vehicleForm.value = { ...item } }
+  function editVehicle(item) {
+    clearVehicleImageUrl()
+    vehicleForm.value = { ...item, imagePreview: vehiclesApi.imageUrl(item), vehicleImageFile: null, removeVehicleImage: false }
+  }
   function editCategory(item) { categoryForm.value = { ...item } }
   function resetCategory() { categoryForm.value = { id: '', name: '', tabLabel: '', order: categories.value.length + 1, enabled: true } }
-  function resetVehicle() { vehicleForm.value = { id: crypto.randomUUID(), categoryId: categories.value[0]?.id || '', brand: '', model: '', series: '', seats: 4, image: '', colorLabel: '不限顏色', modelChoiceLabel: '', enabled: true, order: 1 } }
+  function resetVehicle() {
+    clearVehicleImageUrl()
+    vehicleForm.value = { id: crypto.randomUUID(), categoryId: categories.value[0]?.id || '', brand: '', model: '', series: '', seats: 4, image: '', fallbackImage: '', hasStoredImage: false, imagePreview: '', vehicleImageFile: null, removeVehicleImage: false, colorLabel: '不限顏色', modelChoiceLabel: '', enabled: true, order: 1 }
+  }
+  function uploadVehicleImage(event) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) { error.value = '車型圖片只支援 JPEG、PNG 或 WebP'; return }
+    if (file.size > 2 * 1024 * 1024) { error.value = '車型圖片不可超過 2 MB'; return }
+    clearVehicleImageUrl()
+    vehicleImageUrl = URL.createObjectURL(file)
+    vehicleForm.value.vehicleImageFile = file
+    vehicleForm.value.imagePreview = vehicleImageUrl
+    vehicleForm.value.removeVehicleImage = false
+    error.value = ''
+  }
+  function removeVehicleImage() {
+    const form = vehicleForm.value
+    if (!form) return
+    clearVehicleImageUrl()
+    form.vehicleImageFile = null
+    form.removeVehicleImage = Boolean(form.hasStoredImage)
+    form.imagePreview = form.fallbackImage || ''
+  }
+  function closeVehicleForm() {
+    clearVehicleImageUrl()
+    vehicleForm.value = null
+  }
   async function saveCategory() { try { await api('/admin/vehicle-categories', { method: 'POST', body: JSON.stringify(categoryForm.value) }); categoryForm.value = null; await load() } catch (err) { error.value = displayError(err) } }
   async function toggleCategory(item) { try { await api('/admin/vehicle-categories', { method: 'POST', body: JSON.stringify({ ...item, enabled: !item.enabled }) }); await load() } catch (err) { error.value = displayError(err) } }
-  async function saveVehicle() { try { await api('/admin/vehicles', { method: 'POST', body: JSON.stringify(vehicleForm.value) }); vehicleForm.value = null; await load() } catch (err) { error.value = displayError(err) } }
-  async function toggleVehicle(item) { try { await api('/admin/vehicles', { method: 'POST', body: JSON.stringify({ ...item, enabled: !item.enabled }) }); await load() } catch (err) { error.value = displayError(err) } }
+  async function saveVehicle() {
+    const form = vehicleForm.value
+    if (!form?.vehicleImageFile && !form?.imagePreview) { error.value = '請上傳車型圖片'; return }
+    try {
+      await vehiclesApi.save(form, form.vehicleImageFile, form.removeVehicleImage)
+      closeVehicleForm()
+      await load()
+    } catch (err) { error.value = displayError(err) }
+  }
+  async function toggleVehicle(item) { try { await vehiclesApi.save({ ...item, enabled: !item.enabled }); await load() } catch (err) { error.value = displayError(err) } }
   async function removeCategory(item) { if (!await requestConfirmation({ title: '刪除車型分類', message: `${t('remove')} ${item.name}?`, confirmLabel: '刪除', danger: true })) return; try { await api(`/admin/vehicle-categories/${item.id}`, { method: 'DELETE' }); notify('車型分類已刪除'); await load() } catch (err) { error.value = displayError(err); notify(error.value, 'error') } }
   async function removeVehicle(item) { if (!await requestConfirmation({ title: '刪除車型', message: `${t('remove')} ${item.model}?`, confirmLabel: '刪除', danger: true })) return; try { await api(`/admin/vehicles/${item.id}`, { method: 'DELETE' }); notify('車型已刪除'); await load() } catch (err) { error.value = displayError(err); notify(error.value, 'error') } }
-  return { editExtra, resetExtra, saveExtra, moveExtra, showOnlyExtra, toggleSevereWeather, removeExtra, editVehicle, editCategory, resetCategory, resetVehicle, saveCategory, toggleCategory, saveVehicle, toggleVehicle, removeCategory, removeVehicle }
+  return { editExtra, resetExtra, saveExtra, moveExtra, showOnlyExtra, toggleSevereWeather, removeExtra, editVehicle, editCategory, resetCategory, resetVehicle, uploadVehicleImage, removeVehicleImage, closeVehicleForm, saveCategory, toggleCategory, saveVehicle, toggleVehicle, removeCategory, removeVehicle }
 }
