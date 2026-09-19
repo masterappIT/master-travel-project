@@ -19,6 +19,7 @@ import 'package:driver_web/profile_page.dart';
 import 'package:driver_web/registration_page.dart';
 import 'package:driver_web/add_vehicle_page.dart';
 import 'package:driver_web/core/api/driver_api_client.dart';
+import 'package:driver_web/core/state/driver_language_preference.dart';
 
 Widget testApp(Widget home) {
   final routes = Map<String, WidgetBuilder>.from(DriverRouter.builders)
@@ -407,6 +408,51 @@ void main() {
     expect(requests[2].url.path, '/driver/auth/vehicles/vehicle%2F1');
     expect(jsonDecode(requests[1].body), fields);
     expect(jsonDecode(requests[2].body), fields);
+  });
+
+  test('uses account notification preference and statistics endpoints',
+      () async {
+    final requests = <http.Request>[];
+    final api = DriverApiClient(
+      baseUrl: 'https://driver.example.test',
+      client: MockClient((request) async {
+        requests.add(request);
+        return http.Response('{}', 200);
+      }),
+    );
+    final preferences = {
+      'notificationsOn': true,
+      'orderOn': false,
+      'settlementOn': true,
+      'systemOn': false,
+    };
+
+    await api.notificationPreferences();
+    await api.updateNotificationPreferences(preferences);
+    await api.statistics();
+
+    expect(requests[0].method, 'GET');
+    expect(requests[0].url.path, '/driver/auth/notification-preferences');
+    expect(requests[1].method, 'PATCH');
+    expect(requests[1].url.path, '/driver/auth/notification-preferences');
+    expect(jsonDecode(requests[1].body), preferences);
+    expect(requests[2].method, 'GET');
+    expect(requests[2].url.path, '/driver/auth/statistics');
+  });
+
+  test('maps the selected driver language', () {
+    final preference = DriverLanguagePreference.instance;
+    addTearDown(
+        () => preference.select(DriverLanguagePreference.traditionalChinese));
+
+    preference.select(DriverLanguagePreference.simplifiedChinese);
+    expect(driverText('首頁', '首页', 'Home'), '首页');
+
+    preference.select(DriverLanguagePreference.english);
+    expect(driverText('首頁', '首页', 'Home'), 'Home');
+
+    preference.select(DriverLanguagePreference.traditionalChinese);
+    expect(driverText('首頁', '首页', 'Home'), '首頁');
   });
 
   testWidgets('navigates from order history to order hall',

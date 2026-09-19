@@ -1,9 +1,7 @@
-import 'dart:html' as html;
-
 import 'package:flutter/material.dart';
 
-import 'core/api/driver_api_client.dart';
 import 'core/layout/driver_page_shell.dart';
+import 'core/state/driver_language_preference.dart';
 import 'core/tokens/driver_tokens.dart';
 
 class LanguageSettingsPage extends StatefulWidget {
@@ -13,76 +11,61 @@ class LanguageSettingsPage extends StatefulWidget {
 }
 
 class _LanguageSettingsPageState extends State<LanguageSettingsPage> {
-  String _language = '繁體中文';
-  static const _storageKey = 'driver_language';
-  static const _languages = ['繁體中文', '简体中文', 'English'];
-
-  @override
-  void initState() {
-    super.initState();
-    _language = html.window.localStorage[_storageKey] ?? _language;
-    _loadLanguageFromApi();
-  }
-
-  Future<void> _loadLanguageFromApi() async {
-    try {
-      final settings = await DriverApiClient.instance.settings();
-      final language = settings['language']?.toString();
-      if (!mounted || language == null || !_languages.contains(language))
-        return;
-      setState(() => _language = language);
-      html.window.localStorage[_storageKey] = language;
-    } on DriverApiException {
-      // Keep the locally saved language when the settings endpoint is unavailable.
-    }
-  }
+  final _preference = DriverLanguagePreference.instance;
 
   void _selectLanguage(String value) {
-    setState(() => _language = value);
-    html.window.localStorage[_storageKey] = value;
+    _preference.select(value);
   }
 
   @override
-  Widget build(BuildContext context) => DriverPageShell(
-        showBottomNavigation: false,
-        selectedIndex: 2,
-        bottomPadding: DriverSpacing.xl,
-        child:
-            Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          _LanguageHeader(),
-          const SizedBox(height: DriverSpacing.xl),
-          const Text('語言',
-              style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: DriverColors.text)),
-          const SizedBox(height: DriverSpacing.sm),
-          Container(
-            decoration: BoxDecoration(
-                color: DriverColors.surface,
-                border: Border.all(color: DriverColors.divider),
-                borderRadius: BorderRadius.circular(DriverRadii.card)),
-            child: Column(children: [
-              for (var i = 0; i < _languages.length; i++) ...[
-                RadioListTile<String>(
-                    title: Text(_languages[i]),
-                    value: _languages[i],
-                    groupValue: _language,
-                    onChanged: (value) {
-                      if (value != null) _selectLanguage(value);
-                    }),
-                if (i < _languages.length - 1)
-                  const Divider(height: 1, color: DriverColors.divider),
-              ]
-            ]),
-          ),
-          const SizedBox(height: DriverSpacing.sm),
-          const Text('語言變更會套用至司機端介面。',
-              style: TextStyle(
-                  fontSize: DriverTypography.caption,
-                  color: DriverColors.secondaryText)),
-        ]),
-      );
+  Widget build(BuildContext context) => ValueListenableBuilder<String>(
+      valueListenable: _preference,
+      builder: (context, language, _) => DriverPageShell(
+            showBottomNavigation: false,
+            selectedIndex: 2,
+            bottomPadding: DriverSpacing.xl,
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _LanguageHeader(),
+                  const SizedBox(height: DriverSpacing.xl),
+                  Text(driverText('語言', '语言', 'Language'),
+                      style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: DriverColors.text)),
+                  const SizedBox(height: DriverSpacing.sm),
+                  Material(
+                    color: DriverColors.surface,
+                    shape: RoundedRectangleBorder(
+                        side: const BorderSide(color: DriverColors.divider),
+                        borderRadius: BorderRadius.circular(DriverRadii.card)),
+                    clipBehavior: Clip.antiAlias,
+                    child: Column(children: [
+                      for (var i = 0;
+                          i < DriverLanguagePreference.languages.length;
+                          i++) ...[
+                        RadioListTile<String>(
+                            title: Text(DriverLanguagePreference.languages[i]),
+                            value: DriverLanguagePreference.languages[i],
+                            groupValue: language,
+                            onChanged: (value) {
+                              if (value != null) _selectLanguage(value);
+                            }),
+                        if (i < DriverLanguagePreference.languages.length - 1)
+                          const Divider(height: 1, color: DriverColors.divider),
+                      ]
+                    ]),
+                  ),
+                  const SizedBox(height: DriverSpacing.sm),
+                  Text(
+                      driverText('語言變更會套用至司機端介面。', '语言变更会应用至司机端界面。',
+                          'Language changes apply to the driver interface.'),
+                      style: TextStyle(
+                          fontSize: DriverTypography.caption,
+                          color: DriverColors.secondaryText)),
+                ]),
+          ));
 }
 
 class _LanguageHeader extends StatelessWidget {
@@ -108,7 +91,7 @@ class _LanguageHeader extends StatelessWidget {
                             fontWeight: FontWeight.w700,
                             color: DriverColors.text))))),
         const SizedBox(width: DriverSpacing.lg),
-        const Text('語言設定',
+        Text(driverText('語言設定', '语言设置', 'Language settings'),
             style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.w700,

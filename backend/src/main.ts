@@ -342,6 +342,28 @@ async function primaryDriverVehicle(
   return assignment?.vehicle ?? null;
 }
 
+const tripOfferGracePeriodMs = 60 * 60 * 1000;
+
+function tripOfferCutoff(now = new Date()) {
+  return new Date(now.getTime() - tripOfferGracePeriodMs);
+}
+
+function tripOfferIsExpired(scheduledAt: Date, now = new Date()) {
+  return scheduledAt < tripOfferCutoff(now);
+}
+
+async function requireActiveDriverVehicle(
+  client: Pick<Prisma.TransactionClient, "driverVehicleAssignment">,
+  driverId: string,
+) {
+  const vehicle = await primaryDriverVehicle(client, driverId, true);
+  if (!vehicle)
+    throw new ForbiddenException(
+      "An active assigned vehicle is required before accepting or operating trips",
+    );
+  return vehicle;
+}
+
 async function promotePrimaryDriverVehicle(
   tx: Prisma.TransactionClient,
   driverId: string,
@@ -3836,6 +3858,7 @@ class DriverAuthController {
         "isOnline must be a boolean",
         HttpStatus.BAD_REQUEST,
       );
+    if (body.isOnline) await requireActiveDriverVehicle(prisma, session.sub);
     const now = new Date();
     const current = await prisma.driver.findUnique({
       where: { id: session.sub },
@@ -4167,6 +4190,59 @@ class DriverAuthController {
     return tripResponse(updated);
   }
 
+  @Get("notification-preferences")
+  async notificationPreferences(@Req() req: RequestLike) {
+    const session = await driverSessionFrom(req);
+    const preference = await prisma.driverNotificationPreference.findUnique({
+      where: { driverId: session.sub },
+    });
+    return (
+      preference || {
+        driverId: session.sub,
+        notificationsOn: true,
+        orderOn: true,
+        settlementOn: true,
+        systemOn: true,
+      }
+    );
+  }
+
+  @Patch("notification-preferences")
+  async updateNotificationPreferences(
+    @Req() req: RequestLike,
+    @Body()
+    body: {
+      notificationsOn?: boolean;
+      orderOn?: boolean;
+      settlementOn?: boolean;
+      systemOn?: boolean;
+    },
+  ) {
+    const session = await driverSessionFrom(req);
+    const fields = [
+      "notificationsOn",
+      "orderOn",
+      "settlementOn",
+      "systemOn",
+    ] as const;
+    const data: Partial<Record<(typeof fields)[number], boolean>> = {};
+    for (const field of fields) {
+      if (body[field] !== undefined) {
+        if (typeof body[field] !== "boolean")
+          throw new HttpException(
+            `${field} must be a boolean`,
+            HttpStatus.BAD_REQUEST,
+          );
+        data[field] = body[field];
+      }
+    }
+    return prisma.driverNotificationPreference.upsert({
+      where: { driverId: session.sub },
+      create: { driverId: session.sub, ...data },
+      update: data,
+    });
+  }
+
   @Get("notifications")
   async notifications(@Req() req: RequestLike) {
     const session = await driverSessionFrom(req);
@@ -4210,6 +4286,7 @@ class DriverAuthController {
     if (!settings.driverRaceEnabled)
       throw new ForbiddenException("Driver race acceptance is disabled");
     requireReviewedDriver(driver);
+    await requireActiveDriverVehicle(prisma, driver.id);
     if (!driver.isOnline)
       throw new ForbiddenException("Driver must be online to accept trips");
     const trips = await prisma.trip.findMany({
@@ -4217,6 +4294,7 @@ class DriverAuthController {
         driverId: null,
         status: "CONFIRMED",
         executionPhase: "WAITING_DRIVER",
+        scheduledAt: { gte: tripOfferCutoff() },
         payment: { is: { status: "PAID" } },
       },
       include: { user: true },
@@ -4234,6 +4312,7 @@ class DriverAuthController {
     });
     if (!trip) throw new HttpException("Trip not found", HttpStatus.NOT_FOUND);
     const assignedToDriver = trip.driverId === session.sub;
+    if (!assignedToDriver) await requireActiveDriverVehicle(prisma, driver.id);
     const settings = await prisma.appSetting.findUniqueOrThrow({
       where: { id: appSettingsDefaults.id },
     });
@@ -4243,7 +4322,8 @@ class DriverAuthController {
       trip.executionPhase === "WAITING_DRIVER" &&
       trip.payment?.status === "PAID" &&
       settings.driverRaceEnabled &&
-      driver.isOnline;
+      driver.isOnline &&
+      !tripOfferIsExpired(trip.scheduledAt);
     if (!assignedToDriver && !availableToDriver)
       throw new HttpException("Trip not found", HttpStatus.NOT_FOUND);
     return driverTripResponse(trip);
@@ -4262,6 +4342,9 @@ class DriverAuthController {
       include: { payment: true },
     });
     if (!trip) throw new HttpException("Trip not found", HttpStatus.NOT_FOUND);
+    const now = new Date();
+    if (tripOfferIsExpired(trip.scheduledAt, now))
+      throw new HttpException("Trip offer has expired", HttpStatus.GONE);
     const assignedToDriver =
       trip.driverId === driver.id &&
       trip.executionPhase === "DRIVER_PENDING_ACCEPTANCE" &&
@@ -4275,7 +4358,7 @@ class DriverAuthController {
       if (!driver.isOnline)
         throw new ForbiddenException("Driver must be online to accept trips");
     }
-    const assignedVehicle = await primaryDriverVehicle(prisma, driver.id, true);
+    const assignedVehicle = await requireActiveDriverVehicle(prisma, driver.id);
     const result = await prisma.trip.updateMany({
       where: assignedToDriver
         ? {
@@ -4284,6 +4367,7 @@ class DriverAuthController {
             status: "CONFIRMED",
             executionPhase: "DRIVER_PENDING_ACCEPTANCE",
             acceptedAt: null,
+            scheduledAt: { gte: tripOfferCutoff(now) },
             payment: { is: { status: "PAID" } },
           }
         : {
@@ -4291,6 +4375,7 @@ class DriverAuthController {
             driverId: null,
             status: "CONFIRMED",
             executionPhase: "WAITING_DRIVER",
+            scheduledAt: { gte: tripOfferCutoff(now) },
             payment: { is: { status: "PAID" } },
           },
       data: {
@@ -4325,6 +4410,7 @@ class DriverOrderUrlController {
   @Get(":token")
   async details(@Req() req: RequestLike, @Param("token") token: string) {
     const { session } = await reviewedDriverFrom(req);
+    await requireActiveDriverVehicle(prisma, session.sub);
     const item = await prisma.tripOrderUrl.findUnique({
       where: { tokenHash: orderUrlTokenHash(token) },
       include: {
@@ -4349,6 +4435,8 @@ class DriverOrderUrlController {
         "Trip has been accepted by another driver",
         HttpStatus.CONFLICT,
       );
+    if (tripOfferIsExpired(item.trip.scheduledAt, now))
+      throw new HttpException("Trip offer has expired", HttpStatus.GONE);
     return {
       token,
       validFrom: item.validFrom.toISOString(),
@@ -4379,7 +4467,7 @@ class DriverOrderUrlController {
         throw new ForbiddenException("Order URL is assigned to another driver");
       const driver = await tx.driver.findUnique({ where: { id: session.sub } });
       if (!driver) throw new UnauthorizedException("Driver not found");
-      const assignedVehicle = await primaryDriverVehicle(tx, driver.id, true);
+      const assignedVehicle = await requireActiveDriverVehicle(tx, driver.id);
       const trip = await tx.trip.findUnique({ where: { id: item.tripId } });
       if (
         !trip ||
@@ -4388,6 +4476,8 @@ class DriverOrderUrlController {
         trip.executionPhase === "IN_PROGRESS"
       )
         throw new HttpException("Trip is not available", HttpStatus.CONFLICT);
+      if (tripOfferIsExpired(trip.scheduledAt, now))
+        throw new HttpException("Trip offer has expired", HttpStatus.GONE);
       if (!item.driverId && trip.driverId && trip.driverId !== driver.id)
         throw new HttpException(
           "Trip has been accepted by another driver",
@@ -4407,21 +4497,36 @@ class DriverOrderUrlController {
           "Order URL is no longer available",
           HttpStatus.CONFLICT,
         );
-      return tx.trip.update({
-        where: { id: trip.id },
+      const accepted = await tx.trip.updateMany({
+        where: {
+          id: trip.id,
+          driverId: trip.driverId,
+          status: "CONFIRMED",
+          acceptedAt: null,
+          completedAt: null,
+          scheduledAt: { gte: tripOfferCutoff(now) },
+        },
         data: {
           driverId: driver.id,
           driverName: driver.name,
           driverPhone: `${driver.phoneCountryCode} ${driver.phone}`,
-          vehiclePlate: assignedVehicle?.hkPlate || assignedVehicle?.macauPlate || assignedVehicle?.mainlandPlate || null,
-          vehicleHkPlate: assignedVehicle?.hkPlate || null,
-          vehicleMacauPlate: assignedVehicle?.macauPlate || null,
-          vehicleMainlandPlate: assignedVehicle?.mainlandPlate || null,
+          vehiclePlate: assignedVehicle.hkPlate || assignedVehicle.macauPlate || assignedVehicle.mainlandPlate || null,
+          vehicleHkPlate: assignedVehicle.hkPlate || null,
+          vehicleMacauPlate: assignedVehicle.macauPlate || null,
+          vehicleMainlandPlate: assignedVehicle.mainlandPlate || null,
           status: "CONFIRMED",
           executionPhase: "DRIVER_ASSIGNED",
           assignedAt: now,
           acceptedAt: now,
         },
+      });
+      if (accepted.count !== 1)
+        throw new HttpException(
+          "Trip is no longer available",
+          HttpStatus.CONFLICT,
+        );
+      return tx.trip.findUniqueOrThrow({
+        where: { id: trip.id },
         include: { user: true, driver: true },
       });
     });
@@ -5445,6 +5550,24 @@ class AdminController {
     }
     const templateType = body.templateType?.trim() || "system";
     const important = Boolean(body.important);
+    const uniqueDriverIds = [...new Set(driverIds)];
+    let eligibleDriverIds = uniqueDriverIds;
+    if (!important && uniqueDriverIds.length) {
+      const preferences = await prisma.driverNotificationPreference.findMany({
+        where: { driverId: { in: uniqueDriverIds } },
+      });
+      const preferencesByDriver = new Map(
+        preferences.map((preference) => [preference.driverId, preference]),
+      );
+      eligibleDriverIds = uniqueDriverIds.filter((driverId) => {
+        const preference = preferencesByDriver.get(driverId);
+        if (!preference) return true;
+        if (!preference.notificationsOn) return false;
+        if (templateType === "order") return preference.orderOn;
+        if (templateType === "settlement") return preference.settlementOn;
+        return preference.systemOn;
+      });
+    }
     const records: Array<{
       title: string;
       content: string;
@@ -5462,7 +5585,7 @@ class AdminController {
         important,
         userId,
       })),
-      ...[...new Set(driverIds)].map((driverId) => ({
+      ...eligibleDriverIds.map((driverId) => ({
         title,
         content,
         audience: "DRIVER",

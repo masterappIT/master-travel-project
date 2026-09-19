@@ -27,6 +27,17 @@ model Notification {
   @@index([important, createdAt])
 }
 
+model DriverNotificationPreference {
+  driverId          String   @id
+  notificationsOn   Boolean  @default(true)
+  orderOn           Boolean  @default(true)
+  settlementOn      Boolean  @default(true)
+  systemOn          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  driver            Driver   @relation(fields: [driverId], references: [id], onDelete: Cascade)
+}
+
 model NotificationTemplate {
   id        String   @id @default(cuid())
   name      String
@@ -621,6 +632,7 @@ model Driver {
   otpChallenges            DriverOtpChallenge[]
   sessions                 DriverSession[]
   notifications            Notification[]
+  notificationPreference   DriverNotificationPreference?
   orderUrls                TripOrderUrl[]
   vehicleAssignments       DriverVehicleAssignment[]
 

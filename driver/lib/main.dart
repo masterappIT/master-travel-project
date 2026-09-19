@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'app/router.dart';
 import 'app/route_names.dart';
 import 'core/api/driver_api_client.dart';
+import 'core/state/driver_language_preference.dart';
 
 import 'package:driver_web/core/tokens/driver_tokens.dart';
 
@@ -41,40 +42,48 @@ class DriverApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        fontFamily: 'Noto Sans TC',
-        useMaterial3: true,
-        scaffoldBackgroundColor: DriverColors.background,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: DriverColors.primary,
-          surface: DriverColors.surface,
-          brightness: Brightness.light,
-        ),
-        cardTheme: CardThemeData(
-          color: DriverColors.surface,
-          elevation: 0,
-          margin: EdgeInsets.zero,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(DriverRadii.card),
-            side: const BorderSide(color: DriverColors.divider),
+    return ValueListenableBuilder<String>(
+      valueListenable: DriverLanguagePreference.instance,
+      builder: (context, language, _) => MaterialApp(
+        debugShowCheckedModeBanner: false,
+        locale: language == DriverLanguagePreference.english
+            ? const Locale('en')
+            : language == DriverLanguagePreference.simplifiedChinese
+                ? const Locale('zh', 'CN')
+                : const Locale('zh', 'TW'),
+        theme: ThemeData(
+          fontFamily: 'Noto Sans TC',
+          useMaterial3: true,
+          scaffoldBackgroundColor: DriverColors.background,
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: DriverColors.primary,
+            surface: DriverColors.surface,
+            brightness: Brightness.light,
+          ),
+          cardTheme: CardThemeData(
+            color: DriverColors.surface,
+            elevation: 0,
+            margin: EdgeInsets.zero,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(DriverRadii.card),
+              side: const BorderSide(color: DriverColors.divider),
+            ),
+          ),
+          pageTransitionsTheme: const PageTransitionsTheme(
+            builders: {
+              TargetPlatform.android: _NoPageTransitionBuilder(),
+              TargetPlatform.iOS: _NoPageTransitionBuilder(),
+              TargetPlatform.macOS: _NoPageTransitionBuilder(),
+              TargetPlatform.windows: _NoPageTransitionBuilder(),
+              TargetPlatform.linux: _NoPageTransitionBuilder(),
+              TargetPlatform.fuchsia: _NoPageTransitionBuilder(),
+            },
           ),
         ),
-        pageTransitionsTheme: const PageTransitionsTheme(
-          builders: {
-            TargetPlatform.android: _NoPageTransitionBuilder(),
-            TargetPlatform.iOS: _NoPageTransitionBuilder(),
-            TargetPlatform.macOS: _NoPageTransitionBuilder(),
-            TargetPlatform.windows: _NoPageTransitionBuilder(),
-            TargetPlatform.linux: _NoPageTransitionBuilder(),
-            TargetPlatform.fuchsia: _NoPageTransitionBuilder(),
-          },
-        ),
+        routes: DriverRouter.builders,
+        home: null,
+        initialRoute: initialRoute,
       ),
-      routes: DriverRouter.builders,
-      home: null,
-      initialRoute: initialRoute,
     );
   }
 }

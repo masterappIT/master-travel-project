@@ -1,8 +1,8 @@
-import 'dart:html' as html;
-
 import 'package:flutter/material.dart';
 
+import 'core/api/driver_api_client.dart';
 import 'core/layout/driver_page_shell.dart';
+import 'core/state/driver_language_preference.dart';
 import 'core/tokens/driver_tokens.dart';
 
 class NotificationSettingsPage extends StatefulWidget {
@@ -14,7 +14,10 @@ class NotificationSettingsPage extends StatefulWidget {
 }
 
 class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
-  static const _storageKey = 'driver_notification_settings';
+  final _api = DriverApiClient.instance;
+  bool _loading = true;
+  bool _saving = false;
+  String? _error;
   bool _pushEnabled = true;
   bool _orderEnabled = true;
   bool _settlementEnabled = true;
@@ -23,27 +26,62 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
   @override
   void initState() {
     super.initState();
-    final values = html.window.localStorage[_storageKey]?.split(',');
-    if (values?.length == 4) {
-      _pushEnabled = values![0] == '1';
-      _orderEnabled = values[1] == '1';
-      _settlementEnabled = values[2] == '1';
-      _systemEnabled = values[3] == '1';
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final values = await _api.notificationPreferences();
+      if (!mounted) return;
+      setState(() {
+        _pushEnabled = values['notificationsOn'] != false;
+        _orderEnabled = values['orderOn'] != false;
+        _settlementEnabled = values['settlementOn'] != false;
+        _systemEnabled = values['systemOn'] != false;
+        _loading = false;
+      });
+    } on DriverApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _error = error.message;
+        _loading = false;
+      });
     }
   }
 
-  void _save() {
-    html.window.localStorage[_storageKey] = [
+  Future<void> _setValue(void Function() update) async {
+    if (_saving) return;
+    final previous = [
       _pushEnabled,
       _orderEnabled,
       _settlementEnabled,
       _systemEnabled,
-    ].map((value) => value ? '1' : '0').join(',');
-  }
-
-  void _setValue(void Function() update) {
-    setState(update);
-    _save();
+    ];
+    setState(() {
+      update();
+      _saving = true;
+      _error = null;
+    });
+    try {
+      await _api.updateNotificationPreferences({
+        'notificationsOn': _pushEnabled,
+        'orderOn': _orderEnabled,
+        'settlementOn': _settlementEnabled,
+        'systemOn': _systemEnabled,
+      });
+      if (!mounted) return;
+      setState(() => _saving = false);
+    } on DriverApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _pushEnabled = previous[0];
+        _orderEnabled = previous[1];
+        _settlementEnabled = previous[2];
+        _systemEnabled = previous[3];
+        _saving = false;
+        _error = error.message;
+      });
+    }
   }
 
   @override
@@ -55,37 +93,59 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _SettingsHeader(title: '通知設定'),
+          _SettingsHeader(
+              title: driverText('通知設定', '通知设置', 'Notification settings')),
           const SizedBox(height: DriverSpacing.xl),
-          const Text('通知偏好',
+          Text(driverText('通知偏好', '通知偏好', 'Notification preferences'),
               style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w700,
                   color: DriverColors.text)),
           const SizedBox(height: DriverSpacing.sm),
-          _SettingsCard(children: [
-            _ToggleRow(
-                title: '推送通知',
-                detail: '接收司機端重要通知',
-                value: _pushEnabled,
-                onChanged: (value) => _setValue(() => _pushEnabled = value)),
-            _ToggleRow(
-                title: '新訂單通知',
-                detail: '有可接訂單時通知我',
-                value: _orderEnabled,
-                onChanged: (value) => _setValue(() => _orderEnabled = value)),
-            _ToggleRow(
-                title: '結算通知',
-                detail: '結算完成或狀態更新時通知我',
-                value: _settlementEnabled,
-                onChanged: (value) =>
-                    _setValue(() => _settlementEnabled = value)),
-            _ToggleRow(
-                title: '系統通知',
-                detail: '服務公告及帳戶安全提醒',
-                value: _systemEnabled,
-                onChanged: (value) => _setValue(() => _systemEnabled = value)),
-          ]),
+          if (_loading)
+            const Center(child: CircularProgressIndicator())
+          else ...[
+            if (_error != null) ...[
+              Text(_error!,
+                  style: const TextStyle(color: DriverColors.warningText)),
+              const SizedBox(height: DriverSpacing.sm),
+            ],
+            _SettingsCard(children: [
+              _ToggleRow(
+                  title: driverText('推送通知', '推送通知', 'Notifications'),
+                  detail: driverText('接收司機端重要通知', '接收司机端重要通知',
+                      'Receive important driver updates'),
+                  value: _pushEnabled,
+                  onChanged: _saving
+                      ? null
+                      : (value) => _setValue(() => _pushEnabled = value)),
+              _ToggleRow(
+                  title:
+                      driverText('新訂單通知', '新订单通知', 'New order notifications'),
+                  detail: driverText('有可接訂單時通知我', '有可接订单时通知我',
+                      'Notify me about available orders'),
+                  value: _orderEnabled,
+                  onChanged: _saving
+                      ? null
+                      : (value) => _setValue(() => _orderEnabled = value)),
+              _ToggleRow(
+                  title: driverText('結算通知', '结算通知', 'Settlement notifications'),
+                  detail: driverText('結算完成或狀態更新時通知我', '结算完成或状态更新时通知我',
+                      'Notify me about settlement updates'),
+                  value: _settlementEnabled,
+                  onChanged: _saving
+                      ? null
+                      : (value) => _setValue(() => _settlementEnabled = value)),
+              _ToggleRow(
+                  title: driverText('系統通知', '系统通知', 'System notifications'),
+                  detail: driverText('服務公告及帳戶安全提醒', '服务公告及账户安全提醒',
+                      'Service and account security updates'),
+                  value: _systemEnabled,
+                  onChanged: _saving
+                      ? null
+                      : (value) => _setValue(() => _systemEnabled = value)),
+            ]),
+          ],
         ],
       ),
     );
@@ -158,7 +218,7 @@ class _ToggleRow extends StatelessWidget {
   final String title;
   final String detail;
   final bool value;
-  final ValueChanged<bool> onChanged;
+  final ValueChanged<bool>? onChanged;
 
   @override
   Widget build(BuildContext context) => Padding(

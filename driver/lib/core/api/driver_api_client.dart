@@ -320,6 +320,16 @@ class DriverApiClient {
           Uri.parse(
               '$baseUrl/driver/auth/trips/${Uri.encodeComponent(id)}/complete'),
           headers: _headers));
+  Future<Map<String, dynamic>> notificationPreferences() async =>
+      _decode(await _client.get(
+          Uri.parse('$baseUrl/driver/auth/notification-preferences'),
+          headers: _headers));
+  Future<Map<String, dynamic>> updateNotificationPreferences(
+          Map<String, bool> fields) async =>
+      _decode(await _client.patch(
+          Uri.parse('$baseUrl/driver/auth/notification-preferences'),
+          headers: _headers,
+          body: jsonEncode(fields)));
   Future<List<dynamic>> notifications() async => _decodeList(await _client
       .get(Uri.parse('$baseUrl/driver/auth/notifications'), headers: _headers));
   Future<Map<String, dynamic>> readNotification(String id) async =>

@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
-import 'about_page.dart';
 import 'app/route_names.dart';
-import 'contact_support_page.dart';
 import 'core/api/driver_api_client.dart';
 import 'core/layout/driver_page_shell.dart';
 import 'core/state/driver_currency_preference.dart';
+import 'core/state/driver_language_preference.dart';
 import 'core/navigation/driver_navigation.dart';
 
 import 'package:driver_web/core/tokens/driver_tokens.dart';
@@ -39,14 +38,24 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Future<void> _loadProfile() async {
     try {
-      final results =
-          await Future.wait<dynamic>([_api.me(), _api.statistics()]);
+      final results = await Future.wait<dynamic>([
+        _api.me(),
+        _api.statistics(),
+        _api.listDriverVehicles(),
+      ]);
       final driver = Map<String, dynamic>.from(results[0] as Map);
       final statistics = Map<String, dynamic>.from(results[1] as Map);
+      final vehicles = Map<String, dynamic>.from(results[2] as Map);
+      final vehicleItems = vehicles['data'] is List
+          ? List<dynamic>.from(vehicles['data'] as List)
+          : const <dynamic>[];
       if (!mounted) return;
       setState(() {
         _name = driver['name']?.toString() ?? _name;
-        _vehicleSummary = _vehicleSummaryFrom(driver);
+        _vehicleSummary = vehicleItems.isEmpty
+            ? '尚未登記車輛'
+            : _vehicleSummaryFrom(
+                Map<String, dynamic>.from(vehicleItems.first as Map));
         final hongKongMacauCode =
             driver['hongKongMacauCountryCode']?.toString() ??
                 (driver['phoneCountryCode'] == '+853' ? '+853' : '+852');
@@ -63,7 +72,8 @@ class _ProfilePageState extends State<ProfilePage> {
             ? '+86 未填寫'
             : '+86 $mainlandNumber';
         _wechatId = driver['wechatId']?.toString();
-        _hasWechatQrCode = driver['wechatQrCodeUrl']?.toString().isNotEmpty ?? false;
+        _hasWechatQrCode =
+            driver['wechatQrCodeUrl']?.toString().isNotEmpty ?? false;
         final settlement = statistics['settlement'] is Map
             ? Map<String, dynamic>.from(statistics['settlement'] as Map)
             : <String, dynamic>{};
@@ -81,10 +91,10 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
-  String _vehicleSummaryFrom(Map<String, dynamic> driver) {
-    final plateType = driver['plateType']?.toString().trim();
-    final category = driver['vehicleCategory']?.toString().trim();
-    final region = (driver['hkPlate']?.toString().trim().isNotEmpty ?? false)
+  String _vehicleSummaryFrom(Map<String, dynamic> vehicle) {
+    final plateType = vehicle['plateType']?.toString().trim();
+    final category = vehicle['vehicleCategory']?.toString().trim();
+    final region = (vehicle['hkPlate']?.toString().trim().isNotEmpty ?? false)
         ? '香港'
         : '香港';
     return [
@@ -203,30 +213,30 @@ class _ProfilePageState extends State<ProfilePage> {
             ),
             const SizedBox(height: DriverSpacing.xl),
             _MenuCard(
-              title: '主要功能',
+              title: driverText('主要功能', '主要功能', 'Main features'),
               items: [
                 _MenuItem(
-                  '個人資料',
+                  driverText('個人資料', '个人资料', 'Personal details'),
                   'assets/profile-user.svg',
                   _IconTone.neutral,
                   onTap: _openProfileEditor,
                 ),
                 _MenuItem(
-                  '車輛資料',
+                  driverText('車輛資料', '车辆资料', 'Vehicle details'),
                   'assets/profile-vehicle.svg',
                   _IconTone.neutral,
                   onTap: () =>
                       DriverNavigation.push(context, DriverRouteNames.vehicle),
                 ),
                 _MenuItem(
-                  '接單紀錄',
+                  driverText('接單紀錄', '接单记录', 'Trip history'),
                   'assets/profile-clipboard.svg',
                   _IconTone.neutral,
                   onTap: () => DriverNavigation.push(
                       context, DriverRouteNames.orderHistory),
                 ),
                 _MenuItem(
-                  '航班查詢',
+                  driverText('航班查詢', '航班查询', 'Flight search'),
                   'assets/profile-fps.svg',
                   _IconTone.neutral,
                   detail: '查詢香港國際機場離港航班',
@@ -237,30 +247,36 @@ class _ProfilePageState extends State<ProfilePage> {
             ),
             const SizedBox(height: DriverSpacing.xl),
             _MenuCard(
-              title: '收款設定',
+              title: driverText('收款設定', '收款设置', 'Payment settings'),
               items: [
                 _MenuItem('收款幣種', 'assets/profile-fps.svg', _IconTone.warning,
                     detail: '港幣 HKD、人民幣 CNY',
                     onTap: () => DriverNavigation.push(
                         context, DriverRouteNames.currency)),
                 _MenuItem(
-                    '微信支付', 'assets/profile-wechat.svg',
-                    _wechatId != null && _wechatId!.isNotEmpty && _hasWechatQrCode
+                    '微信支付',
+                    'assets/profile-wechat.svg',
+                    _wechatId != null &&
+                            _wechatId!.isNotEmpty &&
+                            _hasWechatQrCode
                         ? _IconTone.success
                         : _IconTone.neutral,
-                    detail: _wechatId != null && _wechatId!.isNotEmpty && _hasWechatQrCode
+                    detail: _wechatId != null &&
+                            _wechatId!.isNotEmpty &&
+                            _hasWechatQrCode
                         ? '已綁定：$_wechatId'
-                        : '未綁定',
-                    onTap: () async {
-                      final result = await DriverNavigation.push(
-                          context, DriverRouteNames.wechatPayment);
-                      if (result is Map<String, dynamic> && mounted) {
-                        setState(() {
-                          _wechatId = result['wechatId']?.toString();
-                          _hasWechatQrCode = result['wechatQrCodeUrl']?.toString().isNotEmpty ?? false;
-                        });
-                      }
-                    }),
+                        : '未綁定', onTap: () async {
+                  final result = await DriverNavigation.push(
+                      context, DriverRouteNames.wechatPayment);
+                  if (result is Map<String, dynamic> && mounted) {
+                    setState(() {
+                      _wechatId = result['wechatId']?.toString();
+                      _hasWechatQrCode =
+                          result['wechatQrCodeUrl']?.toString().isNotEmpty ??
+                              false;
+                    });
+                  }
+                }),
                 _MenuItem('支付寶', 'assets/profile-fps.svg', _IconTone.neutral,
                     detail: '未綁定'),
                 _MenuItem(
@@ -270,14 +286,20 @@ class _ProfilePageState extends State<ProfilePage> {
             ),
             const SizedBox(height: DriverSpacing.xl),
             _MenuCard(
-              title: '設定',
+              title: driverText('設定', '设置', 'Settings'),
               items: [
-                _MenuItem('通知設定', 'assets/profile-bell.svg', _IconTone.neutral,
+                _MenuItem(driverText('通知設定', '通知设置', 'Notifications'),
+                    'assets/profile-bell.svg', _IconTone.neutral,
                     onTap: () => DriverNavigation.push(
                         context, DriverRouteNames.notificationSettings)),
-                _MenuItem('語言設定', 'assets/profile-fps.svg', _IconTone.neutral,
-                    onTap: () => DriverNavigation.push(
-                        context, DriverRouteNames.languageSettings)),
+                _MenuItem(
+                    driverText('語言設定', '语言设置', 'Language'),
+                    'assets/profile-fps.svg',
+                    _IconTone.neutral, onTap: () async {
+                  await DriverNavigation.push(
+                      context, DriverRouteNames.languageSettings);
+                  if (mounted) setState(() {});
+                }),
                 _MenuItem('自動結算', 'assets/profile-fps.svg', _IconTone.neutral,
                     toggle: true),
                 _MenuItem('結算方式', 'assets/profile-fps.svg', _IconTone.neutral),
@@ -285,7 +307,7 @@ class _ProfilePageState extends State<ProfilePage> {
             ),
             const SizedBox(height: DriverSpacing.xl),
             _MenuCard(
-              title: '其他',
+              title: driverText('其他', '其他', 'Other'),
               items: [
                 _MenuItem('關於我們', 'assets/profile-fps.svg', _IconTone.neutral,
                     onTap: () =>
@@ -533,15 +555,15 @@ class _MenuRow extends StatelessWidget {
       };
 
   IconData get _icon => switch (item.label) {
-        '個人資料' => Icons.person_outline_rounded,
-        '車輛資料' => Icons.directions_car_outlined,
-        '接單紀錄' => Icons.receipt_long_outlined,
+        '個人資料' || '个人资料' || 'Personal details' => Icons.person_outline_rounded,
+        '車輛資料' || '车辆资料' || 'Vehicle details' => Icons.directions_car_outlined,
+        '接單紀錄' || '接单记录' || 'Trip history' => Icons.receipt_long_outlined,
         '收款幣種' => Icons.payments_outlined,
         '微信支付' => Icons.qr_code_2_rounded,
         '支付寶' => Icons.account_balance_wallet_rounded,
         'FPS 轉數快' => Icons.swap_horizontal_circle_outlined,
-        '通知設定' => Icons.notifications_none_rounded,
-        '語言設定' => Icons.language_rounded,
+        '通知設定' || '通知设置' || 'Notifications' => Icons.notifications_none_rounded,
+        '語言設定' || '语言设置' || 'Language' => Icons.language_rounded,
         '自動結算' => Icons.autorenew_rounded,
         '結算方式' => Icons.account_balance_rounded,
         '關於我們' => Icons.info_outline_rounded,

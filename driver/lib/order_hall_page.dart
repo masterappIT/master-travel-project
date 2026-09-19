@@ -4,6 +4,7 @@ import 'app/route_names.dart';
 import 'core/api/driver_api_client.dart';
 import 'core/layout/driver_page_shell.dart';
 import 'core/navigation/driver_navigation.dart';
+import 'core/state/driver_language_preference.dart';
 import 'core/state/driver_status.dart';
 
 import 'package:driver_web/core/tokens/driver_tokens.dart';
@@ -80,7 +81,7 @@ class _OrderHallPageState extends State<OrderHallPage> {
   }
 
   String _formatPrice(dynamic price, dynamic currency) {
-    if (price is! num) return '待確認';
+    if (price is! num) return driverText('待確認', '待确认', 'Pending');
     final code = currency?.toString();
     final symbol = code == 'HKD'
         ? 'HK\$'
@@ -124,16 +125,18 @@ class _OrderHallPageState extends State<OrderHallPage> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Column(
+                      Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('接單大廳',
+                          Text(driverText('接單大廳', '接单大厅', 'Order hall'),
                               style: TextStyle(
                                   fontSize: 24,
                                   fontWeight: FontWeight.w800,
                                   color: DriverColors.text)),
                           SizedBox(height: DriverSpacing.xs),
-                          Text('掌握可接行程與目前工作',
+                          Text(
+                              driverText('掌握可接行程與目前工作', '掌握可接行程与目前工作',
+                                  'Available and active trips'),
                               style: TextStyle(
                                   fontSize: DriverTypography.label,
                                   color: DriverColors.secondaryText)),
@@ -159,13 +162,16 @@ class _OrderHallPageState extends State<OrderHallPage> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(_selectedTab == 0 ? '可接行程' : '進行中行程',
+                    Text(
+                        _selectedTab == 0
+                            ? driverText('可接行程', '可接行程', 'Available trips')
+                            : driverText('進行中行程', '进行中行程', 'Active trips'),
                         style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w700,
                             color: DriverColors.text)),
                     Text(
-                        '${_selectedTab == 0 ? _available.length : _accepted.length} 筆',
+                        '${_selectedTab == 0 ? _available.length : _accepted.length} ${driverText('筆', '笔', 'trips')}',
                         style: const TextStyle(
                             fontSize: DriverTypography.label,
                             color: DriverColors.secondaryText)),
@@ -195,17 +201,22 @@ class _OrderHallPageState extends State<OrderHallPage> {
                       child: _OrderCard(
                         passenger: item['passengerName']?.toString() ??
                             item['user']?['name']?.toString() ??
-                            '乘客',
+                            driverText('乘客', '乘客', 'Passenger'),
                         time: _formatTripTime(item['scheduledAt']),
                         price: _formatPrice(item['price'], item['currency']),
                         origin: item['pickupAddress']?.toString() ??
                             item['origin']?.toString() ??
-                            '起點待確認',
+                            driverText('起點待確認', '起点待确认', 'Pickup pending'),
                         destination: item['dropoffAddress']?.toString() ??
                             item['destination']?.toString() ??
-                            '終點待確認',
-                        estimatedTime: pendingAssignment ? '等待確認接單' : '預估行程',
-                        actionLabel: pendingAssignment ? '確認訂單' : '接單',
+                            driverText('終點待確認', '终点待确认', 'Destination pending'),
+                        estimatedTime: pendingAssignment
+                            ? driverText(
+                                '等待確認接單', '等待确认接单', 'Awaiting confirmation')
+                            : driverText('預估行程', '预估行程', 'Estimated trip'),
+                        actionLabel: pendingAssignment
+                            ? driverText('確認訂單', '确认订单', 'Confirm')
+                            : driverText('接單', '接单', 'Accept'),
                         onTap: () => _openOrderDetail(item['id'].toString()),
                       ),
                     );
@@ -220,14 +231,15 @@ class _OrderHallPageState extends State<OrderHallPage> {
                       child: _OrderCard(
                         passenger: item['user']?['name']?.toString() ??
                             item['passengerName']?.toString() ??
-                            '乘客',
+                            driverText('乘客', '乘客', 'Passenger'),
                         time: _formatTripTime(item['scheduledAt']),
                         price: _formatPrice(item['price'], item['currency']),
-                        origin: item['pickupAddress']?.toString() ?? '起點待確認',
-                        destination:
-                            item['dropoffAddress']?.toString() ?? '終點待確認',
-                        estimatedTime: '已成功接單',
-                        actionLabel: '查看行程',
+                        origin: item['pickupAddress']?.toString() ??
+                            driverText('起點待確認', '起点待确认', 'Pickup pending'),
+                        destination: item['dropoffAddress']?.toString() ??
+                            driverText('終點待確認', '终点待确认', 'Destination pending'),
+                        estimatedTime: driverText('已成功接單', '已成功接单', 'Accepted'),
+                        actionLabel: driverText('查看行程', '查看行程', 'View trip'),
                         onTap: () => _openOrderDetail(item['id'].toString()),
                       ),
                     );
@@ -240,7 +252,7 @@ class _OrderHallPageState extends State<OrderHallPage> {
 }
 
 String _formatTripTime(dynamic value) {
-  if (value == null) return '時間待確認';
+  if (value == null) return driverText('時間待確認', '时间待确认', 'Time pending');
   final date = DateTime.tryParse(value.toString())?.toLocal();
   if (date == null) return value.toString();
   return '${date.year}/${date.month.toString().padLeft(2, '0')}/${date.day.toString().padLeft(2, '0')} ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
@@ -259,7 +271,10 @@ class _OnlineBadge extends StatelessWidget {
                 ? DriverColors.activeBlue
                 : DriverColors.warningBackground,
             borderRadius: BorderRadius.circular(DriverRadii.pill)),
-        child: Text(isOnline ? '線上接單中' : '目前離線',
+        child: Text(
+            isOnline
+                ? driverText('線上接單中', '线上接单中', 'Online')
+                : driverText('目前離線', '目前离线', 'Offline'),
             style: TextStyle(
                 fontSize: DriverTypography.caption,
                 fontWeight: FontWeight.w700,
@@ -279,11 +294,11 @@ class _OrderTabs extends StatelessWidget {
         spacing: 12,
         children: [
           _OrderTab(
-              label: '可接單',
+              label: driverText('可接單', '可接单', 'Available'),
               selected: selectedIndex == 0,
               onTap: () => onChanged(0)),
           _OrderTab(
-              label: '成功接單',
+              label: driverText('成功接單', '成功接单', 'Accepted'),
               selected: selectedIndex == 1,
               onTap: () => onChanged(1)),
         ],
@@ -468,7 +483,7 @@ class _EmptyAcceptedOrders extends StatelessWidget {
             color: DriverColors.surface,
             border: Border.all(color: DriverColors.divider),
             borderRadius: BorderRadius.circular(DriverRadii.card)),
-        child: const Text('暫無成功接單',
+        child: Text(driverText('暫無成功接單', '暂无成功接单', 'No accepted trips'),
             textAlign: TextAlign.center,
             style: TextStyle(
                 fontSize: DriverTypography.body,

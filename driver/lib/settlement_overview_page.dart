@@ -1,11 +1,55 @@
 import 'package:flutter/material.dart';
 
+import 'core/api/driver_api_client.dart';
 import 'core/layout/driver_page_shell.dart';
 import 'core/state/driver_currency_preference.dart';
 import 'core/tokens/driver_tokens.dart';
 
-class SettlementOverviewPage extends StatelessWidget {
+class SettlementOverviewPage extends StatefulWidget {
   const SettlementOverviewPage({super.key});
+
+  @override
+  State<SettlementOverviewPage> createState() => _SettlementOverviewPageState();
+}
+
+class _SettlementOverviewPageState extends State<SettlementOverviewPage> {
+  final _api = DriverApiClient.instance;
+  bool _loading = true;
+  String? _error;
+  String _settledAmount = '0';
+  String _unsettledAmount = '0';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadStatistics();
+  }
+
+  Future<void> _loadStatistics() async {
+    try {
+      final statistics = await _api.statistics();
+      final settlement = statistics['settlement'] is Map
+          ? Map<String, dynamic>.from(statistics['settlement'] as Map)
+          : <String, dynamic>{};
+      if (!mounted) return;
+      setState(() {
+        _settledAmount = _formatAmount(settlement['settledEarnings']);
+        _unsettledAmount = _formatAmount(settlement['unsettledEarnings']);
+        _loading = false;
+      });
+    } on DriverApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _error = error.message;
+        _loading = false;
+      });
+    }
+  }
+
+  String _formatAmount(dynamic value) {
+    final amount = value is num ? value : num.tryParse(value?.toString() ?? '');
+    return amount?.toStringAsFixed(2) ?? '0';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -58,21 +102,28 @@ class SettlementOverviewPage extends StatelessWidget {
               ),
             ),
             const SizedBox(height: DriverSpacing.xl),
-            _SettlementAmountCard(
-              label: '已結算',
-              amount: '0',
-              description: '已完成結算的收款金額',
-              color: DriverColors.primary,
-              background: DriverColors.infoBackground,
-            ),
-            const SizedBox(height: DriverSpacing.md),
-            _SettlementAmountCard(
-              label: '未結算',
-              amount: '0',
-              description: '等待結算的收款金額',
-              color: DriverColors.warningText,
-              background: DriverColors.warningBackground,
-            ),
+            if (_loading)
+              const Center(child: CircularProgressIndicator())
+            else if (_error != null)
+              Text(_error!,
+                  style: const TextStyle(color: DriverColors.warningText)),
+            if (!_loading && _error == null) ...[
+              _SettlementAmountCard(
+                label: '已結算',
+                amount: _settledAmount,
+                description: '已完成結算的收款金額',
+                color: DriverColors.primary,
+                background: DriverColors.infoBackground,
+              ),
+              const SizedBox(height: DriverSpacing.md),
+              _SettlementAmountCard(
+                label: '未結算',
+                amount: _unsettledAmount,
+                description: '等待結算的收款金額',
+                color: DriverColors.warningText,
+                background: DriverColors.warningBackground,
+              ),
+            ],
             const SizedBox(height: DriverSpacing.xl),
             _SettlementSection(
               title: '結算資訊',

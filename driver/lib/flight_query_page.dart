@@ -53,7 +53,7 @@ class _FlightQueryPageState extends State<FlightQueryPage> {
       context: context,
       initialDate: _selectedDate,
       firstDate: DateTime(2020),
-      lastDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
     );
     if (date == null || date == _selectedDate) return;
     setState(() => _selectedDate = date);

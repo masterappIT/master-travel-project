@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'core/state/driver_language_preference.dart';
 import 'core/tokens/driver_tokens.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
@@ -30,14 +31,16 @@ class FloatingNavBar extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
             _NavItem(
-                label: '首頁',
+                label: driverText('首頁', '首页', 'Home'),
                 asset: 'assets/icon-home.svg',
                 selected: selectedIndex == 0,
                 onTap: onHomeTap),
             _NavItem(
-                label: '接單', selected: selectedIndex == 1, onTap: onOrderTap),
+                label: driverText('接單', '接单', 'Orders'),
+                selected: selectedIndex == 1,
+                onTap: onOrderTap),
             _NavItem(
-                label: '我的',
+                label: driverText('我的', '我的', 'Profile'),
                 asset: 'assets/icon-person.svg',
                 selected: selectedIndex == 2,
                 onTap: onProfileTap),

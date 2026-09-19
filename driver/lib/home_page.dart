@@ -5,6 +5,7 @@ import 'app/route_names.dart';
 import 'core/api/driver_api_client.dart';
 import 'core/layout/driver_page_shell.dart';
 import 'core/navigation/driver_navigation.dart';
+import 'core/state/driver_language_preference.dart';
 import 'core/state/driver_status.dart';
 
 import 'package:driver_web/core/tokens/driver_tokens.dart';
@@ -35,6 +36,7 @@ class _HomePageState extends State<HomePage> {
   bool _loading = true;
   String? _error;
   Map<String, dynamic>? _driver;
+  Map<String, dynamic>? _primaryVehicle;
   Map<String, dynamic>? _statistics;
   bool _statsLoading = true;
   String? _statsError;
@@ -65,12 +67,23 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _loadDriver() async {
     try {
-      final result = await _api.me();
+      final results = await Future.wait<dynamic>([
+        _api.me(),
+        _api.listDriverVehicles(),
+      ]);
       if (!mounted) return;
+      final result = Map<String, dynamic>.from(results[0] as Map);
+      final vehicles = Map<String, dynamic>.from(results[1] as Map);
       final driver = Map<String, dynamic>.from(
           result['driver'] is Map ? result['driver'] as Map : result);
+      final vehicleItems = vehicles['data'] is List
+          ? List<dynamic>.from(vehicles['data'] as List)
+          : const <dynamic>[];
       setState(() {
         _driver = driver;
+        _primaryVehicle = vehicleItems.isEmpty
+            ? null
+            : Map<String, dynamic>.from(vehicleItems.first as Map);
         _isOnline = driver['isOnline'] == true;
         DriverStatusController.instance.isOnline.value = _isOnline;
         _loading = false;
@@ -143,9 +156,10 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  String _vehicleSummary(Map<String, dynamic>? driver) {
-    final plateType = driver?['plateType']?.toString().trim();
-    final category = driver?['vehicleCategory']?.toString().trim();
+  String _vehicleSummary(Map<String, dynamic>? vehicle) {
+    if (vehicle == null) return '尚未登記車輛';
+    final plateType = vehicle['plateType']?.toString().trim();
+    final category = vehicle['vehicleCategory']?.toString().trim();
     return [
       '香港',
       if (plateType != null && plateType.isNotEmpty) plateType,
@@ -174,7 +188,7 @@ class _HomePageState extends State<HomePage> {
             ),
             child: _ProfileHeader(
               name: (_driver?['name'] as String?) ?? (_loading ? '載入中…' : '司機'),
-              vehicleSummary: _vehicleSummary(_driver),
+              vehicleSummary: _vehicleSummary(_primaryVehicle),
               onNotificationTap: _showNotifications,
             ),
           ),
@@ -184,14 +198,15 @@ class _HomePageState extends State<HomePage> {
                 style: const TextStyle(color: DriverColors.warningText)),
           ],
           const SizedBox(height: DriverSpacing.xl),
-          const _SectionEyebrow('工作台總覽'),
+          _SectionEyebrow(driverText('工作台總覽', '工作台总览', 'Dashboard')),
           const SizedBox(height: DriverSpacing.sm),
           _StatusCard(
             isOnline: _isOnline,
             onChanged: _toggleOnline,
           ),
           const SizedBox(height: DriverSpacing.xl),
-          const _SectionEyebrow('收入與表現'),
+          _SectionEyebrow(
+              driverText('收入與表現', '收入与表现', 'Earnings & performance')),
           const SizedBox(height: DriverSpacing.sm),
           _EarningsCard(
               statistics: _statistics,
@@ -252,7 +267,8 @@ class _ProfileHeader extends StatelessWidget {
                       child: Padding(
                         padding:
                             EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        child: Text('已認證司機',
+                        child: Text(
+                            driverText('已認證司機', '已认证司机', 'Verified driver'),
                             style: TextStyle(
                                 fontSize: DriverTypography.caption,
                                 fontWeight: FontWeight.w700,
@@ -320,7 +336,12 @@ class _StatusCard extends StatelessWidget {
                       width: 12, height: 12),
                   const SizedBox(width: DriverSpacing.sm),
                   Flexible(
-                    child: Text(isOnline ? '目前狀態：在線接單' : '目前狀態：離線',
+                    child: Text(
+                        isOnline
+                            ? driverText(
+                                '目前狀態：在線接單', '目前状态：在线接单', 'Status: online')
+                            : driverText(
+                                '目前狀態：離線', '目前状态：离线', 'Status: offline'),
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                             fontSize: DriverTypography.bodyLarge,
@@ -386,7 +407,7 @@ class _EarningsCard extends StatelessWidget {
                 : Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('今日收入',
+                      Text(driverText('今日收入', '今日收入', "Today's earnings"),
                           style: TextStyle(
                               fontSize: DriverTypography.body,
                               color: DriverColors.secondaryText)),
@@ -403,12 +424,14 @@ class _EarningsCard extends StatelessWidget {
                       Row(children: [
                         Expanded(
                             child: _Stat(
-                                label: '今日接單',
+                                label:
+                                    driverText('今日接單', '今日接单', 'Trips today'),
                                 value:
                                     '${_number(today?['completedTrips'])} 單')),
                         Expanded(
                             child: _Stat(
-                                label: '在線時數',
+                                label:
+                                    driverText('在線時數', '在线时数', 'Online hours'),
                                 value: today?['onlineHours'] is num
                                     ? '${(today!['onlineHours'] as num).toStringAsFixed(1)} 小時'
                                     : '—')),
