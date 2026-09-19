@@ -9,6 +9,8 @@ import 'core/tokens/driver_tokens.dart';
 
 class VehicleFormData {
   const VehicleFormData({
+    this.id,
+    this.isPrimary = false,
     required this.ownership,
     required this.plateType,
     required this.category,
@@ -18,6 +20,21 @@ class VehicleFormData {
     required this.color,
   });
 
+  factory VehicleFormData.fromJson(Map<String, dynamic> json) =>
+      VehicleFormData(
+        id: json['id']?.toString(),
+        isPrimary: json['isPrimary'] == true,
+        ownership: json['vehicleOwnership']?.toString() ?? '香港',
+        plateType: json['plateType']?.toString() ?? '兩地牌',
+        category: json['vehicleCategory']?.toString() ?? '',
+        hongKongPlate: json['hkPlate']?.toString() ?? '',
+        macauPlate: json['macauPlate']?.toString() ?? '',
+        mainlandPlate: json['mainlandPlate']?.toString() ?? '',
+        color: json['vehicleColor']?.toString() ?? '',
+      );
+
+  final String? id;
+  final bool isPrimary;
   final String ownership;
   final String plateType;
   final String category;
@@ -28,9 +45,11 @@ class VehicleFormData {
 }
 
 class AddVehiclePage extends StatefulWidget {
-  const AddVehiclePage({super.key, this.initialData});
+  const AddVehiclePage({super.key, this.initialData, DriverApiClient? api})
+      : _api = api;
 
   final VehicleFormData? initialData;
+  final DriverApiClient? _api;
 
   @override
   State<AddVehiclePage> createState() => _AddVehiclePageState();
@@ -38,6 +57,8 @@ class AddVehiclePage extends StatefulWidget {
 
 class _AddVehiclePageState extends State<AddVehiclePage> {
   static const _ownershipOptions = ['香港', '澳門', '中國內地'];
+
+  DriverApiClient get _api => widget._api ?? DriverApiClient.instance;
   static const _plateTypeOptions = ['單牌', '兩地牌', '三地牌'];
 
   String _ownership = '香港';
@@ -70,7 +91,7 @@ class _AddVehiclePageState extends State<AddVehiclePage> {
 
   Future<void> _loadCategories() async {
     try {
-      final result = await DriverApiClient.instance.listVehicleCatalog();
+      final result = await _api.listVehicleCatalog();
       final categories = result['categories'];
       if (!mounted) return;
       setState(() {
@@ -163,7 +184,7 @@ class _AddVehiclePageState extends State<AddVehiclePage> {
     }
     setState(() => _isSaving = true);
     try {
-      await DriverApiClient.instance.updateProfile({
+      final fields = {
         'plateType': _plateType,
         'vehicleOwnership': _ownership,
         'hkPlate': normalizeHongKongPlate(_hkPlate.text).isEmpty
@@ -177,7 +198,13 @@ class _AddVehiclePageState extends State<AddVehiclePage> {
             : normalizeMainlandPlate(mainlandPlate),
         'vehicleCategory': _category,
         'vehicleColor': _color.text.trim(),
-      });
+      };
+      final vehicleId = widget.initialData?.id;
+      if (vehicleId == null) {
+        await _api.createVehicle(fields);
+      } else {
+        await _api.updateVehicle(vehicleId, fields);
+      }
       if (!mounted) return;
       Navigator.of(context).pop(true);
     } on DriverApiException catch (error) {

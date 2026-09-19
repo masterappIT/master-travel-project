@@ -256,7 +256,21 @@ class DriverApiClient {
     return _decode(await http.Response.fromStream(await request.send()));
   }
 
-  Future<Map<String, dynamic>> getVehicleProfile() async => me();
+  Future<Map<String, dynamic>> listDriverVehicles() async =>
+      _decode(await _client.get(Uri.parse('$baseUrl/driver/auth/vehicles'),
+          headers: _headers));
+
+  Future<Map<String, dynamic>> createVehicle(
+          Map<String, dynamic> fields) async =>
+      _decode(await _client.post(Uri.parse('$baseUrl/driver/auth/vehicles'),
+          headers: _headers, body: jsonEncode(fields)));
+
+  Future<Map<String, dynamic>> updateVehicle(
+          String id, Map<String, dynamic> fields) async =>
+      _decode(await _client.patch(
+          Uri.parse('$baseUrl/driver/auth/vehicles/${Uri.encodeComponent(id)}'),
+          headers: _headers,
+          body: jsonEncode(fields)));
 
   Future<Map<String, dynamic>> listVehicleCatalog() async => _decode(
       await _client.get(Uri.parse('$baseUrl/vehicles'), headers: _headers));

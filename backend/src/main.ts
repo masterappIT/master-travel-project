@@ -3671,6 +3671,142 @@ class DriverAuthController {
     return driverResponse(driver);
   }
 
+  @Get("vehicles")
+  async listMyVehicles(@Req() req: RequestLike) {
+    const session = await driverSessionFrom(req);
+    const assignments = await prisma.driverVehicleAssignment.findMany({
+      where: {
+        driverId: session.sub,
+        enabled: true,
+        vehicle: { enabled: true },
+      },
+      include: { vehicle: true },
+      orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }],
+    });
+    return {
+      data: assignments.map(({ vehicle, isPrimary }) => ({
+        ...driverVehicleResponse(vehicle),
+        isPrimary,
+      })),
+      total: assignments.length,
+    };
+  }
+
+  @Post("vehicles")
+  async createMyVehicle(
+    @Req() req: RequestLike,
+    @Body()
+    body: {
+      vehicleOwnership?: unknown;
+      plateType?: unknown;
+      hkPlate?: unknown;
+      macauPlate?: unknown;
+      mainlandPlate?: unknown;
+      vehicleCategory?: unknown;
+      vehicleColor?: unknown;
+    },
+  ) {
+    const { session } = await reviewedDriverFrom(req);
+    const vehicle = await this.validateVehicleInput(body);
+    const created = await prisma.$transaction(async (tx) => {
+      const primary = await tx.driverVehicleAssignment.findFirst({
+        where: {
+          driverId: session.sub,
+          enabled: true,
+          isPrimary: true,
+          vehicle: { enabled: true },
+        },
+        select: { id: true },
+      });
+      const item = await tx.driverVehicle.create({
+        data: {
+          id: `vehicle-${Date.now()}-${randomBytes(4).toString("hex")}`,
+          ...vehicle,
+          vehiclePhotos: [],
+        },
+      });
+      await tx.driverVehicleAssignment.create({
+        data: {
+          driverId: session.sub,
+          vehicleId: item.id,
+          isPrimary: !primary,
+        },
+      });
+      return item;
+    });
+    return driverVehicleResponse(created);
+  }
+
+  @Patch("vehicles/:id")
+  async updateMyVehicle(
+    @Req() req: RequestLike,
+    @Param("id") id: string,
+    @Body()
+    body: {
+      vehicleOwnership?: unknown;
+      plateType?: unknown;
+      hkPlate?: unknown;
+      macauPlate?: unknown;
+      mainlandPlate?: unknown;
+      vehicleCategory?: unknown;
+      vehicleColor?: unknown;
+    },
+  ) {
+    const { session } = await reviewedDriverFrom(req);
+    const vehicle = await this.validateVehicleInput(body);
+    const updated = await prisma.driverVehicle.updateMany({
+      where: {
+        id,
+        assignments: { some: { driverId: session.sub, enabled: true } },
+      },
+      data: vehicle,
+    });
+    if (!updated.count)
+      throw new HttpException("Vehicle not found", HttpStatus.NOT_FOUND);
+    return driverVehicleResponse(
+      await prisma.driverVehicle.findUniqueOrThrow({ where: { id } }),
+    );
+  }
+
+  private async validateVehicleInput(body: {
+    vehicleOwnership?: unknown;
+    plateType?: unknown;
+    hkPlate?: unknown;
+    macauPlate?: unknown;
+    mainlandPlate?: unknown;
+    vehicleCategory?: unknown;
+    vehicleColor?: unknown;
+  }) {
+    const normalized = normalizeVehiclePlateData(body);
+    const vehicleCategory =
+      typeof body.vehicleCategory === "string" ? body.vehicleCategory.trim() : "";
+    const vehicleColor =
+      typeof body.vehicleColor === "string" ? body.vehicleColor.trim() : "";
+    if (!vehicleCategory || !vehicleColor || !validVehiclePlateData(normalized))
+      throw new HttpException(
+        "Valid vehicle fields are required",
+        HttpStatus.BAD_REQUEST,
+      );
+    const category = await prisma.vehicleCategory.findFirst({
+      where: { name: vehicleCategory, enabled: true },
+      select: { id: true },
+    });
+    if (!category)
+      throw new HttpException(
+        "Vehicle category is not available",
+        HttpStatus.BAD_REQUEST,
+      );
+    return {
+      vehicleOwnership: normalized.vehicleOwnership,
+      plateType: normalized.plateType,
+      hkPlate: normalized.hkPlate || null,
+      macauPlate: normalized.macauPlate || null,
+      mainlandPlate: normalized.mainlandPlate || null,
+      vehicleCategory,
+      vehicleColor,
+    };
+  }
+
   @Post("status")
   async updateStatus(
     @Req() req: RequestLike,

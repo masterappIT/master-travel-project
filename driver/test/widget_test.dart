@@ -1,5 +1,9 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 
 import 'package:driver_web/app/route_names.dart';
 import 'package:driver_web/app/router.dart';
@@ -13,8 +17,8 @@ import 'package:driver_web/order_in_progress_page.dart';
 import 'package:driver_web/driver_profile_page.dart';
 import 'package:driver_web/profile_page.dart';
 import 'package:driver_web/registration_page.dart';
-import 'package:driver_web/vehicle_page.dart';
 import 'package:driver_web/add_vehicle_page.dart';
+import 'package:driver_web/core/api/driver_api_client.dart';
 
 Widget testApp(Widget home) {
   final routes = Map<String, WidgetBuilder>.from(DriverRouter.builders)
@@ -339,20 +343,70 @@ void main() {
     expect(find.text('車牌類型'), findsNothing);
   });
 
-  testWidgets('opens vehicle card in prefilled edit form',
-      (WidgetTester tester) async {
-    await tester.pumpWidget(testApp(const VehiclePage()));
+  test('maps assigned vehicle fields and primary status', () {
+    final vehicles = [
+      {
+        'id': 'vehicle-primary',
+        'isPrimary': true,
+        'vehicleOwnership': '香港',
+        'plateType': '兩地牌',
+        'vehicleCategory': '轎車',
+        'hkPlate': 'AB 1234',
+        'macauPlate': '',
+        'mainlandPlate': '粵Z CD5678',
+        'vehicleColor': '白色',
+      },
+      {
+        'id': 'vehicle-secondary',
+        'isPrimary': false,
+        'vehicleOwnership': '澳門',
+        'plateType': '單牌',
+        'vehicleCategory': 'MPV',
+        'hkPlate': '',
+        'macauPlate': 'AA-12-34',
+        'mainlandPlate': '',
+        'vehicleColor': '黑色',
+      },
+    ].map(VehicleFormData.fromJson).toList();
 
-    await tester.tap(find.text('兩地牌轎車'));
-    await tester.pumpAndSettle();
+    expect(vehicles, hasLength(2));
+    expect(vehicles.first.id, 'vehicle-primary');
+    expect(vehicles.first.isPrimary, isTrue);
+    expect(vehicles.first.mainlandPlate, '粵Z CD5678');
+    expect(vehicles.last.id, 'vehicle-secondary');
+    expect(vehicles.last.isPrimary, isFalse);
+    expect(vehicles.last.macauPlate, 'AA-12-34');
+  });
 
-    expect(find.text('新增車輛'), findsOneWidget);
-    expect(find.text('香港'), findsOneWidget);
-    expect(find.text('兩地牌'), findsOneWidget);
-    expect(find.text('轎車'), findsOneWidget);
-    expect(find.widgetWithText(TextField, 'AB 1234'), findsOneWidget);
-    expect(find.widgetWithText(TextField, 'CD 5678 粵Z'), findsOneWidget);
-    expect(find.text('白色'), findsOneWidget);
+  test('uses driver vehicle endpoints for list, create and update', () async {
+    final requests = <http.Request>[];
+    final api = DriverApiClient(
+      baseUrl: 'https://driver.example.test',
+      client: MockClient((request) async {
+        requests.add(request);
+        return http.Response('{}', 200);
+      }),
+    );
+    final fields = {
+      'vehicleOwnership': '香港',
+      'plateType': '單牌',
+      'hkPlate': 'AB 1234',
+      'vehicleCategory': '轎車',
+      'vehicleColor': '白色',
+    };
+
+    await api.listDriverVehicles();
+    await api.createVehicle(fields);
+    await api.updateVehicle('vehicle/1', fields);
+
+    expect(requests[0].method, 'GET');
+    expect(requests[0].url.path, '/driver/auth/vehicles');
+    expect(requests[1].method, 'POST');
+    expect(requests[1].url.path, '/driver/auth/vehicles');
+    expect(requests[2].method, 'PATCH');
+    expect(requests[2].url.path, '/driver/auth/vehicles/vehicle%2F1');
+    expect(jsonDecode(requests[1].body), fields);
+    expect(jsonDecode(requests[2].body), fields);
   });
 
   testWidgets('navigates from order history to order hall',

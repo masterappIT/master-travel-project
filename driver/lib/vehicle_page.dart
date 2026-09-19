@@ -9,15 +9,17 @@ import 'core/navigation/driver_navigation.dart';
 import 'core/tokens/driver_tokens.dart';
 
 class VehiclePage extends StatefulWidget {
-  const VehiclePage({super.key});
+  const VehiclePage({super.key, DriverApiClient? api}) : _api = api;
+
+  final DriverApiClient? _api;
 
   @override
   State<VehiclePage> createState() => _VehiclePageState();
 }
 
 class _VehiclePageState extends State<VehiclePage> {
-  final _api = DriverApiClient.instance;
-  Map<String, dynamic>? _driver;
+  DriverApiClient get _api => widget._api ?? DriverApiClient.instance;
+  List<VehicleFormData> _vehicles = const [];
   bool _loading = true;
   String? _error;
 
@@ -29,11 +31,18 @@ class _VehiclePageState extends State<VehiclePage> {
 
   Future<void> _loadVehicle() async {
     try {
-      final result = await _api.getVehicleProfile();
+      final result = await _api.listDriverVehicles();
+      final data = result['data'];
       if (!mounted) return;
       setState(() {
-        _driver = Map<String, dynamic>.from(
-            result['driver'] is Map ? result['driver'] as Map : result);
+        _vehicles = data is List
+            ? data
+                .whereType<Map>()
+                .map((item) =>
+                    VehicleFormData.fromJson(Map<String, dynamic>.from(item)))
+                .toList()
+            : const [];
+        _error = null;
         _loading = false;
       });
     } on DriverApiException catch (error) {
@@ -44,16 +53,6 @@ class _VehiclePageState extends State<VehiclePage> {
       });
     }
   }
-
-  VehicleFormData _vehicleData() => VehicleFormData(
-        ownership: _driver?['vehicleOwnership']?.toString() ?? '香港',
-        plateType: _driver?['plateType']?.toString() ?? '兩地牌',
-        category: _driver?['vehicleCategory']?.toString() ?? '',
-        hongKongPlate: _driver?['hkPlate']?.toString() ?? '',
-        macauPlate: _driver?['macauPlate']?.toString() ?? '',
-        mainlandPlate: _driver?['mainlandPlate']?.toString() ?? '',
-        color: _driver?['vehicleColor']?.toString() ?? '',
-      );
 
   Future<void> _openVehicleEditor({VehicleFormData? data}) async {
     final updated = await DriverNavigation.push(
@@ -80,7 +79,6 @@ class _VehiclePageState extends State<VehiclePage> {
         child: Center(child: Text(_error!)),
       );
     }
-    final data = _vehicleData();
     return DriverPageShell(
       selectedIndex: 2,
       showBottomNavigation: false,
@@ -90,13 +88,20 @@ class _VehiclePageState extends State<VehiclePage> {
         children: [
           _Header(onBack: () => Navigator.of(context).maybePop()),
           const SizedBox(height: DriverSpacing.lg),
-          _VehicleCard(
-              data: data,
-              title: data.category.isEmpty ? '車輛' : data.category,
-              status: '使用中',
-              active: true,
-              onEdit: () => _openVehicleEditor(data: data)),
-          const SizedBox(height: DriverSpacing.lg),
+          if (_vehicles.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: DriverSpacing.xl),
+              child: Center(child: Text('尚未登記車輛')),
+            ),
+          for (final data in _vehicles) ...[
+            _VehicleCard(
+                data: data,
+                title: data.category.isEmpty ? '車輛' : data.category,
+                status: data.isPrimary ? '使用中' : '已登記',
+                active: data.isPrimary,
+                onEdit: () => _openVehicleEditor(data: data)),
+            const SizedBox(height: DriverSpacing.lg),
+          ],
           OutlinedButton(
             onPressed: () => _openVehicleEditor(),
             style: OutlinedButton.styleFrom(
