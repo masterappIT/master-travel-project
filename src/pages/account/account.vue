@@ -66,7 +66,7 @@ import { closeCachedPage } from '../../utils/navigation'
 const { responsiveStyle } = useResponsiveCanvas()
 import { onShow } from '@dcloudio/uni-app'
 import { computed, reactive, ref, onMounted } from 'vue'
-import { getAuthUser, setAuthenticated } from '../../utils/auth'
+import { getAuthToken, getAuthUser, isAuthSessionCurrent, setAuthenticated } from '../../utils/auth'
 import { getClientProfile, updateClientProfile, uploadClientAvatar, getClientSecurity, updateClientSecurity, requestClientPhoneChange, verifyClientPhoneChange, linkClientProvider, unlinkClientProvider } from '../../services/api'
 type Provider = 'apple' | 'wechat'
 const stored = uni.getStorageSync('account-profile') || {}
@@ -260,8 +260,11 @@ const comingSoon = (name: string) => uni.showToast({ title: `${name}功能開發
 const goBack = () => closeCachedPage('/pages/trips/trips')
 
 const loadSecurity = async () => {
+  const authToken = getAuthToken()
+  if (!authToken) return
   try {
     const result = await getClientSecurity()
+    if (!isAuthSessionCurrent(authToken)) return
     countryCode.value = result.countryCode
     countryCodeIndex.value = Math.max(0, countryCodes.indexOf(result.countryCode))
     phoneNumber.value = result.phoneNumber
@@ -275,8 +278,11 @@ const loadSecurity = async () => {
 }
 
 onMounted(async () => {
+  const authToken = getAuthToken()
+  if (!authToken) return
   try {
     const user = await getClientProfile()
+    if (!isAuthSessionCurrent(authToken)) return
     form.name = user.name || form.name
     form.displayName = user.displayName || form.displayName
     form.gender = user.gender || form.gender
@@ -297,7 +303,10 @@ onMounted(async () => {
 })
 
 onShow(() => {
+  const authToken = getAuthToken()
+  if (!authToken) return
   void getClientProfile().then((user) => {
+    if (!isAuthSessionCurrent(authToken)) return
     avatarUrl.value = user.avatarUrl || ''
     form.name = user.name || ''
     form.displayName = user.displayName || ''

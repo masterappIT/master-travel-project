@@ -31,7 +31,7 @@ import { openCachedPage, setOrderReturnTarget } from '../../utils/navigation'
 const { responsiveStyle } = useResponsiveCanvas()
 import { onUnmounted, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
-import { isAuthenticated, getAuthUser, subscribeAuthUser } from '../../utils/auth'
+import { getAuthToken, isAuthenticated, getAuthUser, isAuthSessionCurrent, subscribeAuthUser } from '../../utils/auth'
 import ProfileHeader from '../../components/profile/ProfileHeader.vue'
 import UpgradeCard from '../../components/profile/UpgradeCard.vue'
 import WalletCard from '../../components/profile/WalletCard.vue'
@@ -56,9 +56,11 @@ const refreshProfile = async () => {
   const authUser = getAuthUser()
   avatarUrl.value = ''
   displayName.value = profile?.name || profile?.displayName || authUser?.name || authUser?.displayName || ''
-  if (authenticated.value) {
+  const authToken = getAuthToken()
+  if (authenticated.value && authToken) {
     try {
       const remote = await getClientProfile()
+      if (!isAuthSessionCurrent(authToken)) return
       displayName.value = remote.name || remote.displayName || displayName.value
       avatarUrl.value = remote.avatarUrl || ''
       const { avatarUrl: _cachedAvatarUrl, ...cachedProfile } = profile || {}
@@ -68,10 +70,14 @@ const refreshProfile = async () => {
       fareBalance.value = Number(remote.fareBalance) || 0
       persistWallet({ ...wallet, withdrawable: cashBalance.value, fare: fareBalance.value })
     } catch { /* keep cached profile when offline */ }
-  }
-  try {
-    unreadCount.value = (await listNotifications()).unread
-  } catch {
+    try {
+      const notifications = await listNotifications()
+      if (!isAuthSessionCurrent(authToken)) return
+      unreadCount.value = notifications.unread
+    } catch {
+      unreadCount.value = 0
+    }
+  } else {
     unreadCount.value = 0
   }
   const wallet = readWallet()
@@ -81,8 +87,16 @@ const refreshProfile = async () => {
 
 void refreshProfile()
 const unsubscribeAuthUser = subscribeAuthUser((user) => {
-  displayName.value = user.name || user.displayName || ''
-  avatarUrl.value = user.avatarUrl || ''
+  authenticated.value = Boolean(user)
+  displayName.value = user?.name || user?.displayName || ''
+  avatarUrl.value = user?.avatarUrl || ''
+  if (!user) {
+    unreadCount.value = 0
+    cashBalance.value = 0
+    fareBalance.value = 0
+    if (profilePollTimer) clearInterval(profilePollTimer)
+    profilePollTimer = undefined
+  }
 })
 onUnmounted(unsubscribeAuthUser)
 
