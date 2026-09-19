@@ -1,3 +1,7 @@
+import 'dart:async';
+import 'dart:html' as html;
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -18,6 +22,7 @@ class VehicleFormData {
     required this.macauPlate,
     required this.mainlandPlate,
     required this.color,
+    this.hasPhoto = false,
   });
 
   factory VehicleFormData.fromJson(Map<String, dynamic> json) =>
@@ -31,6 +36,8 @@ class VehicleFormData {
         macauPlate: json['macauPlate']?.toString() ?? '',
         mainlandPlate: json['mainlandPlate']?.toString() ?? '',
         color: json['vehicleColor']?.toString() ?? '',
+        hasPhoto: json['vehiclePhotos'] is List &&
+            (json['vehiclePhotos'] as List).isNotEmpty,
       );
 
   final String? id;
@@ -42,6 +49,7 @@ class VehicleFormData {
   final String macauPlate;
   final String mainlandPlate;
   final String color;
+  final bool hasPhoto;
 }
 
 class AddVehiclePage extends StatefulWidget {
@@ -71,6 +79,10 @@ class _AddVehiclePageState extends State<AddVehiclePage> {
 
   List<String> _categoryOptions = const [];
   bool _isSaving = false;
+  bool _isProcessingPhoto = false;
+  Uint8List? _vehiclePhotoBytes;
+  String? _vehiclePhotoName;
+  String? _vehiclePhotoMime;
 
   @override
   void initState() {
@@ -158,6 +170,111 @@ class _AddVehiclePageState extends State<AddVehiclePage> {
     });
   }
 
+  Future<Uint8List> _readBlob(html.Blob blob) {
+    final completer = Completer<Uint8List>();
+    final reader = html.FileReader();
+    reader.onLoad.listen((_) {
+      final result = reader.result;
+      if (result is ByteBuffer) {
+        completer.complete(result.asUint8List());
+      } else if (result is Uint8List) {
+        completer.complete(result);
+      } else {
+        completer.completeError(StateError('無法讀取圖片'));
+      }
+    });
+    reader.onError.listen((_) => completer.completeError(StateError('無法讀取圖片')));
+    reader.readAsArrayBuffer(blob);
+    return completer.future;
+  }
+
+  Future<Uint8List> _compressVehiclePhoto(html.File file) async {
+    const maxBytes = 2 * 1024 * 1024;
+    final objectUrl = html.Url.createObjectUrl(file);
+    try {
+      final image = html.ImageElement(src: objectUrl);
+      await image.onLoad.first;
+      var width = image.naturalWidth;
+      var height = image.naturalHeight;
+      if (width <= 0 || height <= 0) throw StateError('無法解碼圖片');
+      const maxDimension = 2048;
+      if (width > maxDimension || height > maxDimension) {
+        final ratio = maxDimension / (width > height ? width : height);
+        width = (width * ratio).round();
+        height = (height * ratio).round();
+      }
+      var quality = 0.88;
+      for (var attempt = 0; attempt < 12; attempt++) {
+        final canvas = html.CanvasElement(width: width, height: height);
+        canvas.context2D
+          ..fillStyle = '#FFFFFF'
+          ..fillRect(0, 0, width, height)
+          ..drawImageScaled(image, 0, 0, width, height);
+        final bytes =
+            await _readBlob(await canvas.toBlob('image/jpeg', quality));
+        if (bytes.length <= maxBytes) return bytes;
+        if (quality > 0.52) {
+          quality -= 0.09;
+        } else {
+          width = (width * 0.82).round();
+          height = (height * 0.82).round();
+          quality = 0.72;
+        }
+      }
+      throw StateError('圖片壓縮後仍超過 2 MB，請選擇較小的圖片');
+    } finally {
+      html.Url.revokeObjectUrl(objectUrl);
+    }
+  }
+
+  Future<void> _selectVehiclePhoto() async {
+    if (_isProcessingPhoto) return;
+    final input = html.FileUploadInputElement()
+      ..accept = 'image/jpeg,image/png,image/webp'
+      ..multiple = false;
+    html.document.body?.append(input);
+    try {
+      input.click();
+      await input.onChange.first;
+      final files = input.files;
+      final file = files == null || files.isEmpty ? null : files.first;
+      if (file == null) return;
+      if (!const ['image/jpeg', 'image/png', 'image/webp']
+          .contains(file.type)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('只支援 JPEG、PNG 或 WebP 圖片')));
+        }
+        return;
+      }
+      setState(() => _isProcessingPhoto = true);
+      try {
+        const maxBytes = 2 * 1024 * 1024;
+        final compressed = file.size > maxBytes;
+        final bytes = compressed
+            ? await _compressVehiclePhoto(file)
+            : await _readBlob(file);
+        if (!mounted) return;
+        setState(() {
+          _vehiclePhotoBytes = bytes;
+          _vehiclePhotoName = compressed
+              ? '${file.name.replaceFirst(RegExp(r'\.[^.]+$'), '')}.jpg'
+              : file.name;
+          _vehiclePhotoMime = compressed ? 'image/jpeg' : file.type;
+        });
+      } on Object catch (error) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text(error is StateError ? error.message : '圖片處理失敗')));
+        }
+      } finally {
+        if (mounted) setState(() => _isProcessingPhoto = false);
+      }
+    } finally {
+      input.remove();
+    }
+  }
+
   Future<void> _save() async {
     if (_category == null || _category!.trim().isEmpty) {
       ScaffoldMessenger.of(context)
@@ -201,9 +318,20 @@ class _AddVehiclePageState extends State<AddVehiclePage> {
       };
       final vehicleId = widget.initialData?.id;
       if (vehicleId == null) {
-        await _api.createVehicle(fields);
+        await _api.createVehicle(
+          fields,
+          vehiclePhotoBytes: _vehiclePhotoBytes,
+          vehiclePhotoFilename: _vehiclePhotoName,
+          vehiclePhotoMime: _vehiclePhotoMime,
+        );
       } else {
-        await _api.updateVehicle(vehicleId, fields);
+        await _api.updateVehicle(
+          vehicleId,
+          fields,
+          vehiclePhotoBytes: _vehiclePhotoBytes,
+          vehiclePhotoFilename: _vehiclePhotoName,
+          vehiclePhotoMime: _vehiclePhotoMime,
+        );
       }
       if (!mounted) return;
       Navigator.of(context).pop(true);
@@ -280,8 +408,7 @@ class _AddVehiclePageState extends State<AddVehiclePage> {
                   color: DriverColors.text)),
           const SizedBox(height: DriverSpacing.md),
           InkWell(
-            onTap: () => ScaffoldMessenger.of(context)
-                .showSnackBar(const SnackBar(content: Text('車輛相片上傳功能尚未開放'))),
+            onTap: _isProcessingPhoto ? null : _selectVehiclePhoto,
             borderRadius: BorderRadius.circular(DriverRadii.input),
             child: Container(
               padding: const EdgeInsets.all(20),
@@ -301,14 +428,27 @@ class _AddVehiclePageState extends State<AddVehiclePage> {
                     child: SvgPicture.asset('assets/camera.svg',
                         width: 20, height: 20)),
                 const SizedBox(height: DriverSpacing.md),
-                const Text('點擊上傳車輛相片',
-                    style: TextStyle(
+                Text(
+                    _isProcessingPhoto
+                        ? '正在壓縮圖片…'
+                        : _vehiclePhotoName != null
+                            ? '已選擇 $_vehiclePhotoName'
+                            : widget.initialData?.hasPhoto == true
+                                ? '已上傳車輛相片・點擊更換'
+                                : '點擊上傳車輛相片',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
                         fontSize: DriverTypography.label,
                         fontWeight: FontWeight.w500,
                         color: DriverColors.activeBlue)),
                 const SizedBox(height: DriverSpacing.sm),
-                const Text('建議上傳正面、側面、車頭照片',
-                    style: TextStyle(
+                Text(
+                    _vehiclePhotoBytes == null
+                        ? '只允許 1 張 JPEG、PNG 或 WebP，相片上限 2 MB'
+                        : '${(_vehiclePhotoBytes!.length / 1024 / 1024).toStringAsFixed(2)} MB・點擊更換',
+                    style: const TextStyle(
                         fontSize: 11, color: DriverColors.secondaryText)),
               ]),
             ),

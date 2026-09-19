@@ -271,16 +271,62 @@ class DriverApiClient {
           headers: _headers));
 
   Future<Map<String, dynamic>> createVehicle(
-          Map<String, dynamic> fields) async =>
-      _decode(await _client.post(Uri.parse('$baseUrl/driver/auth/vehicles'),
-          headers: _headers, body: jsonEncode(fields)));
+    Map<String, dynamic> fields, {
+    Uint8List? vehiclePhotoBytes,
+    String? vehiclePhotoFilename,
+    String? vehiclePhotoMime,
+  }) =>
+      _saveVehicle(
+        'POST',
+        Uri.parse('$baseUrl/driver/auth/vehicles'),
+        fields,
+        vehiclePhotoBytes: vehiclePhotoBytes,
+        vehiclePhotoFilename: vehiclePhotoFilename,
+        vehiclePhotoMime: vehiclePhotoMime,
+      );
 
   Future<Map<String, dynamic>> updateVehicle(
-          String id, Map<String, dynamic> fields) async =>
-      _decode(await _client.patch(
-          Uri.parse('$baseUrl/driver/auth/vehicles/${Uri.encodeComponent(id)}'),
-          headers: _headers,
-          body: jsonEncode(fields)));
+    String id,
+    Map<String, dynamic> fields, {
+    Uint8List? vehiclePhotoBytes,
+    String? vehiclePhotoFilename,
+    String? vehiclePhotoMime,
+  }) =>
+      _saveVehicle(
+        'PATCH',
+        Uri.parse('$baseUrl/driver/auth/vehicles/${Uri.encodeComponent(id)}'),
+        fields,
+        vehiclePhotoBytes: vehiclePhotoBytes,
+        vehiclePhotoFilename: vehiclePhotoFilename,
+        vehiclePhotoMime: vehiclePhotoMime,
+      );
+
+  Future<Map<String, dynamic>> _saveVehicle(
+    String method,
+    Uri uri,
+    Map<String, dynamic> fields, {
+    Uint8List? vehiclePhotoBytes,
+    String? vehiclePhotoFilename,
+    String? vehiclePhotoMime,
+  }) async {
+    final request = http.MultipartRequest(method, uri)
+      ..headers.addAll({
+        if (_token != null) 'Authorization': 'Bearer ' + _token!,
+      })
+      ..fields.addAll({
+        for (final entry in fields.entries)
+          if (entry.value != null) entry.key: entry.value.toString(),
+      });
+    if (vehiclePhotoBytes != null) {
+      request.files.add(http.MultipartFile.fromBytes(
+        'vehiclePhoto',
+        vehiclePhotoBytes,
+        filename: vehiclePhotoFilename,
+        contentType: MediaType.parse(vehiclePhotoMime!),
+      ));
+    }
+    return _decode(await http.Response.fromStream(await _client.send(request)));
+  }
 
   Future<Map<String, dynamic>> setPrimaryVehicle(String id) async =>
       _decode(await _client.post(

@@ -3813,6 +3813,13 @@ class DriverAuthController {
   }
 
   @Post("vehicles")
+  @UseInterceptors(
+    FileInterceptor("vehiclePhoto", {
+      limits: { fileSize: 2 * 1024 * 1024 },
+      fileFilter: (_req, file, cb) =>
+        cb(null, /^image\/(jpeg|png|webp)$/.test(file.mimetype)),
+    }),
+  )
   async createMyVehicle(
     @Req() req: RequestLike,
     @Body()
@@ -3825,6 +3832,7 @@ class DriverAuthController {
       vehicleCategory?: unknown;
       vehicleColor?: unknown;
     },
+    @UploadedFile() vehiclePhoto?: Express.Multer.File,
   ) {
     const { session } = await reviewedDriverFrom(req);
     const vehicle = await this.validateVehicleInput(body);
@@ -3843,6 +3851,12 @@ class DriverAuthController {
           id: `vehicle-${Date.now()}-${randomBytes(4).toString("hex")}`,
           ...vehicle,
           vehiclePhotos: [],
+          ...(vehiclePhoto
+            ? {
+                vehiclePhotoData: new Uint8Array(vehiclePhoto.buffer),
+                vehiclePhotoMime: vehiclePhoto.mimetype,
+              }
+            : {}),
         },
       });
       await tx.driverVehicleAssignment.create({
@@ -3967,6 +3981,13 @@ class DriverAuthController {
   }
 
   @Patch("vehicles/:id")
+  @UseInterceptors(
+    FileInterceptor("vehiclePhoto", {
+      limits: { fileSize: 2 * 1024 * 1024 },
+      fileFilter: (_req, file, cb) =>
+        cb(null, /^image\/(jpeg|png|webp)$/.test(file.mimetype)),
+    }),
+  )
   async updateMyVehicle(
     @Req() req: RequestLike,
     @Param("id") id: string,
@@ -3980,6 +4001,7 @@ class DriverAuthController {
       vehicleCategory?: unknown;
       vehicleColor?: unknown;
     },
+    @UploadedFile() vehiclePhoto?: Express.Multer.File,
   ) {
     const { session } = await reviewedDriverFrom(req);
     const vehicle = await this.validateVehicleInput(body);
@@ -3988,7 +4010,15 @@ class DriverAuthController {
         id,
         assignments: { some: { driverId: session.sub, enabled: true } },
       },
-      data: vehicle,
+      data: {
+        ...vehicle,
+        ...(vehiclePhoto
+          ? {
+              vehiclePhotoData: new Uint8Array(vehiclePhoto.buffer),
+              vehiclePhotoMime: vehiclePhoto.mimetype,
+            }
+          : {}),
+      },
     });
     if (!updated.count)
       throw new HttpException("Vehicle not found", HttpStatus.NOT_FOUND);

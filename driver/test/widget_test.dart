@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -424,7 +425,12 @@ void main() {
     };
 
     await api.listDriverVehicles();
-    await api.createVehicle(fields);
+    await api.createVehicle(
+      fields,
+      vehiclePhotoBytes: Uint8List.fromList('photo'.codeUnits),
+      vehiclePhotoFilename: 'vehicle.jpg',
+      vehiclePhotoMime: 'image/jpeg',
+    );
     await api.updateVehicle('vehicle/1', fields);
     await api.setPrimaryVehicle('vehicle/1');
     await api.deleteVehicle('vehicle/1');
@@ -438,8 +444,18 @@ void main() {
       '/driver/auth/vehicles/vehicle%2F1/primary',
       '/driver/auth/vehicles/vehicle%2F1',
     ]);
-    expect(jsonDecode(requests[1].body), fields);
-    expect(jsonDecode(requests[2].body), fields);
+    expect(
+        requests[1].headers['content-type'], startsWith('multipart/form-data'));
+    expect(requests[1].body, contains('name="vehicleOwnership"'));
+    expect(requests[1].body, contains('香港'));
+    expect(requests[1].body, contains('name="vehiclePhoto"'));
+    expect(requests[1].body, contains('filename="vehicle.jpg"'));
+    expect(requests[1].body, contains('content-type: image/jpeg'));
+    expect(
+        requests[2].headers['content-type'], startsWith('multipart/form-data'));
+    expect(requests[2].body, contains('name="vehicleColor"'));
+    expect(requests[2].body, contains('白色'));
+    expect(requests[2].body, isNot(contains('name="vehiclePhoto"')));
   });
 
   test('uses driver trip endpoints for listing, detail and acceptance',
