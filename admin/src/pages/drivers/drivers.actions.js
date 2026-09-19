@@ -12,15 +12,39 @@ function requiredVehiclePlateError({ vehicleOwnership, plateType, hkPlate, macau
 export function createDriversActions({ driversApi, driverForm, selectedDriver, settlementForm, drivers, allVehicles, error, load, displayError, requestConfirmation, notify }) {
   let vehiclePhotoUrl = null
   let driverFormPhotoUrl = null
+  let vehicleFormPhotoUrl = null
   const vehicleForm = ref(null)
   const assignmentVehicle = ref(null)
   const vehicleAssignments = ref([])
-  function resetVehicleForm() {
-    const driver = selectedDriver.value
-    vehicleForm.value = { id: '', driverId: driver?.id || '', plateType: '單牌', hkPlate: '', macauPlate: '', mainlandPlate: '', vehicleOwnership: '香港', vehicleCategory: '', vehicleColor: '', vehiclePhotoFile: null, vehiclePhotos: [] }
+  function clearVehicleFormPhotoUrl() {
+    if (vehicleFormPhotoUrl) URL.revokeObjectURL(vehicleFormPhotoUrl)
+    vehicleFormPhotoUrl = null
   }
-  function editVehicle(vehicle) { vehicleForm.value = { ...vehicle, vehiclePhotoFile: null, vehiclePhotos: [] } }
-  function closeVehicleForm() { vehicleForm.value = null }
+  function resetVehicleForm() {
+    clearVehicleFormPhotoUrl()
+    const driver = selectedDriver.value
+    vehicleForm.value = { id: '', driverId: driver?.id || '', plateType: '單牌', hkPlate: '', macauPlate: '', mainlandPlate: '', vehicleOwnership: '香港', vehicleCategory: '', vehicleColor: '', vehiclePhotoFile: null, vehiclePhotos: [], vehiclePhotoUrl: null }
+  }
+  function editVehicle(vehicle) {
+    clearVehicleFormPhotoUrl()
+    vehicleForm.value = { ...vehicle, vehiclePhotoFile: null, vehiclePhotos: vehicle.vehiclePhotos || [], vehiclePhotoUrl: vehicle.vehiclePhotoUrl || null }
+  }
+  function closeVehicleForm() {
+    clearVehicleFormPhotoUrl()
+    vehicleForm.value = null
+  }
+  function uploadVehiclePhoto(event) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file || !vehicleForm.value) return
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) { error.value = '車輛相片只支援 JPEG、PNG 或 WebP'; return }
+    if (file.size > 2 * 1024 * 1024) { error.value = '車輛相片不可超過 2 MB'; return }
+    clearVehicleFormPhotoUrl()
+    vehicleFormPhotoUrl = URL.createObjectURL(file)
+    vehicleForm.value.vehiclePhotoFile = file
+    vehicleForm.value.vehiclePhotoUrl = vehicleFormPhotoUrl
+    error.value = ''
+  }
   function changeVehicleOwnership() {
     if (!vehicleForm.value) return
     if (vehicleForm.value.vehicleOwnership === '中國內地') vehicleForm.value.plateType = '兩地牌'
@@ -272,5 +296,5 @@ export function createDriversActions({ driversApi, driverForm, selectedDriver, s
     } catch (err) { error.value = displayError(err) }
   }
 
-  return { reviewStatusLabel, resetDriver, editDriver, formatDriverHongKongPlate, formatDriverMacauPlate, formatDriverMainlandPlate, changeDriverOwnership, uploadDriverPhotos, removeDriverPhoto, saveDriver, updateDriverStatus, removeDriver, openDriverDetail, previewDriver, closeDriverDetail, approveDriver, requestDriverRevision, rejectDriver, resetSettlement, saveSettlement, refreshDriverVehicles, manageVehicleAssignments, closeVehicleAssignments, bindVehicleDriver, setPrimaryVehicle, unbindVehicleDriver, vehicleAssignments, assignmentVehicle, updateVehicleStatus, removeVehicle, vehicleForm, resetVehicleForm, editVehicle, closeVehicleForm, changeVehicleOwnership, saveVehicle }
+  return { reviewStatusLabel, resetDriver, editDriver, formatDriverHongKongPlate, formatDriverMacauPlate, formatDriverMainlandPlate, changeDriverOwnership, uploadDriverPhotos, removeDriverPhoto, saveDriver, updateDriverStatus, removeDriver, openDriverDetail, previewDriver, closeDriverDetail, approveDriver, requestDriverRevision, rejectDriver, resetSettlement, saveSettlement, refreshDriverVehicles, manageVehicleAssignments, closeVehicleAssignments, bindVehicleDriver, setPrimaryVehicle, unbindVehicleDriver, vehicleAssignments, assignmentVehicle, updateVehicleStatus, removeVehicle, vehicleForm, resetVehicleForm, editVehicle, closeVehicleForm, changeVehicleOwnership, uploadVehiclePhoto, saveVehicle }
 }

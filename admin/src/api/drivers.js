@@ -28,6 +28,7 @@ export const createDriversApi = api => ({
   categories: () => api('/admin/vehicle-categories'),
   listVehicles: driverId => api(`/admin/drivers/${driverId}/vehicles`),
   listAllVehicles: () => api('/admin/driver-vehicles'),
+  vehiclePhotoByVehicle: id => api.blob(`/admin/driver-vehicles/${encodeURIComponent(id)}/photo`),
   saveVehicle: payload => {
     const form = new FormData()
     Object.entries(payload).forEach(([key, value]) => {

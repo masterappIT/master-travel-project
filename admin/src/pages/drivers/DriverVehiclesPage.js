@@ -41,15 +41,16 @@ export const DriverVehiclesPage = {
           <span class="vehicle-result-count"><strong>{{filteredVehicles.length}}</strong> 部車輛</span>
           <button type="button" class="vehicle-refresh-action" @click="refresh" title="重新整理車輛資料" aria-label="重新整理車輛資料">↻</button>
         </div>
-        <div class="vehicle-table-wrap"><table><thead><tr><th>車輛</th><th>車輛資料</th><th>綁定司機</th><th>狀態</th><th>操作</th></tr></thead><tbody>
+        <div class="vehicle-table-wrap"><table><thead><tr><th>相片</th><th>車輛</th><th>車輛資料</th><th>綁定司機</th><th>狀態</th><th>操作</th></tr></thead><tbody>
           <tr v-for="vehicle in filteredVehicles" :key="vehicle.id">
+            <td class="vehicle-photo-cell"><VehiclePhotoViewer v-if="vehicle.vehiclePhotoUrl" :src="vehicle.vehiclePhotoUrl" :alt="displayPlate(vehicle) + ' 車輛相片'"/><span v-else>未上傳</span></td>
             <td><div class="vehicle-plate-cell"><strong>{{displayPlate(vehicle)}}</strong><div v-if="plateSummary(vehicle).length > 1" class="vehicle-alt-plates"><span v-for="plate in plateSummary(vehicle).slice(1)" :key="plate">{{plate}}</span></div><small>{{vehicle.vehicleOwnership || '未設定歸屬地'}} · {{vehicle.plateType || '單牌'}}</small></div></td>
             <td><div class="vehicle-spec-cell"><strong>{{vehicle.vehicleCategory || '未設定類別'}}</strong><span>{{vehicle.vehicleColor || '未設定顏色'}}</span></div></td>
             <td><button type="button" class="vehicle-assignment-link" @click="manageVehicleAssignments(vehicle)"><span>{{vehicle.assignments?.length || 0}}</span><span>{{vehicle.driverName || '尚未綁定'}}</span></button></td>
             <td><span class="vehicle-status" :class="vehicle.enabled === false ? 'is-disabled' : 'is-enabled'"><i></i>{{vehicle.enabled === false ? '已停用' : '啟用中'}}</span></td>
             <td><div class="vehicle-row-actions"><button type="button" @click="manageVehicleAssignments(vehicle)">綁定</button><button type="button" v-if="canWrite" class="is-primary" @click="editVehicleFromRegistry(vehicle)">編輯</button><details v-if="canWrite" class="vehicle-more-menu"><summary title="更多操作" aria-label="更多操作">•••</summary><div><button type="button" @click="updateVehicleStatus(vehicle)">{{vehicle.enabled === false ? '恢復使用' : '停用車輛'}}</button><button type="button" class="danger" @click="removeVehicle(vehicle)">永久刪除</button></div></details></div></td>
           </tr>
-          <tr v-if="!filteredVehicles.length"><td colspan="5" class="vehicle-empty-state"><strong>{{vehicles.length ? '找不到符合條件的車輛' : '尚未建立登記車輛'}}</strong><span>{{vehicles.length ? '請調整搜尋內容或使用狀態。' : '新增第一部車輛後，資料會顯示在這裡。'}}</span></td></tr>
+          <tr v-if="!filteredVehicles.length"><td colspan="6" class="vehicle-empty-state"><strong>{{vehicles.length ? '找不到符合條件的車輛' : '尚未建立登記車輛'}}</strong><span>{{vehicles.length ? '請調整搜尋內容或使用狀態。' : '新增第一部車輛後，資料會顯示在這裡。'}}</span></td></tr>
         </tbody></table></div>
       </section>
       <div v-if="assignmentVehicle" class="modal-backdrop" @click.self="closeVehicleAssignments"><section class="vehicle-assignment-modal" role="dialog" aria-modal="true" aria-labelledby="vehicle-assignment-title">
@@ -74,7 +75,8 @@ export const DriverVehiclesPage = {
           </div></section>
           <section class="vehicle-form-section"><div class="vehicle-section-heading"><span>3</span><div><h3>司機與相片</h3><p>建立時可先綁定一名司機，也可稍後管理多人綁定。</p></div></div><div class="vehicle-form-grid">
             <label><span>初始綁定司機 <em>選填</em></span><select v-model="vehicleForm.driverId"><option value="">暫不綁定</option><option v-for="driver in availableDrivers" :key="driver.id" :value="driver.id">{{driver.name}} · {{driver.phone || '未提供電話'}}</option></select></label>
-            <label><span>車輛相片 <em>選填</em></span><input type="file" accept="image/jpeg,image/png,image/webp" @change="vehicleForm.vehiclePhotoFile = $event.target.files?.[0] || null"/><small>支援 JPEG、PNG、WebP</small></label>
+            <label><span>車輛相片 <em>選填</em></span><input type="file" accept="image/jpeg,image/png,image/webp" @change="uploadVehiclePhoto"/><small>支援 JPEG、PNG、WebP，檔案不可超過 2 MB</small></label>
+            <div class="vehicle-form-photo-preview"><VehiclePhotoViewer v-if="vehicleForm.vehiclePhotoUrl" :src="vehicleForm.vehiclePhotoUrl" :alt="displayPlate(vehicleForm) + ' 車輛相片'"/><span v-else>尚未上傳相片</span></div>
           </div></section>
         </div>
         <footer class="vehicle-form-actions"><button type="button" class="secondary" @click="closeVehicleForm">取消</button><button type="submit" class="vehicle-primary-action">{{vehicleForm.id ? '儲存修改' : '建立車輛'}}</button></footer>
