@@ -6,7 +6,7 @@ import path from 'node:path'
 const root = process.cwd()
 const driver = path.join(root, 'driver')
 const baseline = new Set(JSON.parse(fs.readFileSync(path.join(root, 'config/driver-test-baseline.json'), 'utf8')).failingTests)
-const result = spawnSync('flutter', ['test', '--reporter', 'json'], { cwd: driver, encoding: 'utf8' })
+const result = spawnSync('flutter', ['test', '--platform', 'chrome', '--reporter', 'json'], { cwd: driver, encoding: 'utf8' })
 if (result.error) throw result.error
 
 const names = new Map()

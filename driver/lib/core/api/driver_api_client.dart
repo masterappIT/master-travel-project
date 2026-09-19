@@ -7,6 +7,16 @@ import 'package:http_parser/http_parser.dart';
 
 import '../state/driver_status.dart';
 
+Map<String, dynamic>? selectTripVehicle({
+  required bool accepted,
+  required bool completed,
+  required dynamic snapshot,
+  required Map<String, dynamic>? currentVehicle,
+}) {
+  if (!accepted && !completed) return currentVehicle;
+  return snapshot is Map ? Map<String, dynamic>.from(snapshot) : null;
+}
+
 class DriverApiException implements Exception {
   DriverApiException(this.statusCode, this.message);
 

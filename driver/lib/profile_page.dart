@@ -571,6 +571,7 @@ class _MenuRow extends StatelessWidget {
         _ => Icons.tune_rounded,
       };
 
+  @override
   Widget build(BuildContext context) => Semantics(
         button: true,
         label: item.label,

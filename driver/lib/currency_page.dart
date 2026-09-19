@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 
-import 'app/route_names.dart';
 import 'core/layout/driver_page_shell.dart';
 import 'core/state/driver_currency_preference.dart';
-import 'core/navigation/driver_navigation.dart';
 import 'core/tokens/driver_tokens.dart';
 
 class CurrencyPage extends StatefulWidget {

@@ -176,9 +176,12 @@ class _OrderAcceptedPageState extends State<OrderAcceptedPage> {
   Widget build(BuildContext context) {
     final origin = _tripText('pickupAddress', '起點待確認');
     final destination = _tripText('dropoffAddress', '終點待確認');
-    final snapshot = _trip?['vehicle'];
-    final vehicle =
-        snapshot is Map ? Map<String, dynamic>.from(snapshot) : null;
+    final vehicle = selectTripVehicle(
+      accepted: true,
+      completed: false,
+      snapshot: _trip?['vehicle'],
+      currentVehicle: null,
+    );
 
     return DriverPageShell(
       selectedIndex: 1,

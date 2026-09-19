@@ -235,31 +235,57 @@ void main() {
     expect(find.text('香港中環置地廣場東門大堂'), findsNothing);
     expect(find.text('深圳福田口岸'), findsNothing);
   });
-  testWidgets('opens order details and selects a vehicle',
-      (WidgetTester tester) async {
-    await tester.pumpWidget(testApp(const OrderHallPage()));
+  test('uses the primary vehicle before acceptance and the trip snapshot after',
+      () {
+    final primaryVehicle = {
+      'id': 'vehicle-primary',
+      'vehicleCategory': '七座商務車',
+      'vehicleColor': '珍珠白',
+      'hkPlate': 'AB 1234',
+    };
+    final snapshot = {
+      'vehicleId': 'vehicle-primary',
+      'vehicleCategory': '跨境轎車',
+      'vehicleColor': '曜石黑',
+      'vehiclePlate': 'SNAP 88',
+    };
 
-    await tester.tap(find.text('陳大文'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('訂單詳情'), findsOneWidget);
-    expect(find.text('請確認乘客資訊與行程內容'), findsOneWidget);
-    expect(find.text('確認接單'), findsOneWidget);
-    expect(find.text('車輛 1'), findsOneWidget);
-    expect(find.text('AB 1234'), findsOneWidget);
-
-    await tester.ensureVisible(find.text('車輛 2').first);
-    await tester.tap(find.text('車輛 2').first);
-    await tester.pump();
-    await tester.ensureVisible(find.text('確認接單'));
-    await tester.tap(find.text('確認接單'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('成功接單'), findsOneWidget);
-    expect(find.text('車資'), findsOneWidget);
-    expect(find.text('\$280.00'), findsOneWidget);
-    expect(find.text('車輛顏色'), findsOneWidget);
-    expect(find.text('白色'), findsOneWidget);
+    expect(
+      selectTripVehicle(
+        accepted: false,
+        completed: false,
+        snapshot: snapshot,
+        currentVehicle: primaryVehicle,
+      ),
+      same(primaryVehicle),
+    );
+    expect(
+      selectTripVehicle(
+        accepted: true,
+        completed: false,
+        snapshot: snapshot,
+        currentVehicle: primaryVehicle,
+      ),
+      snapshot,
+    );
+    expect(
+      selectTripVehicle(
+        accepted: false,
+        completed: true,
+        snapshot: snapshot,
+        currentVehicle: primaryVehicle,
+      ),
+      snapshot,
+    );
+    expect(
+      selectTripVehicle(
+        accepted: true,
+        completed: false,
+        snapshot: null,
+        currentVehicle: primaryVehicle,
+      ),
+      isNull,
+    );
   });
 
   testWidgets('renders in-progress order page content',
@@ -408,6 +434,41 @@ void main() {
     expect(requests[2].url.path, '/driver/auth/vehicles/vehicle%2F1');
     expect(jsonDecode(requests[1].body), fields);
     expect(jsonDecode(requests[2].body), fields);
+  });
+
+  test('uses driver trip endpoints for listing, detail and acceptance',
+      () async {
+    final requests = <http.Request>[];
+    final api = DriverApiClient(
+      baseUrl: 'https://driver.example.test',
+      client: MockClient((request) async {
+        requests.add(request);
+        if (request.method == 'GET' &&
+            (request.url.path == '/driver/auth/trips' ||
+                request.url.path == '/driver/auth/trips/available')) {
+          return http.Response('[]', 200);
+        }
+        return http.Response('{}', 200);
+      }),
+    );
+
+    await api.trips();
+    await api.availableTrips();
+    await api.trip('trip/1');
+    await api.acceptTrip('trip/1');
+
+    expect(requests.map((request) => request.method), [
+      'GET',
+      'GET',
+      'GET',
+      'POST',
+    ]);
+    expect(requests.map((request) => request.url.path), [
+      '/driver/auth/trips',
+      '/driver/auth/trips/available',
+      '/driver/auth/trips/trip%2F1',
+      '/driver/auth/trips/trip%2F1/accept',
+    ]);
   });
 
   test('uses account notification preference and statistics endpoints',

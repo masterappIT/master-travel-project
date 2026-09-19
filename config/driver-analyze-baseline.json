@@ -1,17 +1,18 @@
 {
   "version": 1,
   "diagnostics": {
-    "INFO|CURLY_BRACES_IN_FLOW_CONTROL_STRUCTURES|lib/core/api/driver_api_client.dart|Statements in an if should be enclosed in a block.": 1,
-    "INFO|CURLY_BRACES_IN_FLOW_CONTROL_STRUCTURES|lib/home_page.dart|Statements in an if should be enclosed in a block.": 2,
-    "INFO|CURLY_BRACES_IN_FLOW_CONTROL_STRUCTURES|lib/order_accepted_page.dart|Statements in an if should be enclosed in a block.": 3,
-    "INFO|CURLY_BRACES_IN_FLOW_CONTROL_STRUCTURES|lib/order_detail_page.dart|Statements in an if should be enclosed in a block.": 2,
-    "INFO|CURLY_BRACES_IN_FLOW_CONTROL_STRUCTURES|lib/order_hall_page.dart|Statements in an if should be enclosed in a block.": 1,
-    "INFO|CURLY_BRACES_IN_FLOW_CONTROL_STRUCTURES|lib/order_history_page.dart|Statements in an if should be enclosed in a block.": 2,
-    "INFO|CURLY_BRACES_IN_FLOW_CONTROL_STRUCTURES|lib/order_in_progress_page.dart|Statements in an if should be enclosed in a block.": 3,
-    "INFO|CURLY_BRACES_IN_FLOW_CONTROL_STRUCTURES|lib/profile_page.dart|Statements in an if should be enclosed in a block.": 3,
-    "INFO|PREFER_INTERPOLATION_TO_COMPOSE_STRINGS|lib/add_vehicle_page.dart|Use interpolation to compose strings and values.": 4,
+    "INFO|DEPRECATED_MEMBER_USE|lib/core/api/driver_api_client.dart|'dart:html' is deprecated and shouldn't be used. Use package:web and dart:js_interop instead.": 1,
+    "INFO|AVOID_WEB_LIBRARIES_IN_FLUTTER|lib/core/api/driver_api_client.dart|Don't use web-only libraries outside Flutter web plugins.": 1,
     "INFO|PREFER_INTERPOLATION_TO_COMPOSE_STRINGS|lib/core/api/driver_api_client.dart|Use interpolation to compose strings and values.": 1,
-    "INFO|USE_BUILD_CONTEXT_SYNCHRONOUSLY|lib/profile_page.dart|Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check.": 1,
-    "WARNING|UNUSED_ELEMENT|lib/order_history_page.dart|The declaration '_historyEntries' isn't referenced.": 1
+    "INFO|DEPRECATED_MEMBER_USE|lib/core/state/driver_currency_preference.dart|'dart:html' is deprecated and shouldn't be used. Use package:web and dart:js_interop instead.": 1,
+    "INFO|AVOID_WEB_LIBRARIES_IN_FLUTTER|lib/core/state/driver_currency_preference.dart|Don't use web-only libraries outside Flutter web plugins.": 1,
+    "INFO|DEPRECATED_MEMBER_USE|lib/core/state/driver_language_preference.dart|'dart:html' is deprecated and shouldn't be used. Use package:web and dart:js_interop instead.": 1,
+    "INFO|AVOID_WEB_LIBRARIES_IN_FLUTTER|lib/core/state/driver_language_preference.dart|Don't use web-only libraries outside Flutter web plugins.": 1,
+    "INFO|DEPRECATED_MEMBER_USE|lib/language_settings_page.dart|'groupValue' is deprecated and shouldn't be used. Use a RadioGroup ancestor to manage group value instead. This feature was deprecated after v3.32.0-0.0.pre.": 1,
+    "INFO|DEPRECATED_MEMBER_USE|lib/language_settings_page.dart|'onChanged' is deprecated and shouldn't be used. Use RadioGroup to handle value change instead. This feature was deprecated after v3.32.0-0.0.pre.": 1,
+    "INFO|DEPRECATED_MEMBER_USE|lib/registration_page.dart|'dart:html' is deprecated and shouldn't be used. Use package:web and dart:js_interop instead.": 1,
+    "INFO|AVOID_WEB_LIBRARIES_IN_FLUTTER|lib/registration_page.dart|Don't use web-only libraries outside Flutter web plugins.": 1,
+    "INFO|DEPRECATED_MEMBER_USE|lib/wechat_payment_page.dart|'dart:html' is deprecated and shouldn't be used. Use package:web and dart:js_interop instead.": 1,
+    "INFO|AVOID_WEB_LIBRARIES_IN_FLUTTER|lib/wechat_payment_page.dart|Don't use web-only libraries outside Flutter web plugins.": 1
   }
 }

@@ -1,14 +1,19 @@
 {
   "version": 1,
   "failingTests": [
+    "navigates from order history to order hall",
     "opens completed page from in-progress action",
-    "opens order details and selects a vehicle",
     "opens order history from profile menu",
     "opens profile from the bottom navigation",
     "opens vehicle preview from the profile menu",
+    "renders completed order page content",
+    "renders in-progress order page content",
     "renders order history page content",
     "renders the driver home page and toggles online status",
+    "renders the driver login page",
     "renders the driver profile page and navigation",
-    "switches between available and accepted orders"
+    "switches between available and accepted orders",
+    "updates plate fields from region and plate type selections",
+    "uses mainland and Hong Kong plates for mainland ownership"
   ]
 }

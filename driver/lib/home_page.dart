@@ -51,17 +51,19 @@ class _HomePageState extends State<HomePage> {
   Future<void> _loadStatistics() async {
     try {
       final result = await _api.statistics();
-      if (mounted)
+      if (mounted) {
         setState(() {
           _statistics = result;
           _statsLoading = false;
         });
+      }
     } on DriverApiException catch (error) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _statsError = error.message;
           _statsLoading = false;
         });
+      }
     }
   }
 
@@ -132,9 +134,10 @@ class _HomePageState extends State<HomePage> {
         ),
       );
     } on DriverApiException catch (error) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(error.message)));
+      }
     }
   }
 
@@ -242,6 +245,7 @@ class _ProfileHeader extends StatelessWidget {
   final String vehicleSummary;
   final VoidCallback onNotificationTap;
 
+  @override
   Widget build(BuildContext context) => Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
@@ -356,7 +360,7 @@ class _StatusCard extends StatelessWidget {
                 child: Switch(
                   value: isOnline,
                   onChanged: onChanged,
-                  activeColor: DriverColors.onPrimary,
+                  activeThumbColor: DriverColors.onPrimary,
                   activeTrackColor: DriverColors.primary,
                   inactiveThumbColor: DriverColors.mutedText,
                   inactiveTrackColor: DriverColors.divider,
@@ -456,7 +460,7 @@ class _QuickStatsRow extends StatelessWidget {
     final ratingValue = rating?['average'] is num
         ? '${(rating!['average'] as num).toStringAsFixed(1)} / 5.0'
         : '尚無評分';
-    if (loading)
+    if (loading) {
       return const Row(children: [
         Expanded(
             child: _Card(
@@ -467,6 +471,7 @@ class _QuickStatsRow extends StatelessWidget {
             child: _Card(
                 padding: 16, child: Center(child: CircularProgressIndicator())))
       ]);
+    }
     return IntrinsicHeight(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,

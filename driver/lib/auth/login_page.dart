@@ -16,7 +16,6 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  static const _testLoginEnabled = bool.fromEnvironment('DRIVER_TEST_LOGIN');
   final _phoneController = TextEditingController();
   final _codeController = TextEditingController();
   final _api = DriverApiClient.instance;
@@ -78,9 +77,8 @@ class _LoginPageState extends State<LoginPage> {
         _isRegistration = isRegistration;
         if (developmentCode != null) _codeController.text = developmentCode;
       });
-      final message = developmentCode == null
-          ? '驗證碼已發送'
-          : '開發環境驗證碼：$developmentCode';
+      final message =
+          developmentCode == null ? '驗證碼已發送' : '開發環境驗證碼：$developmentCode';
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(message)));
     } on DriverApiException catch (error) {

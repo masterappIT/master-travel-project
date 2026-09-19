@@ -176,12 +176,12 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
     final passenger = _tripText('passengerName', '乘客');
     final scheduledAt = _formatDate(_trip?['scheduledAt']);
     final accepted = _trip?['acceptedAt'] != null;
-    final snapshot = _trip?['vehicle'];
-    final vehicle = accepted || widget.completed
-        ? snapshot is Map
-            ? Map<String, dynamic>.from(snapshot)
-            : null
-        : _currentVehicle;
+    final vehicle = selectTripVehicle(
+      accepted: accepted,
+      completed: widget.completed,
+      snapshot: _trip?['vehicle'],
+      currentVehicle: _currentVehicle,
+    );
     final missingVehicleText =
         accepted || widget.completed ? '歷史資料未記錄' : '車輛資料待確認';
     final pendingAssignment =
