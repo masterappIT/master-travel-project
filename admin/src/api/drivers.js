@@ -23,18 +23,18 @@ export const createDriversApi = api => ({
   vehiclePhoto: id => api.blob(`/admin/drivers/${id}/vehicle-photo`),
   categories: () => api('/admin/vehicle-categories'),
   listVehicles: driverId => api(`/admin/drivers/${driverId}/vehicles`),
-  listAllVehicles: () => api('/admin/vehicles'),
+  listAllVehicles: () => api('/admin/driver-vehicles'),
   saveVehicle: payload => {
     const form = new FormData()
     Object.entries(payload).forEach(([key, value]) => {
       if (value !== undefined && value !== null && key !== 'vehiclePhotos' && key !== 'vehiclePhotoFile') form.append(key, String(value))
     })
     if (payload.vehiclePhotoFile) form.append('vehiclePhoto', payload.vehiclePhotoFile)
-    return api(payload.id ? `/admin/vehicles/${payload.id}` : '/admin/vehicles', { method: payload.id ? 'PATCH' : 'POST', body: form })
+    return api(payload.id ? `/admin/driver-vehicles/${payload.id}` : '/admin/driver-vehicles', { method: payload.id ? 'PATCH' : 'POST', body: form })
   },
-  updateVehicleStatus: (id, enabled) => api(`/admin/vehicles/${id}/status`, { method: 'POST', body: JSON.stringify({ enabled }) }),
-  listVehicleAssignments: id => api(`/admin/vehicles/${id}/assignments`),
+  updateVehicleStatus: (id, enabled) => api(`/admin/driver-vehicles/${id}/status`, { method: 'POST', body: JSON.stringify({ enabled }) }),
+  listVehicleAssignments: id => api(`/admin/driver-vehicles/${id}/assignments`),
   bindVehicle: (driverId, id) => api(`/admin/drivers/${driverId}/vehicles/${id}/bind`, { method: 'POST' }),
   unbindVehicle: (driverId, id) => api(`/admin/drivers/${driverId}/vehicles/${id}/bind`, { method: 'DELETE' }),
-  removeVehicle: id => api(`/admin/vehicles/${id}`, { method: 'DELETE' }),
+  removeVehicle: id => api(`/admin/driver-vehicles/${id}`, { method: 'DELETE' }),
 })

@@ -370,7 +370,7 @@ const App = { setup() {
      toggleCategory,
      removeCategory,
      resetVehicle,
-     editCatalogVehicle,
+     editVehicle: editCatalogVehicle,
      saveVehicle,
      toggleVehicle,
      removeVehicle,

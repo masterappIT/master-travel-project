@@ -1934,7 +1934,7 @@ function driverVehicleResponse(vehicle: {
   const { vehiclePhotoData, vehiclePhotoMime, ...publicVehicle } = vehicle;
   return {
     ...publicVehicle,
-    vehiclePhotos: vehiclePhotoData && vehiclePhotoMime ? [`/admin/vehicles/${vehicle.id}/photo`] : [],
+    vehiclePhotos: vehiclePhotoData && vehiclePhotoMime ? [`/admin/driver-vehicles/${vehicle.id}/photo`] : [],
     createdAt: vehicle.createdAt.toISOString(),
     updatedAt: vehicle.updatedAt.toISOString(),
   };
@@ -4386,7 +4386,7 @@ class AdminController {
       total: data.length,
     };
   }
-  @Get("vehicles") async listAllVehicles(@Req() req: RequestLike) {
+  @Get("driver-vehicles") async listAllVehicles(@Req() req: RequestLike) {
     requireAuth(req);
     const data = await prisma.driverVehicle.findMany({
       include: { assignments: { where: { enabled: true }, include: { driver: { select: { id: true, name: true, phone: true, enabled: true } } }, orderBy: { createdAt: "asc" } } },
@@ -4432,7 +4432,7 @@ class AdminController {
     await prisma.driverVehicleAssignment.upsert({ where: { driverId_vehicleId: { driverId, vehicleId: id } }, create: { driverId, vehicleId: id }, update: { enabled: true } });
     return driverVehicleResponse(await prisma.driverVehicle.findUniqueOrThrow({ where: { id } }));
   }
-  @Post("vehicles")
+  @Post("driver-vehicles")
   @UseInterceptors(FileInterceptor("vehiclePhoto", { limits: { fileSize: 2 * 1024 * 1024 }, fileFilter: (_req, file, cb) => cb(null, /^image\/(jpeg|png|webp)$/.test(file.mimetype)) }))
   async createAdminVehicle(
     @Req() req: RequestLike,
@@ -4456,7 +4456,7 @@ class AdminController {
     }
     return driverVehicleResponse(vehicle);
   }
-  @Patch("vehicles/:id")
+  @Patch("driver-vehicles/:id")
   @UseInterceptors(FileInterceptor("vehiclePhoto", { limits: { fileSize: 2 * 1024 * 1024 }, fileFilter: (_req, file, cb) => cb(null, /^image\/(jpeg|png|webp)$/.test(file.mimetype)) }))
   async updateAdminVehicle(@Req() req: RequestLike, @Param("id") id: string, @Body() body: Partial<Prisma.DriverVehicleCreateInput> & { removeVehiclePhoto?: string }, @UploadedFile() vehiclePhoto?: Express.Multer.File) {
     requireRole(req, ["SUPER_ADMIN", "OPERATOR"]);
@@ -4472,26 +4472,26 @@ class AdminController {
     if (!result.count) throw new HttpException("Vehicle not found", HttpStatus.NOT_FOUND);
     return driverVehicleResponse(await prisma.driverVehicle.findUniqueOrThrow({ where: { id } }));
   }
-  @Post("vehicles/:id/status") async updateAdminVehicleStatus(@Req() req: RequestLike, @Param("id") id: string, @Body() body: { enabled?: boolean }) {
+  @Post("driver-vehicles/:id/status") async updateAdminVehicleStatus(@Req() req: RequestLike, @Param("id") id: string, @Body() body: { enabled?: boolean }) {
     requireRole(req, ["SUPER_ADMIN", "OPERATOR"]);
     if (typeof body.enabled !== "boolean") throw new HttpException("Enabled status is required", HttpStatus.BAD_REQUEST);
     const result = await prisma.driverVehicle.updateMany({ where: { id }, data: { enabled: body.enabled } });
     if (!result.count) throw new HttpException("Vehicle not found", HttpStatus.NOT_FOUND);
     return driverVehicleResponse(await prisma.driverVehicle.findUniqueOrThrow({ where: { id } }));
   }
-  @Delete("vehicles/:id") async deleteAdminVehicle(@Req() req: RequestLike, @Param("id") id: string) {
+  @Delete("driver-vehicles/:id") async deleteAdminVehicle(@Req() req: RequestLike, @Param("id") id: string) {
     requireRole(req, ["SUPER_ADMIN", "OPERATOR"]);
     const result = await prisma.driverVehicle.deleteMany({ where: { id } });
     if (!result.count) throw new HttpException("Vehicle not found", HttpStatus.NOT_FOUND);
     return { ok: true };
   }
-  @Get("vehicles/:id/photo") async adminVehiclePhoto(@Req() req: RequestLike, @Param("id") id: string, @Res() response: Response) {
+  @Get("driver-vehicles/:id/photo") async adminVehiclePhoto(@Req() req: RequestLike, @Param("id") id: string, @Res() response: Response) {
     requireAuth(req);
     const vehicle = await prisma.driverVehicle.findUnique({ where: { id }, select: { vehiclePhotoData: true, vehiclePhotoMime: true } });
     if (!vehicle?.vehiclePhotoData || !vehicle.vehiclePhotoMime) throw new HttpException("Vehicle photo not found", HttpStatus.NOT_FOUND);
     response.type(vehicle.vehiclePhotoMime).send(Buffer.from(vehicle.vehiclePhotoData));
   }
-  @Get("vehicles/:id/assignments") async listVehicleAssignments(
+  @Get("driver-vehicles/:id/assignments") async listVehicleAssignments(
     @Req() req: RequestLike,
     @Param("id") id: string,
   ) {
