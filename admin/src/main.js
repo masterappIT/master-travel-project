@@ -172,7 +172,7 @@ const { editExtra, resetExtra, saveExtra, moveExtra, showOnlyExtra, toggleSevere
 const addressesActions = createAddressesActions({ addressesApi, addresses, addressForm, mainlandCities, mainlandCityForm, addressSearchKeyword, addressSearchResults, addressSearching, error, load, displayError, displayMainlandCity, apiMainlandCity, displayPlaceName, requestConfirmation, notify, t })
 const { editAddress, resetAddress, searchAddressPlaces, handleAddressRegionChange, handleAddressCityChange, selectAddressSearchResult, saveAddress, removeAddress, resetMainlandCity, editMainlandCity, saveMainlandCity, removeMainlandCity } = addressesActions
 const driverActions = createDriversActions({ driversApi, driverForm, selectedDriver, settlementForm, drivers, allVehicles, error, load, displayError, requestConfirmation, notify })
-const { reviewStatusLabel, resetDriver, editDriver, formatDriverHongKongPlate, formatDriverMacauPlate, formatDriverMainlandPlate, changeDriverOwnership, uploadDriverPhotos, removeDriverPhoto, saveDriver, updateDriverStatus, removeDriver, openDriverDetail, previewDriver, closeDriverDetail, approveDriver, requestDriverRevision, rejectDriver, resetSettlement, saveSettlement, refreshDriverVehicles, updateVehicleStatus, removeVehicle: removeDriverVehicle, vehicleForm: driverVehicleForm, resetVehicleForm, editVehicle: editDriverVehicle, closeVehicleForm, changeVehicleOwnership: changeDriverVehicleOwnership, uploadVehiclePhoto, saveVehicle: saveDriverVehicle, manageVehicleAssignments, closeVehicleAssignments, bindVehicleDriver, setPrimaryVehicle, unbindVehicleDriver, vehicleAssignments, assignmentVehicle } = driverActions
+const { reviewStatusLabel, resetDriver, editDriver, closeDriverForm, formatDriverHongKongPlate, formatDriverMacauPlate, formatDriverMainlandPlate, changeDriverOwnership, uploadDriverPhotos, removeDriverPhoto, saveDriver, updateDriverStatus, removeDriver, openDriverDetail, previewDriver, closeDriverDetail, approveDriver, requestDriverRevision, rejectDriver, resetSettlement, saveSettlement, refreshDriverVehicles, updateVehicleStatus, removeVehicle: removeDriverVehicle, vehicleForm: driverVehicleForm, resetVehicleForm, editVehicle: editDriverVehicle, closeVehicleForm, changeVehicleOwnership: changeDriverVehicleOwnership, uploadVehiclePhoto, saveVehicle: saveDriverVehicle, manageVehicleAssignments, closeVehicleAssignments, bindVehicleDriver, setPrimaryVehicle, unbindVehicleDriver, vehicleAssignments, assignmentVehicle } = driverActions
 const administratorsActions = createAdministratorsActions({ api, administratorForm, load, error, displayError, requestConfirmation, notify })
 const { resetAdministrator, editAdministrator, saveAdministrator, disableAdministrator } = administratorsActions
 const operationsStorage = createOperationsStorage({ personnel, entryItems, expenseItems })
@@ -503,6 +503,7 @@ const App = { setup() {
      reviewStatusLabel,
      resetDriver,
      editDriver,
+     closeDriverForm,
      formatDriverHongKongPlate,
      formatDriverMacauPlate,
      formatDriverMainlandPlate,
@@ -528,6 +529,7 @@ const App = { setup() {
      editVehicle: editDriverVehicle,
      closeVehicleForm,
      changeVehicleOwnership: changeDriverVehicleOwnership,
+     uploadVehiclePhoto,
      saveVehicle: saveDriverVehicle,
      saveDriverVehicle
     })

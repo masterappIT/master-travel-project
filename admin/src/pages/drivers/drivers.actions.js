@@ -73,14 +73,33 @@ export function createDriversActions({ driversApi, driverForm, selectedDriver, s
 
   function resetDriver() {
     clearDriverFormPhotoUrl()
-    driverForm.value = { id: '', driverType: '內部司機', name: '', affiliation: '香港', vehicleOwnership: '香港', plateType: '單牌', hkPlate: '', macauPlate: '', mainlandPlate: '', phoneCountryCode: '+852', phone: '', vehicleCategory: '', vehicleColor: '', vehiclePhotos: [], vehiclePhotoFile: null, vehiclePhotoPersisted: false, removeVehiclePhoto: false }
+    driverForm.value = { id: '', driverType: '內部司機', name: '', affiliation: '香港', vehicleOwnership: '香港', plateType: '單牌', hkPlate: '', macauPlate: '', mainlandPlate: '', phoneCountryCode: '+852', phone: '', vehicleCategory: '', vehicleColor: '', vehiclePhotos: [], vehiclePhotoFile: null, vehiclePhotoPersisted: false, vehiclePhotoLoading: false, vehiclePhotoLoadError: false, removeVehiclePhoto: false }
   }
 
-  function editDriver(item) {
+  function closeDriverForm() {
+    clearDriverFormPhotoUrl()
+    driverForm.value = null
+    error.value = ''
+  }
+
+  async function editDriver(item) {
     clearDriverFormPhotoUrl()
     const vehicle = primaryDriverVehicle(item) || {}
     const vehicleOwnership = vehicle.vehicleOwnership || '香港'
-    driverForm.value = { driverType: '內部司機', affiliation: '香港', phoneCountryCode: '+852', ...item, vehicleOwnership, plateType: vehicle.plateType || '單牌', hkPlate: vehicle.hkPlate || '', macauPlate: formatMacauPlateInput(vehicle.macauPlate), mainlandPlate: mainlandPlateInput(vehicle.mainlandPlate, vehicleOwnership), vehicleCategory: vehicle.vehicleCategory || '', vehicleColor: vehicle.vehicleColor || '', vehiclePhotos: [], vehiclePhotoFile: null, vehiclePhotoPersisted: Boolean(vehicle.vehiclePhotos?.length), removeVehiclePhoto: false }
+    const hasVehiclePhoto = Boolean(vehicle.vehiclePhotos?.length)
+    const form = { driverType: '內部司機', affiliation: '香港', phoneCountryCode: '+852', ...item, vehicleOwnership, plateType: vehicle.plateType || '單牌', hkPlate: vehicle.hkPlate || '', macauPlate: formatMacauPlateInput(vehicle.macauPlate), mainlandPlate: mainlandPlateInput(vehicle.mainlandPlate, vehicleOwnership), vehicleCategory: vehicle.vehicleCategory || '', vehicleColor: vehicle.vehicleColor || '', vehiclePhotos: [], vehiclePhotoFile: null, vehiclePhotoPersisted: hasVehiclePhoto, vehiclePhotoLoading: hasVehiclePhoto, vehiclePhotoLoadError: false, removeVehiclePhoto: false }
+    driverForm.value = form
+    if (!hasVehiclePhoto) return
+    try {
+      const photoUrl = URL.createObjectURL(await driversApi.vehiclePhoto(item.id))
+      if (driverForm.value !== form) { URL.revokeObjectURL(photoUrl); return }
+      driverFormPhotoUrl = photoUrl
+      form.vehiclePhotos = [photoUrl]
+    } catch {
+      if (driverForm.value === form) form.vehiclePhotoLoadError = true
+    } finally {
+      if (driverForm.value === form) form.vehiclePhotoLoading = false
+    }
   }
 
   function formatDriverHongKongPlate() {
@@ -118,6 +137,8 @@ export function createDriversActions({ driversApi, driverForm, selectedDriver, s
     driverForm.value.vehiclePhotoFile = file
     driverForm.value.vehiclePhotos = [driverFormPhotoUrl]
     driverForm.value.vehiclePhotoPersisted = false
+    driverForm.value.vehiclePhotoLoading = false
+    driverForm.value.vehiclePhotoLoadError = false
     driverForm.value.removeVehiclePhoto = false
     error.value = ''
   }
@@ -127,13 +148,15 @@ export function createDriversActions({ driversApi, driverForm, selectedDriver, s
     driverForm.value.vehiclePhotoFile = null
     driverForm.value.vehiclePhotos = []
     driverForm.value.vehiclePhotoPersisted = false
+    driverForm.value.vehiclePhotoLoading = false
+    driverForm.value.vehiclePhotoLoadError = false
     driverForm.value.removeVehiclePhoto = true
   }
 
   async function saveDriver() {
     const vehicleOwnership = driverForm.value.vehicleOwnership || '香港'
     const plates = normalizeVehiclePlates({ ...driverForm.value, mainlandPlate: composeMainlandPlate(driverForm.value.mainlandPlate, vehicleOwnership) })
-    const { vehiclePhotoFile, vehiclePhotoPersisted, removeVehiclePhoto, vehiclePhotos, ...driverFields } = driverForm.value
+    const { vehiclePhotoFile, vehiclePhotoPersisted, vehiclePhotoLoading, vehiclePhotoLoadError, removeVehiclePhoto, vehiclePhotos, ...driverFields } = driverForm.value
     const form = { ...driverFields, ...plates, vehicleOwnership, driverType: driverForm.value.driverType || '內部司機', name: String(driverForm.value.name || '').trim(), phone: String(driverForm.value.phone || '').trim(), vehicleCategory: String(driverForm.value.vehicleCategory || '').trim(), vehicleColor: String(driverForm.value.vehicleColor || '').trim(), id: driverForm.value.id || undefined }
     const plateError = vehiclePlateError({ ...plates, vehicleOwnership: form.vehicleOwnership }) || requiredVehiclePlateError(form)
     if (plateError) { error.value = plateError; return }
@@ -141,8 +164,8 @@ export function createDriversActions({ driversApi, driverForm, selectedDriver, s
     if (form.vehicleOwnership === '中國內地' && form.plateType !== '兩地牌') { error.value = '中國內地車輛只可選擇兩地牌'; return }
     try {
       await driversApi.save(form, vehiclePhotoFile, removeVehiclePhoto)
-      clearDriverFormPhotoUrl()
-      driverForm.value = null; error.value = ''; await load()
+      closeDriverForm()
+      await load()
     } catch (err) { error.value = displayError(err) }
   }
 
@@ -168,7 +191,7 @@ export function createDriversActions({ driversApi, driverForm, selectedDriver, s
     try {
       await driversApi.remove(item.id)
       if (selectedDriver.value?.id === item.id) closeDriverDetail()
-      if (driverForm.value?.id === item.id) driverForm.value = null
+      if (driverForm.value?.id === item.id) closeDriverForm()
       notify('司機已永久刪除')
       await load()
     } catch (err) { error.value = displayError(err); notify(error.value, 'error') }
@@ -230,13 +253,22 @@ export function createDriversActions({ driversApi, driverForm, selectedDriver, s
   async function openDriverDetail(item) {
     if (vehiclePhotoUrl) URL.revokeObjectURL(vehiclePhotoUrl)
     vehiclePhotoUrl = null
-    selectedDriver.value = { ...item, vehiclePhotoUrl: null }
-    await refreshDriverVehicles(selectedDriver.value)
+    const vehiclePhotoPersisted = Boolean(primaryDriverVehicle(item)?.vehiclePhotos?.length)
+    const detail = { ...item, vehiclePhotoUrl: null, vehiclePhotoPersisted, vehiclePhotoLoading: vehiclePhotoPersisted, vehiclePhotoLoadError: false }
+    selectedDriver.value = detail
+    await refreshDriverVehicles(detail)
+    if (selectedDriver.value !== detail) return
     if (primaryDriverVehicle(item)?.vehiclePhotos?.length) {
       try {
-        vehiclePhotoUrl = URL.createObjectURL(await driversApi.vehiclePhoto(item.id))
-        if (selectedDriver.value?.id === item.id) selectedDriver.value = { ...selectedDriver.value, vehiclePhotoUrl }
-      } catch (err) { error.value = displayError(err) }
+        const photoUrl = URL.createObjectURL(await driversApi.vehiclePhoto(item.id))
+        if (selectedDriver.value !== detail) { URL.revokeObjectURL(photoUrl); return }
+        vehiclePhotoUrl = photoUrl
+        detail.vehiclePhotoUrl = photoUrl
+      } catch {
+        if (selectedDriver.value === detail) detail.vehiclePhotoLoadError = true
+      } finally {
+        if (selectedDriver.value === detail) detail.vehiclePhotoLoading = false
+      }
     }
   }
   function previewDriver(item) { openDriverDetail(item) }
@@ -256,7 +288,7 @@ export function createDriversActions({ driversApi, driverForm, selectedDriver, s
         : action === 'revision'
           ? await driversApi.requestRevision(item.id, reason)
           : await driversApi.reject(item.id, reason)
-      selectedDriver.value = { ...updated, vehiclePhotoUrl }
+      selectedDriver.value = { ...updated, vehiclePhotoUrl, vehiclePhotoLoading: false, vehiclePhotoLoadError: item.vehiclePhotoLoadError }
       notify(action === 'approve' ? '司機審核已通過' : action === 'revision' ? '已退回司機修改資料' : '已拒絕司機註冊')
       await load()
     } catch (err) { error.value = displayError(err); notify(error.value, 'error') }
@@ -296,5 +328,5 @@ export function createDriversActions({ driversApi, driverForm, selectedDriver, s
     } catch (err) { error.value = displayError(err) }
   }
 
-  return { reviewStatusLabel, resetDriver, editDriver, formatDriverHongKongPlate, formatDriverMacauPlate, formatDriverMainlandPlate, changeDriverOwnership, uploadDriverPhotos, removeDriverPhoto, saveDriver, updateDriverStatus, removeDriver, openDriverDetail, previewDriver, closeDriverDetail, approveDriver, requestDriverRevision, rejectDriver, resetSettlement, saveSettlement, refreshDriverVehicles, manageVehicleAssignments, closeVehicleAssignments, bindVehicleDriver, setPrimaryVehicle, unbindVehicleDriver, vehicleAssignments, assignmentVehicle, updateVehicleStatus, removeVehicle, vehicleForm, resetVehicleForm, editVehicle, closeVehicleForm, changeVehicleOwnership, uploadVehiclePhoto, saveVehicle }
+  return { reviewStatusLabel, resetDriver, editDriver, closeDriverForm, formatDriverHongKongPlate, formatDriverMacauPlate, formatDriverMainlandPlate, changeDriverOwnership, uploadDriverPhotos, removeDriverPhoto, saveDriver, updateDriverStatus, removeDriver, openDriverDetail, previewDriver, closeDriverDetail, approveDriver, requestDriverRevision, rejectDriver, resetSettlement, saveSettlement, refreshDriverVehicles, manageVehicleAssignments, closeVehicleAssignments, bindVehicleDriver, setPrimaryVehicle, unbindVehicleDriver, vehicleAssignments, assignmentVehicle, updateVehicleStatus, removeVehicle, vehicleForm, resetVehicleForm, editVehicle, closeVehicleForm, changeVehicleOwnership, uploadVehiclePhoto, saveVehicle }
 }
