@@ -4,6 +4,7 @@ on:
   pull_request:
   push:
     branches: [main]
+  workflow_call:
 
 jobs:
   scope:
@@ -16,7 +17,19 @@ jobs:
         with:
           node-version: 20
       - run: npm ci
-      - run: npm run check:scope -- --scope cross-cutting --base "${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}"
+      - name: Check changed-file scope
+        if: github.event_name != 'workflow_call'
+        env:
+          EVENT_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          base="$EVENT_BASE"
+          if [[ -z "$base" || "$base" == "0000000000000000000000000000000000000000" ]]; then
+            base="$(git rev-parse HEAD^)"
+          fi
+          npm run check:scope -- --scope cross-cutting --base "$base"
+      - name: Check repository boundaries
+        if: github.event_name == 'workflow_call'
+        run: npm run check:dependencies
 
   verify:
     needs: scope
@@ -51,4 +64,16 @@ jobs:
       - if: matrix.area == 'driver'
         run: flutter pub get
         working-directory: driver
-      - run: npm run verify:affected -- --area "${{ matrix.area }}" --base "${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}"
+      - name: Verify affected area
+        if: github.event_name != 'workflow_call'
+        env:
+          EVENT_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          base="$EVENT_BASE"
+          if [[ -z "$base" || "$base" == "0000000000000000000000000000000000000000" ]]; then
+            base="$(git rev-parse HEAD^)"
+          fi
+          npm run verify:affected -- --area "${{ matrix.area }}" --base "$base"
+      - name: Verify production area
+        if: github.event_name == 'workflow_call'
+        run: npm run "verify:${{ matrix.area }}"

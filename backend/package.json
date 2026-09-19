@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "tsx watch src/main.ts",
     "prisma:generate": "prisma generate --schema ../prisma/schema.prisma",
+    "prisma:migrate:deploy": "prisma migrate deploy --schema ../prisma/schema.prisma",
     "prebuild": "npm run prisma:generate",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/main.js"

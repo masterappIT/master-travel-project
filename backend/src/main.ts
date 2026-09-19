@@ -42,7 +42,7 @@ import {
   PromotionKind,
   DiscountType,
   PromotionStackingMode,
-} from "@prisma/client";
+} from "../generated/prisma";
 
 try {
   loadEnvFile("../.env");
@@ -2705,11 +2705,14 @@ function wait(milliseconds: number) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
-function assertProductionAdminConfiguration() {
+function assertProductionConfiguration() {
   if (process.env.NODE_ENV !== "production") return;
-  const missing = ["ADMIN_USERNAME", "ADMIN_PASSWORD", "ADMIN_SESSION_SECRET"].filter(
-    (name) => !process.env[name]?.trim(),
-  );
+  const missing = [
+    "ADMIN_USERNAME",
+    "ADMIN_PASSWORD",
+    "ADMIN_SESSION_SECRET",
+    "APP_CORS_ORIGINS",
+  ].filter((name) => !process.env[name]?.trim());
   if (missing.length)
     throw new Error(`Missing required production configuration: ${missing.join(", ")}`);
   validateAdminPassword(process.env.ADMIN_PASSWORD!, process.env.ADMIN_USERNAME!);
@@ -11619,8 +11622,26 @@ class ClientOrdersController {
 
 @Controller("health")
 class HealthController {
-  @Get() check() {
+  @Get("live")
+  live() {
     return { status: "ok", service: "master-travel-project-api" };
+  }
+
+  @Get(["", "ready"])
+  async ready() {
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      return {
+        status: "ok",
+        service: "master-travel-project-api",
+        dependencies: { database: "ok" },
+      };
+    } catch {
+      throw new HttpException(
+        { status: "unavailable", dependencies: { database: "unavailable" } },
+        HttpStatus.SERVICE_UNAVAILABLE,
+      );
+    }
   }
 }
 @Module({
@@ -11651,7 +11672,7 @@ class HealthController {
 })
 class AppModule {}
 async function bootstrap() {
-  assertProductionAdminConfiguration();
+  assertProductionConfiguration();
   await prisma.$connect();
   await hydrateAdminSecurityState();
   await ensureMembershipPlanDefaults();
@@ -11660,31 +11681,34 @@ async function bootstrap() {
     bodyParser: false,
   });
   app.useBodyParser("json", { limit: "2mb" });
-  const configuredOrigins = (
-    process.env.APP_CORS_ORIGINS ||
-    process.env.ADMIN_CORS_ORIGIN ||
-    ""
-  )
-    .split(",")
+  const configuredOrigins = [
+    process.env.APP_CORS_ORIGINS,
+    process.env.ADMIN_CORS_ORIGIN,
+  ]
+    .filter(Boolean)
+    .flatMap((value) => value!.split(","))
     .map((origin) => origin.trim())
     .filter(Boolean);
-  const allowedOrigins = new Set([
-    ...configuredOrigins,
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "http://localhost:5174",
-    "http://127.0.0.1:5174",
-    "http://localhost:5181",
-    "http://127.0.0.1:5181",
-    "http://localhost:8080",
-    "http://127.0.0.1:8080",
-    "http://localhost:8085",
-    "http://127.0.0.1:8085",
-    "http://localhost:8090",
-    "http://127.0.0.1:8090",
-    "http://localhost:8091",
-    "http://127.0.0.1:8091",
-  ]);
+  const developmentOrigins =
+    process.env.NODE_ENV === "production"
+      ? []
+      : [
+          "http://localhost:5173",
+          "http://127.0.0.1:5173",
+          "http://localhost:5174",
+          "http://127.0.0.1:5174",
+          "http://localhost:5181",
+          "http://127.0.0.1:5181",
+          "http://localhost:8080",
+          "http://127.0.0.1:8080",
+          "http://localhost:8085",
+          "http://127.0.0.1:8085",
+          "http://localhost:8090",
+          "http://127.0.0.1:8090",
+          "http://localhost:8091",
+          "http://127.0.0.1:8091",
+        ];
+  const allowedOrigins = new Set([...configuredOrigins, ...developmentOrigins]);
   app.enableCors({
     origin: (origin, callback) =>
       callback(null, !origin || allowedOrigins.has(origin)),
