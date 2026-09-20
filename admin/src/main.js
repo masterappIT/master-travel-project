@@ -238,9 +238,6 @@ const App = { setup() {
      view,
      t,
      canWrite,
-     error,
-     loading,
-     load,
      paymentSettings,
      paymentSettingsSaved,
      savePaymentSettings
