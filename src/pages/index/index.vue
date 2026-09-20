@@ -744,25 +744,43 @@ const useCurrentLocation = (closePicker = false, setAsOrigin = false, forceCente
     },
     fail: (error) => uni.showToast({ title: `無法取得位置：${error.errMsg || '請允許定位權限'}`, icon: 'none' })
   })
-  // 微信小程序拒絕過定位後，不會再次自動彈出授權框。
-  // #ifdef MP-WEIXIN
-  uni.getSetting({
-    success: (settings) => {
-     if (settings.authSetting?.['scope.userLocation'] === false) {
-       uni.showModal({
-         title: '需要定位權限',
-         content: '請在微信設定中允許定位，才能取得出發地座標。',
-         success: (result) => { if (result.confirm) uni.openSetting({}) },
+  const requestLocation = () => {
+    // 微信小程序拒絕過定位後，不會再次自動彈出授權框。
+    // #ifdef MP-WEIXIN
+    uni.getSetting({
+      success: (settings) => {
+       if (settings.authSetting?.['scope.userLocation'] === false) {
+         uni.showModal({
+           title: '需要定位權限',
+           content: '請在微信設定中允許定位，才能取得出發地座標。',
+           success: (result) => { if (result.confirm) uni.openSetting({}) },
+         })
+         return
+       }
+       uni.authorize({
+         scope: 'scope.userLocation',
+         success: () => getLocation(),
+         fail: () => getLocation(),
        })
-       return
-     }
-     getLocation()
-    },
-    fail: () => getLocation(),
-  })
+      },
+      fail: () => getLocation(),
+    })
+    // #endif
+    // #ifndef MP-WEIXIN
+    getLocation()
+    // #endif
+  }
+  // 微信新版本會在隱私協議未同意前攔截 getLocation。
+  // #ifdef MP-WEIXIN
+  const privacyApi = uni as typeof uni & { requirePrivacyAuthorize?: (options: { success: () => void; fail: () => void }) => void }
+  if (typeof privacyApi.requirePrivacyAuthorize === 'function') {
+    privacyApi.requirePrivacyAuthorize({ success: requestLocation, fail: () => undefined })
+  } else {
+    requestLocation()
+  }
   // #endif
   // #ifndef MP-WEIXIN
-  getLocation()
+  requestLocation()
   // #endif
 }
 const openTrips = () => {
