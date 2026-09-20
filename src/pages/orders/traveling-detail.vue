@@ -35,7 +35,7 @@ import { computed, ref, onMounted, watch } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { useTripStore } from '../../stores/trip'
-import { closeCachedPage, cachedPageUrl, cachedPageStack, openCachedPage, returnToBookingSuccess } from '../../utils/navigation'
+import { closeCachedPage, cachedPageUrl, cachedPageStack, openCachedPage, returnToBookingSuccess, pagePath } from '../../utils/navigation'
 import OrdersBackButton from '../../components/orders/OrdersBackButton.vue'
 import { formatOrderDetailAddress } from '../../utils/orderAddress'
 import { getClientTrip, type ClientTrip } from '../../services/api'
@@ -79,13 +79,19 @@ const loadOrder = async (url = '') => {
 const loadCurrentOrder = () => {
   const candidates = [cachedPageUrl.value]
   if (typeof window !== 'undefined' && window.location.hash) candidates.push(window.location.hash)
-  const source = candidates.find(candidate => parseQueryParams(candidate).id)
+  const source = candidates.find(candidate => {
+    if (candidate === cachedPageUrl.value && pagePath(candidate) !== '/pages/orders/traveling-detail') return false
+    return Boolean(parseQueryParams(candidate).id)
+  })
   if (source) void loadOrder(source)
 }
 onLoad(options => { void loadOrder(options ? `?from=${encodeURIComponent(options.from || options.returnTo || '')}&id=${encodeURIComponent(options.id || '')}` : '') })
 onMounted(loadCurrentOrder)
 // #ifdef MP-WEIXIN || MP-TOUTIAO
-watch(cachedPageUrl, loadCurrentOrder)
+watch(cachedPageUrl, url => {
+  if (pagePath(url) !== '/pages/orders/traveling-detail') return
+  loadCurrentOrder()
+})
 // #endif
 const addressLabel = (value: string | undefined, fallback: string) => formatOrderDetailAddress(value, fallback)
 const originLabel = computed(() => addressLabel(storedOrder.value?.origin || tripStore.activeTrip?.origin, '香港國際機場'))
