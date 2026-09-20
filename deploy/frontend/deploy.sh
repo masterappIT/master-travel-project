@@ -32,5 +32,5 @@ service_url="$(gcloud run services describe "$SERVICE_NAME" \
   --region "$REGION" \
   --format='value(status.url)')"
 curl --fail --silent --show-error --retry 5 --retry-delay 2 \
-  "$service_url/healthz" >/dev/null
+  "$service_url/" >/dev/null
 printf '%s=%s\n' "$SERVICE_NAME" "$service_url"
