@@ -2,7 +2,7 @@ name: Deploy WeChat Experience
 
 on:
   push:
-    branches: [develop]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -42,7 +42,7 @@ jobs:
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: develop-mp-weixin-${{ github.sha }}
+          name: main-mp-weixin-${{ github.sha }}
           path: dist/build/mp-weixin
           if-no-files-found: error
           retention-days: 30
@@ -52,7 +52,7 @@ jobs:
           WECHAT_APPID: ${{ secrets.WECHAT_APPID }}
           WECHAT_PRIVATE_KEY: ${{ secrets.WECHAT_PRIVATE_KEY }}
           WECHAT_MP_VERSION: 0.1.${{ github.run_number }}
-          WECHAT_MP_DESC: develop-${{ github.sha }}
+          WECHAT_MP_DESC: main-${{ github.sha }}
           WECHAT_MP_ROBOT: ${{ vars.WECHAT_MP_ROBOT }}
         run: |
           set -euo pipefail
