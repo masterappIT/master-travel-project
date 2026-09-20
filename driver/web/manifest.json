@@ -1,11 +1,11 @@
 {
-    "name": "driver_web",
-    "short_name": "driver_web",
-    "start_url": ".",
+    "name": "Master App Driver",
+    "short_name": "Driver",
+    "start_url": "/",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#F5F7FB",
+    "theme_color": "#F5F7FB",
+    "description": "Master App driver web application.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
