@@ -92,7 +92,9 @@ H5 靜態檔案與 `/api/` 同源反向代理可參考 `deploy/nginx.h5.conf`。
 
 GitHub `customer` Environment 只允許 `customer` 分支部署，並保存 workflow 所需的非敏感 Google Cloud resource identifiers。資料庫連線、管理員密碼及 session secret 只保存在 Google Secret Manager；GitHub 不保存長效 service-account key 或應用程式密碼。Workload Identity Provider 同時限制 repository 與 `refs/heads/customer`。
 
-目前客戶 API 位於 `https://master-travel-api-c25rpt3lia-df.a.run.app`。前端尚未部署，因此 `APP_CORS_ORIGINS` 暫時使用不可用的保留網址；部署前端後必須改為實際 HTTPS origin 並重新發布 API。
+目前客戶 API 位於 `https://master-travel-api-c25rpt3lia-df.a.run.app`。
+
+乘客 H5、管理後台與司機 Web 分別使用獨立 Cloud Run 服務，均可縮至零並由同一個 customer workflow 發布。微信小程序 build 會以 `customer-mp-weixin-<commit>` GitHub artifact 保留 30 天，其中 `VITE_API_BASE_URL` 直接指向客戶 API；正式上傳前，仍須在微信公眾平台將 `master-travel-api-c25rpt3lia-df.a.run.app` 設為 request 合法域名，再透過微信開發者工具或平台 CI 提交審核。
 
 一般修改依序透過 PR 合併 `feature/* → develop → customer`，不要直接修改 Cloud Run revision 或 `customer` 分支。完整 migration、健康檢查、候選 revision、回滾及備份流程見 `deploy/cloud-run/README.md`。
 
