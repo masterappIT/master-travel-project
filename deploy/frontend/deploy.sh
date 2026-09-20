@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-required=(PROJECT_ID REGION SERVICE_NAME IMAGE SERVICE_ACCOUNT)
+required=(PROJECT_ID REGION SERVICE_NAME IMAGE SERVICE_ACCOUNT API_ORIGIN)
 for name in "${required[@]}"; do
   if [[ -z "${!name:-}" ]]; then
     printf 'Missing required variable: %s\n' "$name" >&2
@@ -19,6 +19,7 @@ gcloud run deploy "$SERVICE_NAME" \
   --region "$REGION" \
   --image "$IMAGE" \
   --service-account "$SERVICE_ACCOUNT" \
+  --set-env-vars "API_ORIGIN=$API_ORIGIN" \
   --port 8080 \
   --memory 256Mi \
   --cpu 1 \

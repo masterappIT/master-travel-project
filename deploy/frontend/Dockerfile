@@ -1,6 +1,6 @@
 FROM nginx:1.27-alpine
 
-COPY deploy/frontend/default.conf /etc/nginx/conf.d/default.conf
+COPY deploy/frontend/default.conf /etc/nginx/templates/default.conf.template
 COPY --from=static / /usr/share/nginx/html
 
 EXPOSE 8080
