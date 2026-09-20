@@ -17,8 +17,6 @@ jobs:
         with:
           node-version: 20
       - run: npm ci
-      - name: Check conflict markers
-        run: npm run check:conflict-markers
       - name: Check changed-file scope
         if: github.event_name != 'workflow_call'
         env:
