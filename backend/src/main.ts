@@ -4832,12 +4832,12 @@ class DriverAuthController {
     });
     if (!trip) throw new HttpException("Trip not found", HttpStatus.NOT_FOUND);
     const now = new Date();
-    if (tripOfferIsExpired(trip.scheduledAt, now))
-      throw new HttpException("Trip offer has expired", HttpStatus.GONE);
     const assignedToDriver =
       trip.driverId === driver.id &&
       trip.executionPhase === "DRIVER_PENDING_ACCEPTANCE" &&
       trip.acceptedAt === null;
+    if (!assignedToDriver && tripOfferIsExpired(trip.scheduledAt, now))
+      throw new HttpException("Trip offer has expired", HttpStatus.GONE);
     if (!assignedToDriver) {
       const settings = await prisma.appSetting.findUniqueOrThrow({
         where: { id: appSettingsDefaults.id },
@@ -4874,7 +4874,6 @@ class DriverAuthController {
             status: "CONFIRMED",
             executionPhase: "DRIVER_PENDING_ACCEPTANCE",
             acceptedAt: null,
-            scheduledAt: { gt: tripOfferCutoff(now) },
             payment: { is: { status: "PAID" } },
           }
         : {
