@@ -2711,6 +2711,7 @@ function assertProductionConfiguration() {
     "ADMIN_USERNAME",
     "ADMIN_PASSWORD",
     "ADMIN_SESSION_SECRET",
+    "AMAP_WEB_SERVICE_KEY",
     "APP_CORS_ORIGINS",
   ].filter((name) => !process.env[name]?.trim());
   if (missing.length)

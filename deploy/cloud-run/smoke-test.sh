@@ -15,4 +15,5 @@ request() {
 
 request /health/live >/dev/null
 request /health/ready >/dev/null
+request '/location/reverse-geocode?latitude=22.3193&longitude=114.1694' >/dev/null
 printf 'Smoke tests passed for %s\n' "$SERVICE_URL"

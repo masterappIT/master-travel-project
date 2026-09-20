@@ -17,7 +17,7 @@ Production access must use separate runtime, migration, and GitHub deploy servic
 - Artifact Registry Docker repository.
 - Publicly invokable Cloud Run API service and a non-public migration job in the same region as Cloud SQL. API authorization remains enforced by the application routes.
 - Cloud SQL PostgreSQL with high availability as required, automated backups, point-in-time recovery, deletion protection, and a private or approved connector path.
-- Secret Manager secrets for `DATABASE_URL`, `ADMIN_PASSWORD`, and `ADMIN_SESSION_SECRET`.
+- Secret Manager secrets for `DATABASE_URL`, `ADMIN_PASSWORD`, `ADMIN_SESSION_SECRET`, and `AMAP_WEB_SERVICE_KEY`.
 - GitHub `production` Environment with required reviewers and the variables referenced by `deploy-production.yml`.
 - Workload Identity Federation restricted to this repository and production environment.
 

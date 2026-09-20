@@ -5,7 +5,7 @@ required=(
   PROJECT_ID REGION SERVICE_NAME MIGRATION_JOB IMAGE CLOUD_SQL_INSTANCE
   SERVICE_ACCOUNT MIGRATION_SERVICE_ACCOUNT DATABASE_SECRET
   ADMIN_USERNAME ADMIN_PASSWORD_SECRET ADMIN_SESSION_SECRET
-  APP_CORS_ORIGINS
+  AMAP_SECRET APP_CORS_ORIGINS
 )
 for name in "${required[@]}"; do
   if [[ -z "${!name:-}" ]]; then
@@ -45,7 +45,7 @@ deploy_args=(
   --service-account "$SERVICE_ACCOUNT"
   --set-cloudsql-instances "$CLOUD_SQL_INSTANCE"
   --set-env-vars "^@^NODE_ENV=production@ADMIN_USERNAME=${ADMIN_USERNAME}@APP_CORS_ORIGINS=${APP_CORS_ORIGINS}"
-  --set-secrets "DATABASE_URL=${DATABASE_SECRET}:latest,ADMIN_PASSWORD=${ADMIN_PASSWORD_SECRET}:latest,ADMIN_SESSION_SECRET=${ADMIN_SESSION_SECRET}:latest"
+  --set-secrets "DATABASE_URL=${DATABASE_SECRET}:latest,ADMIN_PASSWORD=${ADMIN_PASSWORD_SECRET}:latest,ADMIN_SESSION_SECRET=${ADMIN_SESSION_SECRET}:latest,AMAP_WEB_SERVICE_KEY=${AMAP_SECRET}:latest"
   --startup-probe "httpGet.path=/health/live,httpGet.port=8080,initialDelaySeconds=0,timeoutSeconds=3,periodSeconds=5,failureThreshold=12"
   --liveness-probe "httpGet.path=/health/live,httpGet.port=8080,initialDelaySeconds=10,timeoutSeconds=3,periodSeconds=10,failureThreshold=3"
   --allow-unauthenticated
