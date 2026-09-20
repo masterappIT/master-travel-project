@@ -158,9 +158,14 @@ watch(
 </script>
 
 <style scoped>
-.map-layer{position:absolute;left:0;top:106px;width:430px;height:519px;z-index:0;overflow:hidden;background:#edf0f2}.map-layer.full-screen{top:0;height:642px}.native-map{width:430px;height:519px}.map-layer.full-screen .native-map{height:642px}.map-layer.booking-picker-open{bottom:auto!important;height:466px!important}.map-layer.booking-picker-open .native-map{height:466px!important}
+.map-layer{position:absolute;left:0;top:106px;width:430px;height:519px;z-index:0;overflow:hidden;background:#edf0f2}.map-layer.full-screen{top:0;height:642px}.map-layer.booking-picker-open{bottom:auto!important;height:466px!important}
+/* #ifdef APP-PLUS || MP-WEIXIN || MP-TOUTIAO */
+.native-map{width:430px;height:519px}.map-layer.full-screen .native-map{height:642px}.map-layer.booking-picker-open .native-map{height:466px!important}
+/* #endif */
 /* #ifdef APP-PLUS */
 .map-layer:not(.full-screen){top:189px;height:397px}.map-layer:not(.full-screen) .native-map{height:397px}.map-layer.booking-picker-open:not(.full-screen){height:383px!important}.map-layer.booking-picker-open:not(.full-screen) .native-map{height:383px!important}
 /* #endif */
+/* #ifdef H5 */
 .map-fallback{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(145deg,#e6edf0,#cbd8dc);color:#53636b;font-size:18px;font-weight:600;pointer-events:none}.route-preview{position:absolute;inset:0;width:430px;height:519px}.map-pin{position:absolute;z-index:1;width:18px;height:18px;box-sizing:border-box;border:4px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(40,67,88,.35);transform:translate(-50%,-50%)}.pickup-pin{background:#10a64a}.destination-pin{background:#ffc44f}.map-callout{position:absolute;z-index:2;display:flex;width:max-content;min-width:118px;max-width:220px;padding:8px 10px;box-sizing:border-box;flex-direction:column;border-radius:9px;background:#fff;box-shadow:0 3px 12px rgba(40,67,88,.24);color:#38434a;transform:translate(-50%,12px)}.map-callout::after{position:absolute;top:-7px;left:50%;width:0;height:0;border-top:0;border-right:7px solid transparent;border-bottom:8px solid #fff;border-left:7px solid transparent;content:'';transform:translateX(-50%)}.callout-title{font-size:11px;font-weight:500;line-height:16px}.callout-value{font-size:13px;font-weight:700;line-height:18px;text-align:center;white-space:normal;overflow-wrap:anywhere}.callout-summary{margin-top:2px;font-size:12px;font-weight:500;line-height:17px;text-align:center;white-space:normal}.destination-callout{transform:translate(-50%,12px)}.pickup-callout--center{left:50%;top:42%;transform:translate(-50%,12px)}.destination-callout::after{top:-7px;bottom:auto;border-top:0;border-right:7px solid transparent;border-bottom:8px solid #fff;border-left:7px solid transparent}.map-layer.full-screen .map-fallback,.map-layer.full-screen .route-preview{height:642px}
+/* #endif */
 </style>
