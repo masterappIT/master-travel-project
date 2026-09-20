@@ -1,4 +1,4 @@
-name: Deploy Customer
+name: Deploy Customer API
 
 on:
   push:
@@ -7,110 +7,72 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 concurrency:
-  group: customer
+  group: customer-api
   cancel-in-progress: false
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      - run: npm ci
-      - run: npm run build:h5
-
-      - name: Package H5 artifact
-        run: tar -C dist/build/h5 -czf customer-h5.tar.gz .
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: customer-h5-${{ github.sha }}
-          path: customer-h5.tar.gz
-          if-no-files-found: error
-          retention-days: 14
+  quality-gates:
+    uses: ./.github/workflows/quality-gates.yml
 
   deploy:
-    needs: build
+    needs: quality-gates
     runs-on: ubuntu-latest
     environment: customer
-    env:
-      DEPLOY_HOST: ${{ secrets.CUSTOMER_VM_HOST }}
-      DEPLOY_USER: ${{ secrets.CUSTOMER_VM_USER }}
-      DEPLOY_PORT: ${{ vars.CUSTOMER_VM_PORT }}
-      DEPLOY_PATH: ${{ vars.CUSTOMER_DEPLOY_PATH }}
-      SITE_URL: ${{ vars.CUSTOMER_SITE_URL }}
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/download-artifact@v4
+      - uses: google-github-actions/auth@v2
         with:
-          name: customer-h5-${{ github.sha }}
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
 
-      - name: Validate deployment configuration
-        run: |
-          set -euo pipefail
-          : "${DEPLOY_HOST:?Missing CUSTOMER_VM_HOST secret}"
-          : "${DEPLOY_USER:?Missing CUSTOMER_VM_USER secret}"
-          : "${DEPLOY_PATH:?Missing CUSTOMER_DEPLOY_PATH variable}"
-          : "${SITE_URL:?Missing CUSTOMER_SITE_URL variable}"
-          if [[ ! "$DEPLOY_HOST" =~ ^[a-zA-Z0-9.-]+$ ]]; then
-            echo "CUSTOMER_VM_HOST contains unsupported characters" >&2
-            exit 1
-          fi
-          if [[ ! "$DEPLOY_USER" =~ ^[a-z_][a-z0-9_-]*$ ]]; then
-            echo "CUSTOMER_VM_USER is not a valid Linux username" >&2
-            exit 1
-          fi
-          if [[ "$DEPLOY_PATH" != /* || "$DEPLOY_PATH" == *$'\n'* ]]; then
-            echo "CUSTOMER_DEPLOY_PATH must be a single-line absolute path" >&2
-            exit 1
-          fi
-          if [[ ! "$SITE_URL" =~ ^https://[^[:space:]]+$ ]]; then
-            echo "CUSTOMER_SITE_URL must be an HTTPS URL" >&2
-            exit 1
-          fi
-          if [[ -z "$DEPLOY_PORT" ]]; then
-            echo "DEPLOY_PORT=22" >> "$GITHUB_ENV"
-          elif [[ ! "$DEPLOY_PORT" =~ ^[0-9]+$ ]] || (( DEPLOY_PORT < 1 || DEPLOY_PORT > 65535 )); then
-            echo "CUSTOMER_VM_PORT must be between 1 and 65535" >&2
-            exit 1
-          fi
+      - uses: google-github-actions/setup-gcloud@v2
 
-      - name: Configure SSH
+      - name: Configure Artifact Registry
+        run: gcloud auth configure-docker "${{ vars.GCP_REGION }}-docker.pkg.dev" --quiet
+
+      - name: Build and push immutable API image
+        id: image
         env:
-          SSH_PRIVATE_KEY: ${{ secrets.CUSTOMER_VM_SSH_PRIVATE_KEY }}
-          SSH_KNOWN_HOSTS: ${{ secrets.CUSTOMER_VM_KNOWN_HOSTS }}
+          PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+          REGION: ${{ vars.GCP_REGION }}
+          REPOSITORY: ${{ vars.GCP_ARTIFACT_REPOSITORY }}
         run: |
           set -euo pipefail
-          : "${SSH_PRIVATE_KEY:?Missing CUSTOMER_VM_SSH_PRIVATE_KEY secret}"
-          : "${SSH_KNOWN_HOSTS:?Missing CUSTOMER_VM_KNOWN_HOSTS secret}"
-          install -d -m 700 ~/.ssh
-          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
-          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
-          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+          image="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/api:${GITHUB_SHA}"
+          docker buildx build \
+            --platform linux/amd64 \
+            --file backend/Dockerfile \
+            --tag "$image" \
+            --push \
+            --provenance=false \
+            .
+          digest="$(gcloud artifacts docker images describe "$image" --format='value(image_summary.digest)')"
+          printf 'image=%s@%s\n' "${image%:*}" "$digest" >> "$GITHUB_OUTPUT"
 
-      - name: Upload release
-        run: |
-          set -euo pipefail
-          remote_archive="/tmp/customer-h5-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz"
-          remote_script="/tmp/deploy-customer-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.sh"
-          scp -P "$DEPLOY_PORT" customer-h5.tar.gz \
-            "${DEPLOY_USER}@${DEPLOY_HOST}:${remote_archive}"
-          scp -P "$DEPLOY_PORT" deploy/deploy-customer.sh \
-            "${DEPLOY_USER}@${DEPLOY_HOST}:${remote_script}"
-          printf 'REMOTE_ARCHIVE=%s\nREMOTE_SCRIPT=%s\n' \
-            "$remote_archive" "$remote_script" >> "$GITHUB_ENV"
+      - name: Create pre-migration database backup
+        run: >-
+          gcloud sql backups create
+          --project "${{ vars.GCP_PROJECT_ID }}"
+          --instance "${{ vars.GCP_SQL_INSTANCE_NAME }}"
+          --description "pre-customer-release-${GITHUB_SHA}"
 
-      - name: Activate and verify release
-        run: |
-          set -euo pipefail
-          printf -v command 'bash %q %q %q %q %q' \
-            "$REMOTE_SCRIPT" "$REMOTE_ARCHIVE" "$DEPLOY_PATH" "$GITHUB_SHA" "$SITE_URL"
-          ssh -p "$DEPLOY_PORT" "${DEPLOY_USER}@${DEPLOY_HOST}" "$command"
+      - name: Migrate, deploy candidate, and promote
+        env:
+          PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+          REGION: ${{ vars.GCP_REGION }}
+          SERVICE_NAME: ${{ vars.GCP_API_SERVICE }}
+          MIGRATION_JOB: ${{ vars.GCP_MIGRATION_JOB }}
+          IMAGE: ${{ steps.image.outputs.image }}
+          CLOUD_SQL_INSTANCE: ${{ vars.GCP_CLOUD_SQL_CONNECTION_NAME }}
+          SERVICE_ACCOUNT: ${{ vars.GCP_RUNTIME_SERVICE_ACCOUNT }}
+          MIGRATION_SERVICE_ACCOUNT: ${{ vars.GCP_MIGRATION_SERVICE_ACCOUNT }}
+          DATABASE_SECRET: ${{ vars.GCP_DATABASE_URL_SECRET }}
+          ADMIN_USERNAME: ${{ vars.ADMIN_USERNAME }}
+          ADMIN_PASSWORD_SECRET: ${{ vars.GCP_ADMIN_PASSWORD_SECRET }}
+          ADMIN_SESSION_SECRET: ${{ vars.GCP_ADMIN_SESSION_SECRET }}
+          APP_CORS_ORIGINS: ${{ vars.APP_CORS_ORIGINS }}
+        run: ./deploy/cloud-run/deploy.sh
