@@ -33,7 +33,7 @@
   </view>
 </template>
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { useTripStore } from '../../stores/trip'
@@ -132,7 +132,10 @@ const quoteStatusFor = (vehicleId: string) => tripStore.fareQuotes[vehicleId]
     : quoteError.value
       ? 'error' as const
       : 'idle' as const
+onMounted(() => { void loadCatalog() })
+// #ifndef MP-WEIXIN || MP-TOUTIAO
 onShow(() => { void loadCatalog() })
+// #endif
 watch([currency, () => tripStore.activeDraft.distanceMeters], () => { void loadQuotes() })
 const cityName = (value: string | undefined, fallback: string) => {
   const text = value?.trim() || ''
