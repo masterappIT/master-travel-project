@@ -37,25 +37,50 @@ gcloud run jobs execute "$MIGRATION_JOB" \
   --region "$REGION" \
   --wait
 
-gcloud run deploy "$SERVICE_NAME" \
+deploy_args=(
+  run deploy "$SERVICE_NAME"
+  --project "$PROJECT_ID"
+  --region "$REGION"
+  --image "$IMAGE"
+  --service-account "$SERVICE_ACCOUNT"
+  --set-cloudsql-instances "$CLOUD_SQL_INSTANCE"
+  --set-env-vars "^@^NODE_ENV=production@ADMIN_USERNAME=${ADMIN_USERNAME}@APP_CORS_ORIGINS=${APP_CORS_ORIGINS}"
+  --set-secrets "DATABASE_URL=${DATABASE_SECRET}:latest,ADMIN_PASSWORD=${ADMIN_PASSWORD_SECRET}:latest,ADMIN_SESSION_SECRET=${ADMIN_SESSION_SECRET}:latest"
+  --startup-probe "httpGet.path=/health/live,httpGet.port=8080,initialDelaySeconds=0,timeoutSeconds=3,periodSeconds=5,failureThreshold=12"
+  --liveness-probe "httpGet.path=/health/live,httpGet.port=8080,initialDelaySeconds=10,timeoutSeconds=3,periodSeconds=10,failureThreshold=3"
+  --allow-unauthenticated
+  --quiet
+)
+
+existing_ready_revision="$(gcloud run services describe "$SERVICE_NAME" \
   --project "$PROJECT_ID" \
   --region "$REGION" \
-  --image "$IMAGE" \
-  --service-account "$SERVICE_ACCOUNT" \
-  --set-cloudsql-instances "$CLOUD_SQL_INSTANCE" \
-  --set-env-vars "^@^NODE_ENV=production@ADMIN_USERNAME=${ADMIN_USERNAME}@APP_CORS_ORIGINS=${APP_CORS_ORIGINS}" \
-  --set-secrets "DATABASE_URL=${DATABASE_SECRET}:latest,ADMIN_PASSWORD=${ADMIN_PASSWORD_SECRET}:latest,ADMIN_SESSION_SECRET=${ADMIN_SESSION_SECRET}:latest" \
-  --startup-probe "httpGet.path=/health/live,httpGet.port=8080,initialDelaySeconds=0,timeoutSeconds=3,periodSeconds=5,failureThreshold=12" \
-  --liveness-probe "httpGet.path=/health/live,httpGet.port=8080,initialDelaySeconds=10,timeoutSeconds=3,periodSeconds=10,failureThreshold=3" \
-  --allow-unauthenticated \
-  --no-traffic \
-  --tag candidate \
-  --quiet
+  --format='value(status.latestReadyRevisionName)' 2>/dev/null || true)"
+if [[ -n "$existing_ready_revision" ]]; then
+  deploy_args+=(--no-traffic --tag candidate)
+fi
+
+gcloud "${deploy_args[@]}"
+
+if [[ -z "$existing_ready_revision" ]]; then
+  SERVICE_URL="$(gcloud run services describe "$SERVICE_NAME" \
+    --project "$PROJECT_ID" \
+    --region "$REGION" \
+    --format='value(status.url)')"
+  SERVICE_URL="$SERVICE_URL" "$(dirname "$0")/smoke-test.sh"
+  REVISION="$(gcloud run services describe "$SERVICE_NAME" \
+    --project "$PROJECT_ID" \
+    --region "$REGION" \
+    --format='value(status.latestReadyRevisionName)')"
+  printf 'Released %s to %s\n' "$REVISION" "$SERVICE_URL"
+  exit 0
+fi
 
 CANDIDATE_URL="$(gcloud run services describe "$SERVICE_NAME" \
   --project "$PROJECT_ID" \
   --region "$REGION" \
-  --format='value(status.traffic[?tag==`candidate`].url)')"
+  --format='csv[no-heading](status.traffic.tag,status.traffic.url)' \
+  | awk -F, '$1 == "candidate" { print $2; exit }')"
 SERVICE_URL="$CANDIDATE_URL" "$(dirname "$0")/smoke-test.sh"
 
 REVISION="$(gcloud run services describe "$SERVICE_NAME" \

@@ -30,10 +30,11 @@ Production access must use separate runtime, migration, and GitHub deploy servic
 3. The workflow builds and pushes the API image and resolves its digest.
 4. Cloud SQL creates an on-demand pre-migration backup. Do not continue if it fails.
 5. The migration job runs `prisma migrate deploy` using the same image digest.
-6. A candidate revision deploys with no production traffic.
-7. `/health/live` and `/health/ready` smoke tests run against the candidate URL.
-8. Only a successful candidate receives 100% traffic; the public URL is tested again.
-9. Monitor the release for at least 30 minutes before closing the change.
+6. The first revision creates the service and is tested immediately at its public URL.
+7. Later revisions deploy as candidates with no production traffic.
+8. `/health/live` and `/health/ready` smoke tests run against the candidate URL.
+9. Only a successful candidate receives 100% traffic; the public URL is tested again.
+10. Monitor the release for at least 30 minutes before closing the change.
 
 Migrations must follow expand/contract: add backward-compatible structures first, deploy compatible code, migrate data, then remove old structures in a later release. Never use automatic down migrations in production.
 

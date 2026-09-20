@@ -11675,8 +11675,8 @@ async function bootstrap() {
   assertProductionConfiguration();
   await prisma.$connect();
   await hydrateAdminSecurityState();
-  await ensureMembershipPlanDefaults();
   await ensurePricingDefaults();
+  await ensureMembershipPlanDefaults();
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     bodyParser: false,
   });
