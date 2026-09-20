@@ -53,6 +53,12 @@ class DriverPageShell extends StatelessWidget {
                 child: Stack(
                   children: [
                     SingleChildScrollView(
+                      primary: true,
+                      physics: const BouncingScrollPhysics(
+                        parent: AlwaysScrollableScrollPhysics(),
+                      ),
+                      keyboardDismissBehavior:
+                          ScrollViewKeyboardDismissBehavior.onDrag,
                       padding: EdgeInsets.fromLTRB(
                         horizontalPadding,
                         topPadding,

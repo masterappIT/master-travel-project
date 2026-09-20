@@ -5,7 +5,7 @@
     "display": "standalone",
     "background_color": "#F5F7FB",
     "theme_color": "#F5F7FB",
-    "description": "Master App driver web",
+    "description": "Master App driver web application.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
