@@ -41,23 +41,6 @@
       margin: 0;
       background: #f5f7fb;
       overscroll-behavior-y: auto;
-      overflow: hidden;
-    }
-
-    #safari-scroll-bridge {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 1px;
-      height: 100dvh;
-      overflow-y: scroll;
-      opacity: 0;
-      pointer-events: none;
-      z-index: -1;
-    }
-
-    #safari-scroll-bridge > div {
-      height: 200vh;
     }
 
     body {
@@ -69,23 +52,8 @@
       box-sizing: border-box;
     }
   </style>
-  <script>
-    (() => {
-      const isSafari = /Safari/.test(navigator.userAgent) &&
-        !/Chrome|CriOS|Android/.test(navigator.userAgent);
-      if (!isSafari) return;
-
-      document.documentElement.classList.add('safari-scroll');
-
-      window.updateSafariScrollBridge = (offset) => {
-        const bridge = document.getElementById('safari-scroll-bridge');
-        if (bridge) bridge.scrollTop = Number(offset) || 0;
-      };
-    })();
-  </script>
 </head>
 <body>
-  <div id="safari-scroll-bridge" aria-hidden="true"><div></div></div>
   <!--
     You can customize the "flutter_bootstrap.js" script.
     This is useful to provide a custom configuration to the Flutter loader
