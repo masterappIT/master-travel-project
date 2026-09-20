@@ -1,6 +1,8 @@
 name: Deploy Production
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -29,10 +31,65 @@ jobs:
 
       - uses: google-github-actions/setup-gcloud@v2
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.4'
+          channel: stable
+          cache: true
+
       - name: Configure Artifact Registry
         run: gcloud auth configure-docker "${{ vars.GCP_REGION }}-docker.pkg.dev" --quiet
 
-      - name: Build and push immutable image
+      - name: Build production frontends
+        env:
+          VITE_API_BASE_URL: ${{ vars.PRODUCTION_API_URL }}
+          VITE_API_URL: /api
+        run: |
+          set -euo pipefail
+          npm ci
+          npm --prefix admin ci
+          (cd driver && flutter pub get)
+          npm run build:h5
+          npm run build:mp-weixin
+          npm --prefix admin run build
+          (cd driver && flutter build web \
+            --release \
+            --dart-define="DRIVER_API_BASE_URL=${{ vars.PRODUCTION_API_URL }}")
+
+      - name: Upload WeChat mini-program build
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-mp-weixin-${{ github.sha }}
+          path: dist/build/mp-weixin
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Build and push immutable frontend images
+        id: frontends
+        env:
+          PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+          REGION: ${{ vars.GCP_REGION }}
+          REPOSITORY: ${{ vars.GCP_ARTIFACT_REPOSITORY }}
+        run: |
+          set -euo pipefail
+          registry="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}"
+          while IFS='|' read -r name source; do
+            image="${registry}/${name}:${GITHUB_SHA}"
+            ./deploy/frontend/build-image.sh "$source" "$image"
+            digest="$(gcloud artifacts docker images describe "$image" --format='value(image_summary.digest)')"
+            printf '%s=%s@%s\n' "$name" "${image%:*}" "$digest" >> "$GITHUB_OUTPUT"
+          done <<'EOF'
+          passenger|dist/build/h5
+          admin|admin/dist
+          driver|driver/build/web
+          EOF
+
+      - name: Build and push immutable API image
         id: image
         env:
           PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
@@ -41,8 +98,13 @@ jobs:
         run: |
           set -euo pipefail
           image="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/api:${GITHUB_SHA}"
-          docker build --file backend/Dockerfile --tag "$image" .
-          docker push "$image"
+          docker buildx build \
+            --platform linux/amd64 \
+            --file backend/Dockerfile \
+            --tag "$image" \
+            --push \
+            --provenance=false \
+            .
           digest="$(gcloud artifacts docker images describe "$image" --format='value(image_summary.digest)')"
           printf 'image=%s@%s\n' "${image%:*}" "$digest" >> "$GITHUB_OUTPUT"
 
@@ -70,3 +132,19 @@ jobs:
           AMAP_WEB_SERVICE_KEY_SECRET: ${{ vars.GCP_AMAP_WEB_SERVICE_KEY_SECRET }}
           APP_CORS_ORIGINS: ${{ vars.APP_CORS_ORIGINS }}
         run: ./deploy/cloud-run/deploy.sh
+
+      - name: Deploy production frontends
+        env:
+          PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+          REGION: ${{ vars.GCP_REGION }}
+          SERVICE_ACCOUNT: ${{ vars.GCP_RUNTIME_SERVICE_ACCOUNT }}
+          API_ORIGIN: ${{ vars.PRODUCTION_API_URL }}
+        run: |
+          set -euo pipefail
+          while IFS='|' read -r service image; do
+            SERVICE_NAME="$service" IMAGE="$image" ./deploy/frontend/deploy.sh
+          done <<EOF
+          ${{ vars.GCP_PASSENGER_SERVICE }}|${{ steps.frontends.outputs.passenger }}
+          ${{ vars.GCP_ADMIN_SERVICE }}|${{ steps.frontends.outputs.admin }}
+          ${{ vars.GCP_DRIVER_SERVICE }}|${{ steps.frontends.outputs.driver }}
+          EOF

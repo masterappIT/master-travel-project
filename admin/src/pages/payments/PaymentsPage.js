@@ -97,5 +97,5 @@ export const PaymentsPage = {
     <button type="button" class="primary" :disabled="!canWrite" @click="savePaymentSettings">{{t('savePaymentSettings')}}</button>
     <span v-if="paymentSettingsSaved" class="success-hint"> {{t('paymentSavedSuccess')}}</span>
   </div>
-</section><ErrorState v-else-if="error" :message="error" @retry="load" /><LoadingState v-else-if="loading" :message="t('loading')" />`
+</section>`
 }
