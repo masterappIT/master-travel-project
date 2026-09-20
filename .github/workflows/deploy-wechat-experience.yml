@@ -18,7 +18,7 @@ jobs:
 
   upload:
     needs: quality-gates
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, wechat-ci]
     environment: production
     steps:
       - uses: actions/checkout@v4
