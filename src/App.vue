@@ -82,10 +82,10 @@ body,
   width: 100%;
   min-width: 0;
   max-width: none;
-  height: 100%;
+  min-height: 100%;
   margin: 0;
   padding: 0;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .currency-switch { position: fixed; z-index: 10000; top: 18px; right: 18px; display: flex; align-items: center; gap: 8px; padding: 5px 7px 5px 10px; border-radius: 18px; background: rgba(37,41,47,.82); color: #fff; font-size: 11px; }
@@ -94,18 +94,15 @@ body,
 .currency-option.active { background: #1effaa; color: #25292f; font-weight: 700; }
 
 .app-shell {
- position: fixed;
-  inset: 0;
- width: 100%;
+  position: relative;
+  width: 100%;
   max-width: none;
-  height: 100vh;
-  height: 100vh;
-  min-height: 100vh;
+  min-height: 100dvh;
   box-sizing: border-box;
   background: #56657e;
-  overflow: hidden;
-  overscroll-behavior: none;
-  touch-action: pan-y;
+  overflow: visible;
+  overscroll-behavior: auto;
+  touch-action: auto;
 }
 .splash-screen {
   width: 100%;
