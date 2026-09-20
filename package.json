@@ -44,7 +44,8 @@
     "verify:admin": "npm --prefix admin run build",
     "verify:driver": "node scripts/check-driver-analyze.mjs && node scripts/check-driver-tests.mjs && cd driver && flutter build web",
     "verify:brand": "npm --prefix brand run build",
-    "verify:affected": "node scripts/verify-affected.mjs"
+    "verify:affected": "node scripts/verify-affected.mjs",
+    "upload:mp-weixin": "node scripts/upload-mp-weixin.mjs"
   },
   "dependencies": {
     "@dcloudio/uni-app": "3.0.0-5020420260813003",
@@ -63,6 +64,7 @@
     "@dcloudio/uni-mp-weixin": "3.0.0-5020420260813003",
     "@dcloudio/uni-mp-xhs": "3.0.0-5020420260813003",
     "@dcloudio/uni-quickapp-webview": "3.0.0-5020420260813003",
+    "miniprogram-ci": "^1.9.6",
     "@prisma/client": "^6.19.3",
     "pinia": "^2.3.0",
     "vue": "^3.4.21",

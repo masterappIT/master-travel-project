@@ -86,17 +86,13 @@ H5 與管理後台使用固定連接埠；若連接埠已被其他程序占用�
 
 H5 靜態檔案與 `/api/` 同源反向代理可參考 `deploy/nginx.h5.conf`。正式 API 使用 Cloud Run + Cloud SQL，migration、發布、smoke test、回滾、監控與備份還原流程定義於 `deploy/cloud-run/README.md`；應用程式啟動不會修改資料庫 schema。
 
-## 客戶環境部署
+## 部署流程
 
-`customer` 分支的每次 push 會觸發 `Deploy Customer API` workflow。Workflow 先執行完整 quality gates，再透過 GitHub OIDC 取得短效 Google Cloud 憑證，建立 `linux/amd64` API image、備份 Cloud SQL、執行 migration、驗證候選 revision，最後才切換 Cloud Run 流量。
+`main` 是唯一正式部署分支。每次 push 都會先執行完整 quality gates，再自動建置並部署 API、乘客 H5、管理後台與司機 Web；微信小程序 build 會以 `production-mp-weixin-<commit>` GitHub artifact 保留 30 天。完整 migration、健康檢查、候選 revision、回滾及備份流程見 `deploy/cloud-run/README.md`。
 
-GitHub `customer` Environment 只允許 `customer` 分支部署，並保存 workflow 所需的非敏感 Google Cloud resource identifiers。資料庫連線、管理員密碼及 session secret 只保存在 Google Secret Manager；GitHub 不保存長效 service-account key 或應用程式密碼。Workload Identity Provider 同時限制 repository 與 `refs/heads/customer`。
+`develop` 用於開發整合及微信小程序體驗版。每次 push 通過 quality gates 後會建置小程序、保留 `develop-mp-weixin-<commit>` artifact，並透過微信小程序 CI 上傳體驗版。體驗版視同正式版本，固定連線正式 API 與正式資料庫，並沿用 GitHub `production` Environment 的微信憑證；不建立額外的 develop API、資料庫或 Environment。
 
-目前客戶 API 位於 `https://master-travel-api-c25rpt3lia-df.a.run.app`。
-
-乘客 H5、管理後台與司機 Web 分別使用獨立 Cloud Run 服務，均可縮至零並由同一個 customer workflow 發布。微信小程序 build 會以 `customer-mp-weixin-<commit>` GitHub artifact 保留 30 天，其中 `VITE_API_BASE_URL` 直接指向客戶 API；正式上傳前，仍須在微信公眾平台將 `master-travel-api-c25rpt3lia-df.a.run.app` 設為 request 合法域名，再透過微信開發者工具或平台 CI 提交審核。
-
-一般修改依序透過 PR 合併 `feature/* → develop → customer`，不要直接修改 Cloud Run revision 或 `customer` 分支。完整 migration、健康檢查、候選 revision、回滾及備份流程見 `deploy/cloud-run/README.md`。
+微信公眾平台必須將小程序使用的 API host 設為 request 合法域名，並將 GitHub Actions runner 的出口 IP 納入小程序代碼上傳白名單，或在平台允許的安全策略下停用 IP 白名單限制。體驗版上傳不會自動提交審核或發布正式版。
 
 ## 環境變數
 

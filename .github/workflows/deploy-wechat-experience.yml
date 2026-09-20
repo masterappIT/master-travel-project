@@ -1,0 +1,61 @@
+name: Deploy WeChat Experience
+
+on:
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wechat-experience
+  cancel-in-progress: true
+
+jobs:
+  quality-gates:
+    uses: ./.github/workflows/quality-gates.yml
+
+  upload:
+    needs: quality-gates
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build WeChat mini-program
+        env:
+          VITE_API_BASE_URL: https://master-travel-api-c25rpt3lia-df.a.run.app
+        run: npm run build:mp-weixin
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: develop-mp-weixin-${{ github.sha }}
+          path: dist/build/mp-weixin
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload WeChat experience build
+        env:
+          WECHAT_APPID: ${{ secrets.WECHAT_APPID }}
+          WECHAT_PRIVATE_KEY: ${{ secrets.WECHAT_PRIVATE_KEY }}
+          WECHAT_MP_VERSION: 0.1.${{ github.run_number }}
+          WECHAT_MP_DESC: develop-${{ github.sha }}
+          WECHAT_MP_ROBOT: ${{ vars.WECHAT_MP_ROBOT }}
+        run: |
+          set -euo pipefail
+          key_path="$RUNNER_TEMP/wechat-private-key.pem"
+          printf '%s' "$WECHAT_PRIVATE_KEY" > "$key_path"
+          chmod 600 "$key_path"
+          export WECHAT_PRIVATE_KEY_PATH="$key_path"
+          trap 'rm -f "$key_path"' EXIT
+          npm run upload:mp-weixin
