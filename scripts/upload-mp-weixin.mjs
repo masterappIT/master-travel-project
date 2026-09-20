@@ -32,10 +32,7 @@ await ci.upload({
   project,
   version: process.env.WECHAT_MP_VERSION,
   desc: process.env.WECHAT_MP_DESC,
-  setting: {
-    es6: true,
-    minify: true,
-  },
+  setting: {},
   robot: Number(process.env.WECHAT_MP_ROBOT || '1'),
   onProgressUpdate({ phase, message }) {
     if (message) console.log(`[${phase}] ${message}`);
