@@ -25,7 +25,7 @@
 import HomeMap from '../../components/home/HomeMap.vue'
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
-import { getClientTrip, listClientTrips, type ClientTrip } from '../../services/api'
+import { getClientTrip, listClientTrips, cancelClientTrip, type ClientTrip } from '../../services/api'
 import { cachedPagePath, cachedPageUrl, getCachedPageOrderQuery, openCachedPage } from '../../utils/navigation'
 import { isPendingTrip, selectNextPendingTrip } from '../../utils/pendingTrip'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
@@ -122,7 +122,20 @@ onUnmounted(() => { stopPolling(); stopConfirmationCountdown() })
 const goBack = () => openCachedPage(fromProfilePending.value
   ? `/pages/trips/pending?id=${encodeURIComponent(tripId.value)}`
   : '/pages/index/index')
-const cancelBooking = () => openCachedPage(`/pages/orders/pending-detail?id=${encodeURIComponent(tripId.value)}`)
+const cancelBooking = async () => {
+  if (!tripId.value) return uni.showToast({ title: '找不到訂單', icon: 'none' })
+  if (transitioning) return
+  transitioning = true
+  stopPolling()
+  try {
+    await cancelClientTrip(tripId.value)
+    openCachedPage(`/pages/orders/cancelled-detail?from=booking-success&id=${encodeURIComponent(tripId.value)}`)
+  } catch (error) {
+    transitioning = false
+    startPolling()
+    uni.showToast({ title: error instanceof Error ? error.message : '訂單取消失敗', icon: 'none' })
+  }
+}
 const showBookingDetail = () => openCachedPage(`/pages/orders/traveling-detail?from=booking-success&id=${encodeURIComponent(tripId.value)}`)
 </script>
 
