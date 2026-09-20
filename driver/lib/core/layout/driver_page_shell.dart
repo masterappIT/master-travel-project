@@ -1,9 +1,14 @@
+// ignore_for_file: avoid_web_libraries_in_flutter, deprecated_member_use
+
+import 'dart:html' as html;
+import 'dart:js' as js;
+
 import 'package:flutter/material.dart';
 
 import '../../floating_nav_bar.dart';
 import '../tokens/driver_tokens.dart';
 
-class DriverPageShell extends StatelessWidget {
+class DriverPageShell extends StatefulWidget {
   const DriverPageShell({
     super.key,
     required this.child,
@@ -30,6 +35,37 @@ class DriverPageShell extends StatelessWidget {
   final bool showBottomNavigation;
 
   @override
+  State<DriverPageShell> createState() => _DriverPageShellState();
+}
+
+class _DriverPageShellState extends State<DriverPageShell> {
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_syncSafariScrollBridge);
+  }
+
+  void _syncSafariScrollBridge() {
+    if (!html.document.documentElement!.classes.contains('safari-scroll')) {
+      return;
+    }
+    final offset = _scrollController.hasClients
+        ? _scrollController.offset.clamp(0.0, double.infinity)
+        : 0.0;
+    js.context.callMethod('updateSafariScrollBridge', <Object>[offset]);
+  }
+
+  @override
+  void dispose() {
+    _scrollController
+      ..removeListener(_syncSafariScrollBridge)
+      ..dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: DriverColors.background,
@@ -53,30 +89,31 @@ class DriverPageShell extends StatelessWidget {
                 child: Stack(
                   children: [
                     SingleChildScrollView(
-                      primary: true,
+                      controller: _scrollController,
+                      primary: false,
                       physics: const BouncingScrollPhysics(
                         parent: AlwaysScrollableScrollPhysics(),
                       ),
                       keyboardDismissBehavior:
                           ScrollViewKeyboardDismissBehavior.onDrag,
                       padding: EdgeInsets.fromLTRB(
-                        horizontalPadding,
-                        topPadding,
-                        horizontalPadding,
-                        bottomPadding,
+                        widget.horizontalPadding,
+                        widget.topPadding,
+                        widget.horizontalPadding,
+                        widget.bottomPadding,
                       ),
-                      child: child,
+                      child: widget.child,
                     ),
-                    if (showBottomNavigation)
+                    if (widget.showBottomNavigation)
                       Positioned(
-                        left: navHorizontalPadding,
-                        right: navHorizontalPadding,
+                        left: widget.navHorizontalPadding,
+                        right: widget.navHorizontalPadding,
                         bottom: DriverDimensions.navBottomInset,
                         child: FloatingNavBar(
-                          selectedIndex: selectedIndex,
-                          onHomeTap: onHomeTap,
-                          onOrderTap: onOrderTap,
-                          onProfileTap: onProfileTap,
+                          selectedIndex: widget.selectedIndex,
+                          onHomeTap: widget.onHomeTap,
+                          onOrderTap: widget.onOrderTap,
+                          onProfileTap: widget.onProfileTap,
                         ),
                       ),
                   ],
