@@ -36,6 +36,9 @@ jobs:
           VITE_API_BASE_URL: https://master-travel-api-c25rpt3lia-df.a.run.app
         run: npm run build:mp-weixin
 
+      - name: Transpile WeChat JavaScript for CI upload
+        run: node scripts/transpile-mp-weixin.mjs
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:

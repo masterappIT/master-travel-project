@@ -46,7 +46,8 @@
     "verify:driver": "node scripts/check-driver-analyze.mjs && node scripts/check-driver-tests.mjs && cd driver && flutter build web",
     "verify:brand": "npm --prefix brand run build",
     "verify:affected": "node scripts/verify-affected.mjs",
-    "upload:mp-weixin": "node scripts/upload-mp-weixin.mjs"
+    "upload:mp-weixin": "node scripts/upload-mp-weixin.mjs",
+    "transpile:mp-weixin": "node scripts/transpile-mp-weixin.mjs"
   },
   "dependencies": {
     "@dcloudio/uni-app": "3.0.0-5020420260813003",
@@ -72,6 +73,8 @@
     "vue-i18n": "^9.1.9"
   },
   "devDependencies": {
+    "@babel/core": "^7.29.7",
+    "@babel/preset-env": "^7.29.7",
     "@dcloudio/types": "^3.4.8",
     "@dcloudio/uni-automator": "3.0.0-5020420260813003",
     "@dcloudio/uni-cli-shared": "3.0.0-5020420260813003",
