@@ -51,6 +51,7 @@ jobs:
           VITE_API_URL: /api
         run: |
           set -euo pipefail
+          npm run check:conflict-markers
           npm ci
           npm --prefix admin ci
           (cd driver && flutter pub get)
@@ -60,6 +61,16 @@ jobs:
           (cd driver && flutter build web \
             --release \
             --dart-define="DRIVER_API_BASE_URL=${{ vars.PRODUCTION_API_URL }}")
+
+      - name: Verify production build outputs
+        run: |
+          set -euo pipefail
+          for directory in dist/build/h5 admin/dist driver/build/web; do
+            if grep -R -n -E '^(<<<<<<<|=======|>>>>>>>)' "$directory"; then
+              echo "Git conflict marker found in build output: $directory" >&2
+              exit 1
+            fi
+          done
 
       - name: Upload WeChat mini-program build
         uses: actions/upload-artifact@v4
