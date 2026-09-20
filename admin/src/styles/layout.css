@@ -1,13 +1,14 @@
 @import './tokens.css';
 
 .shell {
-  min-height: 100vh;
-  height: 100vh;
+  min-height: 100%;
+  height: 100%;
   display: flex;
   background: radial-gradient(circle at 85% 0%, #dfeaff 0, transparent 32rem), #f3f6fb;
 }
 .shell aside {
   position: relative;
+  min-height: 0;
   width: 252px;
   flex: 0 0 252px;
   padding: 32px 20px 24px;
@@ -72,7 +73,7 @@
 .logout { position: relative; z-index: 1; margin-top: 0; }
 .logout-mobile { display: none; }
 .logout:hover { color: #fff; background: rgba(255,255,255,.09); }
-.shell main { flex: 1 1 auto; min-width: 0; width: min(100%, var(--admin-content-max-width)); height: 100vh; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; padding: 56px clamp(24px, 5vw, 64px); }
+.shell main { flex: 1 1 auto; min-width: 0; min-height: 0; width: min(100%, var(--admin-content-max-width)); height: 100%; overflow-x: hidden; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior-y: auto; padding: 56px clamp(24px, 5vw, 64px); }
 .shell header { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 26px; }
 .shell header > div:first-child { min-width: 0; }
 .page-header-spacer { flex: 1 1 auto; min-height: 1px; }
