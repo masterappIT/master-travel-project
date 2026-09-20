@@ -796,8 +796,18 @@ const showComingSoon = (name: string) => uni.showToast({ title: `${name}功能�
 /* #ifdef H5 || APP-PLUS || MP-WEIXIN */
 .airport-hint-modal{position:fixed;inset:0;z-index:1100;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box}.airport-hint-mask{position:absolute;inset:0;background:rgba(24,35,41,.55)}.airport-hint-card{position:relative;width:min(360px,100%);padding:28px 24px 22px;border:1px solid rgba(255,255,255,.7);border-radius:24px;background:#fff;box-shadow:0 18px 50px rgba(18,31,38,.28);box-sizing:border-box;text-align:center}.airport-hint-icon{width:48px;height:48px;margin:0 auto 12px;border-radius:16px;background:#e7f7f3;color:#4eaf9d;font-size:25px;line-height:48px}.airport-hint-title{font-size:19px;font-weight:700;color:#38434a}.airport-hint-content{margin-top:12px;color:#66747b;font-size:14px;line-height:1.75}.airport-hint-button{width:100%;height:46px;margin-top:22px;border:0;border-radius:14px;background:#5ab8a5;color:#fff;font-size:15px;line-height:46px}
 /* #endif */
+/* #ifdef H5 */
 @media (max-width:599px){.page{top:0;left:0;height:var(--mobile-height,100dvh);border-radius:0;transform:scale(var(--mobile-scale, 1));transform-origin:top left}.page-content{bottom:102px;height:auto}.canvas{height:100%;min-height:0}.canvas :deep(.map-layer){bottom:205px;height:auto}.canvas :deep(.map-tool){top:auto;bottom:245px}.canvas :deep(.route-panel){top:auto;bottom:-87px;width:430px;height:331px}.canvas :deep(.panel-surface){top:0;bottom:auto;width:430px;height:331px}.business-scroll{height:auto;bottom:102px}.nav-layer :deep(.bottom-nav){bottom:0}}
+/* #endif */
 /* #ifdef APP-PLUS */
 .page{top:50%;left:50%;width:430px;height:932px;border-radius:35px;transform:translate(-50%,-50%) scale(min(1,calc(100vw / 430px),calc(100dvh / 932px)));transform-origin:center center}.page-content{inset:0;width:430px;height:932px}.canvas{width:430px;height:932px;min-height:932px}.canvas :deep(.route-panel){top:586px;bottom:auto;width:430px;height:331px}.canvas :deep(.panel-surface){top:auto;bottom:0;width:430px;height:331px}.nav-layer :deep(.bottom-nav){bottom:0}
+/* #endif */
+/* #ifdef MP-WEIXIN || MP-TOUTIAO */
+.canvas :deep(.map-layer){top:106px;bottom:auto;height:519px}
+.canvas :deep(.native-map){width:430px;height:519px}
+.canvas :deep(.map-tool){top:538px;bottom:auto}
+.canvas :deep(.route-panel){top:586px;bottom:auto;width:430px;height:331px}
+.canvas :deep(.panel-surface){top:auto;bottom:0;width:430px;height:331px}
+.nav-layer :deep(.bottom-nav){bottom:0}
 /* #endif */
 </style>
