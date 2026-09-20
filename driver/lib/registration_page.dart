@@ -443,7 +443,12 @@ class _RegistrationPageState extends State<RegistrationPage> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     _RegistrationHeader(
-                        onBack: () => Navigator.of(context).maybePop()),
+                        onBack: () => Navigator.of(context).maybePop(),
+                        onLogout: () {
+                          DriverApiClient.instance.clearSession();
+                          DriverNavigation.replaceAll(
+                              context, DriverRouteNames.login);
+                        }),
                     const SizedBox(height: DriverSpacing.xl),
                     if (_registrationStep == 1)
                       _PhoneVerificationCard(
@@ -533,8 +538,9 @@ class _RegistrationPageState extends State<RegistrationPage> {
 }
 
 class _RegistrationHeader extends StatelessWidget {
-  const _RegistrationHeader({required this.onBack});
+  const _RegistrationHeader({required this.onBack, required this.onLogout});
   final VoidCallback onBack;
+  final VoidCallback onLogout;
 
   @override
   Widget build(BuildContext context) => Column(
@@ -554,11 +560,17 @@ class _RegistrationHeader extends StatelessWidget {
                       size: 24, color: DriverColors.text),
                 ),
                 const SizedBox(width: DriverSpacing.sm),
-                const Text('司機註冊',
-                    style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w700,
-                        color: DriverColors.text)),
+                const Expanded(
+                  child: Text('司機註冊',
+                      style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w700,
+                          color: DriverColors.text)),
+                ),
+                TextButton(
+                  onPressed: onLogout,
+                  child: const Text('登出'),
+                ),
               ],
             ),
           ),

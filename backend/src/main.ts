@@ -11707,6 +11707,8 @@ async function bootstrap() {
           "http://127.0.0.1:8090",
           "http://localhost:8091",
           "http://127.0.0.1:8091",
+          "http://localhost:9099",
+          "http://127.0.0.1:9099",
         ];
   const allowedOrigins = new Set([...configuredOrigins, ...developmentOrigins]);
   app.enableCors({
