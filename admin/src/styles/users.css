@@ -72,7 +72,7 @@
   .mobile-nav-toggle span:first-child::before, .mobile-nav-toggle span:first-child::after { position: absolute; left: 0; width: 18px; height: 2px; border-radius: 999px; background: currentColor; content: ''; }
   .mobile-nav-toggle span:first-child::before { top: 1px; box-shadow: 0 5px 0 currentColor, 0 10px 0 currentColor; }
   .shell aside:not(.mobile-nav-open) nav { display: none; }
-  .shell aside.mobile-nav-open .mobile-nav-toggle { position: fixed; top: calc(34px + env(safe-area-inset-top)); right: 10px; transform: translateY(-50%); }
+  .shell aside.mobile-nav-open .mobile-nav-toggle { position: absolute; top: calc(34px + env(safe-area-inset-top)); right: 10px; transform: translateY(-50%); }
   .mobile-nav-toggle span:last-child { display: none; }
  .shell aside.mobile-nav-open nav { position: relative; z-index: 1; display: flex; flex-wrap: nowrap; align-items: center; align-content: initial; flex: 0 0 auto; width: 100%; height: 44px; max-height: 44px; margin-top: 18px; padding: 4px 56px 7px 0; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; scroll-snap-type: none; touch-action: pan-x; scrollbar-width: none; }
   .shell aside.mobile-nav-open nav::-webkit-scrollbar { display: none; }
@@ -95,7 +95,7 @@
   .shell .operations-nav .nav-group-toggle { width: auto; }
   .shell .operations-nav .nav-group-items { display: contents; margin: 0; }
   .shell .operations-nav .nav-group-items button { padding: 7px 10px; font-size: 12px; }
-  .admin-identity { position: fixed; top: calc(34px + env(safe-area-inset-top)); right: 70px; z-index: 21; display: block; max-width: min(38vw, 140px); margin: 0; padding: 3px 5px; overflow: hidden; transform: translateY(-50%); text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+  .admin-identity { position: absolute; top: calc(34px + env(safe-area-inset-top)); right: 70px; z-index: 21; display: block; max-width: min(38vw, 140px); margin: 0; padding: 3px 5px; overflow: hidden; transform: translateY(-50%); text-align: center; text-overflow: ellipsis; white-space: nowrap; }
   .admin-identity b, .admin-identity span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .admin-identity span { font-size: 9px; }
   .shell .logout-desktop { display: none; }
