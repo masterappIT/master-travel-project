@@ -13,11 +13,12 @@
       show-location
       :enable-zoom="!bookingPickerOpen"
       :enable-scroll="!bookingPickerOpen"
+      @updated="handleMapUpdated"
     />
     <!-- #endif -->
     <!-- #ifdef H5 -->
     <view class="map-fallback" aria-label="地圖區域">
-      <svg v-if="projectedRoute" class="route-preview" viewBox="0 0 430 519" preserveAspectRatio="none" aria-hidden="true">
+      <svg v-if="projectedRoute" class="route-preview" :viewBox="`0 0 430 ${logicalMapHeight}`" preserveAspectRatio="none" aria-hidden="true">
         <polyline :points="projectedRoute" fill="none" stroke="#285CFC" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
       </svg>
       <view v-if="routeBounds" class="map-pin pickup-pin" :style="pinStyle(routeBounds.origin)" aria-label="上車位置"></view>
@@ -32,9 +33,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, getCurrentInstance, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, getCurrentInstance, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
-type MapMarker = { id: number; latitude: number; longitude: number; title?: string; iconPath?: string; width?: number; height?: number; callout?: { content: string; display?: 'ALWAYS' | 'BYCLICK'; color?: string; fontSize?: number; borderRadius?: number; bgColor?: string; padding?: number; textAlign?: 'left' | 'center' } }
+type MapMarkerLabel = { content: string; color?: string; fontSize?: number; borderWidth?: number; borderColor?: string; borderRadius?: number; bgColor?: string; padding?: number; textAlign?: 'left' | 'center' | 'right'; anchorX?: number; anchorY?: number }
+type MapMarker = { id: number; latitude: number; longitude: number; title?: string; iconPath?: string; width?: number; height?: number; label?: MapMarkerLabel; callout?: { content: string; display?: 'ALWAYS' | 'BYCLICK'; color?: string; fontSize?: number; borderRadius?: number; bgColor?: string; padding?: number; textAlign?: 'left' | 'center' } }
 type MapPoint = { latitude: number; longitude: number }
 type MapPolyline = { points: MapPoint[]; color: string; width: number; arrowLine?: boolean }
 
@@ -54,6 +56,7 @@ const props = withDefaults(defineProps<{
   mapTop?: number
   mapId?: string
   fitPadding?: [number, number, number, number]
+  routePointCallouts?: boolean
 }>(), {
   scale: 13,
   mapId: 'home-route-map'
@@ -62,20 +65,40 @@ const props = withDefaults(defineProps<{
 const nativeMarkers = computed<MapMarker[]>(() => (props.markers || [])
   .filter(marker => Number.isFinite(marker?.latitude) && Number.isFinite(marker?.longitude))
   .map(marker => {
-  const content = marker.id === 1
-    ? `【上車位置】\n${props.pickupLabel || '目前定位'}`
-    : marker.id === 2 && props.routeSummary
-      ? `【目的地 · 行程資訊】\n${props.destinationLabel || marker.title || '目的地'}\n${props.routeSummary}`
-      : ''
-  const sizedMarker = {
-    ...marker,
-    width: marker.width || (marker.id === 2 ? 10 : 10),
-    height: marker.height || (marker.id === 2 ? 15 : 18)
-  }
-  return content
-    ? { ...sizedMarker, callout: { content, display: 'ALWAYS', color: '#263238', fontSize: 14, borderRadius: 8, bgColor: '#FFFFFF', padding: 10, textAlign: 'center' } }
-    : sizedMarker
-}))
+    const sizedMarker = {
+      ...marker,
+      width: marker.width || 10,
+      height: marker.height || (marker.id === 2 ? 15 : 18)
+    }
+    if (props.routePointCallouts && (marker.id === 1 || marker.id === 2)) {
+      const isOrigin = marker.id === 1
+      const labelContent = isOrigin
+        ? `出發地\n${props.pickupLabel || marker.title || '目前定位'}`
+        : `目的地\n${props.destinationLabel || marker.title || '目的地'}${props.routeSummary ? `\n${props.routeSummary}` : ''}`
+      const label: MapMarkerLabel = {
+        content: labelContent,
+        color: '#263238',
+        fontSize: 12,
+        borderWidth: 1,
+        borderColor: isOrigin ? '#10A64A' : '#285CFC',
+        borderRadius: 8,
+        bgColor: '#FFFFFF',
+        padding: 8,
+        textAlign: 'center',
+        anchorX: isOrigin ? -148 : 8,
+        anchorY: isOrigin ? -70 : -88
+      }
+      return { ...sizedMarker, label }
+    }
+    const content = marker.id === 1
+      ? `【上車位置】\n${props.pickupLabel || '目前定位'}`
+      : marker.id === 2 && props.routeSummary
+        ? `【目的地 · 行程資訊】\n${props.destinationLabel || marker.title || '目的地'}\n${props.routeSummary}`
+        : ''
+    return content
+      ? { ...sizedMarker, callout: { content, display: 'ALWAYS', color: '#263238', fontSize: 14, borderRadius: 8, bgColor: '#FFFFFF', padding: 10, textAlign: 'center' } }
+      : sizedMarker
+  }))
 const nativePolyline = computed<MapPolyline[]>(() => (props.polyline || [])
   .map(line => ({
     ...line,
@@ -88,6 +111,18 @@ const mapLayerStyle = computed(() => ({
   ...(props.mapTop !== undefined ? { top: `${props.mapTop}px` } : {})
 }))
 
+const logicalMapHeight = computed(() => props.fullScreen ? 642 : 519)
+
+const h5FitBounds = computed(() => {
+  const [top, right, bottom, left] = props.fitPadding || [64, 48, 280, 48]
+  return {
+    left,
+    right: Math.max(left, 430 - right),
+    top,
+    bottom: Math.max(top, logicalMapHeight.value - bottom)
+  }
+})
+
 const routeBounds = computed(() => {
   const points = (props.polyline?.[0]?.points || []).filter(point => Number.isFinite(point?.latitude) && Number.isFinite(point?.longitude))
   if (points.length < 2) return null
@@ -99,9 +134,10 @@ const routeBounds = computed(() => {
   const maxLatitude = Math.max(...latitudes)
   const longitudeRange = Math.max(maxLongitude - minLongitude, 0.001)
   const latitudeRange = Math.max(maxLatitude - minLatitude, 0.001)
+  const { left, right, top, bottom } = h5FitBounds.value
   const project = (point: MapPoint) => ({
-    x: 28 + ((point.longitude - minLongitude) / longitudeRange) * 374,
-    y: 96 + ((maxLatitude - point.latitude) / latitudeRange) * 250
+    x: left + ((point.longitude - minLongitude) / longitudeRange) * (right - left),
+    y: top + ((maxLatitude - point.latitude) / latitudeRange) * (bottom - top)
   })
   return { project, origin: project(points[0]), destination: project(points[points.length - 1]) }
 })
@@ -120,26 +156,56 @@ const markerStyle = (point: { x: number; y: number }) => ({ left: `${Math.min(32
 
 const instance = getCurrentInstance()
 const nativeScale = ref(props.scale)
-let centerTimer: ReturnType<typeof setTimeout> | undefined
+let centerTimers: ReturnType<typeof setTimeout>[] = []
+let centerSequence = 0
+
+const clearCenterTimers = () => {
+  centerTimers.forEach(timer => clearTimeout(timer))
+  centerTimers = []
+}
+
+const nativeFitPadding = () => props.fitPadding || [64, 48, 280, 48]
+
+let mapUpdatedFitPending = true
+
+const handleMapUpdated = () => {
+  if (!mapUpdatedFitPending) return
+  mapUpdatedFitPending = false
+  void centerMap()
+}
 
 const centerMap = async () => {
   // #ifdef APP-PLUS || MP-WEIXIN || MP-TOUTIAO
+  const sequence = ++centerSequence
+  clearCenterTimers()
   nativeScale.value = props.scale
   await nextTick()
+  const mapContext = uni.createMapContext(props.mapId, instance?.proxy)
+  const routePoints = nativePolyline.value.flatMap(line => line.points)
+  const markerPoints = nativeMarkers.value.map(({ latitude, longitude }) => ({ latitude, longitude }))
+  const points = [...routePoints, ...markerPoints]
   const moveToCenter = () => {
-    uni.createMapContext(props.mapId, instance?.proxy).moveToLocation({
+    if (sequence !== centerSequence) return
+    if (points.length > 1) {
+      mapContext.includePoints({ points, padding: nativeFitPadding() })
+      return
+    }
+    mapContext.moveToLocation({
       latitude: props.latitude,
       longitude: props.longitude
     })
   }
-  moveToCenter()
-  if (centerTimer) clearTimeout(centerTimer)
-  centerTimer = setTimeout(moveToCenter, 350)
+  ;[100, 500, 1000].forEach(delay => {
+    centerTimers.push(setTimeout(moveToCenter, delay))
+  })
   // #endif
 }
 
+onMounted(() => { void centerMap() })
+
 onBeforeUnmount(() => {
-  if (centerTimer) clearTimeout(centerTimer)
+  centerSequence++
+  clearCenterTimers()
 })
 
 watch(
@@ -148,11 +214,12 @@ watch(
 )
 
 watch(
-  () => props.centerTrigger,
+  [() => props.centerTrigger, () => nativePolyline.value],
   async () => {
     await nextTick()
     await centerMap()
-  }
+  },
+  { deep: true }
 )
 
 </script>

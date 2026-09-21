@@ -11,6 +11,7 @@ export interface TripRoute {
   originLongitude?: number
   destinationLatitude?: number
   destinationLongitude?: number
+  routePoints?: Array<{ latitude: number; longitude: number }>
   originRegion?: string
   originCity?: string
   originDistrict?: string

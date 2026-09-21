@@ -35,7 +35,7 @@ import {
   timingSafeEqual,
 } from "node:crypto";
 import { loadEnvFile } from "node:process";
-import { Observable, tap } from "rxjs";
+import { Observable, Subject, tap } from "rxjs";
 import {
   Prisma,
   PrismaClient,
@@ -72,6 +72,7 @@ type RequestLike = {
   url?: string;
   ip?: string;
   protocol?: string;
+  on?: (event: string, listener: () => void) => void;
 };
 type AdminRole = "SUPER_ADMIN" | "OPERATOR" | "VIEWER";
 interface Administrator {
@@ -435,6 +436,25 @@ async function ensurePrimaryDriverVehicle(
   if (!primary) await promotePrimaryDriverVehicle(tx, driverId);
 }
 
+type DriverOrderEvent = {
+  reason: "available" | "taken";
+  tripId?: string;
+};
+const driverOrderEvents = new Subject<DriverOrderEvent>();
+const driverEventTickets = new Map<
+  string,
+  { driverId: string; expiresAt: number }
+>();
+function publishDriverOrderEvent(event: DriverOrderEvent) {
+  driverOrderEvents.next(event);
+}
+function pruneDriverEventTickets() {
+  const now = Date.now();
+  for (const [ticket, value] of driverEventTickets) {
+    if (value.expiresAt <= now) driverEventTickets.delete(ticket);
+  }
+}
+
 const appSettingsDefaults = {
   id: "default",
   language: "繁體中文",
@@ -546,6 +566,66 @@ const hongKongMinutes = (value: Date) => {
   return Number.isFinite(hour) && Number.isFinite(minute)
     ? hour * 60 + minute
     : null;
+};
+const normalizeCoordinate = (value: unknown, min: number, max: number) => {
+  const number = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(number) && number >= min && number <= max ? number : null;
+};
+const normalizeRoutePoints = (value: unknown) => {
+  if (!Array.isArray(value)) return null;
+  const points = value
+    .map((point) => ({
+      latitude: normalizeCoordinate((point as { latitude?: unknown })?.latitude, -90, 90),
+      longitude: normalizeCoordinate((point as { longitude?: unknown })?.longitude, -180, 180),
+    }))
+    .filter((point): point is { latitude: number; longitude: number } => point.latitude !== null && point.longitude !== null)
+    .slice(0, 2000);
+  return points.length >= 2 ? points : null;
+};
+const routeMapData = (body: {
+  originLatitude?: unknown;
+  originLongitude?: unknown;
+  destinationLatitude?: unknown;
+  destinationLongitude?: unknown;
+  routePoints?: unknown;
+}) => {
+  const originLatitude = normalizeCoordinate(body.originLatitude, -90, 90);
+  const originLongitude = normalizeCoordinate(body.originLongitude, -180, 180);
+  const destinationLatitude = normalizeCoordinate(body.destinationLatitude, -90, 90);
+  const destinationLongitude = normalizeCoordinate(body.destinationLongitude, -180, 180);
+  const routePoints = normalizeRoutePoints(body.routePoints);
+  const hasOriginCoordinate =
+    body.originLatitude !== undefined || body.originLongitude !== undefined;
+  const hasDestinationCoordinate =
+    body.destinationLatitude !== undefined ||
+    body.destinationLongitude !== undefined;
+  return {
+    ...(hasOriginCoordinate
+      ? {
+          originLatitude:
+            originLatitude !== null && originLongitude !== null
+              ? originLatitude
+              : null,
+          originLongitude:
+            originLatitude !== null && originLongitude !== null
+              ? originLongitude
+              : null,
+        }
+      : {}),
+    ...(hasDestinationCoordinate
+      ? {
+          destinationLatitude:
+            destinationLatitude !== null && destinationLongitude !== null
+              ? destinationLatitude
+              : null,
+          destinationLongitude:
+            destinationLatitude !== null && destinationLongitude !== null
+              ? destinationLongitude
+              : null,
+        }
+      : {}),
+    ...(routePoints ? { routePoints } : {}),
+  };
 };
 const parseScheduledAt = (value: unknown) => {
   if (value instanceof Date) return value;
@@ -2375,8 +2455,9 @@ function tripResponse(trip: {
     quote: quote ? quoteResponse(quote) : null,
   };
 }
-function driverTripResponse(trip: {
-  id: string;
+function driverTripResponse(
+  trip: {
+    id: string;
   userId: string;
   origin: string;
   destination: string;
@@ -2398,18 +2479,34 @@ function driverTripResponse(trip: {
   vehicleMainlandPlate: string | null;
   driverPayoutAmount: number | null;
   driverPayoutCurrency: string | null;
-  user?: { id: string; name: string | null; displayName: string | null };
+  user?: {
+    id: string;
+    name: string | null;
+    displayName: string | null;
+    countryCode: string;
+    phoneNumber: string;
+  };
+  passengerPhone?: string | null;
+  passengerPhoneRegion?: string | null;
   settlement?: {
     id: string;
     driverId: string;
     method: string;
     settledAt: Date;
   } | null;
-}) {
+  },
+  includePassengerPhone = false,
+) {
   return {
-    id: trip.id,
-    userId: trip.userId,
-    passengerName: trip.user?.name || trip.user?.displayName || null,
+  id: trip.id,
+  userId: trip.userId,
+  passengerName: trip.user?.name || trip.user?.displayName || null,
+  passengerPhone: includePassengerPhone
+    ? trip.passengerPhone || trip.user?.phoneNumber || null
+    : undefined,
+  passengerPhoneCountryCode: includePassengerPhone
+    ? trip.passengerPhoneRegion || trip.user?.countryCode || null
+    : undefined,
     user: trip.user
       ? { id: trip.user.id, name: trip.user.name || trip.user.displayName }
       : undefined,
@@ -4501,7 +4598,7 @@ class DriverAuthController {
       include: { user: true, settlement: true },
       orderBy: { scheduledAt: "desc" },
     });
-    return trips.map((trip) => driverTripResponse(trip));
+    return trips.map((trip) => driverTripResponse(trip, true));
   }
 
   @Post("trips/:id/arrive")
@@ -4576,6 +4673,7 @@ class DriverAuthController {
         "Trip cannot be cancelled by driver",
         HttpStatus.CONFLICT,
       );
+    publishDriverOrderEvent({ reason: "available", tripId: id });
     const updated = await prisma.trip.findUniqueOrThrow({
       where: { id },
       include: { user: true },
@@ -4614,6 +4712,7 @@ class DriverAuthController {
     });
     if (result.count !== 1)
       throw new HttpException("Trip cannot be rejected", HttpStatus.CONFLICT);
+    publishDriverOrderEvent({ reason: "available", tripId: id });
     const updated = await prisma.trip.findUniqueOrThrow({
       where: { id },
       include: { user: true },
@@ -4735,6 +4834,7 @@ class DriverAuthController {
         orderOn: true,
         settlementOn: true,
         systemOn: true,
+        soundOn: true,
       }
     );
   }
@@ -4748,6 +4848,7 @@ class DriverAuthController {
       orderOn?: boolean;
       settlementOn?: boolean;
       systemOn?: boolean;
+      soundOn?: boolean;
     },
   ) {
     const session = await driverSessionFrom(req);
@@ -4756,6 +4857,7 @@ class DriverAuthController {
       "orderOn",
       "settlementOn",
       "systemOn",
+      "soundOn",
     ] as const;
     const data: Partial<Record<(typeof fields)[number], boolean>> = {};
     for (const field of fields) {
@@ -4805,6 +4907,45 @@ class DriverAuthController {
       readAt: item.readAt?.toISOString() || null,
     };
   }
+  @Post("trips/events/ticket")
+  async orderEventTicket(@Req() req: RequestLike) {
+    const { session } = await reviewedDriverFrom(req);
+    pruneDriverEventTickets();
+    const ticket = randomBytes(32).toString("base64url");
+    const expiresAt = Date.now() + 60_000;
+    driverEventTickets.set(ticket, { driverId: session.sub, expiresAt });
+    return { ticket, expiresAt: new Date(expiresAt).toISOString() };
+  }
+
+  @Get("trips/events")
+  async orderEvents(@Req() req: RequestLike, @Res() res: Response) {
+    pruneDriverEventTickets();
+    const ticket = req.query?.ticket;
+    const entry = ticket ? driverEventTickets.get(ticket) : undefined;
+    if (!ticket || !entry || entry.expiresAt <= Date.now())
+      throw new UnauthorizedException("Valid driver event ticket required");
+    driverEventTickets.delete(ticket);
+    const driver = await prisma.driver.findUnique({ where: { id: entry.driverId } });
+    if (!driver) throw new UnauthorizedException("Driver not found");
+    requireReviewedDriver(driver);
+    res.status(HttpStatus.OK);
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.flushHeaders();
+    const subscription = driverOrderEvents.subscribe((event) => {
+      res.write(`data: ${JSON.stringify(event)}\n\n`);
+    });
+    const heartbeat = setInterval(() => {
+      res.write(`event: heartbeat\ndata: ${JSON.stringify({ at: Date.now() })}\n\n`);
+    }, 25_000);
+    const cleanup = () => {
+      clearInterval(heartbeat);
+      subscription.unsubscribe();
+    };
+    req.on?.("close", cleanup);
+  }
+
   @Get("trips/available")
   async available(@Req() req: RequestLike) {
     const session = await driverSessionFrom(req);
@@ -4891,7 +5032,7 @@ class DriverAuthController {
       !tripOfferIsExpired(visibleTrip.scheduledAt);
     if (!assignedToDriver && !availableToDriver)
       throw new HttpException("Trip not found", HttpStatus.NOT_FOUND);
-    return driverTripResponse(visibleTrip);
+    return driverTripResponse(visibleTrip, assignedToDriver);
   }
 
   @Post("trips/:id/accept")
@@ -4992,11 +5133,12 @@ class DriverAuthController {
         "Trip is no longer available",
         HttpStatus.CONFLICT,
       );
+    publishDriverOrderEvent({ reason: "taken", tripId: id });
     const updated = await prisma.trip.findUnique({
       where: { id },
       include: { user: true },
     });
-    return updated ? driverTripResponse(updated) : null;
+    return updated ? driverTripResponse(updated, true) : null;
   }
 }
 
@@ -5136,7 +5278,8 @@ class DriverOrderUrlController {
         include: { user: true, driver: true },
       });
     });
-    return driverTripResponse(result);
+    publishDriverOrderEvent({ reason: "taken", tripId: result.id });
+    return driverTripResponse(result, true);
   }
 }
 
@@ -9541,6 +9684,9 @@ class SettingsController {
       return result;
     });
     addAudit(req, "SUCCESS");
+    if (data.dispatchSchedulingEnabled && !settings.dispatchSchedulingEnabled) {
+      publishDriverOrderEvent({ reason: "available" });
+    }
     return appSettingsResponse(updated);
   }
 }
@@ -10179,6 +10325,8 @@ class PaymentsController {
         district?: string;
         place?: string;
         detail?: string;
+        latitude?: number;
+        longitude?: number;
       };
       destinationAddress?: {
         region?: string;
@@ -10186,8 +10334,16 @@ class PaymentsController {
         district?: string;
         place?: string;
         detail?: string;
+        latitude?: number;
+        longitude?: number;
       };
+      originLatitude?: number;
+      originLongitude?: number;
+      destinationLatitude?: number;
+      destinationLongitude?: number;
+      routePoints?: Array<{ latitude?: number; longitude?: number }>;
       scheduledAt?: string;
+      durationSeconds?: number;
       passenger?: {
         name?: string;
         phone?: string;
@@ -10214,6 +10370,13 @@ class PaymentsController {
 
     const existingTrip = await prisma.trip.findUnique({ where: { quoteId } });
     const pendingExpiresAt = quoteExpiryDate();
+    const mapData = routeMapData({
+      originLatitude: body.originLatitude ?? body.originAddress?.latitude,
+      originLongitude: body.originLongitude ?? body.originAddress?.longitude,
+      destinationLatitude: body.destinationLatitude ?? body.destinationAddress?.latitude,
+      destinationLongitude: body.destinationLongitude ?? body.destinationAddress?.longitude,
+      routePoints: body.routePoints,
+    });
     if (existingTrip) {
       if (existingTrip.userId !== session.sub)
         throw new ForbiddenException("Quote belongs to another user");
@@ -10225,6 +10388,24 @@ class PaymentsController {
       await prisma.fareQuote.update({
         where: { id: quoteId },
         data: { expiresAt: pendingExpiresAt },
+      });
+      await prisma.trip.update({
+        where: { id: existingTrip.id },
+        data: {
+          origin: body.origin?.trim() || existingTrip.origin,
+          destination: body.destination?.trim() || existingTrip.destination,
+          originRegion: body.originAddress?.region?.trim() || existingTrip.originRegion,
+          originCity: body.originAddress?.city?.trim() || existingTrip.originCity,
+          originDistrict: body.originAddress?.district?.trim() || existingTrip.originDistrict,
+          originPlace: body.originAddress?.place?.trim() || existingTrip.originPlace,
+          originDetail: body.originAddress?.detail?.trim() || existingTrip.originDetail,
+          destinationRegion: body.destinationAddress?.region?.trim() || existingTrip.destinationRegion,
+          destinationCity: body.destinationAddress?.city?.trim() || existingTrip.destinationCity,
+          destinationDistrict: body.destinationAddress?.district?.trim() || existingTrip.destinationDistrict,
+          destinationPlace: body.destinationAddress?.place?.trim() || existingTrip.destinationPlace,
+          destinationDetail: body.destinationAddress?.detail?.trim() || existingTrip.destinationDetail,
+          ...mapData,
+        },
       });
       return {
         ok: true,
@@ -10272,6 +10453,7 @@ class PaymentsController {
         destinationDistrict: body.destinationAddress?.district?.trim() || null,
         destinationPlace: body.destinationAddress?.place?.trim() || null,
         destinationDetail: body.destinationAddress?.detail?.trim() || null,
+        ...mapData,
         region: "GUANGDONG",
         scheduledAt: Number.isNaN(scheduledAt.getTime())
           ? new Date(Date.now() + 3600000)
@@ -10308,6 +10490,8 @@ class PaymentsController {
         district?: string;
         place?: string;
         detail?: string;
+        latitude?: number;
+        longitude?: number;
       };
       destinationAddress?: {
         region?: string;
@@ -10315,7 +10499,14 @@ class PaymentsController {
         district?: string;
         place?: string;
         detail?: string;
+        latitude?: number;
+        longitude?: number;
       };
+      originLatitude?: number;
+      originLongitude?: number;
+      destinationLatitude?: number;
+      destinationLongitude?: number;
+      routePoints?: Array<{ latitude?: number; longitude?: number }>;
       scheduledAt?: string;
       passenger?: {
         name?: string;
@@ -10368,7 +10559,7 @@ class PaymentsController {
     if (!userTarget)
       throw new HttpException("User not found", HttpStatus.NOT_FOUND);
 
-    return prisma.$transaction(
+    const result = await prisma.$transaction(
       async (tx) => {
         const existingPayment = await tx.payment.findUnique({
           where: { quoteId },
@@ -10569,6 +10760,13 @@ class PaymentsController {
         const origin = body.origin || quote.pricing?.routeOriginCity || "香港";
         const destination =
           body.destination || quote.pricing?.routeDestinationCity || "深圳";
+        const mapData = routeMapData({
+          originLatitude: body.originLatitude ?? body.originAddress?.latitude,
+          originLongitude: body.originLongitude ?? body.originAddress?.longitude,
+          destinationLatitude: body.destinationLatitude ?? body.destinationAddress?.latitude,
+          destinationLongitude: body.destinationLongitude ?? body.destinationAddress?.longitude,
+          routePoints: body.routePoints,
+        });
         const addressData = {
           ...(body.originAddress
             ? {
@@ -10617,6 +10815,7 @@ class PaymentsController {
                 origin,
                 destination,
                 ...addressData,
+                ...mapData,
                 scheduledAt: Number.isNaN(scheduledAt.getTime())
                   ? existingPendingTrip.scheduledAt
                   : scheduledAt,
@@ -10642,6 +10841,7 @@ class PaymentsController {
                 origin,
                 destination,
                 ...addressData,
+                ...mapData,
                 region: "GUANGDONG",
                 scheduledAt: Number.isNaN(scheduledAt.getTime())
                   ? new Date()
@@ -10712,6 +10912,8 @@ class PaymentsController {
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
+    publishDriverOrderEvent({ reason: "available", tripId: result.tripId });
+    return result;
   }
 }
 
@@ -10775,6 +10977,8 @@ function clientTripResponse(
             district: trip.originDistrict,
             place: trip.originPlace,
             detail: trip.originDetail,
+            latitude: trip.originLatitude,
+            longitude: trip.originLongitude,
           }
         : null,
     destinationAddress:
@@ -10789,8 +10993,15 @@ function clientTripResponse(
             district: trip.destinationDistrict,
             place: trip.destinationPlace,
             detail: trip.destinationDetail,
+            latitude: trip.destinationLatitude,
+            longitude: trip.destinationLongitude,
           }
         : null,
+    originLatitude: trip.originLatitude,
+    originLongitude: trip.originLongitude,
+    destinationLatitude: trip.destinationLatitude,
+    destinationLongitude: trip.destinationLongitude,
+    routePoints: normalizeRoutePoints(trip.routePoints) || [],
     region: trip.region,
     scheduledAt: trip.scheduledAt.toISOString(),
     estimatedArrivalAt: trip.estimatedArrivalAt?.toISOString() || null,

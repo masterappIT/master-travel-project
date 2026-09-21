@@ -1,6 +1,6 @@
 <template>
   <view class="page booking-success-page" :style="responsiveStyle">
-    <HomeMap map-id="booking-success-map" :latitude="22.3080" :longitude="114.1719" :pickup-label="originLabel" :destination-label="destinationLabel" full-screen />
+      <HomeMap map-id="booking-success-map" :latitude="mapLatitude" :longitude="mapLongitude" :markers="mapMarkers" :polyline="mapPolyline" :route-summary="routeSummary" :center-trigger="centerTrigger" :pickup-label="mapOriginLabel" :destination-label="mapDestinationLabel" :fit-padding="[72, 42, 480, 42]" route-point-callouts full-screen />
     <view class="back" @tap="goBack"><image class="page-back" src="/static/vehicles/confirm-back.svg" mode="aspectFit" /></view>
     <view class="status-panel">
       <view class="route-card">
@@ -29,10 +29,13 @@ import { getClientTrip, cancelClientTrip, type ClientTrip } from '../../services
 import { cachedPagePath, cachedPageUrl, getCachedPageOrderQuery, isCachedPageActive, openCachedPage } from '../../utils/navigation'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { formatAssignmentCountdown, getAssignmentCountdownSeconds } from '../../utils/assignmentCountdown'
-import { formatOrderSummaryAddress } from '../../utils/orderAddress'
+import { formatOrderCardAddress, formatOrderSummaryAddress } from '../../utils/orderAddress'
+
+import { useTripRouteMap } from '../../composables/useTripRouteMap'
 
 const { responsiveStyle } = useResponsiveCanvas()
 const trip = ref<ClientTrip | null>(null)
+const { latitude: mapLatitude, longitude: mapLongitude, markers: mapMarkers, polyline: mapPolyline, routeSummary, centerTrigger } = useTripRouteMap(trip)
 const tripId = ref('')
 let pollTimer: ReturnType<typeof setInterval> | undefined
 let confirmationTimer: ReturnType<typeof setInterval> | undefined
@@ -42,8 +45,10 @@ let requestSequence = 0
 const previewCountdownEndsAt = Date.now() + 3 * 60 * 60 * 1000
 const confirmationCountdown = ref(3 * 60 * 60)
 const confirmationCountdownLabel = computed(() => formatAssignmentCountdown(confirmationCountdown.value))
-const originLabel = computed(() => formatOrderSummaryAddress(trip.value?.originAddress || trip.value?.origin, '香港'))
-const destinationLabel = computed(() => formatOrderSummaryAddress(trip.value?.destinationAddress || trip.value?.destination, '深圳'))
+const originLabel = computed(() => formatOrderCardAddress(trip.value?.originAddress || trip.value?.origin, '香港'))
+const destinationLabel = computed(() => formatOrderCardAddress(trip.value?.destinationAddress || trip.value?.destination, '深圳'))
+const mapOriginLabel = computed(() => formatOrderSummaryAddress(trip.value?.originAddress || trip.value?.origin, '香港'))
+const mapDestinationLabel = computed(() => formatOrderSummaryAddress(trip.value?.destinationAddress || trip.value?.destination, '深圳'))
 const bookingTime = computed(() => {
   const date = trip.value ? new Date(trip.value.scheduledAt) : null
   return date && !Number.isNaN(date.valueOf()) ? `${date.getMonth() + 1}月${date.getDate()}日 ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}` : '—'

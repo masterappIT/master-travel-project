@@ -6,6 +6,7 @@ import 'core/api/driver_api_client.dart';
 import 'core/layout/driver_page_shell.dart';
 import 'core/navigation/driver_navigation.dart';
 
+import 'package:driver_web/core/platform/phone_dialer.dart';
 import 'package:driver_web/core/tokens/driver_tokens.dart';
 
 class OrderAcceptedPage extends StatefulWidget {
@@ -76,6 +77,37 @@ class _OrderAcceptedPageState extends State<OrderAcceptedPage> {
                 ? ''
                 : '$code ';
     return '$symbol${value.toStringAsFixed(2)}';
+  }
+
+  Future<void> _callPassenger() async {
+    final scheduledAt =
+        DateTime.tryParse(_trip?['scheduledAt']?.toString() ?? '')?.toLocal();
+    final localPhone = _trip?['passengerPhone']?.toString().trim();
+    final countryCode =
+        _trip?['passengerPhoneCountryCode']?.toString().trim() ?? '';
+    final phone = localPhone == null || localPhone.isEmpty
+        ? null
+        : localPhone.startsWith('+') || countryCode.isEmpty
+            ? localPhone
+            : '$countryCode$localPhone';
+    if (scheduledAt == null || phone == null || phone.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('暫時沒有客戶電話號碼')),
+        );
+      }
+      return;
+    }
+    if (DateTime.now()
+        .isBefore(scheduledAt.subtract(const Duration(hours: 1)))) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('出發時間前一小時才可以致電客戶')),
+        );
+      }
+      return;
+    }
+    await openPhoneDialer(phone);
   }
 
   String _region(String address, String fallback) {
@@ -242,6 +274,7 @@ class _OrderAcceptedPageState extends State<OrderAcceptedPage> {
               scheduledAt: _formatDate(_trip?['scheduledAt']),
               passenger: _tripText('passengerName', '乘客'),
               price: _formatPrice(_trip?['price'], _trip?['currency']),
+              onCallPassenger: _callPassenger,
             ),
             const SizedBox(height: DriverSpacing.xl),
             _AcceptedVehicleCard(vehicle: vehicle),
@@ -384,12 +417,14 @@ class _AcceptedOrderCard extends StatelessWidget {
     required this.scheduledAt,
     required this.passenger,
     required this.price,
+    required this.onCallPassenger,
   });
   final String origin;
   final String destination;
   final String scheduledAt;
   final String passenger;
   final String price;
+  final VoidCallback onCallPassenger;
 
   @override
   Widget build(BuildContext context) => _Panel(
@@ -403,11 +438,34 @@ class _AcceptedOrderCard extends StatelessWidget {
                     color: DriverColors.successBackground,
                     borderRadius: BorderRadius.circular(18))),
             const SizedBox(width: DriverSpacing.md),
-            const Text('接單成功',
+            const Text('等待出發',
                 style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w700,
                     color: DriverColors.text)),
+            const Spacer(),
+            Semantics(
+              button: true,
+              label: '致電客戶',
+              child: InkWell(
+                onTap: onCallPassenger,
+                borderRadius: BorderRadius.circular(DriverRadii.pill),
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: DriverColors.background,
+                    borderRadius: BorderRadius.circular(DriverRadii.pill),
+                  ),
+                  child: SvgPicture.asset(
+                    'assets/in-progress-phone.svg',
+                    width: 20,
+                    height: 20,
+                  ),
+                ),
+              ),
+            ),
           ]),
           const Divider(height: 1, color: DriverColors.background),
           _AddressPair(origin: origin, destination: destination),

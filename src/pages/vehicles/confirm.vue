@@ -375,11 +375,14 @@ const updateConfirmMap = async () => {
   ]
   try {
     const routeResult = await planDrivingRoute(origin, destination)
+    tripStore.setRoutePoints(routeResult.points)
     mapPolyline.value = [{ points: routeResult.points, color: '#285CFC', width: 6, arrowLine: true }]
     const distanceKm = routeResult.distance / 1000
     const durationMinutes = Math.max(1, Math.round(routeResult.duration / 60))
     mapRouteSummary.value = `共 ${distanceKm < 10 ? distanceKm.toFixed(1) : Math.round(distanceKm)} 公里 · 約 ${durationMinutes >= 60 ? `${Math.floor(durationMinutes / 60)} 小時${durationMinutes % 60 ? ` ${durationMinutes % 60} 分鐘` : ''}` : `${durationMinutes} 分鐘`}`
   } catch (error) {
+    tripStore.clearRouteDistance()
+    tripStore.setRoutePoints(undefined)
     mapPolyline.value = []
     mapRouteSummary.value = ''
   }
@@ -436,6 +439,7 @@ const saveTripChanges = async (origin: string, destination: string, departureTim
   try {
     const route = await planDrivingRoute(originCoordinate, destinationCoordinate)
     tripStore.setRouteDistance(route.distance, route.duration)
+    tripStore.setRoutePoints(route.points)
     mapMarkers.value = [
       { id: 1, ...originCoordinate, title: '出發地', iconPath: '/static/home/route/origin.svg', width: 10, height: 18 },
       { id: 2, ...destinationCoordinate, title: '目的地', iconPath: '/static/home/route/destination.svg', width: 10, height: 15 }
@@ -446,6 +450,7 @@ const saveTripChanges = async (origin: string, destination: string, departureTim
     mapRouteSummary.value = `共 ${distanceKm < 10 ? distanceKm.toFixed(1) : Math.round(distanceKm)} 公里 · 約 ${durationMinutes >= 60 ? `${Math.floor(durationMinutes / 60)} 小時${durationMinutes % 60 ? ` ${durationMinutes % 60} 分鐘` : ''}` : `${durationMinutes} 分鐘`}`
   } catch (error) {
     tripStore.clearRouteDistance()
+    tripStore.setRoutePoints(undefined)
     uni.showToast({ title: error instanceof Error ? error.message : '路線規劃失敗，請稍後再試', icon: 'none' })
   }
 }
@@ -463,9 +468,19 @@ const payNow = async () => {
 const tripAddressPayload = (target: 'origin' | 'destination'): TripAddress | undefined => {
   const route = tripStore.activeDraft.route
   const address = target === 'origin'
-    ? { region: route.originRegion, city: route.originCity, district: route.originDistrict, place: route.originPlace, detail: route.originDetail }
-    : { region: route.destinationRegion, city: route.destinationCity, district: route.destinationDistrict, place: route.destinationPlace, detail: route.destinationDetail }
-  return Object.values(address).some(Boolean) ? address : undefined
+    ? { region: route.originRegion, city: route.originCity, district: route.originDistrict, place: route.originPlace, detail: route.originDetail, latitude: route.originLatitude, longitude: route.originLongitude }
+    : { region: route.destinationRegion, city: route.destinationCity, district: route.destinationDistrict, place: route.destinationPlace, detail: route.destinationDetail, latitude: route.destinationLatitude, longitude: route.destinationLongitude }
+  return Object.values(address).some(value => value !== undefined && value !== null && value !== '') ? address : undefined
+}
+const tripRoutePayload = () => {
+  const route = tripStore.activeDraft.route
+  return {
+    originLatitude: route.originLatitude,
+    originLongitude: route.originLongitude,
+    destinationLatitude: route.destinationLatitude,
+    destinationLongitude: route.destinationLongitude,
+    routePoints: route.routePoints
+  }
 }
 const pendingOrderLoading = ref(false)
 const closePayment = async () => {
@@ -485,6 +500,7 @@ const closePayment = async () => {
       destination: tripStore.activeDraft.route.destination || destinationLabel.value,
       originAddress: tripAddressPayload('origin'),
       destinationAddress: tripAddressPayload('destination'),
+      ...tripRoutePayload(),
       scheduledAt: tripStore.departureTime || undefined,
       durationSeconds: selectedFareQuote.value.durationSeconds,
       passenger: passenger.value || undefined
@@ -519,6 +535,7 @@ const confirmPayment = async () => {
         destination: tripStore.activeDraft.route.destination || destinationLabel.value,
         originAddress: tripAddressPayload('origin'),
         destinationAddress: tripAddressPayload('destination'),
+        ...tripRoutePayload(),
         scheduledAt: tripStore.departureTime || undefined,
         durationSeconds: selectedFareQuote.value.durationSeconds,
         passenger: passenger.value || undefined
@@ -543,6 +560,7 @@ const confirmPayment = async () => {
       destination: tripStore.activeDraft.route.destination || destinationLabel.value,
       originAddress: tripAddressPayload('origin'),
       destinationAddress: tripAddressPayload('destination'),
+      ...tripRoutePayload(),
       scheduledAt: tripStore.departureTime || undefined,
       useFareBalance: walletSelections.fare,
       useCashBalance: walletSelections.cash,

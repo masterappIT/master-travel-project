@@ -10,10 +10,12 @@ import 'package:driver_web/app/route_names.dart';
 import 'package:driver_web/app/router.dart';
 import 'package:driver_web/home_page.dart';
 import 'package:driver_web/main.dart';
+import 'package:driver_web/order_accepted_page.dart';
 import 'package:driver_web/order_completed_page.dart';
 import 'package:driver_web/order_hall_page.dart';
 import 'package:driver_web/order_history_page.dart';
 import 'package:driver_web/order_in_progress_page.dart';
+import 'package:driver_web/notification_settings_page.dart';
 
 import 'package:driver_web/driver_profile_page.dart';
 import 'package:driver_web/profile_page.dart';
@@ -69,6 +71,15 @@ Future<http.Response> _driverFixtureResponse(http.Request request) async {
       ],
     });
   }
+  if (path == '/driver/auth/notification-preferences') {
+    return _jsonResponse({
+      'notificationsOn': true,
+      'orderOn': true,
+      'settlementOn': true,
+      'systemOn': true,
+      'soundOn': true,
+    });
+  }
   if (path == '/driver/auth/statistics') {
     return _jsonResponse({
       'today': {'earnings': 0, 'currency': 'HKD', 'completedTrips': 0},
@@ -113,8 +124,9 @@ Future<http.Response> _driverFixtureResponse(http.Request request) async {
       'dropoffAddress': '深圳',
       'price': 280,
       'currency': 'HKD',
-      'scheduledAt': '2024-03-20T10:00:00Z',
+      'scheduledAt': '2099-03-20T10:00:00Z',
       'passengerName': '陳大文',
+      'passengerPhone': '91234567',
     });
   }
   return _jsonResponse(<String, dynamic>{});
@@ -128,6 +140,20 @@ void main() {
       client: MockClient(_driverFixtureResponse),
     );
     await DriverApiClient.instance.me();
+  });
+
+  testWidgets('shows accepted order waiting state and phone action',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(testApp(const OrderAcceptedPage(tripId: 'trip-1')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('等待出發'), findsOneWidget);
+    expect(find.bySemanticsLabel('致電客戶'), findsOneWidget);
+    expect(find.text('出發時間前一小時才可以致電客戶'), findsNothing);
+
+    await tester.tap(find.bySemanticsLabel('致電客戶'));
+    await tester.pump();
+    expect(find.text('出發時間前一小時才可以致電客戶'), findsOneWidget);
   });
 
   testWidgets('renders the driver login page', (WidgetTester tester) async {
@@ -334,6 +360,15 @@ void main() {
     expect(find.text('我的'), findsOneWidget);
   });
 
+  testWidgets('shows the new-order alert sound setting',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(testApp(const NotificationSettingsPage()));
+    await tester.pumpAndSettle();
+
+    expect(find.text('新訂單提示聲'), findsOneWidget);
+    expect(find.text('有新可接訂單時播放提示聲'), findsOneWidget);
+  });
+
   testWidgets('switches between available and accepted orders',
       (WidgetTester tester) async {
     await tester.pumpWidget(testApp(const OrderHallPage()));
@@ -352,6 +387,41 @@ void main() {
     expect(find.text('香港中環置地廣場東門大堂'), findsNothing);
     expect(find.text('深圳福田口岸'), findsNothing);
   });
+  test('plays only for genuinely new available orders when enabled', () {
+    expect(
+      shouldPlayNewOrderAlert(
+        previousIds: null,
+        currentIds: {'trip-1'},
+        enabled: true,
+      ),
+      isFalse,
+    );
+    expect(
+      shouldPlayNewOrderAlert(
+        previousIds: {'trip-1'},
+        currentIds: {'trip-1', 'trip-2'},
+        enabled: true,
+      ),
+      isTrue,
+    );
+    expect(
+      shouldPlayNewOrderAlert(
+        previousIds: {'trip-1'},
+        currentIds: {'trip-1'},
+        enabled: true,
+      ),
+      isFalse,
+    );
+    expect(
+      shouldPlayNewOrderAlert(
+        previousIds: {'trip-1'},
+        currentIds: {'trip-1', 'trip-2'},
+        enabled: false,
+      ),
+      isFalse,
+    );
+  });
+
   test('uses the primary vehicle before acceptance and the trip snapshot after',
       () {
     final primaryVehicle = {
@@ -634,6 +704,7 @@ void main() {
       'orderOn': false,
       'settlementOn': true,
       'systemOn': false,
+      'soundOn': true,
     };
 
     await api.notificationPreferences();

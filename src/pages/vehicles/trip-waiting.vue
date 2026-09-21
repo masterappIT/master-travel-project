@@ -1,6 +1,7 @@
 <template>
   <view class="page trip-waiting-page" :style="responsiveStyle">
     <view class="canvas">
+      <HomeMap map-id="trip-waiting-map" :latitude="mapLatitude" :longitude="mapLongitude" :markers="mapMarkers" :polyline="mapPolyline" :route-summary="routeSummary" :center-trigger="centerTrigger" :pickup-label="mapOriginLabel" :destination-label="mapDestinationLabel" :fit-padding="[72, 42, 480, 42]" route-point-callouts full-screen />
       <view class="back-button" @tap="goBack">
         <image src="/static/vehicles/trip-waiting/back.svg" mode="aspectFit" />
       </view>
@@ -58,24 +59,30 @@
 </template>
 
 <script setup lang="ts">
+import HomeMap from '../../components/home/HomeMap.vue'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { getClientTrip, type ClientTrip } from '../../services/api'
-import { formatOrderCardAddress } from '../../utils/orderAddress'
+import { formatOrderCardAddress, formatOrderSummaryAddress } from '../../utils/orderAddress'
 import { cachedPagePath, cachedPageUrl, getCachedPageOrderQuery, hasPageInNavigationHistory, isCachedPageActive, openCachedPage } from '../../utils/navigation'
 import { layoutVehiclePlates } from '../../utils/vehiclePlate'
 import { isPendingTrip } from '../../utils/pendingTrip'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 
+import { useTripRouteMap } from '../../composables/useTripRouteMap'
+
 const { responsiveStyle } = useResponsiveCanvas()
 const trip = ref<ClientTrip | null>(null)
+const { latitude: mapLatitude, longitude: mapLongitude, markers: mapMarkers, polyline: mapPolyline, routeSummary, centerTrigger } = useTripRouteMap(trip)
 const tripId = ref('')
 const logoLoadFailed = ref(false)
 let pollTimer: ReturnType<typeof setInterval> | undefined
 let transitioning = false
 let requestSequence = 0
-const originLabel = computed(() => formatOrderCardAddress(trip.value?.origin, '香港'))
-const destinationLabel = computed(() => formatOrderCardAddress(trip.value?.destination, '深圳'))
+const originLabel = computed(() => formatOrderCardAddress(trip.value?.originAddress || trip.value?.origin, '香港'))
+const destinationLabel = computed(() => formatOrderCardAddress(trip.value?.destinationAddress || trip.value?.destination, '深圳'))
+const mapOriginLabel = computed(() => formatOrderSummaryAddress(trip.value?.originAddress || trip.value?.origin, '香港'))
+const mapDestinationLabel = computed(() => formatOrderSummaryAddress(trip.value?.destinationAddress || trip.value?.destination, '深圳'))
 const driverName = computed(() => trip.value?.driver?.name || '陳師傅')
 const driverRating = computed(() => '5.0')
 const vehicleBrand = computed(() => 'Toyota Alphard')

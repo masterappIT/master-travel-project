@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'core/api/driver_api_client.dart';
 import 'core/layout/driver_page_shell.dart';
+import 'core/state/driver_alert_sound_preference.dart';
 import 'core/state/driver_language_preference.dart';
 import 'core/tokens/driver_tokens.dart';
 
@@ -22,6 +23,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
   bool _orderEnabled = true;
   bool _settlementEnabled = true;
   bool _systemEnabled = true;
+  bool _soundEnabled = true;
 
   @override
   void initState() {
@@ -38,6 +40,8 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
         _orderEnabled = values['orderOn'] != false;
         _settlementEnabled = values['settlementOn'] != false;
         _systemEnabled = values['systemOn'] != false;
+        _soundEnabled = values['soundOn'] != false;
+        DriverAlertSoundPreference.instance.setEnabled(_soundEnabled);
         _loading = false;
       });
     } on DriverApiException catch (error) {
@@ -56,6 +60,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
       _orderEnabled,
       _settlementEnabled,
       _systemEnabled,
+      _soundEnabled,
     ];
     setState(() {
       update();
@@ -68,7 +73,9 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
         'orderOn': _orderEnabled,
         'settlementOn': _settlementEnabled,
         'systemOn': _systemEnabled,
+        'soundOn': _soundEnabled,
       });
+      DriverAlertSoundPreference.instance.setEnabled(_soundEnabled);
       if (!mounted) return;
       setState(() => _saving = false);
     } on DriverApiException catch (error) {
@@ -78,6 +85,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
         _orderEnabled = previous[1];
         _settlementEnabled = previous[2];
         _systemEnabled = previous[3];
+        _soundEnabled = previous[4];
         _saving = false;
         _error = error.message;
       });
@@ -128,6 +136,15 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
                   onChanged: _saving
                       ? null
                       : (value) => _setValue(() => _orderEnabled = value)),
+              _ToggleRow(
+                  title:
+                      driverText('新訂單提示聲', '新订单提示音', 'New order alert sound'),
+                  detail: driverText('有新可接訂單時播放提示聲', '有新可接订单时播放提示音',
+                      'Play a sound for new available orders'),
+                  value: _soundEnabled,
+                  onChanged: _saving
+                      ? null
+                      : (value) => _setValue(() => _soundEnabled = value)),
               _ToggleRow(
                   title: driverText('結算通知', '结算通知', 'Settlement notifications'),
                   detail: driverText('結算完成或狀態更新時通知我', '结算完成或状态更新时通知我',

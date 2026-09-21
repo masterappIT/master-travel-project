@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import type { FareQuote } from '../services/api'
 import type { TripDraft, ServiceMode } from '../types/trip'
 import type { Vehicle } from '../types/vehicle'
+import { compactRoutePoints } from '../utils/routePoints'
 
 const createTripDraft = (serviceMode: ServiceMode): TripDraft => ({
   serviceMode,
@@ -62,7 +63,14 @@ export const useTripStore = defineStore('trip', () => {
       route.destinationLongitude = undefined
     }
     if (location) Object.assign(activeDraft.value.route, location)
-    if (routeChanged) clearRouteDistance()
+    if (routeChanged) {
+      clearRouteDistance()
+      route.routePoints = undefined
+    }
+  }
+
+  function setRoutePoints(points: TripDraft['route']['routePoints']) {
+    activeDraft.value.route.routePoints = compactRoutePoints(points)
   }
 
   function setRouteDistance(distanceMeters: number, durationSeconds?: number) {
@@ -152,6 +160,7 @@ export const useTripStore = defineStore('trip', () => {
     selectedFareQuote,
     setRoute,
     setRouteDistance,
+    setRoutePoints,
     setDepartureTime,
     setCouponCode,
     setChosenVehicle,

@@ -700,6 +700,8 @@ export type TripAddress = {
   district?: string | null
   place?: string | null
   detail?: string | null
+  latitude?: number | null
+  longitude?: number | null
 }
 
 export type TripPayRequest = {
@@ -712,6 +714,11 @@ export type TripPayRequest = {
   destination?: string
   originAddress?: TripAddress
   destinationAddress?: TripAddress
+  originLatitude?: number
+  originLongitude?: number
+  destinationLatitude?: number
+  destinationLongitude?: number
+  routePoints?: Coordinate[]
   scheduledAt?: string
   passenger?: TripPassenger
 }
@@ -741,6 +748,11 @@ export type CreatePendingTripRequest = {
   destination?: string
   originAddress?: TripAddress
   destinationAddress?: TripAddress
+  originLatitude?: number
+  originLongitude?: number
+  destinationLatitude?: number
+  destinationLongitude?: number
+  routePoints?: Coordinate[]
   scheduledAt?: string
   durationSeconds?: number
   passenger?: TripPassenger
@@ -758,8 +770,9 @@ export async function createPendingTrip(params: CreatePendingTripRequest): Promi
     url: `${API_BASE_URL}/payments/trip-pending`,
     method: 'POST',
     data: params,
-    header: authHeaders()
-  })
+    header: authHeaders(),
+    timeout: REQUEST_TIMEOUT_MS
+  }).catch(error => { throw networkError(error, '無法連接伺服器，待付款訂單建立失敗') })
   if (response.statusCode >= 400) throw apiError(response, '待付款訂單建立失敗')
   return response.data as CreatePendingTripResult
 }
@@ -769,8 +782,9 @@ export async function payTrip(params: TripPayRequest): Promise<TripPayResult> {
     url: `${API_BASE_URL}/payments/trip-pay`,
     method: 'POST',
     data: params,
-    header: authHeaders()
-  })
+    header: authHeaders(),
+    timeout: REQUEST_TIMEOUT_MS
+  }).catch(error => { throw networkError(error, '無法連接伺服器，支付失敗') })
   if (response.statusCode >= 400) throw apiError(response, '支付失敗')
   return response.data as TripPayResult
 }
@@ -797,6 +811,11 @@ export type ClientTrip = {
   destination: string
   originAddress: TripAddress | null
   destinationAddress: TripAddress | null
+  originLatitude: number | null
+  originLongitude: number | null
+  destinationLatitude: number | null
+  destinationLongitude: number | null
+  routePoints: Coordinate[]
   region: string
   scheduledAt: string
   estimatedArrivalAt: string | null
