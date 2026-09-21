@@ -1,14 +1,15 @@
 <template>
   <view :class="['page', { 'has-load-error': loadError }]" :style="responsiveStyle">
     <view v-if="loadError" class="load-error">訂單不存在或無權查看</view>
-    <template v-if="!loadError">
-      <view class="header">
-        <OrdersBackButton icon-src="/static/orders/traveling-back.svg" @tap="goBack" />
-        <text v-if="isTraveling" class="traveling-title">待出行</text>
-        <text v-else class="number">訂單編號：{{ orderNumber }}</text>
-      </view>
+    <template v-else-if="loading">
+      <view class="loading-state">載入中…</view>
     </template>
-    <template v-if="!loadError && isTraveling">
+    <view v-if="!loadError && !loading" class="header">
+      <OrdersBackButton icon-src="/static/orders/traveling-back.svg" @tap="goBack" />
+      <text v-if="isTraveling" class="traveling-title">待出行</text>
+      <text v-else class="number">訂單編號：{{ orderNumber }}</text>
+    </view>
+    <template v-if="!loadError && !loading && isTraveling">
       <text class="traveling-order-number">訂單編號：{{ orderNumber }}</text>
       <view class="traveling-card">
         <view class="traveling-status-row">
@@ -31,7 +32,7 @@
         </view>
       </view>
     </template>
-    <template v-else-if="!loadError">
+    <template v-else-if="!loadError && !loading && isCancelled">
       <view class="assist"><image src="/static/orders/help.svg" mode="aspectFit" /><text>訂單協助</text></view>
       <view class="status"><image :src="statusIcon" mode="aspectFit" /><text>取消</text></view>
       <view class="traveling-card standard-detail-card">
@@ -65,6 +66,7 @@ const { responsiveStyle } = useResponsiveCanvas()
 const isCompleted = ref(false)
 const isCancelled = ref(true)
 const isTraveling = ref(false)
+const loading = ref(true)
 const storedOrder = ref<ClientTrip | undefined>()
 const loadError = ref(false)
 const routeUrl = ref('')
@@ -75,24 +77,41 @@ const orderNumber = computed(() => {
 const parseQueryParams = (url = '') => Object.fromEntries((url.split('?')[1] || '').split('&').filter(Boolean).map(pair => { const [key, ...value] = pair.split('='); return [decodeURIComponent(key), decodeURIComponent(value.join('=') || '')] }))
 const loadOrder = async (url = '') => {
   const id = parseQueryParams(url).id
-  if (!id) return
+  if (!id) {
+    loading.value = false
+    return
+  }
   loadError.value = false
+  loading.value = true
   try {
-    storedOrder.value = await getClientTrip(id)
-    isCancelled.value = storedOrder.value.status === 'CANCELLED'
+    const order = await getClientTrip(id)
+    storedOrder.value = order
+    isCompleted.value = order.status === 'COMPLETED'
+    isCancelled.value = order.status === 'CANCELLED'
+    isTraveling.value = order.status === 'CONFIRMED'
+    if (order.status !== 'CANCELLED') {
+      const params = parseQueryParams(url)
+      const source = params.from || params.returnTo || 'orders'
+      const target = order.status === 'PENDING'
+        ? `/pages/orders/pending-detail?from=${encodeURIComponent(source)}&id=${encodeURIComponent(order.id)}`
+        : order.status === 'CONFIRMED'
+          ? `/pages/orders/traveling-detail?from=${encodeURIComponent(source)}&id=${encodeURIComponent(order.id)}`
+          : `/pages/orders/completed-detail?status=completed&from=${encodeURIComponent(source)}&id=${encodeURIComponent(order.id)}`
+      openCachedPage(target)
+    }
   } catch (error) {
     storedOrder.value = undefined
     loadError.value = true
     uni.showToast({ title: error instanceof Error ? error.message : '訂單載入失敗', icon: 'none' })
+  } finally {
+    loading.value = false
   }
 }
 const applyStatus = (url?: string) => {
   const currentUrl = url || routeUrl.value || (typeof window !== 'undefined' && window.location.hash ? window.location.hash : cachedPageUrl.value)
-  if (parseQueryParams(currentUrl).id) routeUrl.value = currentUrl
-  void loadOrder(currentUrl)
-  isCompleted.value = false
-  isCancelled.value = true
-  isTraveling.value = false
+  const id = parseQueryParams(currentUrl).id
+  if (id) routeUrl.value = currentUrl
+  if (id) void loadOrder(currentUrl)
 }
 onLoad((options) => {
   const query = options?.id ? `?from=${encodeURIComponent(options.from || options.returnTo || '')}&id=${encodeURIComponent(options.id)}` : ''
