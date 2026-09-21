@@ -125,49 +125,49 @@
     </view>
   </view>
   <!-- #ifdef MP-WEIXIN || MP-TOUTIAO -->
-  <TripsPage v-if="visitedPages.has('/pages/trips/trips')" v-show="activePagePath === '/pages/trips/trips'" />
-  <ProfilePendingTripPage v-if="visitedPages.has('/pages/trips/pending')" :key="cachedPageUrl" v-show="activePagePath === '/pages/trips/pending'" />
-  <MembershipPage v-if="visitedPages.has('/pages/membership/membership')" v-show="activePagePath === '/pages/membership/membership'" />
-  <MileagePage v-if="visitedPages.has('/pages/mileage/mileage')" v-show="activePagePath === '/pages/mileage/mileage'" />
-  <InvitePage v-if="visitedPages.has('/pages/invite/invite')" v-show="activePagePath === '/pages/invite/invite'" />
-  <MessagesPage v-if="visitedPages.has('/pages/messages/messages')" v-show="activePagePath === '/pages/messages/messages'" />
-  <MessageDetailPage v-if="visitedPages.has('/pages/messages/detail')" v-show="activePagePath === '/pages/messages/detail'" />
-  <OrdersPage v-if="visitedPages.has('/pages/orders/orders')" v-show="activePagePath === '/pages/orders/orders'" />
-  <OrderDetailPage v-if="visitedPages.has('/pages/orders/detail')" :key="cachedPageUrl" v-show="activePagePath === '/pages/orders/detail'" />
-  <CompletedOrderDetailPage v-if="visitedPages.has('/pages/orders/completed-detail')" :key="cachedPageUrl" v-show="activePagePath === '/pages/orders/completed-detail'" />
-   <TravelingOrderDetailPage v-if="visitedPages.has('/pages/orders/traveling-detail')" :key="cachedPageUrl" v-show="activePagePath === '/pages/orders/traveling-detail'" />
-  <PendingOrderDetailPage v-if="visitedPages.has('/pages/orders/pending-detail')" :key="cachedPageUrl" v-show="activePagePath === '/pages/orders/pending-detail'" />
-  <CancelledOrderDetailPage v-if="visitedPages.has('/pages/orders/cancelled-detail')" :key="cachedPageUrl" v-show="activePagePath === '/pages/orders/cancelled-detail'" />
-  <TripsDetailPage v-if="visitedPages.has('/pages/trips/detail')" :key="cachedPageUrl" v-show="activePagePath === '/pages/trips/detail'" />
-  <VehicleSelectPage v-if="visitedPages.has('/pages/vehicles/select')" v-show="activePagePath === '/pages/vehicles/select'" />
-  <VehicleSelectedPage v-if="visitedPages.has('/pages/vehicles/selected')" v-show="activePagePath === '/pages/vehicles/selected'" />
-  <VehicleConfirmPage v-if="visitedPages.has('/pages/vehicles/confirm')" v-show="activePagePath === '/pages/vehicles/confirm'" />
-  <BookingSuccessPage v-if="visitedPages.has('/pages/vehicles/booking-success')" v-show="activePagePath === '/pages/vehicles/booking-success'" />
-  <TripWaitingPage v-if="visitedPages.has('/pages/vehicles/trip-waiting')" :key="cachedPageUrl" v-show="activePagePath === '/pages/vehicles/trip-waiting'" />
-  <TripProgressPage v-if="visitedPages.has('/pages/vehicles/trip-progress')" :key="cachedPageUrl" v-show="activePagePath === '/pages/vehicles/trip-progress'" />
-  <TripCompletePage v-if="visitedPages.has('/pages/vehicles/trip-complete')" :key="cachedPageUrl" v-show="activePagePath === '/pages/vehicles/trip-complete'" />
-  <AccountPage v-if="visitedPages.has('/pages/account/account')" v-show="activePagePath === '/pages/account/account'" />
-  <SettingsPage v-if="visitedPages.has('/pages/settings/settings')" v-show="activePagePath === '/pages/settings/settings'" />
-  <WalletPage v-if="visitedPages.has('/pages/wallet/wallet')" v-show="activePagePath === '/pages/wallet/wallet'" />
-  <TopUpPage v-if="visitedPages.has('/pages/top-up/top-up')" v-show="activePagePath === '/pages/top-up/top-up'" />
-  <TopUpDetailPage v-if="visitedPages.has('/pages/top-up/detail/detail')" :key="cachedPageUrl" v-show="activePagePath === '/pages/top-up/detail/detail'" />
-  <VoucherClaimPage v-if="visitedPages.has('/pages/voucher/claim')" v-show="activePagePath === '/pages/voucher/claim'" />
-  <WithdrawPage v-if="visitedPages.has('/pages/withdraw/withdraw')" v-show="activePagePath === '/pages/withdraw/withdraw'" />
-  <WithdrawDetailPage v-if="visitedPages.has('/pages/withdraw/detail')" v-show="activePagePath === '/pages/withdraw/detail'" />
-  <AlipayWithdrawPage v-if="visitedPages.has('/pages/withdraw/alipay')" v-show="activePagePath === '/pages/withdraw/alipay'" />
-  <AlipayWithdrawDetailPage v-if="visitedPages.has('/pages/withdraw/alipay-detail')" v-show="activePagePath === '/pages/withdraw/alipay-detail'" />
-  <PaymentSettingsPage v-if="visitedPages.has('/pages/payment-settings/payment-settings')" v-show="activePagePath === '/pages/payment-settings/payment-settings'" />
-  <TransactionsPage v-if="visitedPages.has('/pages/transactions/transactions')" v-show="activePagePath === '/pages/transactions/transactions'" />
-  <ExpenseDetailPage v-if="visitedPages.has('/pages/transactions/expense-detail')" v-show="activePagePath === '/pages/transactions/expense-detail'" />
-  <RefundPage v-if="visitedPages.has('/pages/refund/detail')" v-show="activePagePath === '/pages/refund/detail'" />
-  <BankCardPage v-if="visitedPages.has('/pages/bank-card/bank-card')" v-show="activePagePath === '/pages/bank-card/bank-card'" />
-  <BankCardAccountPage v-if="visitedPages.has('/pages/bank-card/account')" v-show="activePagePath === '/pages/bank-card/account'" />
-  <BankCardListPage v-if="visitedPages.has('/pages/bank-card/list')" v-show="activePagePath === '/pages/bank-card/list'" />
-  <BankCardDetailPage v-if="visitedPages.has('/pages/bank-card/detail')" v-show="activePagePath === '/pages/bank-card/detail'" />
-  <CommonDataPage v-if="visitedPages.has('/pages/common-data/common-data')" v-show="activePagePath === '/pages/common-data/common-data'" />
-  <CouponsPage v-if="visitedPages.has('/pages/coupons/coupons')" v-show="activePagePath === '/pages/coupons/coupons'" />
-  <ComplaintsPage v-if="visitedPages.has('/pages/complaints/complaints')" v-show="activePagePath === '/pages/complaints/complaints'" />
-  <SupportChatPage v-if="visitedPages.has('/pages/support/chat')" v-show="activePagePath === '/pages/support/chat'" />
+  <TripsPage v-if="activePagePath === '/pages/trips/trips'" />
+  <ProfilePendingTripPage v-if="activePagePath === '/pages/trips/pending'" :key="cachedPageUrl" />
+  <MembershipPage v-if="activePagePath === '/pages/membership/membership'" />
+  <MileagePage v-if="activePagePath === '/pages/mileage/mileage'" />
+  <InvitePage v-if="activePagePath === '/pages/invite/invite'" />
+  <MessagesPage v-if="activePagePath === '/pages/messages/messages'" />
+  <MessageDetailPage v-if="activePagePath === '/pages/messages/detail'" />
+  <OrdersPage v-if="activePagePath === '/pages/orders/orders'" />
+  <OrderDetailPage v-if="activePagePath === '/pages/orders/detail'" :key="cachedPageUrl" />
+  <CompletedOrderDetailPage v-if="activePagePath === '/pages/orders/completed-detail'" :key="cachedPageUrl" />
+   <TravelingOrderDetailPage v-if="activePagePath === '/pages/orders/traveling-detail'" :key="cachedPageUrl" />
+  <PendingOrderDetailPage v-if="activePagePath === '/pages/orders/pending-detail'" :key="cachedPageUrl" />
+  <CancelledOrderDetailPage v-if="activePagePath === '/pages/orders/cancelled-detail'" :key="cachedPageUrl" />
+  <TripsDetailPage v-if="activePagePath === '/pages/trips/detail'" :key="cachedPageUrl" />
+  <VehicleSelectPage v-if="activePagePath === '/pages/vehicles/select'" />
+  <VehicleSelectedPage v-if="activePagePath === '/pages/vehicles/selected'" />
+  <VehicleConfirmPage v-if="activePagePath === '/pages/vehicles/confirm'" />
+  <BookingSuccessPage v-if="activePagePath === '/pages/vehicles/booking-success'" />
+  <TripWaitingPage v-if="activePagePath === '/pages/vehicles/trip-waiting'" :key="cachedPageUrl" />
+  <TripProgressPage v-if="activePagePath === '/pages/vehicles/trip-progress'" :key="cachedPageUrl" />
+  <TripCompletePage v-if="activePagePath === '/pages/vehicles/trip-complete'" :key="cachedPageUrl" />
+  <AccountPage v-if="activePagePath === '/pages/account/account'" />
+  <SettingsPage v-if="activePagePath === '/pages/settings/settings'" />
+  <WalletPage v-if="activePagePath === '/pages/wallet/wallet'" />
+  <TopUpPage v-if="activePagePath === '/pages/top-up/top-up'" />
+  <TopUpDetailPage v-if="activePagePath === '/pages/top-up/detail/detail'" :key="cachedPageUrl" />
+  <VoucherClaimPage v-if="activePagePath === '/pages/voucher/claim'" />
+  <WithdrawPage v-if="activePagePath === '/pages/withdraw/withdraw'" />
+  <WithdrawDetailPage v-if="activePagePath === '/pages/withdraw/detail'" />
+  <AlipayWithdrawPage v-if="activePagePath === '/pages/withdraw/alipay'" />
+  <AlipayWithdrawDetailPage v-if="activePagePath === '/pages/withdraw/alipay-detail'" />
+  <PaymentSettingsPage v-if="activePagePath === '/pages/payment-settings/payment-settings'" />
+  <TransactionsPage v-if="activePagePath === '/pages/transactions/transactions'" />
+  <ExpenseDetailPage v-if="activePagePath === '/pages/transactions/expense-detail'" />
+  <RefundPage v-if="activePagePath === '/pages/refund/detail'" />
+  <BankCardPage v-if="activePagePath === '/pages/bank-card/bank-card'" />
+  <BankCardAccountPage v-if="activePagePath === '/pages/bank-card/account'" />
+  <BankCardListPage v-if="activePagePath === '/pages/bank-card/list'" />
+  <BankCardDetailPage v-if="activePagePath === '/pages/bank-card/detail'" />
+  <CommonDataPage v-if="activePagePath === '/pages/common-data/common-data'" />
+  <CouponsPage v-if="activePagePath === '/pages/coupons/coupons'" />
+  <ComplaintsPage v-if="activePagePath === '/pages/complaints/complaints'" />
+  <SupportChatPage v-if="activePagePath === '/pages/support/chat'" />
   <!-- #endif -->
 </template>
 
@@ -192,7 +192,7 @@ import BusinessCharterPanel from '../../components/home/BusinessCharterPanel.vue
 import HomeBottomNav from '../../components/home/HomeBottomNav.vue'
 import AddressPicker from '../../components/home/AddressPicker.vue'
 import BookingTimePicker from '../../components/home/BookingTimePicker.vue'
-import { activateEmbeddedPageHost, cachedPagePath, visitedPages, openCachedPage } from '../../utils/navigation'
+import { activateEmbeddedPageHost, cachedPagePath, openCachedPage } from '../../utils/navigation'
 import { planDrivingRoute, reverseGeocode, lookupFlight, type Coordinate, type FlightLookupResult } from '../../services/api'
 import { findLocalRegion } from '../../utils/localRegions'
 

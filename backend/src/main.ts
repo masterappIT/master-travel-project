@@ -4821,11 +4821,26 @@ class DriverAuthController {
     await requireActiveDriverVehicle(prisma, driver.id);
     if (!driver.isOnline)
       throw new ForbiddenException("Driver must be online to accept trips");
+    if (!settings.dispatchSchedulingEnabled) {
+      await prisma.$transaction((tx) =>
+        openEligibleTripsForDispatch(
+          tx,
+          settings.driverPayoutPercentage,
+        ),
+      );
+    }
     const trips = await prisma.trip.findMany({
       where: {
         driverId: null,
         status: "CONFIRMED",
-        executionPhase: "WAITING_DRIVER",
+        ...(settings.dispatchSchedulingEnabled
+          ? { executionPhase: "WAITING_DRIVER" as const }
+          : {
+              OR: [
+                { executionPhase: "WAITING_DRIVER" as const },
+                { executionPhase: null },
+              ],
+            }),
         scheduledAt: { gt: tripOfferCutoff() },
         payment: { is: { status: "PAID" } },
       },
@@ -4848,17 +4863,35 @@ class DriverAuthController {
     const settings = await prisma.appSetting.findUniqueOrThrow({
       where: { id: appSettingsDefaults.id },
     });
+    let visibleTrip = trip;
+    if (
+      !assignedToDriver &&
+      settings.driverRaceEnabled &&
+      !settings.dispatchSchedulingEnabled &&
+      trip.executionPhase === null
+    ) {
+      await prisma.$transaction((tx) =>
+        openEligibleTripsForDispatch(tx, settings.driverPayoutPercentage, id),
+      );
+      const refreshedTrip = await prisma.trip.findUnique({
+        where: { id },
+        include: { user: true, payment: true, settlement: true },
+      });
+      if (!refreshedTrip)
+        throw new HttpException("Trip not found", HttpStatus.NOT_FOUND);
+      visibleTrip = refreshedTrip;
+    }
     const availableToDriver =
-      trip.driverId === null &&
-      trip.status === "CONFIRMED" &&
-      trip.executionPhase === "WAITING_DRIVER" &&
-      trip.payment?.status === "PAID" &&
+      visibleTrip.driverId === null &&
+      visibleTrip.status === "CONFIRMED" &&
+      visibleTrip.executionPhase === "WAITING_DRIVER" &&
+      visibleTrip.payment?.status === "PAID" &&
       settings.driverRaceEnabled &&
       driver.isOnline &&
-      !tripOfferIsExpired(trip.scheduledAt);
+      !tripOfferIsExpired(visibleTrip.scheduledAt);
     if (!assignedToDriver && !availableToDriver)
       throw new HttpException("Trip not found", HttpStatus.NOT_FOUND);
-    return driverTripResponse(trip);
+    return driverTripResponse(visibleTrip);
   }
 
   @Post("trips/:id/accept")
@@ -4885,14 +4918,19 @@ class DriverAuthController {
       trip.acceptedAt === null;
     if (!assignedToDriver && tripOfferIsExpired(trip.scheduledAt, now))
       throw new HttpException("Trip offer has expired", HttpStatus.GONE);
+    const settings = await prisma.appSetting.findUniqueOrThrow({
+      where: { id: appSettingsDefaults.id },
+    });
+    if (!assignedToDriver && !settings.driverRaceEnabled)
+      throw new ForbiddenException("Driver race acceptance is disabled");
     if (!assignedToDriver) {
-      const settings = await prisma.appSetting.findUniqueOrThrow({
-        where: { id: appSettingsDefaults.id },
-      });
-      if (!settings.driverRaceEnabled)
-        throw new ForbiddenException("Driver race acceptance is disabled");
       if (!driver.isOnline)
         throw new ForbiddenException("Driver must be online to accept trips");
+      if (trip.executionPhase === null && !settings.dispatchSchedulingEnabled) {
+        await prisma.$transaction((tx) =>
+          openEligibleTripsForDispatch(tx, settings.driverPayoutPercentage, id),
+        );
+      }
     }
     const requestedVehicleId =
       typeof body.vehicleId === "string" && body.vehicleId.trim()
@@ -4927,7 +4965,14 @@ class DriverAuthController {
             id,
             driverId: null,
             status: "CONFIRMED",
-            executionPhase: "WAITING_DRIVER",
+            ...(settings.dispatchSchedulingEnabled
+              ? { executionPhase: "WAITING_DRIVER" as const }
+              : {
+                  OR: [
+                    { executionPhase: "WAITING_DRIVER" as const },
+                    { executionPhase: null },
+                  ],
+                }),
             scheduledAt: { gt: tripOfferCutoff(now) },
             payment: { is: { status: "PAID" } },
           },
