@@ -320,8 +320,37 @@
 .shell .driver-management .driver-vehicle-form-actions .driver-primary-action { border: 0; color: #fff; background: var(--gradient-primary); box-shadow: var(--shadow-primary); }
 @media (max-width: 760px) { .driver-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .driver-page-heading { align-items: stretch; flex-direction: column; } .driver-list-toolbar { grid-template-columns: 1fr; align-items: stretch; } .driver-toolbar-count { justify-content: flex-start; } .driver-vehicle-photo-card { grid-template-columns: 120px minmax(0, 1fr); } .driver-vehicle-photo { width: 120px; } .driver-vehicle-actions { grid-column: 1 / -1; justify-content: flex-end; } }
 @media (max-width: 600px) {
+  .driver-management .driver-table-wrap { overflow-x: visible; }
+  .driver-management .driver-table-wrap table,
+  .driver-management .driver-table-wrap thead,
+  .driver-management .driver-table-wrap tbody,
+  .driver-management .driver-table-wrap tr,
+  .driver-management .driver-table-wrap td { display: block; width: 100%; min-width: 0; }
+  .driver-management .driver-table-wrap thead { display: none; }
+  .driver-management .driver-table-wrap tbody tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 18px; padding: 18px 20px; border-top: 1px solid #edf2f7; }
+  .driver-management .driver-table-wrap tbody tr:first-child { border-top: 0; }
+  .driver-management .driver-table-wrap tbody td,
+  .driver-management .driver-table-wrap tbody td:first-child,
+  .driver-management .driver-table-wrap tbody td:last-child { display: block; width: auto; padding: 0; text-align: left; white-space: normal; }
+  .driver-management .driver-table-wrap tbody td::before { display: block; margin-bottom: 5px; color: #647892; font-size: 11px; font-weight: 750; }
+  .driver-management .driver-table-wrap tbody td:nth-child(1)::before { content: '司機'; }
+  .driver-management .driver-table-wrap tbody td:nth-child(2)::before { content: '主要車輛'; }
+  .driver-management .driver-table-wrap tbody td:nth-child(3)::before { content: '車輛資料'; }
+  .driver-management .driver-table-wrap tbody td:nth-child(4)::before { content: '聯繫電話'; }
+  .driver-management .driver-table-wrap tbody td:nth-child(5)::before { content: '審核狀態'; }
+  .driver-management .driver-table-wrap tbody td:nth-child(6) { grid-column: 1 / -1; }
+  .driver-management .driver-table-wrap tbody td:nth-child(6)::before { content: '操作'; }
+  .driver-management .driver-table-wrap .driver-phone-cell { text-align: left; }
+  .driver-management .driver-table-wrap .driver-phone-cell span,
+  .driver-management .driver-table-wrap .driver-phone-cell small { white-space: normal; overflow-wrap: anywhere; }
+  .driver-management .driver-table-wrap .vehicle-plate-cell,
+  .driver-management .driver-table-wrap .vehicle-spec-cell { white-space: normal; }
+  .driver-management .driver-table-wrap td.row-actions { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 8px; }
+  .driver-management .driver-table-wrap .row-actions button { margin: 0; min-width: 0; flex: 1 1 112px; }
+  .driver-management .driver-table-wrap .driver-empty { grid-column: 1 / -1; padding: 44px 0 !important; text-align: center; }
+
   .driver-management .driver-modal-backdrop { place-items: end center; padding: 0; }
-  .driver-management .driver-vehicle-form-modal { width: 100%; max-height: 100dvh; border-radius: 10px 10px 0 0; }
+
   .driver-vehicle-form-heading { padding: 17px 18px 14px; }
   .driver-vehicle-form-heading h3 { font-size: 19px; }
   .driver-vehicle-form-body { gap: 10px; padding: 12px; }

@@ -330,6 +330,39 @@
 }
 
 @media (max-width:700px) {
+  .trip-orders-panel .trip-table-wrap { overflow: visible; }
+  .trip-orders-panel table,
+  .trip-orders-panel thead,
+  .trip-orders-panel tbody,
+  .trip-orders-panel tr,
+  .trip-orders-panel td { display: block; width: 100%; min-width: 0; }
+  .trip-orders-panel thead { display: none; }
+  .trip-orders-panel tbody { display: grid; gap: 10px; padding: 12px; }
+  .trip-orders-panel tbody tr { box-sizing: border-box; padding: 6px 14px; border: 1px solid #dce6f2; border-radius: 14px; background: #fff; box-shadow: 0 5px 16px rgba(39,72,111,.06); }
+  .trip-orders-panel tbody td,
+  .trip-orders-panel tbody td.trip-col-order,
+  .trip-orders-panel tbody td.trip-col-route,
+  .trip-orders-panel tbody td.trip-col-scheduled,
+  .trip-orders-panel tbody td.trip-col-amount,
+  .trip-orders-panel tbody td.trip-col-status,
+  .trip-orders-panel tbody td.trip-col-actions { box-sizing: border-box; width: 100%; min-height: 42px; height: auto; padding: 10px 0 10px 88px; border-bottom: 1px solid #edf1f6; white-space: normal; overflow: visible; }
+  .trip-orders-panel tbody td::before { position: absolute; left: 0; top: 11px; width: 78px; color: #71849d; font-size: 10px; font-weight: 800; letter-spacing: .06em; }
+  .trip-orders-panel tbody td.trip-col-order::before { content: '訂單／乘客'; }
+  .trip-orders-panel tbody td.trip-col-route::before { content: '路線'; }
+  .trip-orders-panel tbody td.trip-col-scheduled::before { content: '計劃時間'; }
+  .trip-orders-panel tbody td.trip-col-amount::before { content: '訂單金額'; }
+  .trip-orders-panel tbody td.trip-col-status::before { content: '狀態'; }
+  .trip-orders-panel tbody td.trip-col-actions::before { content: '操作'; }
+  .trip-orders-panel tbody td:last-child { border-bottom: 0; }
+  .trip-orders-panel .trip-col-order strong,
+  .trip-orders-panel .trip-col-order .muted,
+  .trip-orders-panel .trip-col-route b,
+  .trip-orders-panel .trip-col-route .muted,
+  .trip-orders-panel .trip-col-scheduled .muted { display: block; max-width: 100%; overflow-wrap: anywhere; white-space: normal; }
+  .trip-orders-panel .trip-col-actions .row-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .trip-orders-panel .trip-col-actions .row-actions button { width: 100%; min-width: 0; }
+  .trip-orders-panel .pagination-controls { flex-wrap: wrap; justify-content: center; padding: 14px 16px 16px; }
+  .trip-orders-panel .pagination-controls span { width: 100%; margin: 0; text-align: center; }
   .trip-booking-form { width: 100%; grid-template-columns: 1fr 1fr; margin: 0; padding: max(18px, env(safe-area-inset-top)) 14px max(18px, env(safe-area-inset-bottom)); gap: 10px; border-radius: 0; }
   .trip-form-heading-copy small { max-width: 210px; line-height: 1.4; }
   .trip-form-mode-note { margin-top: 0; }
