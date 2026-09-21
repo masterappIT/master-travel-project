@@ -153,7 +153,7 @@ const openOrder = (order: Order) => {
     if (order.status === '取消') return openCachedPage(`/pages/orders/cancelled-detail?id=${encodeURIComponent(String(order.id))}`)
     if (order.status === '待確認') return openCachedPage(`/pages/orders/pending-detail?id=${encodeURIComponent(String(order.id))}`)
     if (order.status === '待出行' || order.status === '進行中') return openCachedPage(`/pages/orders/traveling-detail?id=${encodeURIComponent(String(order.id))}`)
-    return openCachedPage(`/pages/orders/completed-detail?from=orders&id=${encodeURIComponent(String(order.id))}`)
+    return openCachedPage(`/pages/orders/completed-detail?status=completed&from=orders&id=${encodeURIComponent(String(order.id))}`)
   }
 }
 const goBack = () => openCachedPage('/pages/trips/trips')
