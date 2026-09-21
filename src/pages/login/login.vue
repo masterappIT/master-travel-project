@@ -62,7 +62,7 @@ import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { authenticateThirdParty, requestPhoneVerificationCode, verifyPhoneVerificationCode } from '../../services/api'
-import { setAuthenticated } from '../../utils/auth'
+import { setAuthenticated, isAuthenticated } from '../../utils/auth'
 import { goHome } from '../../utils/navigation'
 
 const { responsiveStyle } = useResponsiveCanvas()
@@ -78,6 +78,10 @@ const invitationCode = ref('')
 const phoneMaxLength = computed(() => countryPhoneLengths[countryIndex.value])
 
 onLoad((options) => {
+  if (isAuthenticated()) {
+    goHome()
+    return
+  }
   invitationCode.value = typeof options?.invite === 'string' ? options.invite.trim().toUpperCase() : ''
 })
 
