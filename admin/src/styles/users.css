@@ -86,6 +86,11 @@
   .shell nav { display: flex; align-items: center; gap: 5px; height: 36px; max-height: 36px; margin-top: 5px; padding: 1px 0; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; scroll-snap-type: x proximity; }
   .shell nav::-webkit-scrollbar { display: none; }
   .shell nav button { flex: 0 0 auto; width: auto; min-height: 34px; padding: 7px 10px; border-radius: 8px; white-space: nowrap; text-align: center; scroll-snap-align: start; font-size: 12px; }
+  .shell nav > .nav-group { display: contents; }
+  .shell nav > .nav-group > .nav-group-toggle { display: none !important; }
+  .shell nav > .nav-group > .nav-group-items { display: contents; margin: 0; }
+  .shell nav > .nav-group > .nav-group-items button { padding: 7px 10px !important; color: #b9c8da !important; text-align: center; }
+  .shell nav > .nav-group > .nav-group-items button.active { color: #fff !important; }
   .shell .operations-nav { display: flex; align-items: center; gap: 5px; margin: 0; padding: 0; border: 0; background: transparent; }
   .shell .operations-nav .nav-group-toggle { width: auto; }
   .shell .operations-nav .nav-group-items { display: contents; margin: 0; }
