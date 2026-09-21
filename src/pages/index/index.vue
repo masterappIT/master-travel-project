@@ -45,6 +45,27 @@
         <!-- #ifndef H5 -->
         <BookingTimePicker v-if="bookingTimePicker" @close="bookingTimePicker = false" @confirm="confirmDepartureTime" />
         <!-- #endif -->
+       <view v-if="flightCandidates.length" class="flight-modal" role="dialog" aria-label="航班選擇">
+         <view class="flight-modal-mask" @tap="closeFlightCandidates" />
+         <view class="flight-modal-card">
+           <view class="flight-modal-title">選擇航班</view>
+           <view class="flight-modal-number">{{ flightNumber }}</view>
+           <view class="flight-modal-question">找到多筆航班資料，請選擇正確的行程</view>
+           <view class="flight-candidate-list">
+             <button v-for="(candidate, index) in flightCandidates" :key="`${candidate.direction}-${candidate.scheduledTime}-${index}`" class="flight-candidate" @tap="selectFlightCandidate(candidate)">
+               <view class="flight-candidate-main">
+                 <text class="flight-candidate-route">{{ candidate.origin.iata }} → {{ candidate.destination.iata }}</text>
+                 <text class="flight-candidate-time">{{ candidate.scheduledTime || '時間待定' }}</text>
+               </view>
+               <view class="flight-candidate-detail">
+                 <text>{{ candidate.direction === 'arrival' ? '抵港香港' : '離港香港' }}</text>
+                 <text>{{ candidate.status || '航班資料已更新' }}</text>
+               </view>
+             </button>
+           </view>
+           <text class="flight-modal-cancel" @tap="closeFlightCandidates">返回修改</text>
+         </view>
+       </view>
        <view v-if="flightLookup" class="flight-modal" role="dialog" aria-label="航班資訊確認">
          <view class="flight-modal-mask" @tap="closeFlightLookup" />
          <view class="flight-modal-card">
@@ -193,7 +214,7 @@ import HomeBottomNav from '../../components/home/HomeBottomNav.vue'
 import AddressPicker from '../../components/home/AddressPicker.vue'
 import BookingTimePicker from '../../components/home/BookingTimePicker.vue'
 import { activateEmbeddedPageHost, cachedPagePath, openCachedPage } from '../../utils/navigation'
-import { planDrivingRoute, reverseGeocode, lookupFlight, type Coordinate, type FlightLookupResult } from '../../services/api'
+import { planDrivingRoute, reverseGeocode, lookupFlight, type Coordinate, type FlightDirection, type FlightLookupResult } from '../../services/api'
 import { findLocalRegion } from '../../utils/localRegions'
 
 // #ifdef H5
@@ -285,6 +306,8 @@ const initialBusinessDestination: BusinessLocation = { region: '大陸', place: 
 const departureTime = ref('')
 const flightNumber = ref('')
 const flightLookup = ref<FlightLookupResult | null>(null)
+const flightCandidates = ref<FlightLookupResult[]>([])
+let flightLookupRequestId = 0
 const mapLatitude = ref(22.3046)
 const mapLongitude = ref(114.1619)
 const mapScale = ref(13)
@@ -500,26 +523,59 @@ const selectCurrentLocation = () => {
 }
 const handleFlightNumberInput = (value: string) => {
   flightNumber.value = value
-  if (travelMode.value !== 'airport' || value.length < 3) return
-  void lookupFlightForDate(value)
+  flightLookup.value = null
+  flightCandidates.value = []
+  flightLookupRequestId += 1
 }
 const handleFlightConfirm = () => {
   uni.hideKeyboard()
+  void lookupFlightForDate(flightNumber.value)
 }
 const handleFlightBlur = () => {
   uni.hideKeyboard()
 }
-const lookupFlightForDate = async (value: string) => {
-  const date = new Date().toISOString().slice(0, 10)
+const flightLookupDate = () => {
+  if (departureTime.value) return departureTime.value.slice(0, 10)
+  const today = new Date()
+  const year = today.getFullYear()
+  const month = String(today.getMonth() + 1).padStart(2, '0')
+  const day = String(today.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+const lookupFlightForDate = async (value: string, direction?: FlightDirection) => {
+  const normalizedFlightNumber = value.replace(/\s+/g, '').toUpperCase()
+  if (!/^[A-Z0-9]{2,8}$/.test(normalizedFlightNumber)) {
+    uni.showToast({ title: '請輸入正確的航班號', icon: 'none' })
+    return
+  }
+  const date = flightLookupDate()
+  const requestId = ++flightLookupRequestId
+  uni.showLoading({ title: '查詢航班中', mask: true })
   try {
-    const result = await lookupFlight(value, date)
-    if (value !== flightNumber.value) return
-    uni.hideKeyboard()
+    const result = await lookupFlight(normalizedFlightNumber, date, direction)
+    if (requestId !== flightLookupRequestId || normalizedFlightNumber !== flightNumber.value) return
+    if ('matches' in result) {
+      flightCandidates.value = result.matches
+      flightLookup.value = null
+      return
+    }
+    flightCandidates.value = []
     flightLookup.value = result
     if (result.scheduledTime) departureTime.value = `${date}T${result.scheduledTime}:00`
   } catch (error) {
-    if (value === flightNumber.value) flightLookup.value = null
+    if (requestId !== flightLookupRequestId || normalizedFlightNumber !== flightNumber.value) return
+    flightLookup.value = null
+    flightCandidates.value = []
+    uni.showToast({ title: error instanceof Error ? error.message : '航班資料暫時無法取得', icon: 'none' })
+  } finally {
+    if (requestId === flightLookupRequestId) uni.hideLoading()
   }
+}
+const closeFlightCandidates = () => { flightCandidates.value = [] }
+const selectFlightCandidate = (candidate: FlightLookupResult) => {
+  flightCandidates.value = []
+  flightLookup.value = candidate
+  if (candidate.scheduledTime) departureTime.value = `${flightLookupDate()}T${candidate.scheduledTime}:00`
 }
 const chooseDepartureTime = () => { bookingTimePicker.value = true }
 const airportDisplayMetadata: Record<string, { city: string; name: string }> = {
@@ -600,7 +656,7 @@ const closeAirportModeHint = () => {
   airportModeHintVisible.value = false
 }
 
-const closeFlightLookup = () => { flightLookup.value = null }
+const closeFlightLookup = () => { flightLookup.value = null; flightCandidates.value = [] }
 const confirmFlightDirection = (direction: 'to-airport' | 'from-airport') => {
   if (!flightLookup.value) return
   if (direction === 'to-airport' && !canGoToAirport.value) {
@@ -798,7 +854,7 @@ const showComingSoon = (name: string) => uni.showToast({ title: `${name}功能�
 </script>
 
 <style scoped>
-:global(html),:global(body),:global(#app){width:100%;min-width:0;height:auto;min-height:100%;margin:0;overflow:visible;overscroll-behavior:auto}.page{position:relative;top:auto;left:auto;width:430px;height:var(--mobile-height, 932px);min-height:var(--mobile-height, 932px);margin:0;overflow-y:auto;overflow-x:hidden;background:#fff;border-radius:35px;box-sizing:border-box;color:#38434a;font-family:'Noto Sans TC',sans-serif;transform:scale(var(--mobile-scale, 1));transform-origin:top left}.page-content{position:absolute;inset:0;width:430px;height:932px}.canvas{position:relative;width:430px;height:932px;min-height:932px}.nav-layer{position:absolute;inset:0;z-index:10;pointer-events:none}.nav-layer :deep(.bottom-nav){pointer-events:auto} .flight-modal{position:fixed;inset:0;z-index:1000;display:flex;align-items:flex-end;justify-content:center}.flight-modal-mask{position:absolute;inset:0;background:rgba(29,38,43,.42)}.flight-modal-card{position:relative;width:min(430px,100%);padding:28px 24px calc(24px + env(safe-area-inset-bottom));box-sizing:border-box;border-radius:28px 28px 0 0;background:#fff;color:#38434a;box-shadow:0 -8px 30px rgba(28,39,45,.16);text-align:center}.flight-modal-title{font-size:15px;font-weight:600;color:#778187}.flight-modal-number{margin-top:7px;font-size:28px;font-weight:700;letter-spacing:1px}.flight-modal-status{margin-top:5px;font-size:13px;color:#8a9499}.flight-modal-route{display:flex;align-items:center;gap:12px;margin:24px 0;padding:16px 12px;border-radius:16px;background:#f5f8f9}.flight-modal-airport{display:flex;flex:1;min-width:0;flex-direction:column;gap:5px;text-align:left;font-size:12px;color:#79858b}.flight-modal-airport--right{text-align:right}.flight-modal-label{font-size:12px;font-weight:600;color:#5ab8a5}.flight-modal-iata{font-size:22px;font-weight:700;color:#38434a}.flight-modal-arrow{font-size:24px;color:#9aa6aa}.flight-modal-question{margin-bottom:14px;font-size:15px;font-weight:600}.flight-modal-actions{display:flex;gap:12px}.flight-modal-notice{margin:0 0 14px;padding:10px 12px;border-radius:10px;background:#fff7e6;color:#b06a00;font-size:13px;line-height:1.5}.flight-modal-action{flex:1;height:48px;margin:0;border:1px solid #d8e0e3;border-radius:14px;background:#fff;color:#526168;font-size:15px;line-height:48px}.flight-modal-action--disabled{border-color:#e3e7e8;background:#f1f3f4;color:#aeb7ba;opacity:1}.flight-modal-action--primary{border-color:#5ab8a5;background:#5ab8a5;color:#fff}.flight-modal-cancel{display:block;margin-top:17px;font-size:13px;color:#9aa4a8}
+:global(html),:global(body),:global(#app){width:100%;min-width:0;height:auto;min-height:100%;margin:0;overflow:visible;overscroll-behavior:auto}.page{position:relative;top:auto;left:auto;width:430px;height:var(--mobile-height, 932px);min-height:var(--mobile-height, 932px);margin:0;overflow-y:auto;overflow-x:hidden;background:#fff;border-radius:35px;box-sizing:border-box;color:#38434a;font-family:'Noto Sans TC',sans-serif;transform:scale(var(--mobile-scale, 1));transform-origin:top left}.page-content{position:absolute;inset:0;width:430px;height:932px}.canvas{position:relative;width:430px;height:932px;min-height:932px}.nav-layer{position:absolute;inset:0;z-index:10;pointer-events:none}.nav-layer :deep(.bottom-nav){pointer-events:auto} .flight-modal{position:fixed;inset:0;z-index:1000;display:flex;align-items:flex-end;justify-content:center}.flight-modal-mask{position:absolute;inset:0;background:rgba(29,38,43,.42)}.flight-modal-card{position:relative;width:min(430px,100%);padding:28px 24px calc(24px + env(safe-area-inset-bottom));box-sizing:border-box;border-radius:28px 28px 0 0;background:#fff;color:#38434a;box-shadow:0 -8px 30px rgba(28,39,45,.16);text-align:center}.flight-modal-title{font-size:15px;font-weight:600;color:#778187}.flight-modal-number{margin-top:7px;font-size:28px;font-weight:700;letter-spacing:1px}.flight-modal-status{margin-top:5px;font-size:13px;color:#8a9499}.flight-modal-route{display:flex;align-items:center;gap:12px;margin:24px 0;padding:16px 12px;border-radius:16px;background:#f5f8f9}.flight-modal-airport{display:flex;flex:1;min-width:0;flex-direction:column;gap:5px;text-align:left;font-size:12px;color:#79858b}.flight-modal-airport--right{text-align:right}.flight-modal-label{font-size:12px;font-weight:600;color:#5ab8a5}.flight-modal-iata{font-size:22px;font-weight:700;color:#38434a}.flight-modal-arrow{font-size:24px;color:#9aa6aa}.flight-modal-question{margin-bottom:14px;font-size:15px;font-weight:600}.flight-modal-actions{display:flex;gap:12px}.flight-direction-actions{display:flex;gap:12px}.flight-candidate-list{display:flex;flex-direction:column;gap:10px;max-height:300px;overflow-y:auto;text-align:left}.flight-candidate{width:100%;padding:14px 16px;margin:0;border:1px solid #d8e0e3;border-radius:14px;background:#fff;color:#38434a;text-align:left}.flight-candidate-main,.flight-candidate-detail{display:flex;justify-content:space-between;gap:12px;align-items:center}.flight-candidate-route{font-size:16px;font-weight:700}.flight-candidate-time{font-size:16px;font-weight:700;color:#5ab8a5}.flight-candidate-detail{margin-top:6px;font-size:12px;color:#7b878c}.flight-modal-notice{margin:0 0 14px;padding:10px 12px;border-radius:10px;background:#fff7e6;color:#b06a00;font-size:13px;line-height:1.5}.flight-modal-action{flex:1;height:48px;margin:0;border:1px solid #d8e0e3;border-radius:14px;background:#fff;color:#526168;font-size:15px;line-height:48px}.flight-modal-action--disabled{border-color:#e3e7e8;background:#f1f3f4;color:#aeb7ba;opacity:1}.flight-modal-action--primary{border-color:#5ab8a5;background:#5ab8a5;color:#fff}.flight-modal-cancel{display:block;margin-top:17px;font-size:13px;color:#9aa4a8}
 /* #ifdef H5 || APP-PLUS || MP-WEIXIN */
 .airport-hint-modal{position:fixed;inset:0;z-index:1100;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box}.airport-hint-mask{position:absolute;inset:0;background:rgba(24,35,41,.55)}.airport-hint-card{position:relative;width:min(360px,100%);padding:28px 24px 22px;border:1px solid rgba(255,255,255,.7);border-radius:24px;background:#fff;box-shadow:0 18px 50px rgba(18,31,38,.28);box-sizing:border-box;text-align:center}.airport-hint-icon{width:48px;height:48px;margin:0 auto 12px;border-radius:16px;background:#e7f7f3;color:#4eaf9d;font-size:25px;line-height:48px}.airport-hint-title{font-size:19px;font-weight:700;color:#38434a}.airport-hint-content{margin-top:12px;color:#66747b;font-size:14px;line-height:1.75}.airport-hint-button{width:100%;height:46px;margin-top:22px;border:0;border-radius:14px;background:#5ab8a5;color:#fff;font-size:15px;line-height:46px}
 /* #endif */

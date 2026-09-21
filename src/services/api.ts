@@ -18,7 +18,9 @@ const apiError = (
   const message = typeof response.data === 'object' && response.data !== null && 'message' in response.data
     ? String((response.data as { message?: unknown }).message || '')
     : ''
-  return new Error(message || `${fallback}（HTTP ${response.statusCode || 0}，請確認小程序可連線至 ${API_BASE_URL}）`)
+  const error = new Error(message || `${fallback}（HTTP ${response.statusCode || 0}，請確認小程序可連線至 ${API_BASE_URL}）`) as Error & { statusCode?: number }
+  error.statusCode = response.statusCode
+  return error
 }
 
 const networkError = (error: unknown, fallback: string) => {
@@ -355,22 +357,26 @@ export type FlightAirport = {
   longitude: number | null
 }
 
+export type FlightDirection = 'arrival' | 'departure'
+
 export type FlightLookupResult = {
   flightNumber: string
-  direction: 'arrival' | 'departure'
+  direction: FlightDirection
   status: string
   scheduledTime: string
   origin: FlightAirport
   destination: FlightAirport
 }
 
-export async function lookupFlight(flightNumber: string, date: string): Promise<FlightLookupResult> {
+export type FlightLookupResponse = FlightLookupResult | { matches: FlightLookupResult[] }
+
+export async function lookupFlight(flightNumber: string, date: string, direction?: FlightDirection): Promise<FlightLookupResponse> {
   const response = await uni.request({
     url: `${API_BASE_URL}/location/flight-information/lookup`,
-    data: { flightNumber, date }
+    data: { flightNumber, date, ...(direction ? { direction } : {}) }
   })
   if (response.statusCode >= 400) throw apiError(response, '航班資料暫時無法取得')
-  return response.data as FlightLookupResult
+  return response.data as FlightLookupResponse
 }
 
 export type PublicVehicleCategory = { id: string; name: string; tabLabel: string; order: number; enabled: boolean }

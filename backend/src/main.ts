@@ -9615,12 +9615,14 @@ class LocationController {
       .replace(/\s+/g, "")
       .toUpperCase();
     const date = req.query?.date || "";
+    const direction = req.query?.direction || "";
     if (
       !/^[A-Z0-9]{2,8}$/.test(flightNumber) ||
-      !/^\d{4}-\d{2}-\d{2}$/.test(date)
+      !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
+      (direction !== "" && direction !== "arrival" && direction !== "departure")
     ) {
       throw new HttpException(
-        "Valid flightNumber and date are required",
+        "Valid flightNumber, date and direction are required",
         HttpStatus.BAD_REQUEST,
       );
     }
@@ -9645,8 +9647,8 @@ class LocationController {
       }>;
     };
     const [arrivals, departures] = await Promise.all([
-      fetchDirection(true),
-      fetchDirection(false),
+      direction === "departure" ? Promise.resolve([]) : fetchDirection(true),
+      direction === "arrival" ? Promise.resolve([]) : fetchDirection(false),
     ]);
     const matches: Array<{
       direction: "arrival" | "departure";
@@ -9674,18 +9676,6 @@ class LocationController {
           matches.push({ direction: "departure", item });
     if (matches.length === 0)
       throw new HttpException("找不到指定日期的航班", HttpStatus.NOT_FOUND);
-    if (matches.length > 1)
-      throw new HttpException(
-        "航班資料有多個匹配結果，請確認航班方向",
-        HttpStatus.CONFLICT,
-      );
-    const match = matches[0];
-    const code =
-      match.direction === "arrival"
-        ? match.item.origin?.[0]
-        : match.item.destination?.[0];
-    if (!code)
-      throw new HttpException("航班機場資料不完整", HttpStatus.BAD_GATEWAY);
     const airportMetadata: Record<string, Omit<FlightAirport, "iata">> = {
       HKG: {
         name: "香港國際機場",
@@ -9799,18 +9789,28 @@ class LocationController {
         longitude: null,
       }),
     });
-    const origin =
-      match.direction === "arrival" ? airport(code) : airport("HKG");
-    const destination =
-      match.direction === "arrival" ? airport("HKG") : airport(code);
-    return {
-      flightNumber,
-      direction: match.direction,
-      status: match.item.status || "",
-      scheduledTime: match.item.time || "",
-      origin,
-      destination,
-    };
+    const results = matches.flatMap((match) => {
+      const code =
+        match.direction === "arrival"
+          ? match.item.origin?.[0]
+          : match.item.destination?.[0];
+      if (!code) return [];
+      const origin =
+        match.direction === "arrival" ? airport(code) : airport("HKG");
+      const destination =
+        match.direction === "arrival" ? airport("HKG") : airport(code);
+      return [{
+        flightNumber,
+        direction: match.direction,
+        status: match.item.status || "",
+        scheduledTime: match.item.time || "",
+        origin,
+        destination,
+      }];
+    });
+    if (results.length === 0)
+      throw new HttpException("航班機場資料不完整", HttpStatus.BAD_GATEWAY);
+    return results.length === 1 ? results[0] : { matches: results };
   }
 
   @Get("reverse-geocode")
