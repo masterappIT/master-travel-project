@@ -28,6 +28,7 @@ export const getOrderReturnTarget = (): OrderReturnTarget | '' => {
 
 export const cachedPageUrl = ref(HOME_PATH)
 export const cachedPagePath = computed(() => pagePath(cachedPageUrl.value))
+export const isCachedPageActive = (path: string) => !embeddedHostActive || cachedPagePath.value === path
 export const cachedPageStack = ref<string[]>([HOME_PATH])
 const cachedVisitedPages = ref<string[]>([HOME_PATH])
 export const visitedPages = computed(() => new Set(cachedVisitedPages.value))
@@ -79,6 +80,26 @@ export const activateEmbeddedPageHost = () => {
 
 export const deactivateEmbeddedPageHost = () => {
   embeddedHostActive = false
+}
+
+export const replaceCachedPage = (url: string) => {
+  // #ifdef MP-WEIXIN || MP-TOUTIAO
+  if (embeddedHostActive) {
+    if (cachedPageStack.value.length > 1) {
+      cachedPageStack.value = [...cachedPageStack.value.slice(0, -1), url]
+    } else {
+      cachedPageStack.value = [HOME_PATH, url]
+    }
+    cachedPageUrl.value = url
+    const targetPath = pagePath(url)
+    if (!cachedVisitedPages.value.includes(targetPath)) {
+      cachedVisitedPages.value = [...cachedVisitedPages.value, targetPath]
+    }
+    return
+  }
+  // #endif
+
+  return uni.redirectTo({ url, animationType: 'none', animationDuration: 0 })
 }
 
 export const openCachedPage = (url: string) => {
@@ -184,14 +205,14 @@ export const closeCachedPage = (fallbackUrl: string) => {
       return
     }
 
+    if (fallbackPath !== HOME_PATH) {
+      return openCachedPage(fallbackUrl)
+    }
+
     if (cachedPageStack.value.length > 1) {
       cachedPageStack.value = cachedPageStack.value.slice(0, -1)
       cachedPageUrl.value = cachedPageStack.value[cachedPageStack.value.length - 1]
       return
-    }
-
-    if (fallbackPath !== HOME_PATH) {
-      return openCachedPage(fallbackUrl)
     }
   }
   // #endif
@@ -213,6 +234,10 @@ export const closeCachedPage = (fallbackUrl: string) => {
 export const swipeBack = () => {
   // #ifdef MP-WEIXIN || MP-TOUTIAO
   if (embeddedHostActive) {
+    if (cachedPageStack.value.length <= 1) return
+    cachedPageStack.value = cachedPageStack.value.slice(0, -1)
+    cachedPageUrl.value = cachedPageStack.value[cachedPageStack.value.length - 1] || HOME_PATH
+    return
   }
   // #endif
 

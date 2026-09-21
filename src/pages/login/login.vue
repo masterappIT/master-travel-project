@@ -104,7 +104,13 @@ const handleLogin = async () => {
   loginSubmitting.value = true
   try {
     const challenge = await requestPhoneVerificationCode(countryCode.value, phone.value)
-    const query = `challengeId=${encodeURIComponent(challenge.challengeId)}&phone=${encodeURIComponent(`${countryCode.value}-${phone.value}`)}&invite=${encodeURIComponent(invitationCode.value)}`
+    const query = [
+      `challengeId=${encodeURIComponent(challenge.challengeId)}`,
+      `phone=${encodeURIComponent(`${countryCode.value}-${phone.value}`)}`,
+      `countryCode=${encodeURIComponent(countryCode.value)}`,
+      `phoneNumber=${encodeURIComponent(phone.value)}`,
+      `invite=${encodeURIComponent(invitationCode.value)}`
+    ].join('&')
     uni.navigateTo({ url: `/pages/login/verify?${query}`, animationType: 'none', animationDuration: 0 })
   } catch (error) {
     uni.showToast({ title: error instanceof Error ? error.message : '驗證碼發送失敗', icon: 'none' })

@@ -49,7 +49,7 @@ import OrdersBackButton from '../../components/orders/OrdersBackButton.vue'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { getClientTrip, listClientTrips, type ClientTrip } from '../../services/api'
 import { formatAssignmentCountdown, getAssignmentCountdownSeconds } from '../../utils/assignmentCountdown'
-import { cachedPageUrl, closeCachedPage, getCachedPageOrderQuery, getCachedPageUrl, openCachedPage, pagePath } from '../../utils/navigation'
+import { cachedPageUrl, closeCachedPage, getCachedPageOrderQuery, getCachedPageUrl, isCachedPageActive, openCachedPage, pagePath } from '../../utils/navigation'
 import { formatOrderDetailAddress } from '../../utils/orderAddress'
 import { isPendingTrip, selectNextPendingTrip } from '../../utils/pendingTrip'
 import { layoutVehiclePlates } from '../../utils/vehiclePlate'
@@ -62,6 +62,7 @@ const logoLoadFailed = ref(false)
 let countdownTimer: ReturnType<typeof setInterval> | undefined
 let pollTimer: ReturnType<typeof setInterval> | undefined
 let transitioning = false
+let requestSequence = 0
 
 const isDriverAccepted = computed(() => trip.value?.executionPhase === 'DRIVER_ASSIGNED' && Boolean(trip.value.acceptedAt))
 const isTripInProgress = computed(() => trip.value?.executionPhase === 'IN_PROGRESS')
@@ -93,6 +94,7 @@ const bookingTime = computed(() => {
 const vehicleLabel = computed(() => `${trip.value?.vehicle?.categoryName || '跨境商務車'}（${trip.value?.vehicle?.seats || 0}座）`)
 
 const stopTimers = () => {
+  requestSequence += 1
   if (countdownTimer) clearInterval(countdownTimer)
   if (pollTimer) clearInterval(pollTimer)
   countdownTimer = undefined
@@ -105,8 +107,11 @@ const startTimers = () => {
 }
 const loadTrip = async () => {
   if (!tripId.value || transitioning) return
+  const sequence = ++requestSequence
+  const requestedTripId = tripId.value
   try {
-    const loadedTrip = await getClientTrip(tripId.value)
+    const loadedTrip = await getClientTrip(requestedTripId)
+    if (sequence !== requestSequence || requestedTripId !== tripId.value || !isCachedPageActive('/pages/trips/pending')) return
     if (loadedTrip.vehicle?.logo !== trip.value?.vehicle?.logo) logoLoadFailed.value = false
     if (!isPendingTrip(loadedTrip)) {
       transitioning = true
@@ -125,6 +130,7 @@ const loadTrip = async () => {
   }
 }
 const activatePage = (url: string) => {
+  requestSequence += 1
   const query = getCachedPageOrderQuery(url)
   const id = query.id
   if (!id) return

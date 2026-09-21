@@ -31,11 +31,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted, watch } from 'vue'
+import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { useTripStore } from '../../stores/trip'
-import { closeCachedPage, cachedPageUrl, cachedPageStack, openCachedPage, returnToBookingSuccess, pagePath } from '../../utils/navigation'
+import { closeCachedPage, cachedPageUrl, cachedPageStack, openCachedPage, returnToBookingSuccess, pagePath, isCachedPageActive } from '../../utils/navigation'
 import OrdersBackButton from '../../components/orders/OrdersBackButton.vue'
 import { formatOrderDetailAddress } from '../../utils/orderAddress'
 import { getClientTrip, type ClientTrip } from '../../services/api'
@@ -65,16 +65,26 @@ const orderNumber = computed(() => {
 const parseQueryParams = (url = '') => Object.fromEntries((url.split('?')[1] || '').split('&').filter(Boolean).map(pair => { const [key, ...value] = pair.split('='); return [decodeURIComponent(key), decodeURIComponent(value.join('=') || '')] }))
 const loadError = ref(false)
 const routeUrl = ref('')
+let requestSequence = 0
 const loadOrder = async (url = '') => {
   const id = parseQueryParams(url).id
+  const sequence = ++requestSequence
   if (id) routeUrl.value = url
   if (!id) {
     loadError.value = true
     return
   }
   loadError.value = false
-  try { storedOrder.value = await getClientTrip(id) }
-  catch (error) { loadError.value = true; uni.showToast({ title: error instanceof Error ? error.message : '訂單載入失敗', icon: 'none' }) }
+  try {
+    const loadedOrder = await getClientTrip(id)
+    if (sequence !== requestSequence || !isCachedPageActive('/pages/orders/traveling-detail')) return
+    storedOrder.value = loadedOrder
+  }
+  catch (error) {
+    if (sequence !== requestSequence || !isCachedPageActive('/pages/orders/traveling-detail')) return
+    loadError.value = true
+    uni.showToast({ title: error instanceof Error ? error.message : '訂單載入失敗', icon: 'none' })
+  }
 }
 const loadCurrentOrder = () => {
   const candidates = [cachedPageUrl.value]
@@ -87,6 +97,7 @@ const loadCurrentOrder = () => {
 }
 onLoad(options => { void loadOrder(options ? `?from=${encodeURIComponent(options.from || options.returnTo || '')}&id=${encodeURIComponent(options.id || '')}` : '') })
 onMounted(loadCurrentOrder)
+onUnmounted(() => { requestSequence += 1 })
 // #ifdef MP-WEIXIN || MP-TOUTIAO
 watch(cachedPageUrl, url => {
   if (pagePath(url) !== '/pages/orders/traveling-detail') return

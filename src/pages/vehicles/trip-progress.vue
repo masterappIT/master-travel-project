@@ -62,7 +62,7 @@ import { computed, onUnmounted, ref, watch } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { getClientTrip, listClientTrips, type ClientTrip } from '../../services/api'
 import { formatOrderSummaryAddress } from '../../utils/orderAddress'
-import { cachedPagePath, cachedPageUrl, getCachedPageOrderQuery, openCachedPage } from '../../utils/navigation'
+import { cachedPagePath, cachedPageUrl, getCachedPageOrderQuery, isCachedPageActive, openCachedPage } from '../../utils/navigation'
 import { isPendingTrip, selectNextPendingTrip } from '../../utils/pendingTrip'
 import { layoutVehiclePlates } from '../../utils/vehiclePlate'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
@@ -85,15 +85,19 @@ const vehicleLogo = computed(() => trip.value?.vehicle?.logo || '')
 const vehiclePlates = computed(() => layoutVehiclePlates(trip.value?.driver))
 const arrivalTime = computed(() => { const date = trip.value?.estimatedArrivalAt ? new Date(trip.value.estimatedArrivalAt) : null; return date && !Number.isNaN(date.valueOf()) ? `${date.getMonth() + 1}月${date.getDate()}日 ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}` : 'March 15 2024 14:00' })
 let transitioning = false
-const stopPolling = () => { if (pollTimer) clearInterval(pollTimer); pollTimer = undefined }
+let requestSequence = 0
+const stopPolling = () => { requestSequence += 1; if (pollTimer) clearInterval(pollTimer); pollTimer = undefined }
 const startPolling = () => {
   if (!tripId.value || pollTimer) return
   pollTimer = setInterval(() => { void loadTrip() }, 15000)
 }
 const loadTrip = async () => {
   if (!tripId.value || transitioning) return
+  const sequence = ++requestSequence
+  const requestedTripId = tripId.value
   try {
-    const nextTrip = await getClientTrip(tripId.value)
+    const nextTrip = await getClientTrip(requestedTripId)
+    if (sequence !== requestSequence || requestedTripId !== tripId.value || !isCachedPageActive('/pages/vehicles/trip-progress')) return
     if (nextTrip.vehicle?.logo !== trip.value?.vehicle?.logo) logoLoadFailed.value = false
     trip.value = nextTrip
     if (isPendingTrip(nextTrip)) return

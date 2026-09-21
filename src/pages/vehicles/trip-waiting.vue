@@ -62,7 +62,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { getClientTrip, listClientTrips, type ClientTrip } from '../../services/api'
 import { formatOrderCardAddress } from '../../utils/orderAddress'
-import { cachedPagePath, cachedPageUrl, getCachedPageOrderQuery, openCachedPage } from '../../utils/navigation'
+import { cachedPagePath, cachedPageUrl, getCachedPageOrderQuery, isCachedPageActive, openCachedPage } from '../../utils/navigation'
 import { layoutVehiclePlates } from '../../utils/vehiclePlate'
 import { isPendingTrip, selectNextPendingTrip } from '../../utils/pendingTrip'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
@@ -74,6 +74,7 @@ const fromProfilePending = ref(false)
 const logoLoadFailed = ref(false)
 let pollTimer: ReturnType<typeof setInterval> | undefined
 let transitioning = false
+let requestSequence = 0
 const originLabel = computed(() => formatOrderCardAddress(trip.value?.origin, '香港'))
 const destinationLabel = computed(() => formatOrderCardAddress(trip.value?.destination, '深圳'))
 const driverName = computed(() => trip.value?.driver?.name || '陳師傅')
@@ -85,15 +86,18 @@ const vehicleImage = computed(() => '/static/vehicles/trip-waiting/vellfire.png'
 const vehicleLogo = computed(() => trip.value?.vehicle?.logo || '')
 const vehiclePlates = computed(() => layoutVehiclePlates(trip.value?.driver))
 const bookingTime = computed(() => { const date = trip.value ? new Date(trip.value.scheduledAt) : null; return date && !Number.isNaN(date.valueOf()) ? `${date.getMonth() + 1}月${date.getDate()}日 ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}` : 'March 15 2024 14:00' })
-const stopPolling = () => { if (pollTimer) clearInterval(pollTimer); pollTimer = undefined }
+const stopPolling = () => { requestSequence += 1; if (pollTimer) clearInterval(pollTimer); pollTimer = undefined }
 const startPolling = () => {
   if (!tripId.value || pollTimer) return
   pollTimer = setInterval(() => { void loadTrip() }, 15000)
 }
 const loadTrip = async () => {
   if (!tripId.value || transitioning) return
+  const sequence = ++requestSequence
+  const requestedTripId = tripId.value
   try {
-    const nextTrip = await getClientTrip(tripId.value)
+    const nextTrip = await getClientTrip(requestedTripId)
+    if (sequence !== requestSequence || requestedTripId !== tripId.value || !isCachedPageActive('/pages/vehicles/trip-waiting')) return
     if (nextTrip.vehicle?.logo !== trip.value?.vehicle?.logo) logoLoadFailed.value = false
     trip.value = nextTrip
     if (fromProfilePending.value && !isPendingTrip(nextTrip)) {

@@ -6,8 +6,12 @@ let API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://192.168.0.185:30
 API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api'
 // #endif
 const REQUEST_TIMEOUT_MS = 10000
-const apiError = (response: UniApp.RequestSuccessCallbackResult, fallback: string) => {
-  if (response.statusCode === 401) {
+const apiError = (
+  response: UniApp.RequestSuccessCallbackResult,
+  fallback: string,
+  redirectOnUnauthorized = true
+) => {
+  if (response.statusCode === 401 && redirectOnUnauthorized) {
     clearAuthentication()
     uni.reLaunch({ url: '/pages/login/login' })
   }
@@ -85,7 +89,7 @@ export async function verifyPhoneVerificationCode(challengeId: string, code = ''
     method: 'POST',
     data: { challengeId, code, invitationCode: invitationCode || undefined }
   })
-  if (response.statusCode >= 400) throw apiError(response, '驗證碼錯誤或已過期')
+  if (response.statusCode >= 400) throw apiError(response, '驗證碼錯誤或已過期', false)
   return response.data as AuthResult
 }
 

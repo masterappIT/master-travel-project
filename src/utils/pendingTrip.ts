@@ -1,14 +1,7 @@
 import type { ClientTrip } from '../services/api'
 
-const pendingExecutionPhases = new Set<ClientTrip['executionPhase']>([
-  'WAITING_DRIVER',
-  'DRIVER_PENDING_ACCEPTANCE',
-  'DRIVER_ASSIGNED',
-  'IN_PROGRESS',
-])
-
 export function isPendingTrip(trip: ClientTrip): boolean {
-  return trip.status === 'CONFIRMED' && pendingExecutionPhases.has(trip.executionPhase)
+  return trip.status === 'CONFIRMED'
 }
 
 export function selectNextPendingTrip(trips: ClientTrip[], excludedTripId?: string): ClientTrip | undefined {

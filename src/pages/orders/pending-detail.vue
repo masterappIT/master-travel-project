@@ -40,7 +40,7 @@ import { computed, ref, onMounted, onUnmounted, reactive, watch } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { useTripStore } from '../../stores/trip'
-import { closeCachedPage, cachedPageUrl, openCachedPage, pagePath, getCachedPagePreviousPath, getCachedPageOrderQuery, getCachedPageUrl } from '../../utils/navigation'
+import { closeCachedPage, cachedPageUrl, openCachedPage, replaceCachedPage, pagePath, getCachedPagePreviousPath, getCachedPageOrderQuery, getCachedPageUrl, isCachedPageActive } from '../../utils/navigation'
 import OrdersBackButton from '../../components/orders/OrdersBackButton.vue'
 import { formatOrderDetailAddress } from '../../utils/orderAddress'
 import { formatCurrencyAmount, normalizeCurrency } from '../../composables/useCurrency'
@@ -132,6 +132,7 @@ const tripStore = useTripStore()
 const { responsiveStyle } = useResponsiveCanvas()
 const storedOrder = ref<ClientTrip | undefined>()
 const currentOrderUrl = ref('')
+let requestSequence = 0
 const resetTimers = () => {
   if (paymentTimer) { clearInterval(paymentTimer); paymentTimer = null }
 }
@@ -139,10 +140,11 @@ const orderNumber = computed(() => {
   const digits = (storedOrder.value?.id || '').replace(/\D/g, '')
   return digits ? `A${digits.slice(-8).padStart(8, '0')}` : '—'
 })
-const navigateOrderPage = (url: string) => openCachedPage(url)
+const navigateOrderPage = (url: string) => replaceCachedPage(url)
 const loadOrder = async (url = '') => {
   const params = getCachedPageOrderQuery(url)
   const id = params.id
+  const sequence = ++requestSequence
   currentOrderUrl.value = url
   resetTimers()
   if (!id) {
@@ -150,14 +152,17 @@ const loadOrder = async (url = '') => {
     return
   }
   try {
-    storedOrder.value = await getClientTrip(id)
+    const loadedOrder = await getClientTrip(id)
+    if (sequence !== requestSequence || !isCachedPageActive('/pages/orders/pending-detail')) return
+    storedOrder.value = loadedOrder
     paymentExpired.value = false
     const source = params.from === 'transactions' ? 'transactions' : 'orders'
-    if (storedOrder.value.status === 'PENDING') startPendingCountdown()
-    else if (storedOrder.value.status === 'CONFIRMED') navigateOrderPage(`/pages/orders/traveling-detail?from=${source}&id=${encodeURIComponent(storedOrder.value.id)}`)
-    else if (storedOrder.value.status === 'COMPLETED') navigateOrderPage(`/pages/orders/completed-detail?status=completed&from=${source}&id=${encodeURIComponent(storedOrder.value.id)}`)
-    else if (storedOrder.value.status === 'CANCELLED') navigateOrderPage(`/pages/orders/cancelled-detail?from=${source}&id=${encodeURIComponent(storedOrder.value.id)}`)
+    if (loadedOrder.status === 'PENDING') startPendingCountdown()
+    else if (loadedOrder.status === 'CONFIRMED') navigateOrderPage(`/pages/orders/traveling-detail?from=${source}&id=${encodeURIComponent(loadedOrder.id)}`)
+    else if (loadedOrder.status === 'COMPLETED') navigateOrderPage(`/pages/orders/completed-detail?status=completed&from=${source}&id=${encodeURIComponent(loadedOrder.id)}`)
+    else if (loadedOrder.status === 'CANCELLED') navigateOrderPage(`/pages/orders/cancelled-detail?from=${source}&id=${encodeURIComponent(loadedOrder.id)}`)
   } catch (error) {
+    if (sequence !== requestSequence || !isCachedPageActive('/pages/orders/pending-detail')) return
     uni.showToast({ title: error instanceof Error ? error.message : '訂單載入失敗', icon: 'none' })
   }
 }
@@ -193,9 +198,7 @@ onMounted(() => {
 // #ifdef MP-WEIXIN || MP-TOUTIAO
 watch(cachedPageUrl, (url) => syncCachedOrder(url), { immediate: true })
 // #endif
-onUnmounted(() => {
-  if (paymentTimer) clearInterval(paymentTimer)
-})
+onUnmounted(() => { requestSequence += 1; if (paymentTimer) clearInterval(paymentTimer) })
 onShow(() => {
   isCompleted.value = false
 })

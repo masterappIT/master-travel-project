@@ -26,7 +26,7 @@ import HomeMap from '../../components/home/HomeMap.vue'
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { getClientTrip, cancelClientTrip, type ClientTrip } from '../../services/api'
-import { cachedPagePath, cachedPageUrl, getCachedPageOrderQuery, openCachedPage } from '../../utils/navigation'
+import { cachedPagePath, cachedPageUrl, getCachedPageOrderQuery, isCachedPageActive, openCachedPage } from '../../utils/navigation'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { formatAssignmentCountdown, getAssignmentCountdownSeconds } from '../../utils/assignmentCountdown'
 import { formatOrderSummaryAddress } from '../../utils/orderAddress'
@@ -38,6 +38,7 @@ let pollTimer: ReturnType<typeof setInterval> | undefined
 let confirmationTimer: ReturnType<typeof setInterval> | undefined
 let loadingTrip = false
 let transitioning = false
+let requestSequence = 0
 const previewCountdownEndsAt = Date.now() + 3 * 60 * 60 * 1000
 const confirmationCountdown = ref(3 * 60 * 60)
 const confirmationCountdownLabel = computed(() => formatAssignmentCountdown(confirmationCountdown.value))
@@ -47,7 +48,7 @@ const bookingTime = computed(() => {
   const date = trip.value ? new Date(trip.value.scheduledAt) : null
   return date && !Number.isNaN(date.valueOf()) ? `${date.getMonth() + 1}月${date.getDate()}日 ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}` : '—'
 })
-const stopPolling = () => { if (pollTimer) clearInterval(pollTimer); pollTimer = undefined }
+const stopPolling = () => { requestSequence += 1; if (pollTimer) clearInterval(pollTimer); pollTimer = undefined }
 const stopConfirmationCountdown = () => { if (confirmationTimer) clearInterval(confirmationTimer); confirmationTimer = undefined }
 const refreshConfirmationCountdown = () => {
   confirmationCountdown.value = trip.value
@@ -66,8 +67,11 @@ const startPolling = () => {
 const loadTrip = async () => {
   if (!tripId.value || loadingTrip || transitioning) return
   loadingTrip = true
+  const sequence = ++requestSequence
+  const requestedTripId = tripId.value
   try {
-    const nextTrip = await getClientTrip(tripId.value)
+    const nextTrip = await getClientTrip(requestedTripId)
+    if (sequence !== requestSequence || requestedTripId !== tripId.value || !isCachedPageActive('/pages/vehicles/booking-success')) return
     trip.value = nextTrip
     refreshConfirmationCountdown()
     const path = nextTrip.status === 'COMPLETED' ? '/pages/vehicles/trip-complete' : nextTrip.executionPhase === 'IN_PROGRESS' ? '/pages/vehicles/trip-progress' : nextTrip.executionPhase === 'DRIVER_ASSIGNED' ? '/pages/vehicles/trip-waiting' : ''
