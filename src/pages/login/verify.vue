@@ -80,7 +80,7 @@ const handleSubmit = async () => {
   }
   try {
     const result = await verifyPhoneVerificationCode(challengeId.value, codes.value.join(''), invitationCode.value)
-    setAuthenticated(result.token, result.user)
+    setAuthenticated(result.token, result.user, result.expiresAt)
     goHome()
   } catch (error) {
     uni.showToast({ title: error instanceof Error ? error.message : '登入失敗', icon: 'none' })

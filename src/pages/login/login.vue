@@ -117,7 +117,7 @@ const handleThirdPartyLogin = async (provider: 'wechat' | 'apple') => {
   try {
     const providerToken = `${provider}-dev-account`
     const result = await authenticateThirdParty(provider, providerToken)
-    setAuthenticated(result.token, result.user)
+    setAuthenticated(result.token, result.user, result.expiresAt)
     goHome()
   } catch (error) {
     uni.showToast({ title: error instanceof Error ? error.message : '第三方登入失敗', icon: 'none' })

@@ -1,5 +1,6 @@
 const AUTH_STATE_KEY = 'client-authenticated'
 const AUTH_TOKEN_KEY = 'client-auth-token'
+const AUTH_EXPIRES_AT_KEY = 'client-auth-expires-at'
 const AUTH_USER_KEY = 'client-auth-user'
 const USER_CACHE_KEYS = [
   'account-profile',
@@ -17,7 +18,15 @@ const USER_CACHE_KEYS = [
 ]
 const profileListeners = new Set<(user: AuthUser | null) => void>()
 
-export const isAuthenticated = () => uni.getStorageSync(AUTH_STATE_KEY) === true
+export const isAuthenticated = () => {
+  if (uni.getStorageSync(AUTH_STATE_KEY) !== true) return false
+  const expiresAt = Number(uni.getStorageSync(AUTH_EXPIRES_AT_KEY))
+  if (Number.isFinite(expiresAt) && expiresAt > 0 && expiresAt <= Date.now()) {
+    clearAuthentication()
+    return false
+  }
+  return true
+}
 
 export type AuthUser = {
   id: string
@@ -44,7 +53,7 @@ const removePersistedAvatarUrl = <T extends Record<string, unknown>>(key: string
   return persisted as T
 }
 
-export const setAuthenticated = (token?: string, user?: AuthUser) => {
+export const setAuthenticated = (token?: string, user?: AuthUser, expiresAt?: string | number) => {
   if (!token && !getAuthToken()) return false
   const previousUser = getAuthUser()
   const hasCachedUserData = USER_CACHE_KEYS.some((key) => uni.getStorageSync(key) !== undefined && uni.getStorageSync(key) !== null && uni.getStorageSync(key) !== '')
@@ -52,6 +61,10 @@ export const setAuthenticated = (token?: string, user?: AuthUser) => {
   if (user?.id && (isNewLogin || !previousUser || previousUser.id !== user.id) && hasCachedUserData) clearUserCache()
   uni.setStorageSync(AUTH_STATE_KEY, true)
   if (token) uni.setStorageSync(AUTH_TOKEN_KEY, token)
+  if (expiresAt !== undefined) {
+    const timestamp = typeof expiresAt === 'number' ? expiresAt : Date.parse(expiresAt)
+    if (Number.isFinite(timestamp) && timestamp > 0) uni.setStorageSync(AUTH_EXPIRES_AT_KEY, timestamp)
+  }
   if (user) {
     uni.setStorageSync(AUTH_USER_KEY, persistedAuthUser(user))
     profileListeners.forEach((listener) => listener(user))
@@ -63,6 +76,7 @@ export const clearAuthentication = () => {
   clearUserCache()
   uni.removeStorageSync(AUTH_STATE_KEY)
   uni.removeStorageSync(AUTH_TOKEN_KEY)
+  uni.removeStorageSync(AUTH_EXPIRES_AT_KEY)
   uni.removeStorageSync(AUTH_USER_KEY)
   profileListeners.forEach((listener) => listener(null))
 }
