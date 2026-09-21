@@ -6808,14 +6808,27 @@ class AdminController {
 
   @Get("dashboard") async dashboard(@Req() req: RequestLike) {
     requireAuth(req);
+    const now = new Date();
     const [
       users,
+      onlineDrivers,
+      onlinePassengerUsers,
       tripsCount,
       pendingTrips,
       completedTrips,
       recommendedAddresses,
     ] = await Promise.all([
       prisma.user.count(),
+      prisma.driver.count({ where: { isOnline: true, enabled: true } }),
+      prisma.clientSession.findMany({
+        where: {
+          revokedAt: null,
+          expiresAt: { gt: now },
+          user: { enabled: true },
+        },
+        distinct: ["userId"],
+        select: { userId: true },
+      }),
       prisma.trip.count(),
       prisma.trip.count({ where: { status: "PENDING" } }),
       prisma.trip.count({ where: { status: "COMPLETED" } }),
@@ -6823,6 +6836,8 @@ class AdminController {
     ]);
     return {
       users,
+      onlineDrivers,
+      onlinePassengers: onlinePassengerUsers.length,
       trips: tripsCount,
       pendingTrips,
       completedTrips,
