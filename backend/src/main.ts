@@ -468,6 +468,51 @@ const configuredCurrencyLabel = (settings: { pricingCurrency: string }) =>
   currencyLabels.RMB;
 const roundMoney = (value: number) =>
   Math.round((value + Number.EPSILON) * 100) / 100;
+
+async function openEligibleTripsForDispatch(
+  tx: Prisma.TransactionClient,
+  driverPayoutPercentage: number,
+  tripId?: string,
+) {
+  const tripsToOpen = await tx.trip.findMany({
+    where: {
+      ...(tripId ? { id: tripId } : {}),
+      status: "CONFIRMED",
+      executionPhase: null,
+      driverId: null,
+      scheduledAt: { gt: tripOfferCutoff() },
+      payment: { is: { status: "PAID" } },
+    },
+    select: {
+      id: true,
+      payment: { select: { total: true, currency: true } },
+    },
+  });
+  let opened = 0;
+  for (const trip of tripsToOpen) {
+    if (!trip.payment) continue;
+    const calculatedAmount = roundMoney(
+      (trip.payment.total * driverPayoutPercentage) / 100,
+    );
+    const result = await tx.trip.updateMany({
+      where: {
+        id: trip.id,
+        status: "CONFIRMED",
+        executionPhase: null,
+        driverId: null,
+      },
+      data: {
+        executionPhase: "WAITING_DRIVER",
+        driverPayoutPercentage,
+        driverPayoutCalculatedAmount: calculatedAmount,
+        driverPayoutAmount: calculatedAmount,
+        driverPayoutCurrency: trip.payment.currency,
+      },
+    });
+    opened += result.count;
+  }
+  return opened;
+}
 const normalizeRuleText = (value: unknown) =>
   typeof value === "string" ? value.trim() : "";
 const normalizeWeekdays = (value: unknown) =>
@@ -7406,54 +7451,6 @@ class AdminController {
     await prisma.driverSettlement.delete({ where: { tripId: id } });
     return { ok: true };
   }
-  @Post("trips/:id/confirm-dispatch") async confirmDispatchTrip(
-    @Req() req: RequestLike,
-    @Param("id") id: string,
-  ) {
-    requireRole(req, ["SUPER_ADMIN", "OPERATOR"]);
-    const trip = await prisma.trip.findUnique({
-      where: { id },
-      include: { payment: true },
-    });
-    if (!trip) throw new HttpException("Trip not found", HttpStatus.NOT_FOUND);
-    if (trip.status !== "CONFIRMED" || trip.executionPhase || trip.driverId)
-      throw new HttpException(
-        "This trip is not awaiting dispatch confirmation",
-        HttpStatus.CONFLICT,
-      );
-    if (!trip.payment || trip.payment.status !== "PAID")
-      throw new HttpException(
-        "Only paid trips can be opened for dispatch",
-        HttpStatus.CONFLICT,
-      );
-    const settings = await prisma.appSetting.findUniqueOrThrow({
-      where: { id: appSettingsDefaults.id },
-    });
-    if (!settings.dispatchSchedulingEnabled)
-      throw new ForbiddenException("Dispatch scheduling is disabled");
-    const calculatedAmount = roundMoney(
-      (trip.payment.total * settings.driverPayoutPercentage) / 100,
-    );
-    const updated = await prisma.trip.update({
-      where: { id },
-      data: {
-        executionPhase: "WAITING_DRIVER",
-        driverPayoutPercentage: settings.driverPayoutPercentage,
-        driverPayoutCalculatedAmount: calculatedAmount,
-        driverPayoutAmount: calculatedAmount,
-        driverPayoutCurrency: trip.payment.currency,
-      },
-    });
-    return {
-      id: updated.id,
-      status: updated.status,
-      executionPhase: updated.executionPhase,
-      driverPayoutPercentage: updated.driverPayoutPercentage,
-      driverPayoutCalculatedAmount: updated.driverPayoutCalculatedAmount,
-      driverPayoutAmount: updated.driverPayoutAmount,
-      driverPayoutCurrency: updated.driverPayoutCurrency,
-    };
-  }
   @Post("trips/:id/dispatch") async dispatchTrip(
     @Req() req: RequestLike,
     @Param("id") id: string,
@@ -7469,19 +7466,27 @@ class AdminController {
         "A valid driver payout amount is required",
         HttpStatus.BAD_REQUEST,
       );
-    const [trip, driver] = await Promise.all([
+    const [trip, driver, settings] = await Promise.all([
       prisma.trip.findUnique({ where: { id }, include: { payment: true } }),
       prisma.driver.findUnique({ where: { id: driverId } }),
+      prisma.appSetting.findUniqueOrThrow({
+        where: { id: appSettingsDefaults.id },
+      }),
     ]);
     if (!trip) throw new HttpException("Trip not found", HttpStatus.NOT_FOUND);
     if (!driver)
       throw new HttpException("Driver not found", HttpStatus.BAD_REQUEST);
     requireReviewedDriver(driver);
-    if (
-      trip.status === "COMPLETED" ||
-      trip.status === "CANCELLED" ||
-      trip.executionPhase !== "WAITING_DRIVER"
-    )
+    const isWaitingForDriver =
+      trip.status === "CONFIRMED" &&
+      trip.executionPhase === "WAITING_DRIVER" &&
+      !trip.driverId;
+    const canBeOpenedManually =
+      trip.status === "CONFIRMED" &&
+      trip.executionPhase === null &&
+      !trip.driverId &&
+      trip.scheduledAt > tripOfferCutoff();
+    if (!isWaitingForDriver && !canBeOpenedManually)
       throw new HttpException(
         "This trip is not open for dispatch",
         HttpStatus.CONFLICT,
@@ -7492,6 +7497,11 @@ class AdminController {
         HttpStatus.CONFLICT,
       );
     const assignedVehicle = await requireActiveDriverVehicle(prisma, driver.id);
+    const driverPayoutPercentage =
+      trip.driverPayoutPercentage ?? settings.driverPayoutPercentage;
+    const driverPayoutCalculatedAmount =
+      trip.driverPayoutCalculatedAmount ??
+      roundMoney((trip.payment.total * driverPayoutPercentage) / 100);
     const updated = await prisma.trip.update({
       where: { id },
       data: {
@@ -7499,6 +7509,8 @@ class AdminController {
         driverName: driver.name,
         driverPhone: `${driver.phoneCountryCode} ${driver.phone}`,
         ...tripVehicleSnapshot(assignedVehicle),
+        driverPayoutPercentage,
+        driverPayoutCalculatedAmount,
         driverPayoutAmount: roundMoney(driverPayoutAmount),
         driverPayoutCurrency:
           trip.driverPayoutCurrency || trip.payment.currency,
@@ -9433,6 +9445,12 @@ class SettingsController {
         where: { id: settings.id },
         data,
       });
+      if (
+        data.dispatchSchedulingEnabled &&
+        !settings.dispatchSchedulingEnabled
+      ) {
+        await openEligibleTripsForDispatch(tx, driverPayoutPercentage);
+      }
       if (pricingCurrency !== settings.pricingCurrency) {
         const label = configuredCurrencyLabel({ pricingCurrency });
         await Promise.all([
@@ -10301,6 +10319,13 @@ class PaymentsController {
           const existingUser = await tx.user.findUniqueOrThrow({
             where: { id: existingPayment.userId },
           });
+          if (settings.dispatchSchedulingEnabled) {
+            await openEligibleTripsForDispatch(
+              tx,
+              settings.driverPayoutPercentage,
+              existingPayment.tripId,
+            );
+          }
           return {
             ok: true,
             tripId: existingPayment.tripId,
@@ -10590,6 +10615,13 @@ class PaymentsController {
             externalReference: null,
           },
         });
+        if (settings.dispatchSchedulingEnabled) {
+          await openEligibleTripsForDispatch(
+            tx,
+            settings.driverPayoutPercentage,
+            trip.id,
+          );
+        }
         await tx.walletTransaction.updateMany({
           where: {
             userId: user.id,
