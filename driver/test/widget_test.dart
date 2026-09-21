@@ -20,6 +20,7 @@ import 'package:driver_web/profile_page.dart';
 import 'package:driver_web/registration_page.dart';
 import 'package:driver_web/add_vehicle_page.dart';
 import 'package:driver_web/core/api/driver_api_client.dart';
+import 'package:driver_web/core/layout/driver_page_shell.dart';
 import 'package:driver_web/core/state/driver_language_preference.dart';
 
 Widget testApp(Widget home) {
@@ -695,6 +696,41 @@ void main() {
 
     expect(find.text('接單大廳'), findsOneWidget);
     expect(find.text('可接單'), findsOneWidget);
+  });
+
+  testWidgets('uses one Flutter scroll container for mobile page movement',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(
+      testApp(
+        DriverPageShell(
+          selectedIndex: 0,
+          child: Column(
+            children: List<Widget>.generate(
+              20,
+              (index) => SizedBox(
+                height: 80,
+                child: Text('scroll item $index'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(SingleChildScrollView), findsOneWidget);
+    final scrollView = tester.widget<SingleChildScrollView>(
+      find.byType(SingleChildScrollView),
+    );
+    expect(scrollView.physics, isA<BouncingScrollPhysics>());
+    expect(find.text('scroll item 19'), findsOneWidget);
+
+    await tester.drag(
+        find.byType(SingleChildScrollView), const Offset(0, -500));
+    await tester.pumpAndSettle();
+
+    final controller = scrollView.controller!;
+    expect(controller.offset, greaterThan(0));
   });
 
   testWidgets('renders core pages without viewport exceptions',

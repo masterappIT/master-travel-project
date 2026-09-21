@@ -1,10 +1,6 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 
 import '../../floating_nav_bar.dart';
-import '../platform/safari_scroll_bridge_stub.dart'
-    if (dart.library.html) '../platform/safari_scroll_bridge_web.dart';
 import '../tokens/driver_tokens.dart';
 
 class DriverPageShell extends StatefulWidget {
@@ -39,48 +35,9 @@ class DriverPageShell extends StatefulWidget {
 
 class _DriverPageShellState extends State<DriverPageShell> {
   final ScrollController _scrollController = ScrollController();
-  final SafariScrollBridge _safariScrollBridge = const SafariScrollBridge();
-  StreamSubscription<Object?>? _windowScrollSubscription;
-
-  @override
-  void initState() {
-    super.initState();
-    if (_safariScrollBridge.isEnabled) {
-      _windowScrollSubscription =
-          _safariScrollBridge.listen(_syncDriverScrollFromSafari);
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _syncSafariScrollExtent();
-        _syncDriverScrollFromSafari(_safariScrollBridge.currentOffset);
-      });
-    }
-  }
-
-  void _syncDriverScrollFromSafari(double offset) {
-    if (!_scrollController.hasClients) {
-      return;
-    }
-    final target = offset.clamp(
-      0.0,
-      _scrollController.position.maxScrollExtent,
-    );
-    if ((_scrollController.offset - target).abs() < 1.0) {
-      return;
-    }
-    _scrollController.jumpTo(target);
-  }
-
-  void _syncSafariScrollExtent() {
-    if (!_safariScrollBridge.isEnabled || !_scrollController.hasClients) {
-      return;
-    }
-    _safariScrollBridge.syncExtent(
-      _scrollController.position.maxScrollExtent,
-    );
-  }
 
   @override
   void dispose() {
-    _windowScrollSubscription?.cancel();
     _scrollController.dispose();
     super.dispose();
   }
@@ -111,33 +68,21 @@ class _DriverPageShellState extends State<DriverPageShell> {
               child: SizedBox.expand(
                 child: Stack(
                   children: [
-                    NotificationListener<ScrollNotification>(
-                      onNotification: (notification) {
-                        if (notification is ScrollMetricsNotification) {
-                          WidgetsBinding.instance.addPostFrameCallback((_) {
-                            _syncSafariScrollExtent();
-                          });
-                        }
-                        return false;
-                      },
-                      child: SingleChildScrollView(
-                        controller: _scrollController,
-                        primary: false,
-                        physics: _safariScrollBridge.isEnabled
-                            ? const NeverScrollableScrollPhysics()
-                            : const BouncingScrollPhysics(
-                                parent: AlwaysScrollableScrollPhysics(),
-                              ),
-                        keyboardDismissBehavior:
-                            ScrollViewKeyboardDismissBehavior.onDrag,
-                        padding: EdgeInsets.fromLTRB(
-                          widget.horizontalPadding,
-                          widget.topPadding,
-                          widget.horizontalPadding,
-                          widget.bottomPadding + bottomSafeInset,
-                        ),
-                        child: widget.child,
+                    SingleChildScrollView(
+                      controller: _scrollController,
+                      primary: false,
+                      physics: const BouncingScrollPhysics(
+                        parent: AlwaysScrollableScrollPhysics(),
                       ),
+                      keyboardDismissBehavior:
+                          ScrollViewKeyboardDismissBehavior.onDrag,
+                      padding: EdgeInsets.fromLTRB(
+                        widget.horizontalPadding,
+                        widget.topPadding,
+                        widget.horizontalPadding,
+                        widget.bottomPadding + bottomSafeInset,
+                      ),
+                      child: widget.child,
                     ),
                     if (widget.showBottomNavigation)
                       Positioned(
