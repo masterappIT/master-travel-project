@@ -329,6 +329,30 @@
   .trip-orders-panel .trip-row-actions button{flex:1 1 0;width:auto;min-width:0;white-space:nowrap;padding-inline:8px}
 }
 
+@media (max-width:900px) {
+  .trip-detail-panel { width: min(680px, calc(100vw - 24px)); padding-bottom: 16px; border-radius: 18px 0 0 18px; }
+  .trip-detail-panel .admin-toolbar { align-items: flex-start; gap: 12px; padding: 18px 18px 12px; }
+  .trip-detail-panel .admin-toolbar > button { align-self: flex-start; min-width: 96px; min-height: 44px; }
+  .trip-detail-panel .admin-toolbar h2 { max-width: 100%; overflow-wrap: anywhere; font-size: 20px; }
+  .trip-detail-grid,
+  .trip-finance-grid { grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 16px 14px; }
+  .trip-detail-card { min-height: 0; padding: 16px; }
+  .trip-detail-card strong,
+  .trip-detail-card small { min-width: 0; overflow-wrap: anywhere; white-space: normal; }
+  .trip-total-card strong { font-size: clamp(20px, 6vw, 28px); }
+  .trip-section-heading { align-items: flex-start; flex-wrap: wrap; gap: 8px; padding: 15px 16px; }
+  .trip-section-heading > strong { max-width: 100%; overflow-wrap: anywhere; }
+  .trip-price-line,
+  .trip-price-summary span,
+  .trip-payment-lines > div,
+  .trip-payment-total { align-items: flex-start; flex-wrap: wrap; gap: 8px 16px; }
+  .trip-price-line > span,
+  .trip-price-summary b,
+  .trip-payment-lines b,
+  .trip-payment-total strong { max-width: 100%; overflow-wrap: anywhere; }
+  .trip-status-actions { padding: 0 14px; }
+}
+
 @media (max-width:700px) {
   .trip-orders-panel .trip-table-wrap { overflow: visible; }
   .trip-orders-panel table,
