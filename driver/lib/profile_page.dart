@@ -21,10 +21,10 @@ class _ProfilePageState extends State<ProfilePage> {
   final _api = DriverApiClient.instance;
   bool _loading = true;
   String? _error;
-  String _name = '陳大文';
-  String _vehicleSummary = '香港 · 兩地牌 · 車輛';
-  String _hongKongMacauPhone = '+852 9123 4567';
-  String _mainlandPhone = '+86 未填寫';
+  String? _name;
+  String? _vehicleSummary;
+  String? _hongKongMacauPhone;
+  String? _mainlandPhone;
   String? _wechatId;
   bool _hasWechatQrCode = false;
   String _settledAmount = '0';
@@ -43,7 +43,10 @@ class _ProfilePageState extends State<ProfilePage> {
         _api.statistics(),
         _api.listDriverVehicles(),
       ]);
-      final driver = Map<String, dynamic>.from(results[0] as Map);
+      final driverResult = Map<String, dynamic>.from(results[0] as Map);
+      final driver = Map<String, dynamic>.from(driverResult['driver'] is Map
+          ? driverResult['driver'] as Map
+          : driverResult);
       final statistics = Map<String, dynamic>.from(results[1] as Map);
       final vehicles = Map<String, dynamic>.from(results[2] as Map);
       final vehicleItems = vehicles['data'] is List
@@ -51,7 +54,7 @@ class _ProfilePageState extends State<ProfilePage> {
           : const <dynamic>[];
       if (!mounted) return;
       setState(() {
-        _name = driver['name']?.toString() ?? _name;
+        _name = driver['name']?.toString() ?? '';
         _vehicleSummary = vehicleItems.isEmpty
             ? '尚未登記車輛'
             : _vehicleSummaryFrom(
@@ -157,9 +160,9 @@ class _ProfilePageState extends State<ProfilePage> {
       context,
       DriverRouteNames.profileEdit,
       arguments: <String, String>{
-        'name': _name,
-        'hongKongMacauPhone': _hongKongMacauPhone,
-        'mainlandPhone': _mainlandPhone,
+        'name': _name ?? '',
+        'hongKongMacauPhone': _hongKongMacauPhone ?? '',
+        'mainlandPhone': _mainlandPhone ?? '',
       },
     );
     if (!mounted || result is! Map<String, String>) return;
@@ -339,19 +342,20 @@ class _ProfileHeader extends StatelessWidget {
       required this.vehicleSummary,
       required this.onNotification});
 
-  final String name;
-  final String vehicleSummary;
+  final String? name;
+  final String? vehicleSummary;
   final VoidCallback onNotification;
 
   @override
   Widget build(BuildContext context) {
+    final hasProfile = name != null && vehicleSummary != null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(name,
+            Text(name ?? '',
                 style: TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.w700,
@@ -379,23 +383,25 @@ class _ProfileHeader extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 10),
-        Container(
-          padding: const EdgeInsets.symmetric(
-              horizontal: 10, vertical: DriverSpacing.xs),
-          decoration: BoxDecoration(
-              color: DriverColors.successBackground,
-              borderRadius: BorderRadius.circular(DriverRadii.pill)),
-          child: const Text('已認證司機',
+        if (hasProfile) ...[
+          Container(
+            padding: const EdgeInsets.symmetric(
+                horizontal: 10, vertical: DriverSpacing.xs),
+            decoration: BoxDecoration(
+                color: DriverColors.successBackground,
+                borderRadius: BorderRadius.circular(DriverRadii.pill)),
+            child: const Text('已認證司機',
+                style: TextStyle(
+                    fontSize: DriverTypography.label,
+                    fontWeight: FontWeight.w700,
+                    color: DriverColors.darkGreen)),
+          ),
+          const SizedBox(height: DriverSpacing.sm),
+          Text(vehicleSummary!,
               style: TextStyle(
-                  fontSize: DriverTypography.label,
-                  fontWeight: FontWeight.w700,
-                  color: DriverColors.darkGreen)),
-        ),
-        const SizedBox(height: DriverSpacing.sm),
-        Text(vehicleSummary,
-            style: TextStyle(
-                fontSize: DriverTypography.body,
-                color: DriverColors.secondaryText)),
+                  fontSize: DriverTypography.body,
+                  color: DriverColors.secondaryText)),
+        ],
       ],
     );
   }

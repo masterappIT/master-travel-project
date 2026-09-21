@@ -10,9 +10,9 @@ import 'package:driver_web/core/tokens/driver_tokens.dart';
 class DriverProfilePage extends StatefulWidget {
   const DriverProfilePage({
     super.key,
-    this.initialName = '陳大文',
-    this.initialHongKongMacauPhone = '+852 9123 4567',
-    this.initialMainlandPhone = '+86 未填寫',
+    this.initialName = '',
+    this.initialHongKongMacauPhone = '',
+    this.initialMainlandPhone = '',
   });
 
   final String initialName;

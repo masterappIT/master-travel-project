@@ -291,7 +291,11 @@ void main() {
 
   testWidgets('renders and edits the standalone driver profile page',
       (WidgetTester tester) async {
-    await tester.pumpWidget(testApp(const DriverProfilePage()));
+    await tester.pumpWidget(testApp(const DriverProfilePage(
+      initialName: '陳大文',
+      initialHongKongMacauPhone: '+852 9123 4567',
+      initialMainlandPhone: '+86 未填寫',
+    )));
 
     expect(find.text('個人資料'), findsOneWidget);
     expect(find.text('基本資料'), findsOneWidget);

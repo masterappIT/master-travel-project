@@ -17,7 +17,6 @@ import '../order_in_progress_page.dart';
 import '../profile_page.dart';
 import '../registration_page.dart';
 import '../review_status_page.dart';
-import '../vehicle_legacy_page.dart';
 import '../vehicle_page.dart';
 import '../wechat_payment_page.dart';
 import '../core/api/driver_api_client.dart';
@@ -68,17 +67,15 @@ abstract final class DriverRouter {
             initialData: arguments is VehicleFormData ? arguments : null,
           );
         },
-        DriverRouteNames.vehicleLegacy: (_) => const VehicleLegacyPage(),
         DriverRouteNames.profileEdit: (context) {
           final arguments = ModalRoute.of(context)?.settings.arguments;
           final values = arguments is Map<String, String>
               ? arguments
               : const <String, String>{};
           return DriverProfilePage(
-            initialName: values['name'] ?? '陳大文',
-            initialHongKongMacauPhone:
-                values['hongKongMacauPhone'] ?? '+852 9123 4567',
-            initialMainlandPhone: values['mainlandPhone'] ?? '+86 未填寫',
+            initialName: values['name'] ?? '',
+            initialHongKongMacauPhone: values['hongKongMacauPhone'] ?? '',
+            initialMainlandPhone: values['mainlandPhone'] ?? '',
           );
         },
         DriverRouteNames.orderDetail: (context) {

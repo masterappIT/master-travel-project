@@ -42,6 +42,8 @@ class _DriverPageShellState extends State<DriverPageShell> {
   final SafariScrollBridge _safariScrollBridge = const SafariScrollBridge();
   StreamSubscription<Object?>? _windowScrollSubscription;
   bool _isSyncingFromSafari = false;
+  double? _lastSafariOffset;
+  double? _lastSafariMaxOffset;
 
   @override
   void initState() {
@@ -57,14 +59,14 @@ class _DriverPageShellState extends State<DriverPageShell> {
   }
 
   void _syncDriverScrollFromSafari(double offset) {
-    if (!_scrollController.hasClients) {
+    if (!_scrollController.hasClients || _isSyncingFromSafari) {
       return;
     }
-    final target = offset.toDouble().clamp(
-          0.0,
-          _scrollController.position.maxScrollExtent,
-        );
-    if ((_scrollController.offset - target).abs() < 0.5) {
+    final target = offset.clamp(
+      0.0,
+      _scrollController.position.maxScrollExtent,
+    );
+    if ((_scrollController.offset - target).abs() < 1.0) {
       return;
     }
     _isSyncingFromSafari = true;
@@ -73,13 +75,24 @@ class _DriverPageShellState extends State<DriverPageShell> {
   }
 
   void _syncSafariScrollBridge() {
-    if (!_safariScrollBridge.isEnabled || !_scrollController.hasClients) {
+    if (!_safariScrollBridge.isEnabled ||
+        !_scrollController.hasClients ||
+        _isSyncingFromSafari) {
       return;
     }
+    final offset = _scrollController.offset;
+    final maxOffset = _scrollController.position.maxScrollExtent;
+    if (_lastSafariOffset != null &&
+        _lastSafariMaxOffset == maxOffset &&
+        (offset - _lastSafariOffset!).abs() < 1.0) {
+      return;
+    }
+    _lastSafariOffset = offset;
+    _lastSafariMaxOffset = maxOffset;
     _safariScrollBridge.sync(
-      offset: _scrollController.offset.clamp(0.0, double.infinity),
-      maxOffset: _scrollController.position.maxScrollExtent,
-      shouldScroll: !_isSyncingFromSafari,
+      offset: offset,
+      maxOffset: maxOffset,
+      shouldScroll: true,
     );
   }
 

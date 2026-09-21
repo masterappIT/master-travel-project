@@ -67,6 +67,7 @@
       padding: 0 !important;
       overflow: visible !important;
       touch-action: pan-y !important;
+      overscroll-behavior-y: none;
     }
 
     html.safari-scroll flutter-view {
@@ -102,19 +103,31 @@
 
       document.documentElement.classList.add('safari-scroll');
 
+      let lastOffset = -1;
+      let lastScrollExtent = -1;
+      let frame = 0;
+      let pendingOffset = 0;
+
       window.updateSafariScrollBridge = (offset, maxOffset, shouldScroll) => {
-        const runway = document.getElementById('safari-toolbar-runway');
-        if (runway) {
-          const scrollExtent = Math.max(160, Number(maxOffset) || 0);
-          runway.style.setProperty('--safari-scroll-extent', `${scrollExtent}px`);
+        const nextExtent = Math.max(160, Number(maxOffset) || 0);
+        if (nextExtent !== lastScrollExtent) {
+          lastScrollExtent = nextExtent;
           document.documentElement.style.setProperty(
             '--safari-scroll-extent',
-            `${scrollExtent}px`,
+            `${nextExtent}px`,
           );
         }
         if (!shouldScroll) return;
 
-        window.scrollTo(0, Math.max(0, Number(offset) || 0));
+        const nextOffset = Math.max(0, Number(offset) || 0);
+        if (Math.abs(nextOffset - lastOffset) < 1) return;
+        lastOffset = nextOffset;
+        pendingOffset = nextOffset;
+        if (frame) return;
+        frame = requestAnimationFrame(() => {
+          frame = 0;
+          window.scrollTo(0, pendingOffset);
+        });
       };
     })();
   </script>
