@@ -60,10 +60,10 @@
   .address-form > div > button { width: 100%; }
 }
 @media (max-width: 700px) {
-  .shell { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+  .shell { display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; height: auto; overflow: visible; }
   .shell aside::after { display: none; }
-  .shell aside { position: relative; z-index: 20; width: 100%; min-width: 0; height: 68px; min-height: 68px; flex: 0 0 68px; overflow: hidden; padding: max(11px, env(safe-area-inset-top)) 14px 11px; }
-  .shell aside.mobile-nav-open { height: 134px; min-height: 134px; max-height: 134px; flex-basis: 134px; overflow: hidden; }
+  .shell aside { position: relative; z-index: 20; width: 100%; min-width: 0; height: calc(68px + env(safe-area-inset-top)); min-height: calc(68px + env(safe-area-inset-top)); flex: 0 0 calc(68px + env(safe-area-inset-top)); overflow: hidden; padding: max(11px, env(safe-area-inset-top)) 14px 11px; }
+  .shell aside.mobile-nav-open { height: calc(134px + env(safe-area-inset-top)); min-height: calc(134px + env(safe-area-inset-top)); max-height: calc(134px + env(safe-area-inset-top)); flex-basis: calc(134px + env(safe-area-inset-top)); overflow: hidden; }
   .shell aside.mobile-nav-open { box-shadow: 0 12px 28px rgb(15 23 42 / 14%); }
   .mobile-nav-toggle { z-index: 22; display: inline-flex; align-items: center; justify-content: center; gap: 5px; position: absolute; top: 50%; right: 10px; left: auto; width: 38px; min-width: 38px; height: 38px; min-height: 38px; padding: 0; transform: translateY(-50%); border: 2px solid rgb(255 255 255 / 62%); border-radius: 11px; color: #fff; background: linear-gradient(145deg, #2a78df, #1769d5); box-shadow: 0 0 0 3px rgb(42 120 223 / 24%), 0 5px 12px rgb(7 25 52 / 26%); font-size: 0; font-weight: 700; transition: background .2s ease, box-shadow .2s ease, transform .2s ease; }
   .mobile-nav-toggle:hover { background: linear-gradient(145deg, #3988ed, #1d70df); box-shadow: 0 0 0 4px rgb(42 120 223 / 34%), 0 8px 16px rgb(7 25 52 / 30%); }
@@ -72,7 +72,7 @@
   .mobile-nav-toggle span:first-child::before, .mobile-nav-toggle span:first-child::after { position: absolute; left: 0; width: 18px; height: 2px; border-radius: 999px; background: currentColor; content: ''; }
   .mobile-nav-toggle span:first-child::before { top: 1px; box-shadow: 0 5px 0 currentColor, 0 10px 0 currentColor; }
   .shell aside:not(.mobile-nav-open) nav { display: none; }
-  .shell aside.mobile-nav-open .mobile-nav-toggle { position: fixed; top: 34px; right: 10px; transform: translateY(-50%); }
+  .shell aside.mobile-nav-open .mobile-nav-toggle { position: fixed; top: calc(34px + env(safe-area-inset-top)); right: 10px; transform: translateY(-50%); }
   .mobile-nav-toggle span:last-child { display: none; }
  .shell aside.mobile-nav-open nav { position: relative; z-index: 1; display: flex; flex-wrap: nowrap; align-items: center; align-content: initial; flex: 0 0 auto; width: 100%; height: 44px; max-height: 44px; margin-top: 18px; padding: 4px 56px 7px 0; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; scroll-snap-type: none; touch-action: pan-x; scrollbar-width: none; }
   .shell aside.mobile-nav-open nav::-webkit-scrollbar { display: none; }
@@ -95,14 +95,14 @@
   .shell .operations-nav .nav-group-toggle { width: auto; }
   .shell .operations-nav .nav-group-items { display: contents; margin: 0; }
   .shell .operations-nav .nav-group-items button { padding: 7px 10px; font-size: 12px; }
-  .admin-identity { position: fixed; top: 34px; right: 70px; z-index: 21; display: block; max-width: min(38vw, 140px); margin: 0; padding: 3px 5px; overflow: hidden; transform: translateY(-50%); text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+  .admin-identity { position: fixed; top: calc(34px + env(safe-area-inset-top)); right: 70px; z-index: 21; display: block; max-width: min(38vw, 140px); margin: 0; padding: 3px 5px; overflow: hidden; transform: translateY(-50%); text-align: center; text-overflow: ellipsis; white-space: nowrap; }
   .admin-identity b, .admin-identity span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .admin-identity span { font-size: 9px; }
   .shell .logout-desktop { display: none; }
   .shell .logout-mobile { display: block; flex: 0 0 auto; width: auto; margin-top: 0; padding: 7px 10px; border-radius: 8px; color: #b9c8da; background: transparent; text-align: center; font-size: 12px; white-space: nowrap; }
   .logout-mobile:hover { color: #fff; background: rgba(255,255,255,.09); }
   .logout { position: static; }
-  .shell main { flex: 1 1 auto; width: 100%; min-height: 0; height: auto; padding: 24px 10px 28px; }
+  .shell main { flex: 1 1 auto; width: 100%; min-height: 0; height: auto; overflow: visible; padding: 24px 10px calc(28px + env(safe-area-inset-bottom)); }
   .shell main > header:has(.header-actions:empty) { display: none; }
   .shell header { align-items: stretch; flex-direction: column; gap: 16px; margin-bottom: 22px; padding-bottom: 6px; }
   .shell header .eyebrow { line-height: 1.4; }
