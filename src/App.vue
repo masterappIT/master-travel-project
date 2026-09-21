@@ -104,6 +104,27 @@ body,
   overscroll-behavior: auto;
   touch-action: auto;
 }
+
+/* #ifdef H5 */
+/* H5 owns the browser viewport edges; native targets keep their existing canvas shape. */
+.app-shell {
+  min-height: 100vh;
+  min-height: 100dvh;
+  border-radius: 0;
+  --trip-screen-radius: 0px;
+}
+
+.app-shell > .page,
+.app-shell > .login-page,
+.app-shell > .verify-page,
+.app-shell > .trip-complete-page,
+.app-shell > .booking-success-page,
+.app-shell > .trip-waiting-page,
+.app-shell > .trip-progress-page {
+  border-radius: 0 !important;
+}
+/* #endif */
+
 .splash-screen {
   width: 100%;
   min-height: 100vh;
