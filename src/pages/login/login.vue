@@ -63,6 +63,7 @@ import { onLoad } from '@dcloudio/uni-app'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { authenticateThirdParty, requestPhoneVerificationCode, verifyPhoneVerificationCode } from '../../services/api'
 import { setAuthenticated } from '../../utils/auth'
+import { goHome } from '../../utils/navigation'
 
 const { responsiveStyle } = useResponsiveCanvas()
 const countryOptions = ['香港 +852', '澳門 +853', '內地 +86', '美國/加拿大 +1', '英國 +44']
@@ -88,7 +89,7 @@ const handleCountryChange = (event: { detail: { value: string | number } }) => {
 }
 
 const handleBack = () => {
-  uni.reLaunch({ url: '/pages/index/index', animationType: 'none', animationDuration: 0 })
+  goHome()
 }
 
 const handleLogin = async () => {

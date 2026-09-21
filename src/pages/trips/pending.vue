@@ -47,11 +47,11 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import OrdersBackButton from '../../components/orders/OrdersBackButton.vue'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
-import { getClientTrip, listClientTrips, type ClientTrip } from '../../services/api'
+import { getClientTrip, type ClientTrip } from '../../services/api'
 import { formatAssignmentCountdown, getAssignmentCountdownSeconds } from '../../utils/assignmentCountdown'
 import { cachedPageUrl, closeCachedPage, getCachedPageOrderQuery, getCachedPageUrl, isCachedPageActive, openCachedPage, pagePath } from '../../utils/navigation'
 import { formatOrderDetailAddress } from '../../utils/orderAddress'
-import { isPendingTrip, selectNextPendingTrip } from '../../utils/pendingTrip'
+import { isPendingTrip } from '../../utils/pendingTrip'
 import { layoutVehiclePlates } from '../../utils/vehiclePlate'
 
 const { responsiveStyle } = useResponsiveCanvas()
@@ -116,9 +116,6 @@ const loadTrip = async () => {
     if (!isPendingTrip(loadedTrip)) {
       transitioning = true
       stopTimers()
-      const nextTrip = selectNextPendingTrip(await listClientTrips(), loadedTrip.id)
-      if (nextTrip) return openCachedPage(`/pages/trips/pending?id=${encodeURIComponent(nextTrip.id)}`)
-      uni.showToast({ title: '目前沒有待出行訂單', icon: 'none' })
       return openCachedPage('/pages/trips/trips')
     }
     trip.value = loadedTrip

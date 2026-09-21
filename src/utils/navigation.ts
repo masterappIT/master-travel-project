@@ -183,9 +183,18 @@ export const redirectEmbeddedLaunch = (path = '', query: Record<string, unknown>
 export const goHome = () => {
   // #ifdef MP-WEIXIN || MP-TOUTIAO
   if (embeddedHostActive) {
+    const pages = getCurrentPages()
+    const currentPath = pages.length ? `/${pages[pages.length - 1].route}` : ''
     cachedPageStack.value = [HOME_PATH]
     cachedPageUrl.value = HOME_PATH
-    return
+
+    if (currentPath === HOME_PATH) return
+
+    // A native page such as login can outlive the embedded host module state
+    // after reLaunch. Reset that stale state before mounting the host again.
+    embeddedHostActive = false
+    lastEmbeddedLaunchUrl = ''
+    try { uni.removeStorageSync(EMBEDDED_LAUNCH_URL_KEY) } catch {}
   }
   // #endif
 

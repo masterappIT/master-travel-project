@@ -60,11 +60,11 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
-import { getClientTrip, listClientTrips, type ClientTrip } from '../../services/api'
+import { getClientTrip, type ClientTrip } from '../../services/api'
 import { formatOrderCardAddress } from '../../utils/orderAddress'
 import { cachedPagePath, cachedPageUrl, getCachedPageOrderQuery, isCachedPageActive, openCachedPage } from '../../utils/navigation'
 import { layoutVehiclePlates } from '../../utils/vehiclePlate'
-import { isPendingTrip, selectNextPendingTrip } from '../../utils/pendingTrip'
+import { isPendingTrip } from '../../utils/pendingTrip'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 
 const { responsiveStyle } = useResponsiveCanvas()
@@ -103,9 +103,6 @@ const loadTrip = async () => {
     if (fromProfilePending.value && !isPendingTrip(nextTrip)) {
       transitioning = true
       stopPolling()
-      const pendingTrip = selectNextPendingTrip(await listClientTrips(), nextTrip.id)
-      if (pendingTrip) return openCachedPage(`/pages/trips/pending?id=${encodeURIComponent(pendingTrip.id)}`)
-      uni.showToast({ title: '目前沒有待出行訂單', icon: 'none' })
       return openCachedPage('/pages/trips/trips')
     }
     const path = nextTrip.status === 'COMPLETED' ? '/pages/vehicles/trip-complete' : nextTrip.executionPhase === 'IN_PROGRESS' ? '/pages/vehicles/trip-progress' : ''

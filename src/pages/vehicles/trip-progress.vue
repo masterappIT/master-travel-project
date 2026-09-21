@@ -60,10 +60,10 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
-import { getClientTrip, listClientTrips, type ClientTrip } from '../../services/api'
+import { getClientTrip, type ClientTrip } from '../../services/api'
 import { formatOrderSummaryAddress } from '../../utils/orderAddress'
 import { cachedPagePath, cachedPageUrl, getCachedPageOrderQuery, isCachedPageActive, openCachedPage } from '../../utils/navigation'
-import { isPendingTrip, selectNextPendingTrip } from '../../utils/pendingTrip'
+import { isPendingTrip } from '../../utils/pendingTrip'
 import { layoutVehiclePlates } from '../../utils/vehiclePlate'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 
@@ -105,9 +105,6 @@ const loadTrip = async () => {
     transitioning = true
     stopPolling()
     if (!fromProfilePending.value) return openCachedPage(`/pages/vehicles/trip-complete?id=${encodeURIComponent(tripId.value)}`)
-    const pendingTrip = selectNextPendingTrip(await listClientTrips(), nextTrip.id)
-    if (pendingTrip) return openCachedPage(`/pages/trips/pending?id=${encodeURIComponent(pendingTrip.id)}`)
-    uni.showToast({ title: '目前沒有待出行訂單', icon: 'none' })
     return openCachedPage('/pages/trips/trips')
   } catch (error) {
     transitioning = false
