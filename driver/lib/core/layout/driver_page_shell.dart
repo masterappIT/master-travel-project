@@ -1,11 +1,10 @@
-// ignore_for_file: avoid_web_libraries_in_flutter, deprecated_member_use
-
-import 'dart:html' as html;
-import 'dart:js' as js;
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 
 import '../../floating_nav_bar.dart';
+import '../platform/safari_scroll_bridge_stub.dart'
+    if (dart.library.html) '../platform/safari_scroll_bridge_web.dart';
 import '../tokens/driver_tokens.dart';
 
 class DriverPageShell extends StatefulWidget {
@@ -40,25 +39,53 @@ class DriverPageShell extends StatefulWidget {
 
 class _DriverPageShellState extends State<DriverPageShell> {
   final ScrollController _scrollController = ScrollController();
+  final SafariScrollBridge _safariScrollBridge = const SafariScrollBridge();
+  StreamSubscription<Object?>? _windowScrollSubscription;
+  bool _isSyncingFromSafari = false;
 
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_syncSafariScrollBridge);
+    if (_safariScrollBridge.isEnabled) {
+      _windowScrollSubscription =
+          _safariScrollBridge.listen(_syncDriverScrollFromSafari);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _syncSafariScrollBridge();
+      });
+    }
+  }
+
+  void _syncDriverScrollFromSafari(double offset) {
+    if (!_scrollController.hasClients) {
+      return;
+    }
+    final target = offset.toDouble().clamp(
+          0.0,
+          _scrollController.position.maxScrollExtent,
+        );
+    if ((_scrollController.offset - target).abs() < 0.5) {
+      return;
+    }
+    _isSyncingFromSafari = true;
+    _scrollController.jumpTo(target);
+    _isSyncingFromSafari = false;
   }
 
   void _syncSafariScrollBridge() {
-    if (!html.document.documentElement!.classes.contains('safari-scroll')) {
+    if (!_safariScrollBridge.isEnabled || !_scrollController.hasClients) {
       return;
     }
-    final offset = _scrollController.hasClients
-        ? _scrollController.offset.clamp(0.0, double.infinity)
-        : 0.0;
-    js.context.callMethod('updateSafariScrollBridge', <Object>[offset]);
+    _safariScrollBridge.sync(
+      offset: _scrollController.offset.clamp(0.0, double.infinity),
+      maxOffset: _scrollController.position.maxScrollExtent,
+      shouldScroll: !_isSyncingFromSafari,
+    );
   }
 
   @override
   void dispose() {
+    _windowScrollSubscription?.cancel();
     _scrollController
       ..removeListener(_syncSafariScrollBridge)
       ..dispose();
