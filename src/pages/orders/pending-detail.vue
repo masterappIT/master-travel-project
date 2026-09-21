@@ -114,7 +114,10 @@ const openPayment = async () => {
     uni.showToast({ title: paymentError.value, icon: 'none' })
   } finally { paymentLoading.value = false }
 }
-const closePayment = () => { paymentOpen.value = false; if (paymentTimer) clearInterval(paymentTimer) }
+const closePayment = () => {
+  paymentOpen.value = false
+  if (storedOrder.value?.status === 'PENDING' && !paymentExpired.value) startPendingCountdown()
+}
 const confirmPayment = async () => {
   if (!storedOrder.value?.quoteId) return
   paymentLoading.value = true

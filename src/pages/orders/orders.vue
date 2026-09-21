@@ -32,10 +32,10 @@
   </view>
 </template>
 <script setup lang="ts">
-import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
-import { openCachedPage, setOrderReturnTarget } from '../../utils/navigation'
+import { openCachedPage, cachedPagePath, setOrderReturnTarget } from '../../utils/navigation'
 import { listClientTrips, type ClientTrip } from '../../services/api'
 import { listStoredOrders, type StoredTripOrder } from '../../utils/orderStore'
 import { formatOrderCardAddress } from '../../utils/orderAddress'
@@ -118,6 +118,9 @@ const loadOrders = async () => {
 }
 onShow(() => { void loadOrders() })
 onMounted(() => { void loadOrders() })
+watch(cachedPagePath, (path, previousPath) => {
+  if (path === '/pages/orders/orders' && previousPath !== path) void loadOrders()
+})
 onUnmounted(() => { if (countdownTimer) clearInterval(countdownTimer) })
 const activeTab = ref<Tab>('all')
 const tabs: Array<{ label: string; value: Tab }> = [{ label: '全部', value: 'all' }, { label: '已完成', value: 'completed' }, { label: '取消', value: 'cancelled' }]
