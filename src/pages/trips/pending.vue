@@ -166,7 +166,7 @@ const showRelatedTrip = () => {
     : isDriverAccepted.value
       ? '/pages/vehicles/trip-waiting'
       : '/pages/vehicles/booking-success'
-  openCachedPage(`${path}?id=${encodeURIComponent(tripId.value)}&from=profile-pending`)
+  openCachedPage(`${path}?id=${encodeURIComponent(tripId.value)}`)
 }
 </script>
 

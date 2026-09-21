@@ -63,6 +63,17 @@ export const getCachedPagePreviousPath = (targetPath: string) => {
   return index > 0 ? pagePath(cachedPageStack.value[index - 1]) : ''
 }
 
+export const hasPageInNavigationHistory = (targetPath: string, currentPath: string) => {
+  if (embeddedHostActive) {
+    const currentIndex = cachedPageStack.value.findLastIndex((entry) => pagePath(entry) === currentPath)
+    return cachedPageStack.value.slice(0, currentIndex < 0 ? undefined : currentIndex).some((entry) => pagePath(entry) === targetPath)
+  }
+
+  const paths = getCurrentPages().map((page) => `/${page.route}`)
+  const currentIndex = paths.lastIndexOf(currentPath)
+  return paths.slice(0, currentIndex < 0 ? undefined : currentIndex).includes(targetPath)
+}
+
 export const activateEmbeddedPageHost = () => {
   if (embeddedHostActive) return
 

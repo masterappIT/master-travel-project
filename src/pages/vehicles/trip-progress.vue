@@ -62,7 +62,7 @@ import { computed, onUnmounted, ref, watch } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { getClientTrip, type ClientTrip } from '../../services/api'
 import { formatOrderSummaryAddress } from '../../utils/orderAddress'
-import { cachedPagePath, cachedPageUrl, getCachedPageOrderQuery, isCachedPageActive, openCachedPage } from '../../utils/navigation'
+import { cachedPagePath, cachedPageUrl, getCachedPageOrderQuery, hasPageInNavigationHistory, isCachedPageActive, openCachedPage } from '../../utils/navigation'
 import { isPendingTrip } from '../../utils/pendingTrip'
 import { layoutVehiclePlates } from '../../utils/vehiclePlate'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
@@ -70,7 +70,6 @@ import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 const { responsiveStyle } = useResponsiveCanvas()
 const trip = ref<ClientTrip | null>(null)
 const tripId = ref('')
-const fromProfilePending = ref(false)
 const logoLoadFailed = ref(false)
 let pollTimer: ReturnType<typeof setInterval> | undefined
 const originLabel = computed(() => formatOrderSummaryAddress(trip.value?.origin, '香港').split(' · ')[0])
@@ -101,30 +100,33 @@ const loadTrip = async () => {
     if (nextTrip.vehicle?.logo !== trip.value?.vehicle?.logo) logoLoadFailed.value = false
     trip.value = nextTrip
     if (isPendingTrip(nextTrip)) return
-    if (!fromProfilePending.value && nextTrip.status !== 'COMPLETED') return
+    if (nextTrip.status !== 'COMPLETED' && hasPageInNavigationHistory('/pages/trips/pending', '/pages/vehicles/trip-progress')) {
+      transitioning = true
+      stopPolling()
+      return openCachedPage('/pages/trips/trips')
+    }
+    if (nextTrip.status !== 'COMPLETED') return
     transitioning = true
     stopPolling()
-    if (!fromProfilePending.value) return openCachedPage(`/pages/vehicles/trip-complete?id=${encodeURIComponent(tripId.value)}`)
-    return openCachedPage('/pages/trips/trips')
+    return openCachedPage(`/pages/vehicles/trip-complete?id=${encodeURIComponent(tripId.value)}`)
   } catch (error) {
     transitioning = false
     uni.showToast({ title: error instanceof Error ? error.message : '行程載入失敗', icon: 'none' })
   }
 }
-onLoad(options => { tripId.value = options?.id || ''; fromProfilePending.value = options?.from === 'profile-pending'; void loadTrip(); startPolling() })
+onLoad(options => { tripId.value = options?.id || ''; void loadTrip(); startPolling() })
 // #ifdef MP-WEIXIN || MP-TOUTIAO
 watch([cachedPagePath, cachedPageUrl], ([path, url]) => {
   if (path !== '/pages/vehicles/trip-progress') { stopPolling(); return }
   const query = getCachedPageOrderQuery(url)
   const id = query.id
   if (!id) { stopPolling(); return }
-  fromProfilePending.value = query.from === 'profile-pending'
   if (id !== tripId.value) { transitioning = false; tripId.value = id; void loadTrip() }
   startPolling()
 }, { immediate: true })
 // #endif
 onUnmounted(stopPolling)
-const goBack = () => openCachedPage(fromProfilePending.value
+const goBack = () => openCachedPage(hasPageInNavigationHistory('/pages/trips/pending', '/pages/vehicles/trip-progress')
   ? `/pages/trips/pending?id=${encodeURIComponent(tripId.value)}`
   : `/pages/orders/traveling-detail?id=${encodeURIComponent(tripId.value)}`)
 const callDriver = () => { const phone = trip.value?.driver?.phone; if (phone) uni.makePhoneCall({ phoneNumber: phone }); else uni.showToast({ title: '暫無司機電話', icon: 'none' }) }
