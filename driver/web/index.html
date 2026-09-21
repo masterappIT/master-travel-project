@@ -39,7 +39,7 @@
       width: 100%;
       min-height: 100%;
       margin: 0;
-      background: #f5f7fb;
+      background: #f4f7fb;
       overscroll-behavior-y: auto;
     }
 
@@ -47,7 +47,7 @@
       min-height: 100dvh;
       padding-top: env(safe-area-inset-top);
       padding-right: env(safe-area-inset-right);
-      padding-bottom: env(safe-area-inset-bottom);
+      padding-bottom: 0;
       padding-left: env(safe-area-inset-left);
       box-sizing: border-box;
     }
@@ -63,11 +63,11 @@
     html.safari-scroll body {
       position: static !important;
       height: auto !important;
-      min-height: calc(100dvh + var(--safari-scroll-extent, 160px));
+      min-height: calc(100dvh + var(--safari-scroll-extent, 0px));
       padding: 0 !important;
       overflow: visible !important;
       touch-action: pan-y !important;
-      overscroll-behavior-y: none;
+      overscroll-behavior-y: auto;
     }
 
     html.safari-scroll flutter-view {
@@ -84,7 +84,7 @@
     html.safari-scroll #safari-toolbar-runway {
       display: block;
       width: 1px;
-      height: calc(100dvh + var(--safari-scroll-extent, 160px));
+      height: calc(100dvh + var(--safari-scroll-extent, 0px));
       pointer-events: none;
     }
   </style>
@@ -103,31 +103,16 @@
 
       document.documentElement.classList.add('safari-scroll');
 
-      let lastOffset = -1;
       let lastScrollExtent = -1;
-      let frame = 0;
-      let pendingOffset = 0;
 
-      window.updateSafariScrollBridge = (offset, maxOffset, shouldScroll) => {
-        const nextExtent = Math.max(160, Number(maxOffset) || 0);
-        if (nextExtent !== lastScrollExtent) {
-          lastScrollExtent = nextExtent;
-          document.documentElement.style.setProperty(
-            '--safari-scroll-extent',
-            `${nextExtent}px`,
-          );
-        }
-        if (!shouldScroll) return;
-
-        const nextOffset = Math.max(0, Number(offset) || 0);
-        if (Math.abs(nextOffset - lastOffset) < 1) return;
-        lastOffset = nextOffset;
-        pendingOffset = nextOffset;
-        if (frame) return;
-        frame = requestAnimationFrame(() => {
-          frame = 0;
-          window.scrollTo(0, pendingOffset);
-        });
+      window.updateSafariScrollExtent = (maxOffset) => {
+        const nextExtent = Math.max(0, Number(maxOffset) || 0);
+        if (nextExtent === lastScrollExtent) return;
+        lastScrollExtent = nextExtent;
+        document.documentElement.style.setProperty(
+          '--safari-scroll-extent',
+          `${nextExtent}px`,
+        );
       };
     })();
   </script>

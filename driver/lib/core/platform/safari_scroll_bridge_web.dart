@@ -12,6 +12,8 @@ class SafariScrollBridge {
   bool get isEnabled =>
       html.document.documentElement?.classes.contains('safari-scroll') ?? false;
 
+  double get currentOffset => html.window.scrollY.toDouble();
+
   StreamSubscription<html.Event>? listen(SafariScrollCallback onScroll) {
     if (!isEnabled) {
       return null;
@@ -21,18 +23,10 @@ class SafariScrollBridge {
     });
   }
 
-  void sync({
-    required double offset,
-    required double maxOffset,
-    required bool shouldScroll,
-  }) {
+  void syncExtent(double maxOffset) {
     if (!isEnabled) {
       return;
     }
-    js.context.callMethod('updateSafariScrollBridge', <Object>[
-      offset,
-      maxOffset,
-      shouldScroll,
-    ]);
+    js.context.callMethod('updateSafariScrollExtent', <Object>[maxOffset]);
   }
 }

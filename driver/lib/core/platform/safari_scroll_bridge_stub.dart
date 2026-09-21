@@ -7,11 +7,9 @@ class SafariScrollBridge {
 
   bool get isEnabled => false;
 
+  double get currentOffset => 0;
+
   StreamSubscription<Object?>? listen(SafariScrollCallback onScroll) => null;
 
-  void sync({
-    required double offset,
-    required double maxOffset,
-    required bool shouldScroll,
-  }) {}
+  void syncExtent(double maxOffset) {}
 }

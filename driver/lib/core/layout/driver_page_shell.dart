@@ -41,25 +41,22 @@ class _DriverPageShellState extends State<DriverPageShell> {
   final ScrollController _scrollController = ScrollController();
   final SafariScrollBridge _safariScrollBridge = const SafariScrollBridge();
   StreamSubscription<Object?>? _windowScrollSubscription;
-  bool _isSyncingFromSafari = false;
-  double? _lastSafariOffset;
-  double? _lastSafariMaxOffset;
 
   @override
   void initState() {
     super.initState();
-    _scrollController.addListener(_syncSafariScrollBridge);
     if (_safariScrollBridge.isEnabled) {
       _windowScrollSubscription =
           _safariScrollBridge.listen(_syncDriverScrollFromSafari);
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _syncSafariScrollBridge();
+        _syncSafariScrollExtent();
+        _syncDriverScrollFromSafari(_safariScrollBridge.currentOffset);
       });
     }
   }
 
   void _syncDriverScrollFromSafari(double offset) {
-    if (!_scrollController.hasClients || _isSyncingFromSafari) {
+    if (!_scrollController.hasClients) {
       return;
     }
     final target = offset.clamp(
@@ -69,47 +66,33 @@ class _DriverPageShellState extends State<DriverPageShell> {
     if ((_scrollController.offset - target).abs() < 1.0) {
       return;
     }
-    _isSyncingFromSafari = true;
     _scrollController.jumpTo(target);
-    _isSyncingFromSafari = false;
   }
 
-  void _syncSafariScrollBridge() {
-    if (!_safariScrollBridge.isEnabled ||
-        !_scrollController.hasClients ||
-        _isSyncingFromSafari) {
+  void _syncSafariScrollExtent() {
+    if (!_safariScrollBridge.isEnabled || !_scrollController.hasClients) {
       return;
     }
-    final offset = _scrollController.offset;
-    final maxOffset = _scrollController.position.maxScrollExtent;
-    if (_lastSafariOffset != null &&
-        _lastSafariMaxOffset == maxOffset &&
-        (offset - _lastSafariOffset!).abs() < 1.0) {
-      return;
-    }
-    _lastSafariOffset = offset;
-    _lastSafariMaxOffset = maxOffset;
-    _safariScrollBridge.sync(
-      offset: offset,
-      maxOffset: maxOffset,
-      shouldScroll: true,
+    _safariScrollBridge.syncExtent(
+      _scrollController.position.maxScrollExtent,
     );
   }
 
   @override
   void dispose() {
     _windowScrollSubscription?.cancel();
-    _scrollController
-      ..removeListener(_syncSafariScrollBridge)
-      ..dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final bottomSafeInset = MediaQuery.viewPaddingOf(context).bottom;
+
     return Scaffold(
       backgroundColor: DriverColors.background,
       body: SafeArea(
+        bottom: false,
         child: Align(
           alignment: Alignment.topCenter,
           child: ConstrainedBox(
@@ -128,27 +111,40 @@ class _DriverPageShellState extends State<DriverPageShell> {
               child: SizedBox.expand(
                 child: Stack(
                   children: [
-                    SingleChildScrollView(
-                      controller: _scrollController,
-                      primary: false,
-                      physics: const BouncingScrollPhysics(
-                        parent: AlwaysScrollableScrollPhysics(),
+                    NotificationListener<ScrollNotification>(
+                      onNotification: (notification) {
+                        if (notification is ScrollMetricsNotification) {
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            _syncSafariScrollExtent();
+                          });
+                        }
+                        return false;
+                      },
+                      child: SingleChildScrollView(
+                        controller: _scrollController,
+                        primary: false,
+                        physics: _safariScrollBridge.isEnabled
+                            ? const NeverScrollableScrollPhysics()
+                            : const BouncingScrollPhysics(
+                                parent: AlwaysScrollableScrollPhysics(),
+                              ),
+                        keyboardDismissBehavior:
+                            ScrollViewKeyboardDismissBehavior.onDrag,
+                        padding: EdgeInsets.fromLTRB(
+                          widget.horizontalPadding,
+                          widget.topPadding,
+                          widget.horizontalPadding,
+                          widget.bottomPadding + bottomSafeInset,
+                        ),
+                        child: widget.child,
                       ),
-                      keyboardDismissBehavior:
-                          ScrollViewKeyboardDismissBehavior.onDrag,
-                      padding: EdgeInsets.fromLTRB(
-                        widget.horizontalPadding,
-                        widget.topPadding,
-                        widget.horizontalPadding,
-                        widget.bottomPadding,
-                      ),
-                      child: widget.child,
                     ),
                     if (widget.showBottomNavigation)
                       Positioned(
                         left: widget.navHorizontalPadding,
                         right: widget.navHorizontalPadding,
-                        bottom: DriverDimensions.navBottomInset,
+                        bottom:
+                            DriverDimensions.navBottomInset + bottomSafeInset,
                         child: FloatingNavBar(
                           selectedIndex: widget.selectedIndex,
                           onHomeTap: widget.onHomeTap,
