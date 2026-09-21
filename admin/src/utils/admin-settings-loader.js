@@ -5,6 +5,7 @@ export function applyAdminSettings(settings, { exchangeRate, pricingCurrency, se
   adminLogo.value = settings.adminLogo || ''
   paymentSettings.value = {
     driverRaceEnabled: Boolean(settings.driverRaceEnabled),
+    dispatchSchedulingEnabled: Boolean(settings.dispatchSchedulingEnabled),
     driverPayoutPercentage: Number.isFinite(Number(settings.driverPayoutPercentage)) ? Number(settings.driverPayoutPercentage) : 100,
     fareBalancePayEnabled: settings.fareBalancePayEnabled !== false,
     cashBalancePayEnabled: settings.cashBalancePayEnabled !== false,

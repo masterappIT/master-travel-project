@@ -27,6 +27,20 @@ export const DriversPage = {
         <input type="checkbox" v-model="paymentSettings.driverRaceEnabled" :disabled="!canWrite"/>
         <span class="slider"></span>
       </label>
+    </div>
+  </div>
+  <div class="dispatch-race-control panel">
+    <div>
+      <span class="eyebrow">DISPATCH SCHEDULING</span>
+      <h3>排單功能</h3>
+      <p class="muted">控制是否開放已確認訂單進入排單流程，不影響司機搶單模式。</p>
+    </div>
+    <div class="dispatch-race-actions">
+      <div class="dispatch-race-status"><span class="dispatch-race-status-dot" :class="{enabled: paymentSettings.dispatchSchedulingEnabled}"></span><span>{{ paymentSettings.dispatchSchedulingEnabled ? '排單已開放' : '排單已關閉' }}</span></div>
+      <label class="switch dispatch-race-switch" :aria-label="paymentSettings.dispatchSchedulingEnabled ? '關閉排單功能' : '開啟排單功能'">
+        <input type="checkbox" v-model="paymentSettings.dispatchSchedulingEnabled" :disabled="!canWrite"/>
+        <span class="slider"></span>
+      </label>
       <button type="button" v-if="canWrite" class="primary dispatch-race-save" :class="{saving: driverRaceSaving}" :disabled="driverRaceSaving" @click="savePaymentSettings">{{ driverRaceSaving ? '保存中…' : '保存設定' }}</button>
       <span v-if="paymentSettingsSaved" class="success-hint">✓ 設定已保存</span>
     </div>

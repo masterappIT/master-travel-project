@@ -7,6 +7,7 @@ export function createAdminSettingsState() {
   const adminLogo = ref('')
   const paymentSettings = ref({
     driverRaceEnabled: false,
+    dispatchSchedulingEnabled: true,
     driverPayoutPercentage: 100,
     fareBalancePayEnabled: true,
     cashBalancePayEnabled: true,

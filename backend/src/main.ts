@@ -446,6 +446,7 @@ const appSettingsDefaults = {
   adminLogo: null as string | null,
   severeWeatherEnabled: false,
   driverRaceEnabled: false,
+  dispatchSchedulingEnabled: true,
   driverPayoutPercentage: 100,
   fareBalancePayEnabled: true,
   cashBalancePayEnabled: true,
@@ -1114,6 +1115,7 @@ function appSettingsResponse(settings: typeof appSettingsDefaults) {
     adminLogo: settings.adminLogo,
     severeWeatherEnabled: settings.severeWeatherEnabled,
     driverRaceEnabled: settings.driverRaceEnabled ?? false,
+    dispatchSchedulingEnabled: settings.dispatchSchedulingEnabled ?? true,
     driverPayoutPercentage: settings.driverPayoutPercentage ?? 100,
     fareBalancePayEnabled: settings.fareBalancePayEnabled ?? true,
     cashBalancePayEnabled: settings.cashBalancePayEnabled ?? true,
@@ -7427,6 +7429,8 @@ class AdminController {
     const settings = await prisma.appSetting.findUniqueOrThrow({
       where: { id: appSettingsDefaults.id },
     });
+    if (!settings.dispatchSchedulingEnabled)
+      throw new ForbiddenException("Dispatch scheduling is disabled");
     const calculatedAmount = roundMoney(
       (trip.payment.total * settings.driverPayoutPercentage) / 100,
     );
@@ -9355,6 +9359,7 @@ class SettingsController {
       adminLogo?: string | null;
       severeWeatherEnabled?: boolean;
       driverRaceEnabled?: boolean;
+      dispatchSchedulingEnabled?: boolean;
       driverPayoutPercentage?: unknown;
       fareBalancePayEnabled?: boolean;
       cashBalancePayEnabled?: boolean;
@@ -9410,6 +9415,8 @@ class SettingsController {
       severeWeatherEnabled:
         body.severeWeatherEnabled ?? settings.severeWeatherEnabled,
       driverRaceEnabled: body.driverRaceEnabled ?? settings.driverRaceEnabled,
+      dispatchSchedulingEnabled:
+        body.dispatchSchedulingEnabled ?? settings.dispatchSchedulingEnabled,
       driverPayoutPercentage,
       fareBalancePayEnabled:
         body.fareBalancePayEnabled ?? settings.fareBalancePayEnabled,

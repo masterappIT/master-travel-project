@@ -595,6 +595,7 @@ model AppSetting {
   exchangeRate                    Float
   adminLogo                       String?  @db.Text
   severeWeatherEnabled            Boolean  @default(false)
+  dispatchSchedulingEnabled Boolean  @default(true)
   driverRaceEnabled               Boolean  @default(false)
   driverPayoutPercentage          Float    @default(100)
   fareBalancePayEnabled           Boolean  @default(true)
