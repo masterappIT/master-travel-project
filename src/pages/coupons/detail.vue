@@ -31,8 +31,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { onLoad, onShow } from '@dcloudio/uni-app'
+import { computed, onMounted, ref } from 'vue'
+import { onLoad } from '@dcloudio/uni-app'
 // #ifdef H5
 import { useH5ResponsiveCanvas } from '../../composables/useH5ResponsiveCanvas'
 // #endif
@@ -117,7 +117,7 @@ const claimPromotion = async () => {
 onLoad((options) => {
   if (typeof options?.id === 'string') promotionId.value = options.id
 })
-onShow(loadPromotion)
+onMounted(loadPromotion)
 const goBack = () => closeCachedPage('/pages/coupons/coupons')
 </script>
 

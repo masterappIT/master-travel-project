@@ -455,7 +455,7 @@ const saveTripChanges = async (origin: string, destination: string, departureTim
   }
 }
 const goBack = () => closeCachedPage('/pages/vehicles/selected')
-const openCoupons = () => openCachedPage('/pages/coupons/coupons')
+const openCoupons = () => openCachedPage('/pages/coupons/coupons?from=/pages/vehicles/confirm')
 const payNow = async () => {
   if (!await ensurePassenger()) return
   if (!selectedFareQuote.value) {

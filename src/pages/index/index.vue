@@ -186,7 +186,7 @@
   <BankCardListPage v-if="activePagePath === '/pages/bank-card/list'" />
   <BankCardDetailPage v-if="activePagePath === '/pages/bank-card/detail'" />
   <CommonDataPage v-if="activePagePath === '/pages/common-data/common-data'" />
-  <CouponsPage v-if="activePagePath === '/pages/coupons/coupons'" />
+  <CouponsPage v-if="activePagePath === '/pages/coupons/coupons'" :key="cachedPageUrl" />
   <CouponDetailPage v-if="activePagePath === '/pages/coupons/detail'" :key="cachedPageUrl" />
   <ComplaintsPage v-if="activePagePath === '/pages/complaints/complaints'" />
   <SupportChatPage v-if="activePagePath === '/pages/support/chat'" />

@@ -6,6 +6,32 @@ let API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://192.168.0.185:30
 API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api'
 // #endif
 const REQUEST_TIMEOUT_MS = 10000
+const requestWithTimeout = (options: UniApp.RequestOptions): Promise<UniApp.RequestSuccessCallbackResult> => new Promise((resolve, reject) => {
+  let settled = false
+  const finish = (callback: () => void) => {
+    if (settled) return
+    settled = true
+    clearTimeout(timer)
+    callback()
+  }
+  const timer = setTimeout(() => finish(() => reject(new Error('request timeout'))), options.timeout || REQUEST_TIMEOUT_MS)
+  const requestTask = uni.request({
+    ...options,
+    success: (response) => finish(() => resolve(response)),
+    fail: (error) => finish(() => reject(error)),
+    complete: (result) => {
+      if (result && typeof result === 'object' && 'statusCode' in result) {
+        finish(() => resolve(result as UniApp.RequestSuccessCallbackResult))
+      }
+    },
+  }) as UniApp.RequestTask & { then?: (onFulfilled: (response: UniApp.RequestSuccessCallbackResult) => void, onRejected?: (error: unknown) => void) => unknown }
+  if (typeof requestTask?.then === 'function') {
+    requestTask.then(
+      (response) => finish(() => resolve(response)),
+      (error) => finish(() => reject(error)),
+    )
+  }
+})
 const apiError = (
   response: UniApp.RequestSuccessCallbackResult,
   fallback: string,
@@ -567,9 +593,14 @@ export type PublicPromotion = {
 }
 
 export async function listPublicPromotions(): Promise<PublicPromotion[]> {
-  const response = await uni.request({ url: `${API_BASE_URL}/promotions?_=${Date.now()}` })
-  if (response.statusCode >= 400) throw new Error('優惠資料暫時無法載入')
-  return (response.data as { data: PublicPromotion[] }).data
+  try {
+    const response = await requestWithTimeout({ url: `${API_BASE_URL}/promotions?_=${Date.now()}`, timeout: REQUEST_TIMEOUT_MS })
+    if (response.statusCode >= 400) throw apiError(response, '優惠資料暫時無法載入', false)
+    return (response.data as { data: PublicPromotion[] }).data
+  } catch (error) {
+    if (error instanceof Error && 'statusCode' in error) throw error
+    throw networkError(error, '優惠資料暫時無法載入')
+  }
 }
 
 export async function redeemPromotionCode(couponCode: string): Promise<{ promotion: PublicPromotion; message: string }> {
