@@ -1,4 +1,7 @@
 <template>
+  <!-- #ifdef H5 -->
+  <view class="h5-viewport">
+  <!-- #endif -->
   <view v-show="activePagePath === '/pages/index/index'" class="page" :style="pageStyle">
     <view v-if="rideMode === 'cross-border'" class="page-content">
       <view class="canvas">
@@ -145,6 +148,9 @@
       <HomeBottomNav @services="openSupport" @trips="openTrips" />
     </view>
   </view>
+  <!-- #ifdef H5 -->
+  </view>
+  <!-- #endif -->
   <!-- #ifdef MP-WEIXIN || MP-TOUTIAO -->
   <TripsPage v-if="activePagePath === '/pages/trips/trips'" />
   <ProfilePendingTripPage v-if="activePagePath === '/pages/trips/pending'" :key="cachedPageUrl" />
@@ -859,7 +865,9 @@ const showComingSoon = (name: string) => uni.showToast({ title: `${name}功能�
 .airport-hint-modal{position:fixed;inset:0;z-index:1100;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box}.airport-hint-mask{position:absolute;inset:0;background:rgba(24,35,41,.55)}.airport-hint-card{position:relative;width:min(360px,100%);padding:28px 24px 22px;border:1px solid rgba(255,255,255,.7);border-radius:24px;background:#fff;box-shadow:0 18px 50px rgba(18,31,38,.28);box-sizing:border-box;text-align:center}.airport-hint-icon{width:48px;height:48px;margin:0 auto 12px;border-radius:16px;background:#e7f7f3;color:#4eaf9d;font-size:25px;line-height:48px}.airport-hint-title{font-size:19px;font-weight:700;color:#38434a}.airport-hint-content{margin-top:12px;color:#66747b;font-size:14px;line-height:1.75}.airport-hint-button{width:100%;height:46px;margin-top:22px;border:0;border-radius:14px;background:#5ab8a5;color:#fff;font-size:15px;line-height:46px}
 /* #endif */
 /* #ifdef H5 */
-@media (max-width:599px){.page{top:0;left:0;height:var(--mobile-height,100dvh);border-radius:0;transform:scale(var(--mobile-scale, 1));transform-origin:top left}.page-content{bottom:102px;height:auto}.canvas{height:100%;min-height:0}.canvas :deep(.map-layer){bottom:205px;height:auto}.canvas :deep(.map-tool){top:auto;bottom:245px}.canvas :deep(.route-panel){top:auto;bottom:-87px;width:430px;height:331px}.canvas :deep(.panel-surface){top:0;bottom:auto;width:430px;height:331px}.business-scroll{height:auto;bottom:102px}.nav-layer :deep(.bottom-nav){bottom:0}}
+.h5-viewport{position:fixed;inset:0;width:100%;height:100%;overflow:hidden;background:#fff}
+:global(html),:global(body),:global(#app){height:100%;min-height:100%;overflow:hidden}
+@media (max-width:599px){.page{top:0;left:0;height:var(--mobile-height,100%);border-radius:0;transform:scale(var(--mobile-scale, 1));transform-origin:top left}.page-content{bottom:102px;height:auto}.canvas{height:100%;min-height:0}.canvas :deep(.map-layer){bottom:205px;height:auto}.canvas :deep(.map-tool){top:auto;bottom:245px}.canvas :deep(.route-panel){top:auto;bottom:-87px;width:430px;height:331px}.canvas :deep(.panel-surface){top:0;bottom:auto;width:430px;height:331px}.business-scroll{height:auto;bottom:102px}.nav-layer :deep(.bottom-nav){bottom:0}}
 /* #endif */
 /* #ifdef APP-PLUS */
 .page{position:fixed;overflow:hidden;overscroll-behavior:none}
