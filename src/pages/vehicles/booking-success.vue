@@ -1,6 +1,6 @@
 <template>
   <view class="page booking-success-page" :style="responsiveStyle">
-      <HomeMap map-id="booking-success-map" :latitude="mapLatitude" :longitude="mapLongitude" :markers="mapMarkers" :polyline="mapPolyline" :route-summary="routeSummary" :center-trigger="centerTrigger" :pickup-label="mapOriginLabel" :destination-label="mapDestinationLabel" :fit-padding="[72, 42, 480, 42]" route-point-callouts full-screen />
+      <TripRouteMap map-id="booking-success-map" :latitude="mapLatitude" :longitude="mapLongitude" :markers="mapMarkers" :polyline="mapPolyline" :route-summary="routeSummary" :pickup-label="mapOriginLabel" :destination-label="mapDestinationLabel" :safe-bottom="243" />
     <view class="back" @tap="goBack"><image class="page-back" src="/static/vehicles/confirm-back.svg" mode="aspectFit" /></view>
     <view class="status-panel">
       <view class="route-card">
@@ -22,7 +22,7 @@
 </template>
 
 <script setup lang="ts">
-import HomeMap from '../../components/home/HomeMap.vue'
+import TripRouteMap from '../../components/vehicles/TripRouteMap.vue'
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { getClientTrip, cancelClientTrip, type ClientTrip } from '../../services/api'
@@ -35,7 +35,7 @@ import { useTripRouteMap } from '../../composables/useTripRouteMap'
 
 const { responsiveStyle } = useResponsiveCanvas()
 const trip = ref<ClientTrip | null>(null)
-const { latitude: mapLatitude, longitude: mapLongitude, markers: mapMarkers, polyline: mapPolyline, routeSummary, centerTrigger } = useTripRouteMap(trip)
+const { latitude: mapLatitude, longitude: mapLongitude, markers: mapMarkers, polyline: mapPolyline, routeSummary } = useTripRouteMap(trip)
 const tripId = ref('')
 let pollTimer: ReturnType<typeof setInterval> | undefined
 let confirmationTimer: ReturnType<typeof setInterval> | undefined

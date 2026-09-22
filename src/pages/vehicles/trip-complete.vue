@@ -1,7 +1,7 @@
 <template>
   <view class="page trip-complete-page" :style="responsiveStyle">
     <view class="canvas">
-      <HomeMap map-id="trip-complete-map" :latitude="mapLatitude" :longitude="mapLongitude" :markers="mapMarkers" :polyline="mapPolyline" :route-summary="routeSummary" :center-trigger="centerTrigger" :pickup-label="mapOriginLabel" :destination-label="mapDestinationLabel" :fit-padding="[72, 42, 480, 42]" route-point-callouts full-screen />
+      <TripRouteMap map-id="trip-complete-map" :latitude="mapLatitude" :longitude="mapLongitude" :markers="mapMarkers" :polyline="mapPolyline" :route-summary="routeSummary" :pickup-label="mapOriginLabel" :destination-label="mapDestinationLabel" :safe-bottom="243" />
       <view class="back-button" @tap="goBack">
         <image src="/static/vehicles/trip-complete/back.svg" mode="aspectFit" />
       </view>
@@ -36,7 +36,7 @@
 </template>
 
 <script setup lang="ts">
-import HomeMap from '../../components/home/HomeMap.vue'
+import TripRouteMap from '../../components/vehicles/TripRouteMap.vue'
 import { computed, ref, watch } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { getClientTrip, type ClientTrip } from '../../services/api'
@@ -48,7 +48,7 @@ import { useTripRouteMap } from '../../composables/useTripRouteMap'
 
 const { responsiveStyle } = useResponsiveCanvas()
 const trip = ref<ClientTrip | null>(null)
-const { latitude: mapLatitude, longitude: mapLongitude, markers: mapMarkers, polyline: mapPolyline, routeSummary, centerTrigger } = useTripRouteMap(trip)
+const { latitude: mapLatitude, longitude: mapLongitude, markers: mapMarkers, polyline: mapPolyline, routeSummary } = useTripRouteMap(trip)
 const tripId = ref('')
 const originLabel = computed(() => formatOrderCardAddress(trip.value?.originAddress || trip.value?.origin, '香港'))
 const destinationLabel = computed(() => formatOrderCardAddress(trip.value?.destinationAddress || trip.value?.destination, '深圳'))
