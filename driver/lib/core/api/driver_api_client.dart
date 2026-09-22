@@ -161,6 +161,7 @@ class DriverApiClient {
     final session = DriverSession.fromJson(_decode(response));
     _token = session.token;
     _currentDriver = session.driver;
+    sessionRevision.value++;
     writeBrowserValue(_tokenStorageKey, session.token);
     return session;
   }
@@ -222,16 +223,19 @@ class DriverApiClient {
         body: jsonEncode({'challengeId': challengeId, 'code': code}))));
     _token = session.token;
     _currentDriver = session.driver;
+    sessionRevision.value++;
     writeBrowserValue(_tokenStorageKey, session.token);
     return session;
   }
 
   Future<Map<String, dynamic>> me() async {
+    final wasApproved = isApproved;
     final result = _decode(await _client
         .get(Uri.parse('$baseUrl/driver/auth/me'), headers: _headers));
     final driver = result['driver'] is Map ? result['driver'] : result;
     if (driver is Map) {
       _currentDriver = Map<String, dynamic>.from(driver);
+      if (isApproved != wasApproved) sessionRevision.value++;
       if (driver.containsKey('isOnline')) {
         DriverStatusController.instance.isOnline.value =
             driver['isOnline'] == true;

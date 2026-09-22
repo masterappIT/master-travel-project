@@ -36,6 +36,7 @@ import {
 } from "node:crypto";
 import { loadEnvFile } from "node:process";
 import { Observable, Subject, tap } from "rxjs";
+import { Client as PgClient } from "pg";
 import {
   Prisma,
   PrismaClient,
@@ -445,8 +446,68 @@ const driverEventTickets = new Map<
   string,
   { driverId: string; expiresAt: number }
 >();
-function publishDriverOrderEvent(event: DriverOrderEvent) {
-  driverOrderEvents.next(event);
+let driverEventNotifier: PgClient | undefined;
+let driverEventNotifierStarted = false;
+let driverEventNotifierStopping = false;
+let driverEventNotifierRetry: NodeJS.Timeout | undefined;
+
+function scheduleDriverEventNotifierReconnect(client: PgClient) {
+  if (driverEventNotifierStopping || driverEventNotifier !== client) return;
+  driverEventNotifierStarted = false;
+  driverEventNotifier = undefined;
+  void client.end().catch(() => undefined);
+  driverEventNotifierRetry ??= setTimeout(() => {
+    driverEventNotifierRetry = undefined;
+    void startDriverEventNotifier();
+  }, 5000);
+}
+
+async function startDriverEventNotifier() {
+  if (driverEventNotifierStopping || driverEventNotifierStarted) return;
+  driverEventNotifierStarted = true;
+  const client = new PgClient({ connectionString: process.env.DATABASE_URL });
+  driverEventNotifier = client;
+  client.on('notification', (message) => {
+    if (!message.payload) return;
+    try {
+      driverOrderEvents.next(JSON.parse(message.payload) as DriverOrderEvent);
+    } catch (error) {
+      console.error('Invalid driver order event payload', error);
+    }
+  });
+  client.on('error', (error) => {
+    console.error('Driver order event listener failed', error);
+    scheduleDriverEventNotifierReconnect(client);
+  });
+  client.on('end', () => scheduleDriverEventNotifierReconnect(client));
+  try {
+    await client.connect();
+    await client.query('LISTEN driver_order_events');
+  } catch (error) {
+    console.error('Unable to start driver order event listener', error);
+    scheduleDriverEventNotifierReconnect(client);
+  }
+}
+
+async function stopDriverEventNotifier() {
+  driverEventNotifierStopping = true;
+  if (driverEventNotifierRetry) clearTimeout(driverEventNotifierRetry);
+  driverEventNotifierRetry = undefined;
+  driverEventNotifierStarted = false;
+  const client = driverEventNotifier;
+  driverEventNotifier = undefined;
+  await client?.end().catch(() => undefined);
+}
+
+async function publishDriverOrderEvent(event: DriverOrderEvent) {
+  try {
+    await prisma.$executeRawUnsafe(
+      `SELECT pg_notify('driver_order_events', $1)`,
+      JSON.stringify(event),
+    );
+  } catch (error) {
+    console.error('Unable to publish driver order event', error);
+  }
 }
 function pruneDriverEventTickets() {
   const now = Date.now();
@@ -4673,7 +4734,7 @@ class DriverAuthController {
         "Trip cannot be cancelled by driver",
         HttpStatus.CONFLICT,
       );
-    publishDriverOrderEvent({ reason: "available", tripId: id });
+    await publishDriverOrderEvent({ reason: "available", tripId: id });
     const updated = await prisma.trip.findUniqueOrThrow({
       where: { id },
       include: { user: true },
@@ -4712,7 +4773,7 @@ class DriverAuthController {
     });
     if (result.count !== 1)
       throw new HttpException("Trip cannot be rejected", HttpStatus.CONFLICT);
-    publishDriverOrderEvent({ reason: "available", tripId: id });
+    await publishDriverOrderEvent({ reason: "available", tripId: id });
     const updated = await prisma.trip.findUniqueOrThrow({
       where: { id },
       include: { user: true },
@@ -5133,7 +5194,7 @@ class DriverAuthController {
         "Trip is no longer available",
         HttpStatus.CONFLICT,
       );
-    publishDriverOrderEvent({ reason: "taken", tripId: id });
+    await publishDriverOrderEvent({ reason: "taken", tripId: id });
     const updated = await prisma.trip.findUnique({
       where: { id },
       include: { user: true },
@@ -5278,7 +5339,7 @@ class DriverOrderUrlController {
         include: { user: true, driver: true },
       });
     });
-    publishDriverOrderEvent({ reason: "taken", tripId: result.id });
+    await publishDriverOrderEvent({ reason: "taken", tripId: result.id });
     return driverTripResponse(result, true);
   }
 }
@@ -7592,6 +7653,9 @@ class AdminController {
         include: { user: true },
       });
     });
+    if (assigningNewDriver) {
+      await publishDriverOrderEvent({ reason: "available", tripId: id });
+    }
     return {
       ...trip,
       scheduledAt: trip.scheduledAt.toISOString(),
@@ -7724,6 +7788,7 @@ class AdminController {
       },
       include: { user: true, driver: true },
     });
+    await publishDriverOrderEvent({ reason: "available", tripId: id });
     return {
       ...updated,
       scheduledAt: updated.scheduledAt.toISOString(),
@@ -9685,7 +9750,7 @@ class SettingsController {
     });
     addAudit(req, "SUCCESS");
     if (data.dispatchSchedulingEnabled && !settings.dispatchSchedulingEnabled) {
-      publishDriverOrderEvent({ reason: "available" });
+      await publishDriverOrderEvent({ reason: "available" });
     }
     return appSettingsResponse(updated);
   }
@@ -10912,7 +10977,7 @@ class PaymentsController {
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
-    publishDriverOrderEvent({ reason: "available", tripId: result.tripId });
+    await publishDriverOrderEvent({ reason: "available", tripId: result.tripId });
     return result;
   }
 }
@@ -11983,6 +12048,7 @@ class AppModule {}
 async function bootstrap() {
   assertProductionConfiguration();
   await prisma.$connect();
+  await startDriverEventNotifier();
   await hydrateAdminSecurityState();
   await ensurePricingDefaults();
   await ensureMembershipPlanDefaults();
@@ -12027,6 +12093,13 @@ async function bootstrap() {
     allowedHeaders: ["Content-Type", "Authorization", "X-CSRF-Token"],
     credentials: true,
   });
+  app.enableShutdownHooks();
+  const shutdown = async () => {
+    await stopDriverEventNotifier();
+    await prisma.$disconnect();
+  };
+  process.once("SIGTERM", () => void shutdown());
+  process.once("SIGINT", () => void shutdown());
   await app.listen(
     Number(process.env.PORT) || 3010,
     process.env.API_HOST || "0.0.0.0",

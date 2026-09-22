@@ -23,6 +23,7 @@ import 'package:driver_web/registration_page.dart';
 import 'package:driver_web/add_vehicle_page.dart';
 import 'package:driver_web/core/api/driver_api_client.dart';
 import 'package:driver_web/core/layout/driver_page_shell.dart';
+import 'package:driver_web/core/state/driver_order_alert_coordinator.dart';
 import 'package:driver_web/core/state/driver_language_preference.dart';
 
 Widget testApp(Widget home) {
@@ -387,9 +388,39 @@ void main() {
     expect(find.text('香港中環置地廣場東門大堂'), findsNothing);
     expect(find.text('深圳福田口岸'), findsNothing);
   });
-  test('plays only for genuinely new available orders when enabled', () {
+  test('detects public and newly assigned alert orders', () {
+    final ids = driverAlertTripIds(
+      availableTrips: [
+        {'id': 'public-trip'},
+      ],
+      assignedTrips: [
+        {
+          'id': 'assigned-trip',
+          'driverId': 'driver-1',
+          'executionPhase': 'DRIVER_PENDING_ACCEPTANCE',
+          'completedAt': null,
+        },
+        {
+          'id': 'accepted-trip',
+          'driverId': 'driver-1',
+          'executionPhase': 'DRIVER_ASSIGNED',
+          'completedAt': null,
+        },
+        {
+          'id': 'completed-trip',
+          'driverId': 'driver-1',
+          'executionPhase': 'DRIVER_PENDING_ACCEPTANCE',
+          'completedAt': '2026-09-22T00:00:00Z',
+        },
+      ],
+    );
+
+    expect(ids, {'public-trip', 'assigned-trip'});
+  });
+
+  test('plays only for genuinely new alert orders when enabled', () {
     expect(
-      shouldPlayNewOrderAlert(
+      shouldPlayDriverOrderAlert(
         previousIds: null,
         currentIds: {'trip-1'},
         enabled: true,
@@ -397,15 +428,15 @@ void main() {
       isFalse,
     );
     expect(
-      shouldPlayNewOrderAlert(
+      shouldPlayDriverOrderAlert(
         previousIds: {'trip-1'},
-        currentIds: {'trip-1', 'trip-2'},
+        currentIds: {'trip-1', 'assigned-trip'},
         enabled: true,
       ),
       isTrue,
     );
     expect(
-      shouldPlayNewOrderAlert(
+      shouldPlayDriverOrderAlert(
         previousIds: {'trip-1'},
         currentIds: {'trip-1'},
         enabled: true,
@@ -413,7 +444,7 @@ void main() {
       isFalse,
     );
     expect(
-      shouldPlayNewOrderAlert(
+      shouldPlayDriverOrderAlert(
         previousIds: {'trip-1'},
         currentIds: {'trip-1', 'trip-2'},
         enabled: false,

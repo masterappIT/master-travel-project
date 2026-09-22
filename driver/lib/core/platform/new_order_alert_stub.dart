@@ -7,6 +7,7 @@ abstract class NewOrderAlert {
 }
 
 class StubNewOrderAlert implements NewOrderAlert {
+  @override
   Future<bool> unlock() async => true;
 
   @override

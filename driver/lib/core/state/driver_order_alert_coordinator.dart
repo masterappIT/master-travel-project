@@ -17,11 +17,15 @@ Set<String> driverAlertTripIds({
       .map((trip) => trip['id']?.toString())
       .whereType<String>()
       .toSet();
-  ids.addAll(assignedTrips.whereType<Map>().where((trip) {
-    return trip['driverId'] != null &&
-        trip['completedAt'] == null &&
-        trip['executionPhase'] == 'DRIVER_PENDING_ACCEPTANCE';
-  }).map((trip) => trip['id']?.toString()).whereType<String>());
+  ids.addAll(assignedTrips
+      .whereType<Map>()
+      .where((trip) {
+        return trip['driverId'] != null &&
+            trip['completedAt'] == null &&
+            trip['executionPhase'] == 'DRIVER_PENDING_ACCEPTANCE';
+      })
+      .map((trip) => trip['id']?.toString())
+      .whereType<String>());
   return ids;
 }
 
@@ -34,10 +38,18 @@ bool shouldPlayDriverOrderAlert({
     previousIds != null &&
     currentIds.difference(previousIds).isNotEmpty;
 
+bool _setEquals(Set<String> left, Set<String> right) =>
+    left.length == right.length && left.containsAll(right);
+
 class DriverOrderAlertCoordinator extends StatefulWidget {
-  const DriverOrderAlertCoordinator({super.key, required this.child});
+  const DriverOrderAlertCoordinator({
+    super.key,
+    required this.child,
+    required this.scaffoldMessengerKey,
+  });
 
   final Widget child;
+  final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey;
 
   static final ValueNotifier<int> tripsChanged = ValueNotifier<int>(0);
 
@@ -179,9 +191,16 @@ class _DriverOrderAlertCoordinatorState
         currentIds: ids,
         enabled: DriverAlertSoundPreference.instance.enabled,
       );
+      final changed = _knownIds == null || !_setEquals(_knownIds!, ids);
       _knownIds = ids;
-      DriverOrderAlertCoordinator.tripsChanged.value++;
-      if (play && !await _alert.play()) _showSoundPrompt();
+      if (changed) DriverOrderAlertCoordinator.tripsChanged.value++;
+      if (play && !await _alert.play()) {
+        developer.log(
+          'Browser blocked the new-order alert sound',
+          name: 'driver.order_alert',
+        );
+        _showSoundPrompt();
+      }
     } on DriverApiException catch (error, stackTrace) {
       developer.log('Unable to refresh driver order alerts',
           name: 'driver.order_alert', error: error, stackTrace: stackTrace);
@@ -199,7 +218,7 @@ class _DriverOrderAlertCoordinatorState
     _soundPromptShown = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      final messenger = ScaffoldMessenger.maybeOf(context);
+      final messenger = widget.scaffoldMessengerKey.currentState;
       messenger
           ?.showSnackBar(SnackBar(
             content: const Text('點擊啟用新訂單提示聲'),

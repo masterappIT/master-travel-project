@@ -23,8 +23,10 @@ class WebNewOrderAlert implements NewOrderAlert {
   WebNewOrderAlert() {
     final interactions = <Stream<html.Event>>[
       html.document.onClick,
-      html.document.onPointerDown,
+      html.document.onMouseDown,
       html.document.onTouchStart,
+      html.EventStreamProvider<html.Event>('pointerdown')
+          .forTarget(html.document),
       html.document.onKeyDown,
     ];
     for (final interaction in interactions) {

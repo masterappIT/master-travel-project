@@ -1,14 +1,10 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'app/route_names.dart';
 import 'core/api/driver_api_client.dart';
 import 'core/layout/driver_page_shell.dart';
 import 'core/navigation/driver_navigation.dart';
-import 'core/platform/new_order_alert.dart';
-import 'core/platform/order_event_stream.dart';
-import 'core/state/driver_alert_sound_preference.dart';
+import 'core/state/driver_order_alert_coordinator.dart';
 import 'core/state/driver_language_preference.dart';
 import 'core/state/driver_status.dart';
 
@@ -19,14 +15,14 @@ bool shouldPlayNewOrderAlert({
   required Set<String> currentIds,
   required bool enabled,
 }) =>
-    enabled &&
-    previousIds != null &&
-    currentIds.difference(previousIds).isNotEmpty;
+    shouldPlayDriverOrderAlert(
+      previousIds: previousIds,
+      currentIds: currentIds,
+      enabled: enabled,
+    );
 
 class OrderHallPage extends StatefulWidget {
-  const OrderHallPage({super.key, this.newOrderAlert});
-
-  final NewOrderAlert? newOrderAlert;
+  const OrderHallPage({super.key});
 
   @override
   State<OrderHallPage> createState() => _OrderHallPageState();
@@ -35,17 +31,10 @@ class OrderHallPage extends StatefulWidget {
 class _OrderHallPageState extends State<OrderHallPage>
     with WidgetsBindingObserver {
   final _api = DriverApiClient.instance;
-  late final NewOrderAlert _newOrderAlert =
-      widget.newOrderAlert ?? NewOrderAlert();
-  Timer? _refreshTimer;
-  Timer? _eventDebounce;
-  Timer? _reconnectTimer;
-  OrderEventConnection? _eventConnection;
   bool _refreshInFlight = false;
   int _selectedTab = 0;
   bool _loading = true;
   String? _error;
-  Set<String>? _knownAvailableIds;
   List<dynamic> _available = [];
   List<dynamic> _accepted = [];
 
@@ -54,61 +43,27 @@ class _OrderHallPageState extends State<OrderHallPage>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _loadTrips();
-    _connectEvents();
-    _refreshTimer = Timer.periodic(
-      const Duration(seconds: 30),
-      (_) => _loadTrips(background: true),
-    );
+    DriverOrderAlertCoordinator.tripsChanged
+        .addListener(_refreshFromCoordinator);
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _refreshTimer?.cancel();
-    _eventDebounce?.cancel();
-    _reconnectTimer?.cancel();
-    _eventConnection?.close();
-    _newOrderAlert.dispose();
+    DriverOrderAlertCoordinator.tripsChanged
+        .removeListener(_refreshFromCoordinator);
     super.dispose();
+  }
+
+  void _refreshFromCoordinator() {
+    if (mounted) _loadTrips(background: true);
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _loadTrips(background: true);
-      if (_eventConnection == null) _connectEvents();
     }
-  }
-
-  Future<void> _connectEvents() async {
-    _reconnectTimer?.cancel();
-    _eventConnection?.close();
-    _eventConnection = null;
-    try {
-      final response = await _api.orderEventTicket();
-      if (!mounted) return;
-      final ticket = response['ticket']?.toString();
-      if (ticket == null || ticket.isEmpty) return;
-      final url =
-          '${_api.baseUrl}/driver/auth/trips/events?ticket=${Uri.encodeQueryComponent(ticket)}';
-      _eventConnection = connectOrderEvents(url, () {
-        _eventDebounce?.cancel();
-        _eventDebounce = Timer(
-          const Duration(milliseconds: 300),
-          () => _loadTrips(background: true),
-        );
-      }, _scheduleReconnect);
-    } on Object {
-      _scheduleReconnect();
-    }
-  }
-
-  void _scheduleReconnect() {
-    _eventConnection?.close();
-    _eventConnection = null;
-    _reconnectTimer?.cancel();
-    if (!mounted) return;
-    _reconnectTimer = Timer(const Duration(seconds: 5), _connectEvents);
   }
 
   Future<void> _loadTrips({bool background = false}) async {
@@ -139,12 +94,6 @@ class _OrderHallPageState extends State<OrderHallPage>
           .map((trip) => trip['id']?.toString())
           .whereType<String>()
           .toSet();
-      final shouldPlayAlert = shouldPlayNewOrderAlert(
-        previousIds: _knownAvailableIds,
-        currentIds: availableIds,
-        enabled: DriverAlertSoundPreference.instance.enabled,
-      );
-      _knownAvailableIds = availableIds;
       setState(() {
         _available = [
           ...availableTrips,
@@ -159,7 +108,6 @@ class _OrderHallPageState extends State<OrderHallPage>
         _error = null;
         _loading = false;
       });
-      if (shouldPlayAlert) unawaited(_newOrderAlert.play());
     } on DriverApiException catch (error) {
       if (mounted && !background) {
         setState(() {
