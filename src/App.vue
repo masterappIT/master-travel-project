@@ -108,8 +108,8 @@ body,
 /* #ifdef H5 */
 /* H5 owns the browser viewport edges; native targets keep their existing canvas shape. */
 .app-shell {
-  height: 100%;
-  min-height: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
   border-radius: 0;
   --trip-screen-radius: 0px;
 }

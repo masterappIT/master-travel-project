@@ -64,6 +64,8 @@ class DriverApiClient {
   String? _token;
   Map<String, dynamic>? _currentDriver;
 
+  final ValueNotifier<int> sessionRevision = ValueNotifier<int>(0);
+
   String? get token => _token;
   Map<String, dynamic>? get currentDriver => _currentDriver;
   bool get isApproved => _currentDriver?['reviewStatus'] == 'APPROVED';
@@ -83,6 +85,7 @@ class DriverApiClient {
     _token = null;
     _currentDriver = null;
     removeBrowserValue(_tokenStorageKey);
+    sessionRevision.value++;
   }
 
   Map<String, String> get _headers => {

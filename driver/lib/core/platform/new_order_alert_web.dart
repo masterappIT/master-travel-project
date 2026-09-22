@@ -9,48 +9,65 @@ import 'dart:typed_data';
 abstract class NewOrderAlert {
   factory NewOrderAlert() = WebNewOrderAlert;
 
-  Future<void> play();
+  Future<bool> unlock();
+  Future<bool> play();
   void dispose();
 }
 
 class WebNewOrderAlert implements NewOrderAlert {
   late final html.AudioElement _audio = html.AudioElement(_createToneDataUri())
     ..preload = 'auto';
-  StreamSubscription<html.Event>? _interactionSubscription;
+  bool _unlocked = false;
+  final List<StreamSubscription<html.Event>> _interactionSubscriptions = [];
 
   WebNewOrderAlert() {
-    _interactionSubscription = html.document.onClick.take(1).listen((_) {
-      unawaited(_unlock());
-    });
+    final interactions = <Stream<html.Event>>[
+      html.document.onClick,
+      html.document.onPointerDown,
+      html.document.onTouchStart,
+      html.document.onKeyDown,
+    ];
+    for (final interaction in interactions) {
+      _interactionSubscriptions.add(interaction.listen((_) {
+        unawaited(unlock());
+      }));
+    }
   }
 
-  Future<void> _unlock() async {
+  @override
+  Future<bool> unlock() async {
+    if (_unlocked) return true;
     final volume = _audio.volume;
     try {
       _audio.volume = 0;
       await _audio.play();
       _audio.pause();
       _audio.currentTime = 0;
+      _unlocked = true;
+      return true;
     } on Object {
-      // A later interaction can still permit normal playback.
+      return false;
     } finally {
       _audio.volume = volume;
     }
   }
 
   @override
-  Future<void> play() async {
+  Future<bool> play() async {
     try {
       _audio.currentTime = 0;
       await _audio.play();
+      return true;
     } on Object {
-      // Browsers may reject playback until the driver interacts with the page.
+      return false;
     }
   }
 
   @override
   void dispose() {
-    _interactionSubscription?.cancel();
+    for (final subscription in _interactionSubscriptions) {
+      subscription.cancel();
+    }
     _audio.pause();
     _audio.remove();
   }

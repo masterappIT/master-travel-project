@@ -1,13 +1,16 @@
 abstract class NewOrderAlert {
   factory NewOrderAlert() = StubNewOrderAlert;
 
-  Future<void> play();
+  Future<bool> unlock();
+  Future<bool> play();
   void dispose();
 }
 
 class StubNewOrderAlert implements NewOrderAlert {
+  Future<bool> unlock() async => true;
+
   @override
-  Future<void> play() async {}
+  Future<bool> play() async => true;
 
   @override
   void dispose() {}

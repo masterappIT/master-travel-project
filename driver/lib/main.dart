@@ -4,6 +4,7 @@ import 'app/router.dart';
 import 'app/route_names.dart';
 import 'core/api/driver_api_client.dart';
 import 'core/state/driver_language_preference.dart';
+import 'core/state/driver_order_alert_coordinator.dart';
 
 import 'package:driver_web/core/tokens/driver_tokens.dart';
 
@@ -44,7 +45,8 @@ class DriverApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return ValueListenableBuilder<String>(
       valueListenable: DriverLanguagePreference.instance,
-      builder: (context, language, _) => MaterialApp(
+      builder: (context, language, _) => DriverOrderAlertCoordinator(
+        child: MaterialApp(
         debugShowCheckedModeBanner: false,
         locale: language == DriverLanguagePreference.english
             ? const Locale('en')

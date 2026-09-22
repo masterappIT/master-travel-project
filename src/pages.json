@@ -43,6 +43,7 @@
     { "path": "pages/top-up/detail/detail", "style": { "navigationStyle": "custom", "navigationBarTitleText": "" } },
     { "path": "pages/voucher/claim", "style": { "navigationStyle": "custom", "navigationBarTitleText": "" } },
     { "path": "pages/coupons/coupons", "style": { "navigationStyle": "custom", "navigationBarTitleText": "" } },
+    { "path": "pages/coupons/detail", "style": { "navigationStyle": "custom", "navigationBarTitleText": "" } },
     { "path": "pages/common-data/common-data", "style": { "navigationStyle": "custom", "navigationBarTitleText": "" } },
     { "path": "pages/complaints/complaints", "style": { "navigationStyle": "custom", "navigationBarTitleText": "" } },
     { "path": "pages/support/chat", "style": { "navigationStyle": "custom", "navigationBarTitleText": "" } }
