@@ -70,7 +70,16 @@ export function createTripsActions({ api, tripsApi, addressesApi, tripForm, sele
     } catch (err) { error.value = displayError(err) }
   }
   async function saveTrip() { if (!tripForm.value) return; if (!tripForm.value.id) return prepareTripQuote(); try { await tripsApi.update(tripForm.value.id, tripForm.value); tripForm.value = null; await load() } catch (err) { error.value = displayError(err) } }
-  function openDispatch(item) { dispatchForm.value = { tripId: item.id, driverId: item.driverId || '', driverPayoutAmount: item.driverPayoutAmount ?? item.driverPayoutCalculatedAmount ?? '', driverPayoutCurrency: item.driverPayoutCurrency || item.payment?.currency || '' } }
+  async function openDispatch(item) {
+    const tripId = item?.id
+    if (!tripId) return
+    try {
+      const latest = await tripsApi.get(tripId)
+      const index = trips.value.findIndex(trip => trip.id === tripId)
+      if (index >= 0) trips.value[index] = latest
+      dispatchForm.value = { tripId, driverId: latest.driverId || '', driverPayoutAmount: latest.driverPayoutAmount ?? latest.driverPayoutCalculatedAmount ?? '', driverPayoutCurrency: latest.driverPayoutCurrency || latest.payment?.currency || '' }
+    } catch (err) { error.value = displayError(err) }
+  }
   async function saveDispatch() { if (!dispatchForm.value?.tripId || !dispatchForm.value.driverId || dispatchForm.value.driverPayoutAmount === '') return; try { await tripsApi.dispatch(dispatchForm.value.tripId, { driverId: dispatchForm.value.driverId, driverPayoutAmount: Number(dispatchForm.value.driverPayoutAmount) }); dispatchForm.value = null; await load() } catch (err) { error.value = displayError(err) } }
   function openOrderUrlForm(item) { const now = new Date(); const later = new Date(now.getTime() + 24 * 60 * 60 * 1000); orderUrlForm.value = { tripId: item.id, driverId: item.driverId || '', validFrom: dateTimeInput(now.toISOString()), validUntil: dateTimeInput(later.toISOString()) } }
   async function createOrderUrl() {

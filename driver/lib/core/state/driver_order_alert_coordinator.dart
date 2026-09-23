@@ -68,6 +68,7 @@ class _DriverOrderAlertCoordinatorState
   OrderEventConnection? _eventConnection;
   Set<String>? _knownIds;
   bool _refreshInFlight = false;
+  bool _refreshPending = false;
   bool _active = false;
   bool _soundPromptShown = false;
 
@@ -120,6 +121,7 @@ class _DriverOrderAlertCoordinatorState
   void _stop() {
     _active = false;
     _knownIds = null;
+    _refreshPending = false;
     _refreshTimer?.cancel();
     _refreshTimer = null;
     _eventDebounce?.cancel();
@@ -170,7 +172,11 @@ class _DriverOrderAlertCoordinatorState
   }
 
   Future<void> _refresh() async {
-    if (!_active || _refreshInFlight) return;
+    if (!_active) return;
+    if (_refreshInFlight) {
+      _refreshPending = true;
+      return;
+    }
     _refreshInFlight = true;
     try {
       final assignedTrips = await _api.trips();
@@ -210,6 +216,10 @@ class _DriverOrderAlertCoordinatorState
           name: 'driver.order_alert', error: error, stackTrace: stackTrace);
     } finally {
       _refreshInFlight = false;
+      if (_refreshPending && _active) {
+        _refreshPending = false;
+        unawaited(_refresh());
+      }
     }
   }
 

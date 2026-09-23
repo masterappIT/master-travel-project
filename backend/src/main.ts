@@ -438,10 +438,21 @@ async function ensurePrimaryDriverVehicle(
 }
 
 type DriverOrderEvent = {
+  eventId: string;
   reason: "available" | "taken";
   tripId?: string;
+  occurredAt: string;
 };
+type DriverOrderEventInput = Pick<DriverOrderEvent, "reason" | "tripId">;
 const driverOrderEvents = new Subject<DriverOrderEvent>();
+const locallyPublishedDriverEventIds = new Set<string>();
+
+function rememberLocallyPublishedDriverEvent(eventId: string) {
+  locallyPublishedDriverEventIds.add(eventId);
+  if (locallyPublishedDriverEventIds.size <= 1000) return;
+  const oldest = locallyPublishedDriverEventIds.values().next().value;
+  if (oldest) locallyPublishedDriverEventIds.delete(oldest);
+}
 const driverEventTickets = new Map<
   string,
   { driverId: string; expiresAt: number }
@@ -470,7 +481,9 @@ async function startDriverEventNotifier() {
   client.on('notification', (message) => {
     if (!message.payload) return;
     try {
-      driverOrderEvents.next(JSON.parse(message.payload) as DriverOrderEvent);
+      const event = JSON.parse(message.payload) as DriverOrderEvent;
+      if (locallyPublishedDriverEventIds.delete(event.eventId)) return;
+      driverOrderEvents.next(event);
     } catch (error) {
       console.error('Invalid driver order event payload', error);
     }
@@ -499,13 +512,21 @@ async function stopDriverEventNotifier() {
   await client?.end().catch(() => undefined);
 }
 
-async function publishDriverOrderEvent(event: DriverOrderEvent) {
+async function publishDriverOrderEvent(input: DriverOrderEventInput) {
+  const event: DriverOrderEvent = {
+    ...input,
+    eventId: randomBytes(16).toString("base64url"),
+    occurredAt: new Date().toISOString(),
+  };
+  rememberLocallyPublishedDriverEvent(event.eventId);
+  driverOrderEvents.next(event);
   try {
     await prisma.$executeRawUnsafe(
       `SELECT pg_notify('driver_order_events', $1)`,
       JSON.stringify(event),
     );
   } catch (error) {
+    locallyPublishedDriverEventIds.delete(event.eventId);
     console.error('Unable to publish driver order event', error);
   }
 }
@@ -7471,6 +7492,33 @@ class AdminController {
       user: userResponse(trip.user),
     };
   }
+  @Get("trips/:id") async getTrip(
+    @Req() req: RequestLike,
+    @Param("id") id: string,
+  ) {
+    requireAuth(req);
+    const trip = await prisma.trip.findUnique({
+      where: { id },
+      include: {
+        user: true,
+        quote: {
+          include: {
+            pricing: { include: { tiers: { orderBy: { order: "asc" } } } },
+            vehicle: true,
+            promotionUsages: { include: { promotion: true } },
+            lines: { orderBy: { order: "asc" } },
+          },
+        },
+        payment: true,
+        settlement: true,
+        driver: true,
+      },
+    });
+    if (!trip)
+      throw new HttpException("Trip not found", HttpStatus.NOT_FOUND);
+    return tripResponse(trip);
+  }
+
   @Post("trips/:id") async updateTrip(
     @Req() req: RequestLike,
     @Param("id") id: string,

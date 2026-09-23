@@ -1,5 +1,6 @@
 export const createTripsApi = api => ({
   list: () => api('/admin/trips'),
+  get: id => api(`/admin/trips/${id}`),
   update: (id, payload) => api(`/admin/trips/${id}`, { method: 'POST', body: JSON.stringify(payload) }),
   dispatch: (id, payload) => api(`/admin/trips/${id}/dispatch`, { method: 'POST', body: JSON.stringify(payload) }),
   settle: (id, method) => api(`/admin/trips/${id}/settlement`, { method: 'POST', body: JSON.stringify({ method }) }),
