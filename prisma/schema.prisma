@@ -67,13 +67,17 @@ model Notification {
   important    Boolean   @default(false)
   userId       String?
   driverId     String?
+  tripId       String?
   readAt       DateTime?
   createdAt    DateTime  @default(now())
   user         User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
   driver       Driver?   @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  trip         Trip?     @relation(fields: [tripId], references: [id], onDelete: SetNull)
 
   @@index([userId, readAt, createdAt])
   @@index([driverId, readAt, createdAt])
+  @@index([driverId, templateType, readAt, createdAt])
+  @@index([tripId])
   @@index([audience, createdAt])
   @@index([important, createdAt])
 }
@@ -537,6 +541,7 @@ model Trip {
   settlement                   DriverSettlement?
   quote                        FareQuote?          @relation(fields: [quoteId], references: [id], onDelete: SetNull)
   mileageLedger                MileageLedger[]
+  notifications                Notification[]
 
   @@index([userId, status])
   @@index([scheduledAt])

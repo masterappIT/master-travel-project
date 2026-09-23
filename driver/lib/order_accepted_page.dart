@@ -3,6 +3,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 
 import 'app/route_names.dart';
 import 'core/api/driver_api_client.dart';
+import 'core/formatters/passenger_name.dart';
 import 'core/layout/driver_page_shell.dart';
 import 'core/navigation/driver_navigation.dart';
 
@@ -272,7 +273,7 @@ class _OrderAcceptedPageState extends State<OrderAcceptedPage> {
               origin: origin,
               destination: destination,
               scheduledAt: _formatDate(_trip?['scheduledAt']),
-              passenger: _tripText('passengerName', '乘客'),
+              passenger: formatPassengerName(_trip),
               price: _formatPrice(_trip?['price'], _trip?['currency']),
               onCallPassenger: _callPassenger,
             ),
@@ -578,12 +579,22 @@ class _InfoRow extends StatelessWidget {
                     color: DriverColors.secondaryText))),
         const SizedBox(width: DriverSpacing.md),
         Expanded(
-            child: Text(value,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                    fontSize: DriverTypography.body,
-                    fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
-                    color: DriverColors.text))),
+            child: label == '乘客'
+                ? PassengerNameText(
+                    value,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: DriverTypography.body,
+                      fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
+                      color: DriverColors.text,
+                    ),
+                  )
+                : Text(value,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        fontSize: DriverTypography.body,
+                        fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
+                        color: DriverColors.text))),
       ]);
 }
 

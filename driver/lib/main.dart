@@ -41,14 +41,17 @@ class DriverApp extends StatelessWidget {
 
   final String initialRoute;
   static final scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
+  static final navigatorKey = GlobalKey<NavigatorState>();
 
   @override
   Widget build(BuildContext context) {
     return DriverOrderAlertCoordinator(
       scaffoldMessengerKey: scaffoldMessengerKey,
+      navigatorKey: navigatorKey,
       child: ValueListenableBuilder<String>(
         valueListenable: DriverLanguagePreference.instance,
         builder: (context, language, _) => MaterialApp(
+          navigatorKey: navigatorKey,
           scaffoldMessengerKey: scaffoldMessengerKey,
           debugShowCheckedModeBanner: false,
           locale: language == DriverLanguagePreference.english

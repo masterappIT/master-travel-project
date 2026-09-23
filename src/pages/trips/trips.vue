@@ -32,6 +32,7 @@ const { responsiveStyle } = useResponsiveCanvas()
 import { onUnmounted, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { getAuthToken, isAuthenticated, getAuthUser, isAuthSessionCurrent, subscribeAuthUser } from '../../utils/auth'
+import { subscribeNotificationChanges } from '../../utils/notificationRealtime'
 import ProfileHeader from '../../components/profile/ProfileHeader.vue'
 import UpgradeCard from '../../components/profile/UpgradeCard.vue'
 import WalletCard from '../../components/profile/WalletCard.vue'
@@ -99,6 +100,8 @@ const unsubscribeAuthUser = subscribeAuthUser((user) => {
   }
 })
 onUnmounted(unsubscribeAuthUser)
+const unsubscribeNotifications = subscribeNotificationChanges(() => { void refreshProfile() })
+onUnmounted(unsubscribeNotifications)
 
 onShow(() => {
   void refreshProfile()

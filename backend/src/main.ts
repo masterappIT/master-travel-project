@@ -38,6 +38,8 @@ import { loadEnvFile } from "node:process";
 import sharp from "sharp";
 import { Observable, Subject, tap } from "rxjs";
 import { Client as PgClient } from "pg";
+import { WebSocket, WebSocketServer } from "ws";
+import type { IncomingMessage } from "node:http";
 import {
   Prisma,
   PrismaClient,
@@ -441,23 +443,38 @@ async function ensurePrimaryDriverVehicle(
 
 type DriverOrderEvent = {
   eventId: string;
-  reason: "available" | "taken";
+  reason: "available" | "taken" | "cancelled";
   tripId?: string;
+  driverId?: string;
   occurredAt: string;
 };
-type DriverOrderEventInput = Pick<DriverOrderEvent, "reason" | "tripId">;
+type DriverOrderEventInput = Pick<
+  DriverOrderEvent,
+  "reason" | "tripId" | "driverId"
+>;
+type NotificationEvent = {
+  eventId: string;
+  recipientType: "user" | "driver";
+  recipientIds: string[];
+  occurredAt: string;
+};
 const driverOrderEvents = new Subject<DriverOrderEvent>();
-const locallyPublishedDriverEventIds = new Set<string>();
+const notificationEvents = new Subject<NotificationEvent>();
+const locallyPublishedEventIds = new Set<string>();
 
-function rememberLocallyPublishedDriverEvent(eventId: string) {
-  locallyPublishedDriverEventIds.add(eventId);
-  if (locallyPublishedDriverEventIds.size <= 1000) return;
-  const oldest = locallyPublishedDriverEventIds.values().next().value;
-  if (oldest) locallyPublishedDriverEventIds.delete(oldest);
+function rememberLocallyPublishedEvent(eventId: string) {
+  locallyPublishedEventIds.add(eventId);
+  if (locallyPublishedEventIds.size <= 1000) return;
+  const oldest = locallyPublishedEventIds.values().next().value;
+  if (oldest) locallyPublishedEventIds.delete(oldest);
 }
 const driverEventTickets = new Map<
   string,
   { driverId: string; expiresAt: number }
+>();
+const notificationEventTickets = new Map<
+  string,
+  { recipientType: "user" | "driver"; recipientId: string; expiresAt: number }
 >();
 let driverEventNotifier: PgClient | undefined;
 let driverEventNotifierStarted = false;
@@ -483,11 +500,17 @@ async function startDriverEventNotifier() {
   client.on('notification', (message) => {
     if (!message.payload) return;
     try {
+      if (message.channel === 'notification_events') {
+        const event = JSON.parse(message.payload) as NotificationEvent;
+        if (locallyPublishedEventIds.delete(event.eventId)) return;
+        notificationEvents.next(event);
+        return;
+      }
       const event = JSON.parse(message.payload) as DriverOrderEvent;
-      if (locallyPublishedDriverEventIds.delete(event.eventId)) return;
+      if (locallyPublishedEventIds.delete(event.eventId)) return;
       driverOrderEvents.next(event);
     } catch (error) {
-      console.error('Invalid driver order event payload', error);
+      console.error('Invalid realtime event payload', error);
     }
   });
   client.on('error', (error) => {
@@ -498,6 +521,7 @@ async function startDriverEventNotifier() {
   try {
     await client.connect();
     await client.query('LISTEN driver_order_events');
+    await client.query('LISTEN notification_events');
   } catch (error) {
     console.error('Unable to start driver order event listener', error);
     scheduleDriverEventNotifierReconnect(client);
@@ -520,7 +544,7 @@ async function publishDriverOrderEvent(input: DriverOrderEventInput) {
     eventId: randomBytes(16).toString("base64url"),
     occurredAt: new Date().toISOString(),
   };
-  rememberLocallyPublishedDriverEvent(event.eventId);
+  rememberLocallyPublishedEvent(event.eventId);
   driverOrderEvents.next(event);
   try {
     await prisma.$executeRawUnsafe(
@@ -528,8 +552,33 @@ async function publishDriverOrderEvent(input: DriverOrderEventInput) {
       JSON.stringify(event),
     );
   } catch (error) {
-    locallyPublishedDriverEventIds.delete(event.eventId);
+    locallyPublishedEventIds.delete(event.eventId);
     console.error('Unable to publish driver order event', error);
+  }
+}
+async function publishNotificationEvent(input: Pick<
+  NotificationEvent,
+  "recipientType" | "recipientIds"
+>) {
+  const recipientIds = [...new Set(input.recipientIds)];
+  for (let offset = 0; offset < recipientIds.length; offset += 100) {
+    const event: NotificationEvent = {
+      recipientType: input.recipientType,
+      recipientIds: recipientIds.slice(offset, offset + 100),
+      eventId: randomBytes(16).toString("base64url"),
+      occurredAt: new Date().toISOString(),
+    };
+    rememberLocallyPublishedEvent(event.eventId);
+    notificationEvents.next(event);
+    try {
+      await prisma.$executeRawUnsafe(
+        `SELECT pg_notify('notification_events', $1)`,
+        JSON.stringify(event),
+      );
+    } catch (error) {
+      locallyPublishedEventIds.delete(event.eventId);
+      console.error('Unable to publish notification event', error);
+    }
   }
 }
 function pruneDriverEventTickets() {
@@ -537,6 +586,39 @@ function pruneDriverEventTickets() {
   for (const [ticket, value] of driverEventTickets) {
     if (value.expiresAt <= now) driverEventTickets.delete(ticket);
   }
+}
+function pruneNotificationEventTickets() {
+  const now = Date.now();
+  for (const [ticket, value] of notificationEventTickets) {
+    if (value.expiresAt <= now) notificationEventTickets.delete(ticket);
+  }
+}
+function startNotificationWebSocketServer(server: ReturnType<NestExpressApplication["getHttpServer"]>) {
+  const socketServer = new WebSocketServer({ noServer: true });
+  server.on("upgrade", (request: { url?: string }, socket: { destroy: () => void }, head: Buffer) => {
+    const url = new URL(request.url || "/", "http://localhost");
+    if (url.pathname !== "/notifications/socket") return;
+    pruneNotificationEventTickets();
+    const ticket = url.searchParams.get("ticket");
+    const entry = ticket ? notificationEventTickets.get(ticket) : undefined;
+    if (!ticket || !entry || entry.recipientType !== "user" || entry.expiresAt <= Date.now()) {
+      socket.destroy();
+      return;
+    }
+    notificationEventTickets.delete(ticket);
+    socketServer.handleUpgrade(request as never, socket as never, head, (client) => {
+      socketServer.emit("connection", client, request, entry);
+    });
+  });
+  socketServer.on("connection", (client: WebSocket, _request: IncomingMessage, entry: { recipientId: string }) => {
+    const subscription = notificationEvents.subscribe((event) => {
+      if (event.recipientType !== "user" || !event.recipientIds.includes(entry.recipientId) || client.readyState !== WebSocket.OPEN) return;
+      client.send(JSON.stringify(event));
+    });
+    client.on("close", () => subscription.unsubscribe());
+    client.on("error", () => subscription.unsubscribe());
+  });
+  return socketServer;
 }
 
 const appSettingsDefaults = {
@@ -2563,15 +2645,17 @@ function driverTripResponse(
   vehicleMainlandPlate: string | null;
   driverPayoutAmount: number | null;
   driverPayoutCurrency: string | null;
+  passengerPhone?: string | null;
+  passengerPhoneRegion?: string | null;
+  passengerGender?: string | null;
   user?: {
     id: string;
     name: string | null;
     displayName: string | null;
+    gender: string | null;
     countryCode: string;
     phoneNumber: string;
   };
-  passengerPhone?: string | null;
-  passengerPhoneRegion?: string | null;
   settlement?: {
     id: string;
     driverId: string;
@@ -2585,6 +2669,7 @@ function driverTripResponse(
   id: trip.id,
   userId: trip.userId,
   passengerName: trip.user?.name || trip.user?.displayName || null,
+  passengerGender: trip.passengerGender || trip.user?.gender || null,
   passengerPhone: includePassengerPhone
     ? trip.passengerPhone || trip.user?.phoneNumber || null
     : undefined,
@@ -4605,7 +4690,7 @@ class DriverAuthController {
         status: "COMPLETED",
         completedAt: { not: null },
       },
-      include: { settlement: true },
+      include: { settlement: true, user: true },
       orderBy: { completedAt: "desc" },
     });
     const onlineSessions = await prisma.driverOnlineSession.findMany({
@@ -4640,6 +4725,7 @@ class DriverAuthController {
       origin: item.origin,
       destination: item.destination,
       passenger: item.passengerName,
+      passengerGender: item.passengerGender || item.user.gender || null,
       settlementStatus: item.settlement ? "SETTLED" : "UNSETTLED",
       settlementMethod: item.settlement?.method ?? null,
       settledAt: item.settlement?.settledAt.toISOString() ?? null,
@@ -4961,6 +5047,81 @@ class DriverAuthController {
     });
   }
 
+  @Get("notifications/cancellations/pending")
+  async pendingCancellationNotifications(@Req() req: RequestLike) {
+    const session = await driverSessionFrom(req);
+    const items = await prisma.notification.findMany({
+      where: {
+        driverId: session.sub,
+        templateType: "trip_cancelled",
+        readAt: null,
+      },
+      include: {
+        trip: {
+          select: {
+            id: true,
+            origin: true,
+            destination: true,
+            scheduledAt: true,
+          },
+        },
+      },
+      orderBy: { createdAt: "asc" },
+    });
+    return items.map((item) => ({
+      ...item,
+      createdAt: item.createdAt.toISOString(),
+      readAt: null,
+      trip: item.trip
+        ? {
+            ...item.trip,
+            scheduledAt: item.trip.scheduledAt.toISOString(),
+          }
+        : null,
+    }));
+  }
+
+  @Post("notifications/events/ticket")
+  async notificationEventTicket(@Req() req: RequestLike) {
+    const session = await driverSessionFrom(req);
+    pruneNotificationEventTickets();
+    const ticket = randomBytes(32).toString("base64url");
+    const expiresAt = Date.now() + 60_000;
+    notificationEventTickets.set(ticket, {
+      recipientType: "driver",
+      recipientId: session.sub,
+      expiresAt,
+    });
+    return { ticket, expiresAt: new Date(expiresAt).toISOString() };
+  }
+
+  @Get("notifications/events")
+  async notificationEvents(@Req() req: RequestLike, @Res() res: Response) {
+    pruneNotificationEventTickets();
+    const ticket = req.query?.ticket;
+    const entry = ticket ? notificationEventTickets.get(ticket) : undefined;
+    if (!ticket || !entry || entry.recipientType !== "driver" || entry.expiresAt <= Date.now())
+      throw new UnauthorizedException("Valid notification event ticket required");
+    notificationEventTickets.delete(ticket);
+    res.status(HttpStatus.OK);
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.flushHeaders();
+    const subscription = notificationEvents.subscribe((event) => {
+      if (event.recipientType !== "driver" || !event.recipientIds.includes(entry.recipientId)) return;
+      res.write(`data: ${JSON.stringify(event)}\n\n`);
+    });
+    const heartbeat = setInterval(() => {
+      res.write(`event: heartbeat\ndata: ${JSON.stringify({ at: Date.now() })}\n\n`);
+    }, 25_000);
+    const cleanup = () => {
+      clearInterval(heartbeat);
+      subscription.unsubscribe();
+    };
+    req.on?.("close", cleanup);
+  }
+
   @Get("notifications")
   async notifications(@Req() req: RequestLike) {
     const session = await driverSessionFrom(req);
@@ -5018,6 +5179,7 @@ class DriverAuthController {
     res.setHeader("Connection", "keep-alive");
     res.flushHeaders();
     const subscription = driverOrderEvents.subscribe((event) => {
+      if (event.driverId != null && event.driverId !== entry.driverId) return;
       res.write(`data: ${JSON.stringify(event)}\n\n`);
     });
     const heartbeat = setInterval(() => {
@@ -6598,6 +6760,16 @@ class AdminController {
       })),
     ];
     await prisma.notification.createMany({ data: records });
+    await Promise.all([
+      publishNotificationEvent({
+        recipientType: "user",
+        recipientIds: records.map((record) => record.userId).filter((id): id is string => Boolean(id)),
+      }),
+      publishNotificationEvent({
+        recipientType: "driver",
+        recipientIds: records.map((record) => record.driverId).filter((id): id is string => Boolean(id)),
+      }),
+    ]);
     return { ok: true, count: records.length };
   }
 
@@ -7630,10 +7802,15 @@ class AdminController {
       requestedDriver && requestedDriver.id !== existing.driverId,
     );
     const region = body.region.trim();
-    const trip = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       const currentTrip = await tx.trip.findUniqueOrThrow({
         where: { id },
-        select: { status: true, userId: true },
+        select: {
+          status: true,
+          userId: true,
+          driverId: true,
+          acceptedAt: true,
+        },
       });
       const payment = await tx.payment.findUnique({ where: { tripId: id } });
       if (
@@ -7679,7 +7856,7 @@ class AdminController {
             },
           });
       }
-      return tx.trip.update({
+      const trip = await tx.trip.update({
         where: { id },
         data: {
           userId: body.userId || existing.userId,
@@ -7720,10 +7897,39 @@ class AdminController {
         },
         include: { user: true },
       });
+      const cancelledDriverId =
+        body.status === "CANCELLED" &&
+        currentTrip.status !== "CANCELLED" &&
+        currentTrip.driverId &&
+        currentTrip.acceptedAt
+          ? currentTrip.driverId
+          : null;
+      if (cancelledDriverId) {
+        await tx.notification.create({
+          data: {
+            title: "行程已取消",
+            content: "後台管理已取消此行程，請停止前往。",
+            audience: "driver",
+            templateType: "trip_cancelled",
+            important: true,
+            driverId: cancelledDriverId,
+            tripId: id,
+          },
+        });
+      }
+      return { trip, cancelledDriverId };
     });
     if (assigningNewDriver) {
       await publishDriverOrderEvent({ reason: "available", tripId: id });
     }
+    if (result.cancelledDriverId) {
+      await publishDriverOrderEvent({
+        reason: "cancelled",
+        tripId: id,
+        driverId: result.cancelledDriverId,
+      });
+    }
+    const trip = result.trip;
     return {
       ...trip,
       scheduledAt: trip.scheduledAt.toISOString(),
@@ -8809,6 +9015,43 @@ class AdminController {
 }
 @Controller("notifications")
 class NotificationsController {
+  @Post("events/ticket") async eventTicket(@Req() req: RequestLike) {
+    const session = await clientSessionFrom(req);
+    pruneNotificationEventTickets();
+    const ticket = randomBytes(32).toString("base64url");
+    const expiresAt = Date.now() + 60_000;
+    notificationEventTickets.set(ticket, {
+      recipientType: "user",
+      recipientId: session.sub,
+      expiresAt,
+    });
+    return { ticket, expiresAt: new Date(expiresAt).toISOString() };
+  }
+  @Get("events") async events(@Req() req: RequestLike, @Res() res: Response) {
+    pruneNotificationEventTickets();
+    const ticket = req.query?.ticket;
+    const entry = ticket ? notificationEventTickets.get(ticket) : undefined;
+    if (!ticket || !entry || entry.recipientType !== "user" || entry.expiresAt <= Date.now())
+      throw new UnauthorizedException("Valid notification event ticket required");
+    notificationEventTickets.delete(ticket);
+    res.status(HttpStatus.OK);
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.flushHeaders();
+    const subscription = notificationEvents.subscribe((event) => {
+      if (event.recipientType !== "user" || !event.recipientIds.includes(entry.recipientId)) return;
+      res.write(`data: ${JSON.stringify(event)}\n\n`);
+    });
+    const heartbeat = setInterval(() => {
+      res.write(`event: heartbeat\ndata: ${JSON.stringify({ at: Date.now() })}\n\n`);
+    }, 25_000);
+    const cleanup = () => {
+      clearInterval(heartbeat);
+      subscription.unsubscribe();
+    };
+    req.on?.("close", cleanup);
+  }
   @Get("me") async listMine(@Req() req: RequestLike) {
     const auth = req.headers.authorization || "";
     if (!auth) throw new UnauthorizedException("Authentication required");
@@ -11924,7 +12167,7 @@ class ClientOrdersController {
   @Post("trips/:id/cancel")
   async cancelTrip(@Req() req: RequestLike, @Param("id") id: string) {
     const session = await clientSessionFrom(req);
-    return prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       const trip = await tx.trip.findFirst({
         where: { id, userId: session.sub },
         include: {
@@ -11952,7 +12195,11 @@ class ClientOrdersController {
       });
       if (!trip)
         throw new HttpException("Trip not found", HttpStatus.NOT_FOUND);
-      if (trip.status === "CANCELLED") return clientTripResponse(trip);
+      if (trip.status === "CANCELLED")
+        return {
+          response: clientTripResponse(trip),
+          cancelledDriverId: null,
+        };
       if (trip.status === "COMPLETED" || trip.executionPhase === "IN_PROGRESS")
         throw new HttpException(
           "Completed or in-progress trips cannot be cancelled",
@@ -12027,8 +12274,32 @@ class ClientOrdersController {
           },
         },
       });
-      return clientTripResponse(updated);
+      if (trip.driverId && trip.acceptedAt) {
+        await tx.notification.create({
+          data: {
+            title: "客戶已取消行程",
+            content: "客戶已取消此行程，請停止前往。",
+            audience: "driver",
+            templateType: "trip_cancelled",
+            important: true,
+            driverId: trip.driverId,
+            tripId: trip.id,
+          },
+        });
+      }
+      return {
+        response: clientTripResponse(updated),
+        cancelledDriverId: trip.driverId && trip.acceptedAt ? trip.driverId : null,
+      };
     });
+    if (result.cancelledDriverId) {
+      await publishDriverOrderEvent({
+        reason: "cancelled",
+        tripId: id,
+        driverId: result.cancelledDriverId,
+      });
+    }
+    return result.response;
   }
 
   @Get("transactions")
@@ -12124,6 +12395,9 @@ async function bootstrap() {
     bodyParser: false,
   });
   app.useBodyParser("json", { limit: "2mb" });
+  const notificationWebSocketServer = startNotificationWebSocketServer(
+    app.getHttpServer(),
+  );
   const configuredOrigins = [
     process.env.APP_CORS_ORIGINS,
     process.env.ADMIN_CORS_ORIGIN,
@@ -12163,6 +12437,7 @@ async function bootstrap() {
   });
   app.enableShutdownHooks();
   const shutdown = async () => {
+    notificationWebSocketServer.close();
     await stopDriverEventNotifier();
     await prisma.$disconnect();
   };

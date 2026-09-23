@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'app/route_names.dart';
 import 'core/api/driver_api_client.dart';
+import 'core/formatters/passenger_name.dart';
 import 'core/layout/driver_page_shell.dart';
 import 'core/navigation/driver_navigation.dart';
 import 'core/state/driver_order_alert_coordinator.dart';
@@ -36,7 +37,7 @@ class _OrderHallPageState extends State<OrderHallPage>
   bool _loading = true;
   String? _error;
   List<dynamic> _available = [];
-  List<dynamic> _accepted = [];
+  List<dynamic> _myTrips = [];
 
   @override
   void initState() {
@@ -100,11 +101,29 @@ class _OrderHallPageState extends State<OrderHallPage>
           ...pendingTrips.where((trip) =>
               !availableIds.contains((trip as Map)['id']?.toString())),
         ];
-        _accepted = assignedTrips
-            .where((trip) =>
-                trip['executionPhase'] != 'DRIVER_PENDING_ACCEPTANCE' &&
-                trip['acceptedAt'] != null)
-            .toList();
+        _myTrips = assignedTrips.where((trip) {
+          if (trip['status'] == 'CANCELLED' || trip['completedAt'] != null) {
+            return false;
+          }
+          return trip['executionPhase'] == 'IN_PROGRESS' ||
+              trip['startedAt'] != null ||
+              trip['executionPhase'] == 'DRIVER_ASSIGNED' ||
+              trip['acceptedAt'] != null;
+        }).toList()
+          ..sort((left, right) {
+            final leftActive = left['executionPhase'] == 'IN_PROGRESS' ||
+                left['startedAt'] != null;
+            final rightActive = right['executionPhase'] == 'IN_PROGRESS' ||
+                right['startedAt'] != null;
+            if (leftActive != rightActive) return leftActive ? -1 : 1;
+            final leftTime =
+                DateTime.tryParse(left['scheduledAt']?.toString() ?? '') ??
+                    DateTime.fromMillisecondsSinceEpoch(0);
+            final rightTime =
+                DateTime.tryParse(right['scheduledAt']?.toString() ?? '') ??
+                    DateTime.fromMillisecondsSinceEpoch(0);
+            return leftTime.compareTo(rightTime);
+          });
         _error = null;
         _loading = false;
       });
@@ -205,13 +224,13 @@ class _OrderHallPageState extends State<OrderHallPage>
                     Text(
                         _selectedTab == 0
                             ? driverText('可接行程', '可接行程', 'Available trips')
-                            : driverText('進行中行程', '进行中行程', 'Active trips'),
+                            : driverText('我的行程', '我的行程', 'My trips'),
                         style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w700,
                             color: DriverColors.text)),
                     Text(
-                        '${_selectedTab == 0 ? _available.length : _accepted.length} ${driverText('筆', '笔', 'trips')}',
+                        '${_selectedTab == 0 ? _available.length : _myTrips.length} ${driverText('筆', '笔', 'trips')}',
                         style: const TextStyle(
                             fontSize: DriverTypography.label,
                             color: DriverColors.secondaryText)),
@@ -239,9 +258,10 @@ class _OrderHallPageState extends State<OrderHallPage>
                     return Padding(
                       padding: const EdgeInsets.only(bottom: DriverSpacing.md),
                       child: _OrderCard(
-                        passenger: item['passengerName']?.toString() ??
-                            item['user']?['name']?.toString() ??
-                            driverText('乘客', '乘客', 'Passenger'),
+                        passenger: formatPassengerName(
+                          item,
+                          fallback: driverText('乘客', '乘客', 'Passenger'),
+                        ),
                         time: _formatTripTime(item['scheduledAt']),
                         price: _formatPrice(item['price'], item['currency']),
                         origin: item['pickupAddress']?.toString() ??
@@ -253,7 +273,7 @@ class _OrderHallPageState extends State<OrderHallPage>
                         estimatedTime: pendingAssignment
                             ? driverText(
                                 '等待確認接單', '等待确认接单', 'Awaiting confirmation')
-                            : driverText('預估行程', '预估行程', 'Estimated trip'),
+                            : driverText('待接行程', '待接行程', 'Available trip'),
                         actionLabel: pendingAssignment
                             ? driverText('確認訂單', '确认订单', 'Confirm')
                             : driverText('接單', '接单', 'Accept'),
@@ -261,25 +281,35 @@ class _OrderHallPageState extends State<OrderHallPage>
                       ),
                     );
                   })
-                else if (_accepted.isEmpty)
+                else if (_myTrips.isEmpty)
                   const _EmptyAcceptedOrders()
                 else
-                  ..._accepted.map((trip) {
+                  ..._myTrips.map((trip) {
                     final item = Map<String, dynamic>.from(trip as Map);
+                    final inProgress =
+                        item['executionPhase'] == 'IN_PROGRESS' ||
+                            item['startedAt'] != null;
                     return Padding(
                       padding: const EdgeInsets.only(bottom: DriverSpacing.md),
                       child: _OrderCard(
-                        passenger: item['user']?['name']?.toString() ??
-                            item['passengerName']?.toString() ??
-                            driverText('乘客', '乘客', 'Passenger'),
+                        passenger: formatPassengerName(
+                          item,
+                          fallback: driverText('乘客', '乘客', 'Passenger'),
+                        ),
                         time: _formatTripTime(item['scheduledAt']),
                         price: _formatPrice(item['price'], item['currency']),
                         origin: item['pickupAddress']?.toString() ??
                             driverText('起點待確認', '起点待确认', 'Pickup pending'),
                         destination: item['dropoffAddress']?.toString() ??
                             driverText('終點待確認', '终点待确认', 'Destination pending'),
-                        estimatedTime: driverText('已成功接單', '已成功接单', 'Accepted'),
-                        actionLabel: driverText('查看行程', '查看行程', 'View trip'),
+                        estimatedTime: inProgress
+                            ? driverText('進行中', '进行中', 'In progress')
+                            : driverText('等待中', '等待中', 'Waiting'),
+                        actionLabel: inProgress
+                            ? driverText(
+                                '查看進行中行程', '查看进行中行程', 'View active trip')
+                            : driverText(
+                                '查看等待中行程', '查看等待中行程', 'View waiting trip'),
                         onTap: () => _openOrderDetail(item['id'].toString()),
                       ),
                     );
@@ -339,7 +369,7 @@ class _OrderTabs extends StatelessWidget {
               selected: selectedIndex == 0,
               onTap: () => onChanged(0)),
           _OrderTab(
-              label: driverText('成功接單', '成功接单', 'Accepted'),
+              label: driverText('我的行程', '我的行程', 'My trips'),
               selected: selectedIndex == 1,
               onTap: () => onChanged(1)),
         ],
@@ -463,13 +493,33 @@ class _OrderCard extends StatelessWidget {
                       width: 8, height: 8),
                   const SizedBox(width: DriverSpacing.sm),
                   Expanded(
-                    child: Text(passenger,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                            fontSize: DriverTypography.body,
-                            color: DriverColors.secondaryText)),
+                    child: PassengerNameText(
+                      passenger,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: DriverTypography.body,
+                        color: DriverColors.secondaryText,
+                      ),
+                    ),
                   ),
                 ],
+              ),
+              const SizedBox(height: DriverSpacing.md),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: DriverSpacing.md, vertical: DriverSpacing.xs),
+                  decoration: BoxDecoration(
+                    color: DriverColors.infoBackground,
+                    borderRadius: BorderRadius.circular(DriverRadii.pill),
+                  ),
+                  child: Text(estimatedTime,
+                      style: const TextStyle(
+                          fontSize: DriverTypography.caption,
+                          fontWeight: FontWeight.w700,
+                          color: DriverColors.primary)),
+                ),
               ),
               const SizedBox(height: DriverSpacing.md),
               SizedBox(
@@ -527,7 +577,7 @@ class _EmptyAcceptedOrders extends StatelessWidget {
             color: DriverColors.surface,
             border: Border.all(color: DriverColors.divider),
             borderRadius: BorderRadius.circular(DriverRadii.card)),
-        child: Text(driverText('暫無成功接單', '暂无成功接单', 'No accepted trips'),
+        child: Text(driverText('暫無我的行程', '暂无我的行程', 'No trips'),
             textAlign: TextAlign.center,
             style: TextStyle(
                 fontSize: DriverTypography.body,

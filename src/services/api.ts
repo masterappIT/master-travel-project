@@ -1,7 +1,7 @@
 import type { CrossBorderTrip } from '../../shared/types/trip'
 import { clearAuthentication, getAuthToken, type AuthUser } from '../utils/auth'
 
-let API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://192.168.0.185:3010'
+export let API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://192.168.0.185:3010'
 // #ifdef H5
 API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api'
 // #endif
@@ -67,11 +67,20 @@ export type Notification = {
   title: string
   content: string
   audience: string
-  audience: string
   templateType: string | null
   important: boolean
   readAt: string | null
   createdAt: string
+}
+
+export async function notificationEventTicket(): Promise<{ ticket: string; expiresAt: string }> {
+  const response = await uni.request({
+    url: `${API_BASE_URL}/notifications/events/ticket`,
+    method: 'POST',
+    header: authHeaders(),
+  })
+  if (response.statusCode >= 400) throw apiError(response, '無法連接即時消息')
+  return response.data as { ticket: string; expiresAt: string }
 }
 
 export async function listNotifications(): Promise<{ data: Notification[]; unread: number }> {

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'app/route_names.dart';
 import 'core/api/driver_api_client.dart';
+import 'core/formatters/passenger_name.dart';
 import 'core/layout/driver_page_shell.dart';
 import 'core/navigation/driver_navigation.dart';
 
@@ -123,7 +124,7 @@ class _OrderCompletedPageState extends State<OrderCompletedPage> {
               origin: origin,
               destination: destination,
               scheduledAt: _formatDate(_trip?['scheduledAt']),
-              passenger: _text('passengerName', '乘客'),
+              passenger: formatPassengerName(_trip),
             ),
             const SizedBox(height: DriverSpacing.xl),
             _FareBreakdownCard(total: total),
@@ -340,12 +341,22 @@ class _InfoRow extends StatelessWidget {
                       color: DriverColors.secondaryText))),
           const SizedBox(width: DriverSpacing.md),
           Expanded(
-              child: Text(value,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                      fontSize: DriverTypography.body,
-                      fontWeight: FontWeight.w500,
-                      color: DriverColors.text))),
+              child: label == '乘客'
+                  ? PassengerNameText(
+                      value,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: DriverTypography.body,
+                        fontWeight: FontWeight.w500,
+                        color: DriverColors.text,
+                      ),
+                    )
+                  : Text(value,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          fontSize: DriverTypography.body,
+                          fontWeight: FontWeight.w500,
+                          color: DriverColors.text))),
         ],
       );
 }

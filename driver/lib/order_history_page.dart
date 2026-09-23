@@ -3,6 +3,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 
 import 'app/route_names.dart';
 import 'core/api/driver_api_client.dart';
+import 'core/formatters/passenger_name.dart';
 import 'core/layout/driver_page_shell.dart';
 import 'core/navigation/driver_navigation.dart';
 
@@ -155,9 +156,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                         origin: item['pickupAddress']?.toString() ?? '起點待確認',
                         destination:
                             item['dropoffAddress']?.toString() ?? '終點待確認',
-                        passenger: item['user']?['name']?.toString() ??
-                            item['passengerName']?.toString() ??
-                            '乘客',
+                        passenger: formatPassengerName(item),
                         settled: item['settlement'] != null,
                         settlementMethod:
                             item['settlement']?['method']?.toString() ?? '未設定');
@@ -353,11 +352,14 @@ class _HistoryCard extends StatelessWidget {
                           width: 8, height: 8),
                       const SizedBox(width: DriverSpacing.sm),
                       Flexible(
-                          child: Text(entry.passenger,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                  fontSize: DriverTypography.label,
-                                  color: DriverColors.secondaryText))),
+                          child: PassengerNameText(
+                        entry.passenger,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: DriverTypography.label,
+                          color: DriverColors.secondaryText,
+                        ),
+                      )),
                     ])),
                     const SizedBox(width: DriverSpacing.sm),
                     Align(

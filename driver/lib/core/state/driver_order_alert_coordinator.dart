@@ -46,12 +46,15 @@ class DriverOrderAlertCoordinator extends StatefulWidget {
     super.key,
     required this.child,
     required this.scaffoldMessengerKey,
+    required this.navigatorKey,
   });
 
   final Widget child;
   final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey;
+  final GlobalKey<NavigatorState> navigatorKey;
 
   static final ValueNotifier<int> tripsChanged = ValueNotifier<int>(0);
+  static final ValueNotifier<int> notificationsChanged = ValueNotifier<int>(0);
 
   @override
   State<DriverOrderAlertCoordinator> createState() =>
@@ -65,12 +68,17 @@ class _DriverOrderAlertCoordinatorState
   Timer? _refreshTimer;
   Timer? _eventDebounce;
   Timer? _reconnectTimer;
+  Timer? _notificationReconnectTimer;
   OrderEventConnection? _eventConnection;
+  OrderEventConnection? _notificationConnection;
   Set<String>? _knownIds;
   bool _refreshInFlight = false;
   bool _refreshPending = false;
   bool _active = false;
   bool _soundPromptShown = false;
+  bool _cancellationDialogShowing = false;
+  final Set<String> _queuedCancellationIds = {};
+  final List<Map<String, dynamic>> _cancellationQueue = [];
 
   @override
   void initState() {
@@ -93,7 +101,12 @@ class _DriverOrderAlertCoordinatorState
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed && _active) {
       unawaited(_refresh());
-      if (_eventConnection == null) unawaited(_connectEvents());
+      if (_eventConnection == null) {
+        unawaited(_connectEvents());
+      }
+      if (_notificationConnection == null) {
+        unawaited(_connectNotificationEvents());
+      }
     }
   }
 
@@ -112,6 +125,7 @@ class _DriverOrderAlertCoordinatorState
     _knownIds = null;
     unawaited(_refresh());
     unawaited(_connectEvents());
+    unawaited(_connectNotificationEvents());
     _refreshTimer = Timer.periodic(
       const Duration(seconds: 30),
       (_) => unawaited(_refresh()),
@@ -121,6 +135,9 @@ class _DriverOrderAlertCoordinatorState
   void _stop() {
     _active = false;
     _knownIds = null;
+    _cancellationQueue.clear();
+    _queuedCancellationIds.clear();
+    _cancellationDialogShowing = false;
     _refreshPending = false;
     _refreshTimer?.cancel();
     _refreshTimer = null;
@@ -128,8 +145,12 @@ class _DriverOrderAlertCoordinatorState
     _eventDebounce = null;
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
+    _notificationReconnectTimer?.cancel();
+    _notificationReconnectTimer = null;
     _eventConnection?.close();
     _eventConnection = null;
+    _notificationConnection?.close();
+    _notificationConnection = null;
   }
 
   Future<void> _connectEvents() async {
@@ -160,6 +181,49 @@ class _DriverOrderAlertCoordinatorState
     }
   }
 
+  Future<void> _connectNotificationEvents() async {
+    if (!_active) return;
+    _notificationReconnectTimer?.cancel();
+    _notificationConnection?.close();
+    _notificationConnection = null;
+    try {
+      final response = await _api.notificationEventTicket();
+      if (!mounted || !_active) return;
+      final ticket = response['ticket']?.toString();
+      if (ticket == null || ticket.isEmpty) {
+        _scheduleNotificationReconnect();
+        return;
+      }
+      final url =
+          '${_api.baseUrl}/driver/auth/notifications/events?ticket=${Uri.encodeQueryComponent(ticket)}';
+      _notificationConnection = connectOrderEvents(
+        url,
+        () {
+          if (_active) {
+            DriverOrderAlertCoordinator.notificationsChanged.value++;
+            unawaited(_refresh());
+          }
+        },
+        _scheduleNotificationReconnect,
+      );
+    } on Object catch (error, stackTrace) {
+      developer.log('Unable to connect driver notification events',
+          name: 'driver.order_alert', error: error, stackTrace: stackTrace);
+      _scheduleNotificationReconnect();
+    }
+  }
+
+  void _scheduleNotificationReconnect() {
+    _notificationConnection?.close();
+    _notificationConnection = null;
+    _notificationReconnectTimer?.cancel();
+    if (!_active) return;
+    _notificationReconnectTimer = Timer(
+      const Duration(seconds: 5),
+      () => unawaited(_connectNotificationEvents()),
+    );
+  }
+
   void _scheduleReconnect() {
     _eventConnection?.close();
     _eventConnection = null;
@@ -180,6 +244,8 @@ class _DriverOrderAlertCoordinatorState
     _refreshInFlight = true;
     try {
       final assignedTrips = await _api.trips();
+      final cancellationNotifications =
+          await _api.pendingCancellationNotifications();
       List<dynamic> availableTrips;
       try {
         availableTrips = await _api.availableTrips();
@@ -200,6 +266,7 @@ class _DriverOrderAlertCoordinatorState
       final changed = _knownIds == null || !_setEquals(_knownIds!, ids);
       _knownIds = ids;
       if (changed) DriverOrderAlertCoordinator.tripsChanged.value++;
+      _enqueueCancellationNotifications(cancellationNotifications);
       if (play && !await _alert.play()) {
         developer.log(
           'Browser blocked the new-order alert sound',
@@ -221,6 +288,122 @@ class _DriverOrderAlertCoordinatorState
         unawaited(_refresh());
       }
     }
+  }
+
+  void _enqueueCancellationNotifications(List<dynamic> notifications) {
+    for (final notification in notifications.whereType<Map>()) {
+      final item = Map<String, dynamic>.from(notification);
+      final id = item['id']?.toString();
+      if (id == null || !_queuedCancellationIds.add(id)) continue;
+      _cancellationQueue.add(item);
+    }
+    _showNextCancellationDialog();
+  }
+
+  void _showNextCancellationDialog() {
+    if (!mounted || _cancellationDialogShowing || _cancellationQueue.isEmpty) {
+      return;
+    }
+    _cancellationDialogShowing = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted || !_active || _cancellationQueue.isEmpty) {
+        _cancellationDialogShowing = false;
+        return;
+      }
+      final dialogContext = widget.navigatorKey.currentContext;
+      if (dialogContext == null) {
+        _cancellationDialogShowing = false;
+        WidgetsBinding.instance.addPostFrameCallback(
+          (_) => _showNextCancellationDialog(),
+        );
+        return;
+      }
+      final item = _cancellationQueue.first;
+      final id = item['id'].toString();
+      final trip = item['trip'] is Map
+          ? Map<String, dynamic>.from(item['trip'] as Map)
+          : <String, dynamic>{};
+      var acknowledging = false;
+      String? errorMessage;
+      await showDialog<void>(
+        context: dialogContext,
+        barrierDismissible: false,
+        builder: (dialogContext) => PopScope(
+          canPop: false,
+          child: StatefulBuilder(
+            builder: (context, setDialogState) => AlertDialog(
+              title: Text(item['title']?.toString() ?? '行程已取消'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                      '訂單編號：${_formatOrderNumber(trip['id'] ?? item['tripId'])}'),
+                  const SizedBox(height: 8),
+                  Text('出發時間：${_formatCancellationTime(trip['scheduledAt'])}'),
+                  const SizedBox(height: 8),
+                  Text(
+                      '${trip['origin']?.toString() ?? '-'} → ${trip['destination']?.toString() ?? '-'}'),
+                  const SizedBox(height: 12),
+                  Text(item['content']?.toString() ?? '此行程已取消，請停止前往。'),
+                  if (errorMessage != null) ...[
+                    const SizedBox(height: 12),
+                    Text(errorMessage!,
+                        style: const TextStyle(color: Colors.red)),
+                  ],
+                ],
+              ),
+              actions: [
+                FilledButton(
+                  onPressed: acknowledging
+                      ? null
+                      : () async {
+                          setDialogState(() {
+                            acknowledging = true;
+                            errorMessage = null;
+                          });
+                          try {
+                            await _api.readNotification(id);
+                            if (dialogContext.mounted) {
+                              Navigator.of(dialogContext).pop();
+                            }
+                          } on Object {
+                            if (dialogContext.mounted) {
+                              setDialogState(() {
+                                acknowledging = false;
+                                errorMessage = '暫時無法確認，請重試。';
+                              });
+                            }
+                          }
+                        },
+                  child: Text(acknowledging ? '處理中…' : '我知道了'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      _cancellationQueue.removeAt(0);
+      _queuedCancellationIds.remove(id);
+      _cancellationDialogShowing = false;
+      _showNextCancellationDialog();
+    });
+    WidgetsBinding.instance.ensureVisualUpdate();
+  }
+
+  String _formatOrderNumber(dynamic value) {
+    final digits = value?.toString().replaceAll(RegExp(r'\D'), '') ?? '';
+    if (digits.isEmpty) return '-';
+    final suffix =
+        digits.length > 8 ? digits.substring(digits.length - 8) : digits;
+    return 'A${suffix.padLeft(8, '0')}';
+  }
+
+  String _formatCancellationTime(dynamic value) {
+    final date = DateTime.tryParse(value?.toString() ?? '')?.toLocal();
+    if (date == null) return '-';
+    String two(int number) => number.toString().padLeft(2, '0');
+    return '${date.year}/${two(date.month)}/${two(date.day)} ${two(date.hour)}:${two(date.minute)}';
   }
 
   void _showSoundPrompt() {

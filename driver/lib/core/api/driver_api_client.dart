@@ -360,6 +360,9 @@ class DriverApiClient {
   Future<Map<String, dynamic>> statistics() async => _decode(await _client
       .get(Uri.parse('$baseUrl/driver/auth/statistics'), headers: _headers));
 
+  Future<Map<String, dynamic>> notificationEventTicket() async => _decode(
+      await _client.post(Uri.parse('$baseUrl/driver/auth/notifications/events/ticket'),
+          headers: _headers));
   Future<Map<String, dynamic>> orderEventTicket() async => _decode(
       await _client.post(Uri.parse('$baseUrl/driver/auth/trips/events/ticket'),
           headers: _headers));
@@ -414,6 +417,10 @@ class DriverApiClient {
           Uri.parse('$baseUrl/driver/auth/notification-preferences'),
           headers: _headers,
           body: jsonEncode(fields)));
+  Future<List<dynamic>> pendingCancellationNotifications() async =>
+      _decodeList(await _client.get(
+          Uri.parse('$baseUrl/driver/auth/notifications/cancellations/pending'),
+          headers: _headers));
   Future<List<dynamic>> notifications() async => _decodeList(await _client
       .get(Uri.parse('$baseUrl/driver/auth/notifications'), headers: _headers));
   Future<Map<String, dynamic>> readNotification(String id) async =>

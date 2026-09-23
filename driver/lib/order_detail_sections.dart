@@ -155,11 +155,14 @@ class _OrderInfoCardState extends State<_OrderInfoCard> {
                     child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(widget.passenger,
-                              style: const TextStyle(
-                                  fontSize: DriverTypography.bodyLarge,
-                                  fontWeight: FontWeight.w700,
-                                  color: DriverColors.text)),
+                          PassengerNameText(
+                            widget.passenger,
+                            style: const TextStyle(
+                              fontSize: DriverTypography.bodyLarge,
+                              fontWeight: FontWeight.w700,
+                              color: DriverColors.text,
+                            ),
+                          ),
                           const SizedBox(height: DriverSpacing.xs),
                           Text(
                               '${widget.routeOrigin} → ${widget.routeDestination}',

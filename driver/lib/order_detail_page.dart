@@ -3,6 +3,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 
 import 'app/route_names.dart';
 import 'core/api/driver_api_client.dart';
+import 'core/formatters/passenger_name.dart';
 import 'core/layout/driver_page_shell.dart';
 import 'core/navigation/driver_navigation.dart';
 
@@ -202,7 +203,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
     final destination = _tripText('dropoffAddress', '終點待確認');
     final originRegion = _region(origin, '起點待確認');
     final destinationRegion = _region(destination, '終點待確認');
-    final passenger = _tripText('passengerName', '乘客');
+    final passenger = formatPassengerName(_trip);
     final scheduledAt = _formatDate(_trip?['scheduledAt']);
     final accepted = _trip?['acceptedAt'] != null;
     final pendingAssignment =

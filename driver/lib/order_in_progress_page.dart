@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'app/route_names.dart';
 import 'core/api/driver_api_client.dart';
+import 'core/formatters/passenger_name.dart';
 import 'core/layout/driver_page_shell.dart';
 import 'core/navigation/driver_navigation.dart';
 
@@ -173,13 +174,13 @@ class _OrderInProgressPageState extends State<OrderInProgressPage> {
               destination: _region(_text('dropoffAddress', '終點待確認'), '終點待確認'),
             ),
             const SizedBox(height: DriverSpacing.xl),
-            _PassengerCard(name: _text('passengerName', '乘客')),
+            _PassengerCard(name: formatPassengerName(_trip)),
             const SizedBox(height: DriverSpacing.xl),
             _TripProgressCard(
               origin: _text('pickupAddress', '起點待確認'),
               destination: _text('dropoffAddress', '終點待確認'),
               scheduledAt: _formatDate(_trip?['scheduledAt']),
-              passenger: _text('passengerName', '乘客'),
+              passenger: formatPassengerName(_trip),
               price: _formatPrice(_trip?['price'], _trip?['currency']),
             ),
             const SizedBox(height: DriverSpacing.xl),
@@ -305,11 +306,14 @@ class _PassengerCard extends StatelessWidget {
                 child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                  Text(name,
-                      style: TextStyle(
-                          fontSize: DriverTypography.bodyLarge,
-                          fontWeight: FontWeight.w700,
-                          color: DriverColors.text)),
+                  PassengerNameText(
+                    name,
+                    style: const TextStyle(
+                      fontSize: DriverTypography.bodyLarge,
+                      fontWeight: FontWeight.w700,
+                      color: DriverColors.text,
+                    ),
+                  ),
                   SizedBox(height: 2),
                   Row(children: [
                     SvgPicture.asset('assets/in-progress-star.svg',
@@ -487,12 +491,22 @@ class _InfoRow extends StatelessWidget {
                     color: DriverColors.secondaryText))),
         const SizedBox(width: DriverSpacing.md),
         Expanded(
-            child: Text(value,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                    fontSize: DriverTypography.body,
-                    fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
-                    color: DriverColors.text))),
+            child: label == '乘客'
+                ? PassengerNameText(
+                    value,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: DriverTypography.body,
+                      fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
+                      color: DriverColors.text,
+                    ),
+                  )
+                : Text(value,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        fontSize: DriverTypography.body,
+                        fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
+                        color: DriverColors.text))),
       ]);
 }
 

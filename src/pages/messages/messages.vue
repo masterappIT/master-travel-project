@@ -33,8 +33,9 @@ import { formatCurrencyAmount } from '../../composables/useCurrency'
 import { closeCachedPage, openCachedPage } from '../../utils/navigation'
 
 const { responsiveStyle } = useResponsiveCanvas()
-import { computed, ref } from 'vue'
+import { computed, onUnmounted, ref } from 'vue'
 import { listNotifications, markNotificationRead, type Notification } from '../../services/api'
+import { subscribeNotificationChanges } from '../../utils/notificationRealtime'
 import { onShow } from '@dcloudio/uni-app'
 const activeTab = ref<'all' | 'important'>('all')
 const hkd = (amount: number) => formatCurrencyAmount(amount, 'HKD')
@@ -49,13 +50,17 @@ const isUnread = (message: Notification) => !message.readAt
   const visibleMessages = computed(() => activeTab.value === 'important' ? notifications.value.filter(message => message.important) : notifications.value)
   const sortedMessages = computed(() => [...visibleMessages.value].sort((a, b) => Number(isUnread(b)) - Number(isUnread(a))))
 
-onShow(async () => {
+const refreshNotifications = async () => {
   try {
     notifications.value = (await listNotifications()).data
   } catch {
     notifications.value = []
   }
-})
+}
+
+onShow(refreshNotifications)
+const unsubscribeNotifications = subscribeNotificationChanges(() => { void refreshNotifications() })
+onUnmounted(unsubscribeNotifications)
 
 const openMessage = async (message: Notification) => {
   if (isUnread(message)) {

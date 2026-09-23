@@ -91,7 +91,7 @@ Future<http.Response> _driverFixtureResponse(http.Request request) async {
       'settlement': {'settledEarnings': 0, 'unsettledEarnings': 0},
     });
   }
-  if (path == '/driver/auth/trips' || path == '/driver/auth/trips/available') {
+  if (path == '/driver/auth/trips/available') {
     return _jsonResponse([
       {
         'id': 'trip-available',
@@ -103,6 +103,35 @@ Future<http.Response> _driverFixtureResponse(http.Request request) async {
         'passengerName': '陳',
         'driverId': null,
         'acceptedAt': null,
+      },
+    ]);
+  }
+  if (path == '/driver/auth/trips') {
+    return _jsonResponse([
+      {
+        'id': 'trip-waiting',
+        'pickupAddress': '香港機場',
+        'dropoffAddress': '澳門酒店',
+        'price': 580,
+        'currency': 'HKD',
+        'scheduledAt': '2099-03-20T10:00:00Z',
+        'passengerName': '李',
+        'driverId': 'driver-1',
+        'acceptedAt': '2024-03-01T08:00:00Z',
+        'executionPhase': 'DRIVER_ASSIGNED',
+      },
+      {
+        'id': 'trip-active',
+        'pickupAddress': '深圳灣口岸',
+        'dropoffAddress': '香港中環',
+        'price': 680,
+        'currency': 'HKD',
+        'scheduledAt': '2099-03-20T09:00:00Z',
+        'passengerName': '王',
+        'driverId': 'driver-1',
+        'acceptedAt': '2024-03-01T08:00:00Z',
+        'startedAt': '2024-03-01T09:00:00Z',
+        'executionPhase': 'IN_PROGRESS',
       },
       {
         'id': 'trip-completed',
@@ -380,7 +409,79 @@ void main() {
     expect(find.text('有新可接訂單時播放提示聲'), findsOneWidget);
   });
 
-  testWidgets('switches between available and accepted orders',
+  testWidgets('requires acknowledgement for a cancelled accepted trip',
+      (WidgetTester tester) async {
+    var acknowledged = false;
+    final client = DriverApiClient(client: MockClient((request) async {
+      final path = request.url.path;
+      if (path == '/driver/auth/phone/verify') {
+        return _jsonResponse({
+          'token': 'test-token',
+          'expiresAt': '2099-01-01T00:00:00Z',
+          'driver': {'id': 'driver-1', 'reviewStatus': 'APPROVED'},
+        });
+      }
+      if (path == '/driver/auth/trips') return _jsonResponse([]);
+      if (path == '/driver/auth/trips/available') return _jsonResponse([]);
+      if (path == '/driver/auth/trips/events/ticket' ||
+          path == '/driver/auth/notifications/events/ticket') {
+        return _jsonResponse({'ticket': ''});
+      }
+      if (path == '/driver/auth/notifications/cancellations/pending') {
+        return _jsonResponse(acknowledged
+            ? []
+            : [
+                {
+                  'id': 'notification-1',
+                  'tripId': 'cmueh27gu001t8oqsvwep1ooo',
+                  'title': '客戶已取消行程',
+                  'content': '客戶已取消此行程，請停止前往。',
+                  'trip': {
+                    'id': 'cmueh27gu001t8oqsvwep1ooo',
+                    'origin': '香港中環',
+                    'destination': '深圳灣口岸',
+                    'scheduledAt': '2099-03-20T10:00:00Z',
+                  },
+                },
+              ]);
+      }
+      if (path == '/driver/auth/notifications/notification-1/read') {
+        acknowledged = true;
+        return _jsonResponse({'id': 'notification-1'});
+      }
+      return _jsonResponse(<String, dynamic>{});
+    }));
+    DriverApiClient.instance = client;
+    await client.verifyPhoneCode(challengeId: 'challenge', code: '00000');
+    final navigatorKey = GlobalKey<NavigatorState>();
+    final messengerKey = GlobalKey<ScaffoldMessengerState>();
+
+    await tester.pumpWidget(DriverOrderAlertCoordinator(
+      navigatorKey: navigatorKey,
+      scaffoldMessengerKey: messengerKey,
+      child: MaterialApp(
+        navigatorKey: navigatorKey,
+        scaffoldMessengerKey: messengerKey,
+        home: const Scaffold(body: Text('司機首頁')),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.text('客戶已取消行程'), findsOneWidget);
+    expect(find.text('訂單編號：A02700181'), findsOneWidget);
+    expect(find.textContaining('cmueh27gu001t8oqsvwep1ooo'), findsNothing);
+    expect(find.text('香港中環 → 深圳灣口岸'), findsOneWidget);
+    expect(find.text('我知道了'), findsOneWidget);
+
+    await tester.tap(find.text('我知道了'));
+    await tester.pumpAndSettle();
+
+    expect(acknowledged, isTrue);
+    expect(find.text('客戶已取消行程'), findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('shows waiting and active trips in my trips',
       (WidgetTester tester) async {
     await tester.pumpWidget(testApp(const OrderHallPage()));
     await tester.pumpAndSettle();
@@ -388,15 +489,19 @@ void main() {
     expect(find.text('接單大廳'), findsOneWidget);
     expect(find.text('線上接單中'), findsOneWidget);
     expect(find.text('香港中環置地廣場東門大堂'), findsOneWidget);
+    expect(find.text('待接行程'), findsOneWidget);
     expect(find.text('深圳福田口岸'), findsOneWidget);
-    expect(find.text('暫無成功接單'), findsNothing);
 
-    await tester.tap(find.text('成功接單'));
+    await tester.tap(find.text('我的行程'));
     await tester.pump();
 
-    expect(find.text('暫無成功接單'), findsOneWidget);
+    expect(find.text('查看進行中行程'), findsOneWidget);
+    expect(find.text('查看等待中行程'), findsOneWidget);
+    expect(find.text('進行中'), findsOneWidget);
+    expect(find.text('等待中'), findsOneWidget);
+    expect(find.text('深圳灣口岸'), findsOneWidget);
+    expect(find.text('香港機場'), findsOneWidget);
     expect(find.text('香港中環置地廣場東門大堂'), findsNothing);
-    expect(find.text('深圳福田口岸'), findsNothing);
   });
   test('detects public and newly assigned alert orders', () {
     final ids = driverAlertTripIds(

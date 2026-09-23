@@ -3,9 +3,11 @@ import 'package:flutter_svg/flutter_svg.dart';
 
 import 'app/route_names.dart';
 import 'core/api/driver_api_client.dart';
+import 'core/formatters/passenger_name.dart';
 import 'core/layout/driver_page_shell.dart';
 import 'core/navigation/driver_navigation.dart';
 import 'core/state/driver_language_preference.dart';
+import 'core/state/driver_order_alert_coordinator.dart';
 import 'core/state/driver_status.dart';
 
 import 'package:driver_web/core/tokens/driver_tokens.dart';
@@ -44,8 +46,24 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    DriverOrderAlertCoordinator.notificationsChanged
+        .addListener(_onNotificationsChanged);
     _loadDriver();
     _loadStatistics();
+  }
+
+  @override
+  void dispose() {
+    DriverOrderAlertCoordinator.notificationsChanged
+        .removeListener(_onNotificationsChanged);
+    super.dispose();
+  }
+
+  void _onNotificationsChanged() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('收到新通知')),
+    );
   }
 
   Future<void> _loadStatistics() async {
@@ -120,7 +138,7 @@ class _HomePageState extends State<HomePage> {
                 final id = notification['id']?.toString();
                 return ListTile(
                   title: Text(notification['title']?.toString() ?? '通知'),
-                  subtitle: Text(notification['message']?.toString() ?? ''),
+                  subtitle: Text(notification['content']?.toString() ?? ''),
                   onTap: id == null
                       ? null
                       : () async {
@@ -548,7 +566,10 @@ class _RecentOrdersSection extends StatelessWidget {
                     : '—',
                 origin: order['origin']?.toString() ?? '—',
                 destination: order['destination']?.toString() ?? '—',
-                passenger: order['passenger']?.toString() ?? '—',
+                passenger: formatPassengerName({
+                  'passengerName': order['passenger'],
+                  'passengerGender': order['passengerGender'],
+                }, fallback: '—'),
                 settlementStatus:
                     order['settlementStatus'] == 'SETTLED' ? '已結算' : '未結算',
                 settlementMethod:
@@ -612,11 +633,16 @@ class _RecentOrderCard extends StatelessWidget {
                 SvgPicture.asset('assets/home-user.svg', width: 14, height: 14),
                 const SizedBox(width: 6),
                 Flexible(
-                  child: Text(passenger,
-                      overflow: TextOverflow.ellipsis,
+                  child: Text.rich(
+                    passengerNameSpan(
+                      passenger,
                       style: const TextStyle(
-                          fontSize: DriverTypography.label,
-                          color: DriverColors.secondaryText)),
+                        fontSize: DriverTypography.label,
+                        color: DriverColors.secondaryText,
+                      ),
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ]),
             ),

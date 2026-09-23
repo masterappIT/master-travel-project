@@ -14,6 +14,7 @@
 
 <script>
 import { redirectEmbeddedLaunch, swipeBack } from './utils/navigation'
+import { startNotificationRealtime, stopNotificationRealtime } from './utils/notificationRealtime'
 
 import { useCurrency } from './composables/useCurrency'
 
@@ -44,6 +45,7 @@ export default {
   onLaunch(options) {
     console.log('App Launch')
     redirectEmbeddedLaunch(options?.path, options?.query)
+    startNotificationRealtime()
   },
   mounted() {
     // H5 routed pages may be mounted outside the App.vue shell.
@@ -68,9 +70,11 @@ export default {
   onShow(options) {
     console.log('App Show')
     redirectEmbeddedLaunch(options?.path, options?.query)
+    startNotificationRealtime()
   },
   onHide() {
     console.log('App Hide')
+    stopNotificationRealtime()
   },
 }
 </script>
