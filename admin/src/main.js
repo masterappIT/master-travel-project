@@ -377,6 +377,7 @@ const App = { setup() {
      view,
      t,
      canWrite,
+     timeOptions,
      formatDate,
      vehicleTab,
      categories,
