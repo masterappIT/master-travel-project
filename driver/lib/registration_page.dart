@@ -1053,16 +1053,9 @@ class _PlateSection extends StatelessWidget {
           onChanged: onPlateTypeChanged,
         ),
         const SizedBox(height: DriverSpacing.md),
-        LayoutBuilder(
-          builder: (context, constraints) => constraints.maxWidth < 340
-              ? Column(
-                  children: _withSpacing(
-                      fields, const SizedBox(height: DriverSpacing.md)))
-              : Row(
-                  children: _withSpacing(
-                  [for (final field in fields) Expanded(child: field)],
-                  const SizedBox(width: DriverSpacing.md),
-                )),
+        Column(
+          children:
+              _withSpacing(fields, const SizedBox(height: DriverSpacing.md)),
         ),
       ],
     );
