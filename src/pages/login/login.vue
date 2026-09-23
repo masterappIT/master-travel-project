@@ -93,7 +93,7 @@ const handleCountryChange = (event: { detail: { value: string | number } }) => {
 }
 
 const handleBack = () => {
-  goHome()
+  uni.reLaunch({ url: '/pages/index/index?guest=1', animationType: 'none', animationDuration: 0 })
 }
 
 const handleLogin = async () => {

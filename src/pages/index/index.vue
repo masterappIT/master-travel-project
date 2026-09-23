@@ -1,5 +1,5 @@
 <template>
-  <view v-show="activePagePath === '/pages/index/index'" class="page" :style="pageStyle">
+  <view v-show="homeAccessGranted && activePagePath === '/pages/index/index'" class="page" :style="pageStyle">
     <view v-if="rideMode === 'cross-border'" class="page-content">
       <view class="canvas">
         <!-- #ifndef APP-PLUS -->
@@ -195,7 +195,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { onShow } from '@dcloudio/uni-app'
+import { onLoad, onShow } from '@dcloudio/uni-app'
 import { useTripStore } from '../../stores/trip'
 // #ifdef H5
 import { useH5ResponsiveCanvas } from '../../composables/useH5ResponsiveCanvas'
@@ -215,6 +215,7 @@ import HomeBottomNav from '../../components/home/HomeBottomNav.vue'
 import AddressPicker from '../../components/home/AddressPicker.vue'
 import BookingTimePicker from '../../components/home/BookingTimePicker.vue'
 import { activateEmbeddedPageHost, cachedPagePath, openCachedPage } from '../../utils/navigation'
+import { isAuthenticated } from '../../utils/auth'
 import { planDrivingRoute, reverseGeocode, lookupFlight, type Coordinate, type FlightDirection, type FlightLookupResult } from '../../services/api'
 import { findLocalRegion } from '../../utils/localRegions'
 
@@ -281,9 +282,19 @@ type RideMode = 'cross-border' | 'business'
 type TravelMode = 'cross-border' | 'airport'
 
 const activePagePath = cachedPagePath
+const homeAccessGranted = ref(false)
 // #ifdef MP-WEIXIN || MP-TOUTIAO
 activateEmbeddedPageHost()
 // #endif
+
+onLoad((options) => {
+  const guestEntry = options?.guest === '1'
+  if (isAuthenticated() || guestEntry) {
+    homeAccessGranted.value = true
+    return
+  }
+  uni.reLaunch({ url: '/pages/login/login', animationType: 'none', animationDuration: 0 })
+})
 
 const tripStore = useTripStore()
 const rideMode = ref<RideMode>('cross-border')
@@ -351,6 +362,7 @@ const switchRideMode = (mode: RideMode) => {
 }
 
 onShow(() => {
+  if (!homeAccessGranted.value) return
   if (hasShown) {
     rideMode.value = 'cross-border'
   } else {
