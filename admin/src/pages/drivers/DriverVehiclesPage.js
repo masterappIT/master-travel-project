@@ -43,7 +43,7 @@ export const DriverVehiclesPage = {
         </div>
         <div class="vehicle-table-wrap"><table><thead><tr><th>相片</th><th>車輛</th><th>車輛資料</th><th>綁定司機</th><th>狀態</th><th>操作</th></tr></thead><tbody>
           <tr v-for="vehicle in filteredVehicles" :key="vehicle.id">
-            <td class="vehicle-photo-cell"><VehiclePhotoViewer v-if="vehicle.vehiclePhotoUrl" :src="vehicle.vehiclePhotoUrl" :alt="displayPlate(vehicle) + ' 車輛相片'"/><span v-else>未上傳</span></td>
+            <td class="vehicle-photo-cell"><LazyVehiclePhotoViewer :key="vehicle.id + ':' + vehicle.updatedAt" :has-photo="Boolean(vehicle.vehiclePhotos?.length)" :load-photo="() => loadVehiclePhotoThumbnail(vehicle.id)" :load-full-photo="() => loadVehiclePhoto(vehicle.id)" :alt="displayPlate(vehicle) + ' 車輛相片'"/></td>
             <td><div class="vehicle-plate-cell"><strong>{{displayPlate(vehicle)}}</strong><div v-if="plateSummary(vehicle).length > 1" class="vehicle-alt-plates"><span v-for="plate in plateSummary(vehicle).slice(1)" :key="plate">{{plate}}</span></div><small>{{vehicle.vehicleOwnership || '未設定歸屬地'}} · {{vehicle.plateType || '單牌'}}</small></div></td>
             <td><div class="vehicle-spec-cell"><strong>{{vehicle.vehicleCategory || '未設定類別'}}</strong><span>{{vehicle.vehicleColor || '未設定顏色'}}</span></div></td>
             <td><button type="button" class="vehicle-assignment-link" @click="manageVehicleAssignments(vehicle)"><span>{{vehicle.assignments?.length || 0}}</span><span>{{vehicle.driverName || '尚未綁定'}}</span></button></td>

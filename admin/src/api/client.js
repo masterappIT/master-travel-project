@@ -5,23 +5,42 @@ function cookieValue(name) {
 }
 
 export function createApiClient({ baseUrl, getToken, onUnauthorized }) {
+  const mutationListeners = new Set()
+  let activeReadController = null
+
+  function beginReadScope() {
+    activeReadController?.abort()
+    activeReadController = new AbortController()
+    return activeReadController.signal
+  }
+
   async function request(path, options = {}) {
     let response
-    const isFormData = options.body instanceof FormData
-    const method = (options.method || 'GET').toUpperCase()
+    const { cancelOnNavigate = true, ...fetchOptions } = options
+    const isFormData = fetchOptions.body instanceof FormData
+    const method = (fetchOptions.method || 'GET').toUpperCase()
     const csrfToken = method === 'GET' || method === 'HEAD' ? '' : cookieValue('admin_csrf')
+    const signal = fetchOptions.signal || (cancelOnNavigate && (method === 'GET' || method === 'HEAD') ? activeReadController?.signal : undefined)
     try {
       response = await fetch(`${baseUrl}${path}`, {
-        ...options,
+        ...fetchOptions,
+        ...(signal ? { signal } : {}),
         credentials: 'include',
         headers: {
           ...(!isFormData ? { 'Content-Type': 'application/json' } : {}),
           ...(getToken() ? { Authorization: 'Bearer ' + getToken() } : {}),
           ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}),
-          ...(options.headers || {})
+          ...(fetchOptions.headers || {})
         }
       })
     } catch (cause) {
+      if (cause?.name === 'AbortError') {
+        const error = new Error('Request cancelled')
+        error.kind = 'cancelled'
+        error.retryable = false
+        error.cause = cause
+        throw error
+      }
       const error = new Error('Network request failed')
       error.kind = 'network'
       error.retryable = true
@@ -44,9 +63,18 @@ export function createApiClient({ baseUrl, getToken, onUnauthorized }) {
 
   const api = async (path, options = {}) => {
     const response = await request(path, options)
-    if (response.status === 204) return null
-    return response.json()
+    const payload = response.status === 204 ? null : await response.json()
+    const method = (options.method || 'GET').toUpperCase()
+    if (method !== 'GET' && method !== 'HEAD') {
+      for (const listener of mutationListeners) listener({ path, method, payload })
+    }
+    return payload
   }
   api.blob = async (path, options = {}) => (await request(path, options)).blob()
+  api.beginReadScope = beginReadScope
+  api.onMutation = listener => {
+    mutationListeners.add(listener)
+    return () => mutationListeners.delete(listener)
+  }
   return api
 }

@@ -2,28 +2,42 @@ export const VehiclePhotoViewer = {
   name: 'VehiclePhotoViewer',
   props: {
     src: { type: String, required: true },
-    alt: { type: String, default: '車輛相片' }
+    alt: { type: String, default: '車輛相片' },
+    loadFullPhoto: { type: Function, default: null }
   },
   data() {
-    return { open: false, scale: 1, previousBodyOverflow: '' }
+    return { open: false, scale: 1, previousBodyOverflow: '', fullPhotoUrl: '', loadingFullPhoto: false }
   },
   computed: {
     scaleLabel() {
       return `${Math.round(this.scale * 100)}%`
+    },
+    viewerSrc() {
+      return this.fullPhotoUrl || this.src
     }
   },
   beforeUnmount() {
     window.removeEventListener('keydown', this.handleKeydown)
     if (this.open) document.body.style.overflow = this.previousBodyOverflow
+    if (this.fullPhotoUrl) URL.revokeObjectURL(this.fullPhotoUrl)
   },
   methods: {
-    openViewer() {
+    async openViewer() {
       this.scale = 1
       this.previousBodyOverflow = document.body.style.overflow
       this.open = true
       document.body.style.overflow = 'hidden'
       window.addEventListener('keydown', this.handleKeydown)
       this.$nextTick(() => this.$refs.closeButton?.focus())
+      if (!this.loadFullPhoto || this.fullPhotoUrl || this.loadingFullPhoto) return
+      this.loadingFullPhoto = true
+      try {
+        this.fullPhotoUrl = URL.createObjectURL(await this.loadFullPhoto())
+      } catch {
+        this.fullPhotoUrl = ''
+      } finally {
+        this.loadingFullPhoto = false
+      }
     },
     closeViewer() {
       window.removeEventListener('keydown', this.handleKeydown)
@@ -61,7 +75,7 @@ export const VehiclePhotoViewer = {
             <button ref="closeButton" type="button" class="vehicle-photo-viewer-close" aria-label="關閉圖片預覽" @click="closeViewer">×</button>
           </div>
           <div class="vehicle-photo-viewer-canvas" @click.self="closeViewer">
-            <img :src="src" :alt="alt" :style="{ transform: 'scale(' + scale + ')' }" />
+            <img :src="viewerSrc" :alt="alt" :style="{ transform: 'scale(' + scale + ')' }" />
           </div>
         </div>
       </Teleport>

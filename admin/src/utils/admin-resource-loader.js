@@ -101,17 +101,7 @@ export async function loadDriversResources({ driversApi, vehicleCategories, driv
   const [categoryResult, driverResult, vehicleResult] = await Promise.all([driversApi.categories(), driversApi.list(), driversApi.listAllVehicles()])
   vehicleCategories.value = categoryResult.data.filter(item => item.enabled !== false)
   drivers.value = driverResult.data
-  const previousPhotoUrls = allVehicles.value.map(vehicle => vehicle.vehiclePhotoUrl).filter(Boolean)
-  const loadedVehicles = await Promise.all(vehicleResult.data.map(async vehicle => {
-    if (!vehicle.vehiclePhotos?.length) return { ...vehicle, vehiclePhotoUrl: null }
-    try {
-      return { ...vehicle, vehiclePhotoUrl: URL.createObjectURL(await driversApi.vehiclePhotoByVehicle(vehicle.id)) }
-    } catch {
-      return { ...vehicle, vehiclePhotoUrl: null }
-    }
-  }))
-  previousPhotoUrls.forEach(url => URL.revokeObjectURL(url))
-  allVehicles.value = loadedVehicles
+  allVehicles.value = vehicleResult.data.map(vehicle => ({ ...vehicle, vehiclePhotoUrl: null }))
 }
 
 export async function loadDispatchResources({ tripsApi, driversApi, trips, drivers, orderUrls, tripPage }) {

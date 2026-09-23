@@ -9,6 +9,7 @@ export function createAdminResourceLoader({
   loadRequestId,
   displayError,
   applySettings,
+  loadSettings,
   settings,
   resources,
   resourceLoaders
@@ -17,15 +18,25 @@ export function createAdminResourceLoader({
 
   async function load() {
     const requestId = ++requestSequence.value
+    api.beginReadScope()
     loading.value = true
     error.value = ''
     const requestedView = view.value
 
     try {
-      const settingsResponse = await api('/settings')
+      const settingsPromise = loadSettings()
+      if (!token.value) {
+        const { settings: settingsResponse } = await settingsPromise
+        applySettings(settingsResponse, settings)
+        return
+      }
+
+      const administratorPromise = currentAdministrator.value
+        ? Promise.resolve(currentAdministrator.value)
+        : api('/admin/auth/me')
+      const [{ settings: settingsResponse }, administrator] = await Promise.all([settingsPromise, administratorPromise])
       applySettings(settingsResponse, settings)
-      if (!token.value) return
-      if (!currentAdministrator.value) currentAdministrator.value = await api('/admin/auth/me')
+      currentAdministrator.value = administrator
 
       if (requestedView === 'dashboard') dashboard.value = await api('/admin/dashboard')
       if (['users', 'trips', 'charters'].includes(requestedView)) await resourceLoaders.coreUsers()
@@ -43,6 +54,7 @@ export function createAdminResourceLoader({
       if (requestedView === 'vehicles') await resourceLoaders.vehicles()
       if (requestedView === 'route-pricing') await resourceLoaders.routePricing()
     } catch (requestError) {
+      if (requestError.kind === 'cancelled') return
       error.value = displayError(requestError)
       if (requestError.kind === 'unauthorized' || requestError.status === 401) {
         token.value = ''

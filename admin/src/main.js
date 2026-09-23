@@ -1,8 +1,9 @@
-import { createApp, computed, ref, nextTick, onMounted, watch, provide } from 'vue'
+import { createApp, computed, ref, nextTick, onMounted, watch, provide, defineAsyncComponent } from 'vue'
 import { createAdminApi } from './utils/admin-api.js'
 import { LoadingState, ErrorState, ToastHost, ConfirmDialog } from './components/index.js'
 import { DriverReviewActions } from './components/DriverReviewActions.js'
 import { VehiclePhotoViewer } from './components/VehiclePhotoViewer.js'
+import { LazyVehiclePhotoViewer } from './components/LazyVehiclePhotoViewer.js'
 import { sortByOrder, formatOrderNumber, displayMainlandCity, apiMainlandCity, displayPlaceName } from './utils/formatters.js'
 import { promotionKindLabel, promotionDiscountLabel } from './utils/promotions.js'
 import { dateTimeInput, formatTripAmount, paymentMethodLabel, formatBenefits } from './utils/display-formatters.js'
@@ -22,44 +23,44 @@ import { createLocalization } from './utils/localization.js'
 import { getPassengerTripStatus, getPassengerTripStatusLabel } from './utils/trip-status.js'
 import { createAdminSessionActions } from './utils/admin-session.js'
 import { createPromotionDisplay } from './utils/promotion-display.js'
-import { applyAdminSettings } from './utils/admin-settings-loader.js'
+import { applyAdminSettings, createAdminSettingsLoader } from './utils/admin-settings-loader.js'
 import { createAdminResourceLoader } from './utils/admin-load-orchestrator.js'
 import { registerAdminComponents } from './utils/register-admin-components.js'
 import { primaryNavigation, operationsNavigation, createNavigationController, createOverlayController } from './layout/index.js'
-import { UsersPage } from './pages/users/UsersPage.js'
+const DashboardPage = defineAsyncComponent(() => import('./pages/dashboard/DashboardPage.js').then(module => module.DashboardPage))
+const UsersPage = defineAsyncComponent(() => import('./pages/users/UsersPage.js').then(module => module.UsersPage))
+const DriversPage = defineAsyncComponent(() => import('./pages/drivers/DriversPage.js').then(module => module.DriversPage))
+const DriverVehiclesPage = defineAsyncComponent(() => import('./pages/drivers/DriverVehiclesPage.js').then(module => module.DriverVehiclesPage))
+const TripsPage = defineAsyncComponent(() => import('./pages/trips/TripsPage.js').then(module => module.TripsPage))
+const SettlementsPage = defineAsyncComponent(() => import('./pages/settlements/SettlementsPage.js').then(module => module.SettlementsPage))
+const AddressesPage = defineAsyncComponent(() => import('./pages/addresses/AddressesPage.js').then(module => module.AddressesPage))
+const PromotionsPage = defineAsyncComponent(() => import('./pages/promotions/PromotionsPage.js').then(module => module.PromotionsPage))
+const MembershipPage = defineAsyncComponent(() => import('./pages/membership/MembershipPage.js').then(module => module.MembershipPage))
+const RoutePricingPage = defineAsyncComponent(() => import('./pages/route-pricing/RoutePricingPage.js').then(module => module.RoutePricingPage))
+const VehiclesPage = defineAsyncComponent(() => import('./pages/vehicles/VehiclesPage.js').then(module => module.VehiclesPage))
+const PaymentsPage = defineAsyncComponent(() => import('./pages/payments/PaymentsPage.js').then(module => module.PaymentsPage))
+const AuditLogsPage = defineAsyncComponent(() => import('./pages/audit-logs/AuditLogsPage.js').then(module => module.AuditLogsPage))
+const AdministratorsPage = defineAsyncComponent(() => import('./pages/administrators/AdministratorsPage.js').then(module => module.AdministratorsPage))
+const NotificationsPage = defineAsyncComponent(() => import('./pages/notifications/NotificationsPage.js').then(module => module.NotificationsPage))
+const OperationsPage = defineAsyncComponent(() => import('./pages/operations/OperationsPage.js').then(module => module.OperationsPage))
+const ChartersPage = defineAsyncComponent(() => import('./pages/charters/ChartersPage.js').then(module => module.ChartersPage))
 import { createUsersActions } from './pages/users/users.actions.js'
-import { DriversPage } from './pages/drivers/DriversPage.js'
-import { DriverVehiclesPage } from './pages/drivers/DriverVehiclesPage.js'
 import { createDriversActions } from './pages/drivers/drivers.actions.js'
 import { isEligibleVehicleDriver } from './utils/drivers.js'
-import { TripsPage } from './pages/trips/TripsPage.js'
 import { createTripsActions } from './pages/trips/trips.actions.js'
-import { SettlementsPage } from './pages/settlements/SettlementsPage.js'
-import { AddressesPage } from './pages/addresses/AddressesPage.js'
 import { createAddressesActions } from './pages/addresses/addresses.actions.js'
 import { createPromotionsActions } from './pages/promotions/promotions.actions.js'
-import { PromotionsPage } from './pages/promotions/PromotionsPage.js'
-import { MembershipPage } from './pages/membership/MembershipPage.js'
 import { createMembershipActions } from './pages/membership/membership.actions.js'
-import { RoutePricingPage } from './pages/route-pricing/RoutePricingPage.js'
 import { createRoutePricingActions } from './pages/route-pricing/route-pricing.actions.js'
-import { VehiclesPage } from './pages/vehicles/VehiclesPage.js'
 import { createVehiclesPageState } from './pages/vehicles/vehicles.state.js'
 import { createVehiclesActions } from './pages/vehicles/vehicles.actions.js'
 import { createPaymentsPageState } from './pages/payments/payments.state.js'
-import { PaymentsPage } from './pages/payments/PaymentsPage.js'
 import { createPaymentsActions } from './pages/payments/payments.actions.js'
-import { AuditLogsPage } from './pages/audit-logs/AuditLogsPage.js'
-import { AdministratorsPage } from './pages/administrators/AdministratorsPage.js'
 import { createAdministratorsActions } from './pages/administrators/administrators.actions.js'
-import { NotificationsPage } from './pages/notifications/NotificationsPage.js'
 import { createNotificationsPageState } from './pages/notifications/notifications.state.js'
 import { createNotificationsActions } from './pages/notifications/notifications.actions.js'
-import { OperationsPage } from './pages/operations/OperationsPage.js'
 import { createOperationsActions } from './pages/operations/operations.actions.js'
 import { createCharterActions } from './pages/charters/charters.actions.js'
-import { ChartersPage } from './pages/charters/ChartersPage.js'
-import { DashboardPage } from './pages/dashboard/DashboardPage.js'
 import './style.css'
 
 const API = import.meta.env.VITE_API_URL || '/api'
@@ -101,6 +102,8 @@ const timeOptions = createTimeOptions()
 
 
 const { api, usersApi, driversApi, tripsApi, addressesApi, vehiclesApi } = createAdminApi({ baseUrl: API, token, currentAdministrator })
+const settingsLoader = createAdminSettingsLoader({ api })
+api.onMutation(({ path }) => { if (path === '/settings') settingsLoader.invalidate() })
 let load
 const loadRequestState = { value: loadRequestId }
 const resourceLoader = createAdminResourceLoader({
@@ -114,6 +117,7 @@ const resourceLoader = createAdminResourceLoader({
   loadRequestId: loadRequestState,
   displayError,
   applySettings: applyAdminSettings,
+  loadSettings: settingsLoader.load,
   settings: { exchangeRate, pricingCurrency, severeWeatherEnabled, adminLogo, paymentSettings },
   resourceLoaders: {
     coreUsers: () => import('./utils/admin-resource-loader.js').then(({ loadCoreUsers }) => loadCoreUsers({ usersApi, users })),
@@ -221,6 +225,29 @@ const App = { setup() {
   const navigate = createNavigationController({ view, load, mobileNavOpen })
   const visiblePrimaryNavigation = computed(() => primaryNavigation.filter(item => !item.superAdminOnly || isSuperAdministrator.value))
   const visibleOperationsNavigation = operationsNavigation
+  const activePageComponent = computed(() => ({
+    dashboard: 'DashboardPage',
+    charters: 'ChartersPage',
+    users: 'UsersPage',
+    drivers: 'DriversPage',
+    dispatch: 'DriversPage',
+    'driver-vehicles': 'DriverVehiclesPage',
+    trips: 'TripsPage',
+    settlements: 'SettlementsPage',
+    addresses: 'AddressesPage',
+    promotions: 'PromotionsPage',
+    membership: 'MembershipPage',
+    'route-pricing': 'RoutePricingPage',
+    vehicles: 'VehiclesPage',
+    'operations-personnel': 'OperationsPage',
+    entries: 'OperationsPage',
+    income: 'OperationsPage',
+    expenses: 'OperationsPage',
+    notifications: 'NotificationsPage',
+    administrators: 'AdministratorsPage',
+    auditLogs: 'AuditLogsPage',
+    payments: 'PaymentsPage'
+  })[view.value] || 'DashboardPage')
   createOverlayController({ confirmDialog, createdOrderUrl, orderUrlForm, dispatchForm, tripForm, selectedTrip, selectedUser, closeCreatedOrderUrl, closeTrip })
   onMounted(() => {
     seedOperations()
@@ -546,6 +573,8 @@ const App = { setup() {
       uploadVehiclePhoto,
       saveVehicle: saveDriverVehicle,
       refresh: () => load(),
+      loadVehiclePhotoThumbnail: id => driversApi.vehiclePhotoThumbnailByVehicle(id, { cancelOnNavigate: false }),
+      loadVehiclePhoto: id => driversApi.vehiclePhotoByVehicle(id, { cancelOnNavigate: false }),
       openFirstVehicleForm: () => { resetVehicleForm(); view.value = 'driver-vehicles' },
       updateVehicleStatus,
       removeVehicle: removeDriverVehicle,
@@ -721,6 +750,7 @@ const App = { setup() {
       mobileNavOpen,
       navigate,
       setVehicleView,
+      activePageComponent,
       title,
       exchangeRate,
       adminLogo,
@@ -776,7 +806,7 @@ const App = { setup() {
   </div>
   <button type="button" class="logout logout-mobile" @click="logout">{{t('signOut')}}</button>
 </nav><div v-if="currentAdministrator" class="admin-identity"><b>{{currentAdministrator.displayName}}</b><span>{{currentAdministrator.role}}</span></div><button type="button" class="logout logout-desktop" @click="logout">{{t('signOut')}}</button>
-</aside><main :class="{readonly: !canWrite}"><header><div v-if="view==='dashboard'"><span class="eyebrow">{{t('adminConsole')}}</span><h1>{{title}}</h1></div><div v-else class="page-header-spacer" aria-hidden="true"></div><div class="header-actions"><span v-if="!canWrite" class="readonly-badge">唯讀模式</span><label v-if="canWrite && view==='dashboard'" class="rate-control">{{t('exchangeRate')}} <input v-model="exchangeRate" type="number" min="0.0001" step="0.0001"/><button type="button" @click="saveExchangeRate">{{t('saveRate')}}</button></label><template v-if="view==='dashboard'"><button type="button" class="language-toggle" @click="toggleLocale" :aria-label="t('languageLabel')">中 / EN</button><button type="button" class="refresh" @click="load">↻ {{t('refresh')}}</button></template></div></header><div v-if="error" class="error">{{error}}</div><DashboardPage /> <ChartersPage /> <UsersPage /><DriversPage /><DriverVehiclesPage /><TripsPage /><SettlementsPage /><AddressesPage /><PromotionsPage /><MembershipPage /><RoutePricingPage /><VehiclesPage /><OperationsPage />      <NotificationsPage /><AdministratorsPage /><AuditLogsPage /><PaymentsPage /></main></div>` }
+</aside><main :class="{readonly: !canWrite}"><header><div v-if="view==='dashboard'"><span class="eyebrow">{{t('adminConsole')}}</span><h1>{{title}}</h1></div><div v-else class="page-header-spacer" aria-hidden="true"></div><div class="header-actions"><span v-if="!canWrite" class="readonly-badge">唯讀模式</span><label v-if="canWrite && view==='dashboard'" class="rate-control">{{t('exchangeRate')}} <input v-model="exchangeRate" type="number" min="0.0001" step="0.0001"/><button type="button" @click="saveExchangeRate">{{t('saveRate')}}</button></label><template v-if="view==='dashboard'"><button type="button" class="language-toggle" @click="toggleLocale" :aria-label="t('languageLabel')">中 / EN</button><button type="button" class="refresh" @click="load">↻ {{t('refresh')}}</button></template></div></header><div v-if="error" class="error">{{error}}</div><KeepAlive><component :is="activePageComponent" /></KeepAlive></main></div>` }
 const app = createApp(App)
 registerAdminComponents(app, {
   UsersPage,
@@ -801,6 +831,7 @@ registerAdminComponents(app, {
   ToastHost,
   ConfirmDialog,
   DriverReviewActions,
-  VehiclePhotoViewer
+  VehiclePhotoViewer,
+  LazyVehiclePhotoViewer
 })
 app.mount('#app')

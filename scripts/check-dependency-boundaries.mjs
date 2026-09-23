@@ -50,6 +50,25 @@ for (const file of files) {
   }
 }
 
+const adminPagesRoot = path.join(root, 'admin/src/pages')
+if (fs.existsSync(adminPagesRoot)) {
+  const pageFiles = files.filter(file => file.startsWith('admin/src/pages/'))
+  const importPattern = /(?:\bfrom\s*|\bimport\s*(?:\(|)|\brequire\s*\(|\bexport\s+(?:\*|\{[^}]*\})\s+from\s*)["']([^"']+)["']/g
+  for (const file of pageFiles) {
+    const sourceModule = file.split(path.sep)[3]
+    const source = fs.readFileSync(path.join(root, file), 'utf8')
+    for (const match of source.matchAll(importPattern)) {
+      if (!match[1].startsWith('.')) continue
+      const importedPath = path.normalize(path.join(path.dirname(file), match[1]))
+      if (!importedPath.startsWith(path.normalize('admin/src/pages/'))) continue
+      const targetModule = importedPath.split(path.sep)[3]
+      if (targetModule && targetModule !== sourceModule) {
+        failures.push(`${file} imports admin page module ${targetModule}; page modules must not depend on each other`)
+      }
+    }
+  }
+}
+
 if (failures.length) {
   console.error('Dependency boundary check failed:')
   for (const failure of failures) console.error(`- ${failure}`)

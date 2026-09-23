@@ -35,6 +35,7 @@ import {
   timingSafeEqual,
 } from "node:crypto";
 import { loadEnvFile } from "node:process";
+import sharp from "sharp";
 import { Observable, Subject, tap } from "rxjs";
 import { Client as PgClient } from "pg";
 import {
@@ -67,6 +68,7 @@ type RequestLike = {
     host?: string;
     origin?: string;
     ["x-forwarded-proto"]?: string;
+    ["if-none-match"]?: string;
   };
   query?: Record<string, string | undefined>;
   method?: string;
@@ -5719,6 +5721,25 @@ class AdminController {
       for (const { driverId } of affected) await promotePrimaryDriverVehicle(tx, driverId);
     });
     return { ok: true };
+  }
+  @Get("driver-vehicles/:id/photo/thumbnail") async adminVehiclePhotoThumbnail(@Req() req: RequestLike, @Param("id") id: string, @Res() response: Response) {
+    requireAuth(req);
+    const vehicle = await prisma.driverVehicle.findUnique({ where: { id }, select: { vehiclePhotoData: true, vehiclePhotoMime: true, updatedAt: true } });
+    if (!vehicle?.vehiclePhotoData || !vehicle.vehiclePhotoMime) throw new HttpException("Vehicle photo not found", HttpStatus.NOT_FOUND);
+    const etag = `\"${createHash("sha256").update(vehicle.vehiclePhotoData).update("vehicle-thumbnail-v1").digest("base64url")}\"`;
+    response.setHeader("Cache-Control", "private, max-age=300");
+    response.setHeader("ETag", etag);
+    response.setHeader("Last-Modified", vehicle.updatedAt.toUTCString());
+    if (req.headers["if-none-match"] === etag) {
+      response.status(HttpStatus.NOT_MODIFIED).send();
+      return;
+    }
+    const thumbnail = await sharp(Buffer.from(vehicle.vehiclePhotoData))
+      .rotate()
+      .resize({ width: 320, height: 240, fit: "inside", withoutEnlargement: true })
+      .webp({ quality: 82 })
+      .toBuffer();
+    response.type("image/webp").send(thumbnail);
   }
   @Get("driver-vehicles/:id/photo") async adminVehiclePhoto(@Req() req: RequestLike, @Param("id") id: string, @Res() response: Response) {
     requireAuth(req);
