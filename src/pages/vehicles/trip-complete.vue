@@ -98,7 +98,7 @@ const finishTrip = () => openCachedPage(`/pages/orders/completed-detail?id=${enc
 @import '../../styles/tokens.css';
 
 :global(html), :global(body), :global(#app) { width: 100%; height: 100%; margin: 0; overflow: hidden; background: var(--trip-viewport-background); }
-.page { width: var(--trip-canvas-width); height: var(--mobile-height, 932px); transform: scale(var(--mobile-scale, 1)); transform-origin: top left; overflow: hidden; font-family: var(--trip-font); }
+.page { position: fixed; top: 0; left: 0; width: var(--trip-canvas-width); height: var(--mobile-height, 932px); transform: scale(var(--mobile-scale, 1)); transform-origin: top left; overflow: hidden; font-family: var(--trip-font); }
 .canvas { position: relative; width: var(--trip-canvas-width); height: var(--trip-canvas-height); border-radius: var(--trip-screen-radius); background: var(--trip-background); overflow: hidden; }
 .back-button { position: absolute; z-index: 3; top: var(--trip-back-top); left: var(--trip-back-left); width: var(--trip-back-size); height: var(--trip-back-size); }
 .back-button image { width: 100%; height: 100%; }
