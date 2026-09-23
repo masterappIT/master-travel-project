@@ -68,7 +68,7 @@ const connect = async () => {
 export const startNotificationRealtime = () => {
   active = true
   emitChanged()
-  if (!pollTimer) pollTimer = setInterval(emitChanged, 30000)
+  if (!pollTimer) pollTimer = setInterval(emitChanged, 10000)
   void connect()
 }
 

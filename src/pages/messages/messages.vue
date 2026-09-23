@@ -34,7 +34,7 @@ import { closeCachedPage, openCachedPage } from '../../utils/navigation'
 
 const { responsiveStyle } = useResponsiveCanvas()
 import { computed, onUnmounted, ref } from 'vue'
-import { listNotifications, markNotificationRead, type Notification } from '../../services/api'
+import { listNotifications, type Notification } from '../../services/api'
 import { subscribeNotificationChanges } from '../../utils/notificationRealtime'
 import { onShow } from '@dcloudio/uni-app'
 const activeTab = ref<'all' | 'important'>('all')
@@ -47,14 +47,14 @@ const messages = [
 ] as const
 const notifications = ref<Notification[]>([])
 const isUnread = (message: Notification) => !message.readAt
-  const visibleMessages = computed(() => activeTab.value === 'important' ? notifications.value.filter(message => message.important) : notifications.value)
-  const sortedMessages = computed(() => [...visibleMessages.value].sort((a, b) => Number(isUnread(b)) - Number(isUnread(a))))
+const visibleMessages = computed(() => activeTab.value === 'important' ? notifications.value.filter(message => message.important) : notifications.value)
+const sortedMessages = computed(() => [...visibleMessages.value].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()))
 
 const refreshNotifications = async () => {
   try {
     notifications.value = (await listNotifications()).data
   } catch {
-    notifications.value = []
+    // Keep the last successful snapshot during transient reconnect failures.
   }
 }
 
@@ -63,10 +63,6 @@ const unsubscribeNotifications = subscribeNotificationChanges(() => { void refre
 onUnmounted(unsubscribeNotifications)
 
 const openMessage = async (message: Notification) => {
-  if (isUnread(message)) {
-    await markNotificationRead(message.id).catch(() => undefined)
-    message.readAt = new Date().toISOString()
-  }
   uni.setStorageSync('selected-notification', message)
   openCachedPage(`/pages/messages/detail?id=${encodeURIComponent(message.id)}`)
 }

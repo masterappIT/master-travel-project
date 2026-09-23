@@ -59,11 +59,27 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
 
-  void _onNotificationsChanged() {
+  Future<void> _onNotificationsChanged() async {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('收到新通知')),
-    );
+    try {
+      final items = await _api.notifications();
+      if (!mounted || items.isEmpty) return;
+      final notification = Map<String, dynamic>.from(items.first as Map);
+      final title = notification['title']?.toString().trim();
+      final content = notification['content']?.toString().trim();
+      final lines = [
+        if (title != null && title.isNotEmpty) title,
+        if (content != null && content.isNotEmpty) content,
+      ];
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(lines.isEmpty ? '收到新通知' : lines.join('\n'))),
+      );
+    } on DriverApiException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error.message)));
+      }
+    }
   }
 
   Future<void> _loadStatistics() async {
