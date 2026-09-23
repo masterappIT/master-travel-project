@@ -62,7 +62,7 @@ export function createAdminResourceLoader({
       if (requestedView === 'dashboard') dashboard.value = viewResult
       if (requestedView === 'addresses') error.value = viewResult
     } catch (requestError) {
-      if (requestError.kind === 'cancelled') return
+      if (requestId !== requestSequence.value || requestError.kind === 'cancelled') return
       error.value = displayError(requestError)
       if (requestError.kind === 'unauthorized' || requestError.status === 401) {
         token.value = ''

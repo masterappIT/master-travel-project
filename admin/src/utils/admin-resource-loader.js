@@ -6,20 +6,19 @@ export async function loadAddressResources({ addressesApi, addresses, mainlandCi
 
   if (addressResult.status === 'fulfilled') {
     addresses.value = addressResult.value.data
-  } else {
+  } else if (addressResult.reason?.kind !== 'cancelled') {
     addresses.value = []
   }
 
   if (cityResult.status === 'fulfilled') {
     mainlandCities.value = cityResult.value.data.map(item => ({ ...item, name: displayMainlandCity(item.name) }))
-  } else {
+  } else if (cityResult.reason?.kind !== 'cancelled') {
     mainlandCities.value = []
   }
 
   const errors = [addressResult, cityResult]
-    .filter(result => result.status === 'rejected')
-    .map(result => result.reason?.message)
-    .filter(Boolean)
+    .filter(result => result.status === 'rejected' && result.reason?.kind !== 'cancelled')
+    .map(result => result.reason)
 
   return errors.length ? displayError(errors[0]) : ''
 }

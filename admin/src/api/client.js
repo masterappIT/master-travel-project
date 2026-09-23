@@ -20,7 +20,8 @@ export function createApiClient({ baseUrl, getToken, onUnauthorized }) {
     const isFormData = fetchOptions.body instanceof FormData
     const method = (fetchOptions.method || 'GET').toUpperCase()
     const csrfToken = method === 'GET' || method === 'HEAD' ? '' : cookieValue('admin_csrf')
-    const signal = fetchOptions.signal || (cancelOnNavigate && (method === 'GET' || method === 'HEAD') ? activeReadController?.signal : undefined)
+    const isScopedRead = cancelOnNavigate && (method === 'GET' || method === 'HEAD') && !fetchOptions.signal
+    const signal = fetchOptions.signal || (isScopedRead ? activeReadController?.signal : undefined)
     try {
       response = await fetch(`${baseUrl}${path}`, {
         ...fetchOptions,
@@ -34,7 +35,7 @@ export function createApiClient({ baseUrl, getToken, onUnauthorized }) {
         }
       })
     } catch (cause) {
-      if (cause?.name === 'AbortError') {
+      if (signal?.aborted || cause?.name === 'AbortError') {
         const error = new Error('Request cancelled')
         error.kind = 'cancelled'
         error.retryable = false
@@ -54,7 +55,8 @@ export function createApiClient({ baseUrl, getToken, onUnauthorized }) {
       error.status = response.status
       error.kind = response.status === 401 ? 'unauthorized' : response.status === 403 ? 'forbidden' : response.status === 404 ? 'not-found' : 'http'
       error.retryable = response.status >= 500
-      if (response.status === 401) onUnauthorized()
+      const obsoleteScopedRead = isScopedRead && signal !== activeReadController?.signal
+      if (response.status === 401 && !obsoleteScopedRead) onUnauthorized()
       throw error
     }
 
