@@ -1,16 +1,18 @@
+import { computed } from 'vue'
+
 export function createPromotionDisplay({ promotionForm, promotionsPageState, severeWeatherEnabled, extras }) {
-  const promotionDiscountHint = () => {
+  const promotionDiscountHint = computed(() => {
     if (!promotionForm.value) return ''
     if (promotionForm.value.discountType === 'PERCENTAGE') return '輸入折扣百分比，例如 10 代表減免 10%。'
     if (promotionForm.value.discountType === 'TOTAL_PRICE') return '輸入折扣後應付總價，例如 500 代表原價會折到 500。'
     return '輸入固定折抵金額，例如 50 代表直接減免 50。'
-  }
-  const promotionStackingHint = () => {
+  })
+  const promotionStackingHint = computed(() => {
     if (!promotionForm.value) return ''
     if (promotionForm.value.stackingMode === 'PERCENTAGE_AND_VOUCHER') return '可同時套用一個百分比優惠與一張現金券。'
     if (promotionForm.value.stackingMode === 'ALL') return '符合條件的優惠都可以一起套用，系統會依序計算。'
     return '只套用這一項優惠，不會與其他優惠疊加。'
-  }
+  })
   const filteredPromotions = promotionsPageState.filtered
   const toggleWeekday = day => {
     if (!promotionForm.value) return
