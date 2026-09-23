@@ -183,6 +183,19 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
     return fallback;
   }
 
+  String _vehicleOwnershipAndPlateType(
+      Map<String, dynamic>? vehicle, String fallback) {
+    final ownership = vehicle?['vehicleOwnership']?.toString().trim();
+    final plateType = (vehicle?['plateType'] ?? vehicle?['vehiclePlateType'])
+        ?.toString()
+        .trim();
+    final values = [ownership, plateType]
+        .whereType<String>()
+        .where((value) => value.isNotEmpty)
+        .toList();
+    return values.isEmpty ? fallback : values.join('·');
+  }
+
   @override
   Widget build(BuildContext context) {
     final origin = _tripText('pickupAddress', '起點待確認');
@@ -279,6 +292,8 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                           true
                       ? _vehicles[index]['vehicleColor'].toString()
                       : missingVehicleText,
+                  ownership: _vehicleOwnershipAndPlateType(
+                      _vehicles[index], missingVehicleText),
                   type: _vehicles[index]['vehicleCategory']
                               ?.toString()
                               .trim()
@@ -302,6 +317,8 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                         true
                     ? vehicle!['vehicleColor'].toString()
                     : missingVehicleText,
+                ownership:
+                    _vehicleOwnershipAndPlateType(vehicle, missingVehicleText),
                 type:
                     vehicle?['vehicleCategory']?.toString().trim().isNotEmpty ==
                             true

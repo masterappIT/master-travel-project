@@ -16,6 +16,7 @@ import 'package:driver_web/order_hall_page.dart';
 import 'package:driver_web/order_history_page.dart';
 import 'package:driver_web/order_in_progress_page.dart';
 import 'package:driver_web/notification_settings_page.dart';
+import 'package:driver_web/order_detail_page.dart';
 
 import 'package:driver_web/driver_profile_page.dart';
 import 'package:driver_web/profile_page.dart';
@@ -141,6 +142,15 @@ void main() {
       client: MockClient(_driverFixtureResponse),
     );
     await DriverApiClient.instance.me();
+  });
+
+  testWidgets('shows vehicle ownership and type on order detail cards',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(testApp(const OrderDetailPage(tripId: 'trip-1')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('車輛所屬地：香港·兩地牌'), findsOneWidget);
+    expect(find.text('車輛類型：轎車'), findsOneWidget);
   });
 
   testWidgets('shows accepted order waiting state and phone action',

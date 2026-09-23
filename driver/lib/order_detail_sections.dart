@@ -257,12 +257,14 @@ class _VehicleCard extends StatelessWidget {
   const _VehicleCard(
       {required this.index,
       required this.title,
+      required this.ownership,
       required this.type,
       required this.plate,
       required this.selected,
       required this.onTap});
   final int index;
   final String title;
+  final String ownership;
   final String type;
   final String plate;
   final bool selected;
@@ -311,7 +313,12 @@ class _VehicleCard extends StatelessWidget {
                           fontWeight: FontWeight.w700,
                           color: DriverColors.text)),
                   const SizedBox(height: 2),
-                  Text(type,
+                  Text('車輛所屬地：$ownership',
+                      style: const TextStyle(
+                          fontSize: DriverTypography.caption,
+                          color: DriverColors.secondaryText)),
+                  const SizedBox(height: 2),
+                  Text('車輛類型：$type',
                       style: const TextStyle(
                           fontSize: DriverTypography.caption,
                           color: DriverColors.secondaryText))
