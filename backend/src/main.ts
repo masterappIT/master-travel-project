@@ -7066,15 +7066,14 @@ class AdminController {
     ] = await Promise.all([
       prisma.user.count(),
       prisma.driver.count({ where: { isOnline: true, enabled: true } }),
-      prisma.clientSession.findMany({
-        where: {
-          revokedAt: null,
-          expiresAt: { gt: now },
-          user: { enabled: true },
-        },
-        distinct: ["userId"],
-        select: { userId: true },
-      }),
+      prisma.$queryRaw<Array<{ count: bigint }>>`
+        SELECT COUNT(DISTINCT session."userId") AS count
+        FROM "ClientSession" AS session
+        INNER JOIN "User" AS passenger ON passenger."id" = session."userId"
+        WHERE session."revokedAt" IS NULL
+          AND session."expiresAt" > ${now}
+          AND passenger."enabled" = true
+      `.then(([result]) => Number(result?.count || 0)),
       prisma.trip.count(),
       prisma.trip.count({ where: { status: "PENDING" } }),
       prisma.trip.count({ where: { status: "COMPLETED" } }),
@@ -7083,7 +7082,7 @@ class AdminController {
     return {
       users,
       onlineDrivers,
-      onlinePassengers: onlinePassengerUsers.length,
+      onlinePassengers: onlinePassengerUsers,
       trips: tripsCount,
       pendingTrips,
       completedTrips,
