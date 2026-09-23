@@ -528,6 +528,8 @@ model Trip {
   arrivedAt                    DateTime?
   startedAt                    DateTime?
   completedAt                  DateTime?
+  cancelledAt                  DateTime?
+  cancellationSource           String?
   fareBalancePaid              Float               @default(0)
   cashBalancePaid              Float               @default(0)
   externalPaid                 Float               @default(0)
@@ -542,6 +544,7 @@ model Trip {
   quote                        FareQuote?          @relation(fields: [quoteId], references: [id], onDelete: SetNull)
   mileageLedger                MileageLedger[]
   notifications                Notification[]
+  driverCancellations          DriverTripCancellation[]
 
   @@index([userId, status])
   @@index([scheduledAt])
@@ -700,6 +703,7 @@ model Driver {
   otpChallenges            DriverOtpChallenge[]
   sessions                 DriverSession[]
   notifications            Notification[]
+  tripCancellations        DriverTripCancellation[]
   notificationPreference   DriverNotificationPreference?
   orderUrls                TripOrderUrl[]
   vehicleAssignments       DriverVehicleAssignment[]
@@ -708,6 +712,18 @@ model Driver {
   @@index([reviewStatus])
   @@index([phone])
   @@index([isOnline, enabled])
+}
+
+model DriverTripCancellation {
+  id          String   @id @default(cuid())
+  tripId      String
+  driverId    String
+  cancelledAt DateTime @default(now())
+  trip        Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  driver      Driver   @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
+  @@index([driverId, cancelledAt])
+  @@index([tripId])
 }
 
 model DriverVehicle {

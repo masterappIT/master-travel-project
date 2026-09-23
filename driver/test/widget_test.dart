@@ -146,6 +146,45 @@ Future<http.Response> _driverFixtureResponse(http.Request request) async {
         'acceptedAt': '2024-03-01T08:00:00Z',
         'settlement': {'method': '微信支付'},
       },
+      {
+        'id': 'trip-driver-cancelled',
+        'pickupAddress': '九龍站',
+        'dropoffAddress': '香港機場',
+        'price': 320,
+        'currency': 'HKD',
+        'scheduledAt': '2024-03-02T08:00:00Z',
+        'cancelledAt': '2024-03-02T07:30:00Z',
+        'cancellationSource': 'DRIVER',
+        'status': 'CONFIRMED',
+        'passengerName': '林',
+        'settlement': null,
+      },
+      {
+        'id': 'trip-passenger-cancelled',
+        'pickupAddress': '澳門碼頭',
+        'dropoffAddress': '氹仔',
+        'price': 180,
+        'currency': 'HKD',
+        'scheduledAt': '2024-03-03T08:00:00Z',
+        'cancelledAt': '2024-03-03T07:00:00Z',
+        'cancellationSource': 'PASSENGER',
+        'status': 'CANCELLED',
+        'passengerName': '黃',
+        'settlement': null,
+      },
+      {
+        'id': 'trip-platform-cancelled',
+        'pickupAddress': '深圳灣口岸',
+        'dropoffAddress': '香港中環',
+        'price': 460,
+        'currency': 'HKD',
+        'scheduledAt': '2024-03-04T08:00:00Z',
+        'cancelledAt': '2024-03-04T06:30:00Z',
+        'cancellationSource': 'PLATFORM',
+        'status': 'CANCELLED',
+        'passengerName': '何',
+        'settlement': null,
+      },
     ]);
   }
   if (path.startsWith('/driver/auth/trips/')) {
@@ -666,10 +705,17 @@ void main() {
     expect(find.text('出發：香港中環'), findsOneWidget);
     expect(find.text('目的：深圳'), findsOneWidget);
     expect(find.text('HK\$680.00'), findsOneWidget);
+    expect(find.text('司機取消'), findsOneWidget);
+    expect(find.text('乘客取消'), findsOneWidget);
+    expect(find.text('平台取消'), findsOneWidget);
 
     await tester.tap(find.text('未結算').first);
     await tester.pump();
     expect(find.text('接單紀錄'), findsOneWidget);
+    expect(find.text('司機取消'), findsOneWidget);
+    expect(find.text('乘客取消'), findsOneWidget);
+    expect(find.text('平台取消'), findsOneWidget);
+    expect(find.text('出發：香港中環'), findsNothing);
   });
 
   testWidgets('opens order history from profile menu',

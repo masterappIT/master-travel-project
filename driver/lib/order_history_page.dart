@@ -32,18 +32,29 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
 
   List<Map<String, dynamic>> get _visibleTrips {
     if (_selectedHistoryTab == 0) return _trips;
-    final settled = _selectedHistoryTab == 1;
-    return _trips
-        .where((trip) => (trip['settlement'] != null) == settled)
-        .toList();
+    if (_selectedHistoryTab == 1) {
+      return _trips.where((trip) => trip['settlement'] != null).toList();
+    }
+    return _trips.where((trip) => trip['settlement'] == null).toList();
+  }
+
+  DateTime? _historyDate(Map<String, dynamic> trip) =>
+      DateTime.tryParse(trip['completedAt']?.toString() ??
+          trip['cancelledAt']?.toString() ??
+          trip['scheduledAt']?.toString() ??
+          '');
+
+  String? _cancellationLabel(Map<String, dynamic> trip) {
+    if (trip['cancellationSource'] == 'DRIVER') return '司機取消';
+    if (trip['cancellationSource'] == 'PASSENGER') return '乘客取消';
+    if (trip['cancellationSource'] == 'PLATFORM') return '平台取消';
+    return null;
   }
 
   Map<String, List<Map<String, dynamic>>> get _tripsByDate {
     final groups = <String, List<Map<String, dynamic>>>{};
     for (final trip in _visibleTrips) {
-      final date = DateTime.tryParse(trip['completedAt']?.toString() ??
-          trip['scheduledAt']?.toString() ??
-          '');
+      final date = _historyDate(trip);
       final key = date == null ? '日期待確認' : _formatDateGroup(date);
       groups.putIfAbsent(key, () => []).add(trip);
     }
@@ -79,9 +90,20 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
       if (mounted) {
         setState(() {
           _trips = trips
-              .where((trip) => trip is Map && trip['completedAt'] != null)
+              .where((trip) =>
+                  trip is Map &&
+                  (trip['completedAt'] != null ||
+                      trip['cancelledAt'] != null ||
+                      trip['cancellationSource'] != null))
               .map((trip) => Map<String, dynamic>.from(trip as Map))
-              .toList();
+              .toList()
+            ..sort((left, right) {
+              final leftAt = _historyDate(left);
+              final rightAt = _historyDate(right);
+              if (leftAt == null) return rightAt == null ? 0 : 1;
+              if (rightAt == null) return -1;
+              return rightAt.compareTo(leftAt);
+            });
           _loading = false;
         });
       }
@@ -146,10 +168,8 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                             color: DriverColors.secondaryText)),
                   ),
                   ...group.value.map((item) {
-                    final date = DateTime.tryParse(
-                        item['completedAt']?.toString() ??
-                            item['scheduledAt']?.toString() ??
-                            '');
+                    final date = _historyDate(item);
+                    final cancellationLabel = _cancellationLabel(item);
                     final entry = _HistoryEntry(
                         date: date == null ? '日期待確認' : _formatDateTime(date),
                         price: _formatPrice(item['price'], item['currency']),
@@ -158,8 +178,11 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                             item['dropoffAddress']?.toString() ?? '終點待確認',
                         passenger: formatPassengerName(item),
                         settled: item['settlement'] != null,
-                        settlementMethod:
-                            item['settlement']?['method']?.toString() ?? '未設定');
+                        statusLabel: cancellationLabel ??
+                            (item['settlement'] != null ? '已結算' : '未結算'),
+                        settlementMethod: cancellationLabel ??
+                            item['settlement']?['method']?.toString() ??
+                            '未設定');
                     return Padding(
                         padding:
                             const EdgeInsets.only(bottom: DriverSpacing.md),
@@ -287,6 +310,7 @@ class _HistoryEntry {
       required this.destination,
       required this.passenger,
       required this.settled,
+      required this.statusLabel,
       required this.settlementMethod});
   final String date;
   final String price;
@@ -294,6 +318,7 @@ class _HistoryEntry {
   final String destination;
   final String passenger;
   final bool settled;
+  final String statusLabel;
   final String settlementMethod;
 }
 
@@ -376,7 +401,7 @@ class _HistoryCard extends StatelessWidget {
                           mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
-                            Text(entry.settled ? '已結算' : '未結算',
+                            Text(entry.statusLabel,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 textAlign: TextAlign.end,

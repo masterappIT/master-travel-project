@@ -2632,6 +2632,8 @@ function driverTripResponse(
   arrivedAt: Date | null;
   startedAt: Date | null;
   completedAt: Date | null;
+  cancelledAt?: Date | null;
+  cancellationSource?: string | null;
   status: string;
   executionPhase: string | null;
   driverId?: string | null;
@@ -2686,6 +2688,8 @@ function driverTripResponse(
     arrivedAt: trip.arrivedAt?.toISOString() || null,
     startedAt: trip.startedAt?.toISOString() || null,
     completedAt: trip.completedAt?.toISOString() || null,
+    cancelledAt: trip.cancelledAt?.toISOString() || null,
+    cancellationSource: trip.cancellationSource || null,
     status: trip.status,
     executionPhase: trip.executionPhase,
     driverId: trip.driverId,
@@ -4763,12 +4767,34 @@ class DriverAuthController {
   @Get("trips")
   async history(@Req() req: RequestLike) {
     const { session } = await reviewedDriverFrom(req);
-    const trips = await prisma.trip.findMany({
-      where: { driverId: session.sub },
-      include: { user: true, settlement: true },
-      orderBy: { scheduledAt: "desc" },
+    const [trips, driverCancellations] = await Promise.all([
+      prisma.trip.findMany({
+        where: {
+          driverId: session.sub,
+          OR: [{ completedAt: { not: null } }, { status: "CANCELLED" }],
+        },
+        include: { user: true, settlement: true },
+      }),
+      prisma.driverTripCancellation.findMany({
+        where: { driverId: session.sub },
+        include: {
+          trip: { include: { user: true, settlement: true } },
+        },
+      }),
+    ]);
+    return [
+      ...trips.map((trip) => driverTripResponse(trip, true)),
+      ...driverCancellations.map((item) => ({
+        ...driverTripResponse(item.trip, true),
+        cancelledAt: item.cancelledAt.toISOString(),
+        cancellationSource: "DRIVER",
+        settlement: null,
+      })),
+    ].sort((left, right) => {
+      const leftAt = left.completedAt || left.cancelledAt || left.scheduledAt;
+      const rightAt = right.completedAt || right.cancelledAt || right.scheduledAt;
+      return rightAt.localeCompare(leftAt);
     });
-    return trips.map((trip) => driverTripResponse(trip, true));
   }
 
   @Post("trips/:id/arrive")
@@ -4812,31 +4838,41 @@ class DriverAuthController {
         "Trip cannot be cancelled by driver",
         HttpStatus.CONFLICT,
       );
-    const result = await prisma.trip.updateMany({
-      where: {
-        id,
-        driverId: session.sub,
-        startedAt: null,
-        completedAt: null,
-        status: { not: "CANCELLED" },
-      },
-      data: {
-        driverId: null,
-        driverName: null,
-        driverPhone: null,
-        vehicleId: null,
-        vehicleCategory: null,
-        vehicleColor: null,
-        vehiclePlateType: null,
-        vehiclePlate: null,
-        vehicleHkPlate: null,
-        vehicleMacauPlate: null,
-        vehicleMainlandPlate: null,
-        assignedAt: null,
-        acceptedAt: null,
-        arrivedAt: null,
-        executionPhase: "WAITING_DRIVER",
-      },
+    const cancelledAt = new Date();
+    const result = await prisma.$transaction(async (tx) => {
+      const cancellation = await tx.driverTripCancellation.create({
+        data: { tripId: id, driverId: session.sub, cancelledAt },
+      });
+      const update = await tx.trip.updateMany({
+        where: {
+          id,
+          driverId: session.sub,
+          startedAt: null,
+          completedAt: null,
+          status: { not: "CANCELLED" },
+        },
+        data: {
+          driverId: null,
+          driverName: null,
+          driverPhone: null,
+          vehicleId: null,
+          vehicleCategory: null,
+          vehicleColor: null,
+          vehiclePlateType: null,
+          vehiclePlate: null,
+          vehicleHkPlate: null,
+          vehicleMacauPlate: null,
+          vehicleMainlandPlate: null,
+          assignedAt: null,
+          acceptedAt: null,
+          arrivedAt: null,
+          executionPhase: "WAITING_DRIVER",
+        },
+      });
+      if (update.count !== 1) {
+        await tx.driverTripCancellation.delete({ where: { id: cancellation.id } });
+      }
+      return update;
     });
     if (result.count !== 1)
       throw new HttpException(
@@ -7865,6 +7901,18 @@ class AdminController {
           region: region as any,
           scheduledAt,
           status: body.status as any,
+          cancelledAt:
+            body.status === "CANCELLED" && currentTrip.status !== "CANCELLED"
+              ? new Date()
+              : body.status !== "CANCELLED"
+                ? null
+                : undefined,
+          cancellationSource:
+            body.status === "CANCELLED" && currentTrip.status !== "CANCELLED"
+              ? "PLATFORM"
+              : body.status !== "CANCELLED"
+                ? null
+                : undefined,
           executionPhase:
             body.status !== "CONFIRMED"
               ? null
@@ -12250,7 +12298,12 @@ class ClientOrdersController {
       }
       const updated = await tx.trip.update({
         where: { id: trip.id },
-        data: { status: "CANCELLED", executionPhase: null },
+        data: {
+          status: "CANCELLED",
+          executionPhase: null,
+          cancelledAt: new Date(),
+          cancellationSource: "PASSENGER",
+        },
         include: {
           user: {
             select: {
