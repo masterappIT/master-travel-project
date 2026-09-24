@@ -2,8 +2,11 @@
 
 import 'dart:convert';
 import 'dart:html' as html;
+import 'dart:js_interop';
 import 'dart:math' as math;
 import 'dart:typed_data';
+
+import 'package:web/web.dart' as web_audio;
 
 abstract class NewOrderAlert {
   factory NewOrderAlert() = WebNewOrderAlert;
@@ -16,11 +19,17 @@ abstract class NewOrderAlert {
 class WebNewOrderAlert implements NewOrderAlert {
   static final html.AudioElement _audio =
       html.AudioElement(_createToneDataUri())..preload = 'auto';
+  static web_audio.AudioContext? _audioContext;
   static bool _unlocked = false;
 
   @override
   Future<bool> unlock() async {
-    final volume = _audio.volume;
+    if (await _unlockAudioContext()) {
+      _unlocked = true;
+      _playWebAudioTone();
+      return true;
+    }
+
     try {
       _audio.volume = 0.22;
       _audio.currentTime = 0;
@@ -30,14 +39,17 @@ class WebNewOrderAlert implements NewOrderAlert {
     } on Object {
       _unlocked = false;
       return false;
-    } finally {
-      _audio.volume = volume;
     }
   }
 
   @override
   Future<bool> play() async {
     if (!_unlocked) return false;
+    if (await _unlockAudioContext()) {
+      _playWebAudioTone();
+      return true;
+    }
+
     try {
       _audio.currentTime = 0;
       await _audio.play();
@@ -46,6 +58,42 @@ class WebNewOrderAlert implements NewOrderAlert {
       _unlocked = false;
       return false;
     }
+  }
+
+  Future<bool> _unlockAudioContext() async {
+    try {
+      final context = _audioContext ??= web_audio.AudioContext();
+      if (context.state != 'running') await context.resume().toDart;
+      return context.state == 'running';
+    } on Object {
+      return false;
+    }
+  }
+
+  void _playWebAudioTone() {
+    final context = _audioContext;
+    final destination = context?.destination;
+    final start = context?.currentTime;
+    if (context == null || destination == null || start == null) return;
+
+    final gain = context.createGain();
+    gain.gain
+      ..setValueAtTime(0.0001, start)
+      ..exponentialRampToValueAtTime(0.22, start + 0.02)
+      ..exponentialRampToValueAtTime(0.0001, start + 0.55);
+    gain.connect(destination);
+
+    final first = context.createOscillator();
+    first.frequency.value = 880;
+    first.connect(gain);
+    first.start(start);
+    first.stop(start + 0.28);
+
+    final second = context.createOscillator();
+    second.frequency.value = 1174;
+    second.connect(gain);
+    second.start(start + 0.28);
+    second.stop(start + 0.55);
   }
 
   @override
