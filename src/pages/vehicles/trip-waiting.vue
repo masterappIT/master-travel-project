@@ -157,7 +157,7 @@ const showComingSoon = (label: string) => uni.showToast({ title: `${label}功能
 
 :global(html), :global(body), :global(#app) { width: 100%; height: 100%; margin: 0; overflow: hidden; background: var(--trip-viewport-background); }
 .page { position: fixed; top: 0; left: 0; width: 430px; height: var(--mobile-height, 932px); transform: scale(var(--mobile-scale, 1)); transform-origin: top left; overflow: hidden; font-family: var(--trip-font); }
-.canvas { position: relative; width: var(--trip-canvas-width); height: var(--trip-canvas-height); border-radius: var(--trip-screen-radius); background: var(--trip-background); overflow: hidden; }
+.canvas { position: relative; width: var(--trip-canvas-width); height: var(--mobile-height, var(--trip-canvas-height)); border-radius: var(--trip-screen-radius) var(--trip-screen-radius) 0 0; background: var(--trip-background); overflow: hidden; }
 .back-button { position: absolute; z-index: 8; top: var(--trip-back-top); left: var(--trip-back-left); width: var(--trip-back-size); height: var(--trip-back-size); }
 .back-button image { width: 100%; height: 100%; }
 .driver-card { position: absolute; z-index: 6; top: var(--trip-card-top); left: var(--trip-card-left); width: var(--trip-card-width); height: var(--trip-card-height); border-radius: var(--trip-card-radius); background: var(--trip-surface); overflow: hidden; }
@@ -185,7 +185,7 @@ const showComingSoon = (label: string) => uni.showToast({ title: `${label}功能
 .plate-slot-bottom { z-index: 1; top: var(--trip-plate-cn-top); height: var(--trip-plate-cn-height); padding-top: 9px; line-height: 27px; }
 .plate-hong-kong { background: var(--trip-plate-gold); color: var(--trip-plate-gold-text); }
 .plate-macau, .plate-mainland { background: var(--trip-plate-black); color: var(--trip-surface); }
-.status-panel { position: absolute; z-index: 2; left: 0; top: var(--trip-panel-top); width: 430px; height: var(--trip-panel-height); border-radius: var(--trip-panel-radius) var(--trip-panel-radius) 0 0; background: var(--trip-panel-background); overflow: hidden; }
+.status-panel { position: absolute; z-index: 2; left: 0; top: var(--trip-panel-top); width: 430px; height: calc(var(--mobile-height, var(--trip-canvas-height)) - var(--trip-panel-top)); border-radius: var(--trip-panel-radius) var(--trip-panel-radius) 0 0; background: var(--trip-panel-background); overflow: hidden; }
 .city-scene { position: absolute; left: var(--trip-scene-left); top: var(--trip-scene-top); width: var(--trip-scene-width); height: var(--trip-scene-height); }
 .quick-actions { position: absolute; z-index: 2; top: var(--trip-actions-top); left: var(--trip-card-left); width: var(--trip-card-width); display: flex; justify-content: center; gap: var(--trip-action-gap); color: var(--trip-surface); font-family: var(--trip-action-font); font-size: var(--trip-action-size); font-style: var(--trip-action-style); }
 .status-content { position: absolute; z-index: 2; top: var(--trip-status-top); left: 0; width: var(--trip-canvas-width); display: flex; flex-direction: column; align-items: center; color: var(--trip-surface); }
