@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'app/router.dart';
 import 'app/route_names.dart';
 import 'core/api/driver_api_client.dart';
+import 'core/state/driver_alert_audio_controller.dart';
 import 'core/state/driver_language_preference.dart';
 import 'core/state/driver_order_alert_coordinator.dart';
 
@@ -50,6 +51,16 @@ class DriverApp extends StatelessWidget {
       child: ValueListenableBuilder<String>(
         valueListenable: DriverLanguagePreference.instance,
         builder: (context, language, _) => MaterialApp(
+          builder: (context, child) => ListenableBuilder(
+            listenable: DriverAlertAudioController.instance,
+            builder: (context, _) => Column(
+              children: [
+                if (DriverAlertAudioController.instance.requiresActivation)
+                  _DriverAlertAudioBanner(),
+                Expanded(child: child ?? const SizedBox.shrink()),
+              ],
+            ),
+          ),
           navigatorKey: navigatorKey,
           scaffoldMessengerKey: scaffoldMessengerKey,
           debugShowCheckedModeBanner: false,
@@ -90,6 +101,64 @@ class DriverApp extends StatelessWidget {
           routes: DriverRouter.builders,
           home: null,
           initialRoute: initialRoute,
+        ),
+      ),
+    );
+  }
+}
+
+class _DriverAlertAudioBanner extends StatefulWidget {
+  const _DriverAlertAudioBanner();
+
+  @override
+  State<_DriverAlertAudioBanner> createState() =>
+      _DriverAlertAudioBannerState();
+}
+
+class _DriverAlertAudioBannerState extends State<_DriverAlertAudioBanner> {
+  bool _activating = false;
+
+  Future<void> _activate() async {
+    if (_activating) return;
+    setState(() => _activating = true);
+    await DriverAlertAudioController.instance.activate();
+    if (mounted) setState(() => _activating = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final failed = DriverAlertAudioController.instance.state ==
+        DriverAlertAudioState.failed;
+    return Material(
+      color: DriverColors.warningBackground,
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: DriverSpacing.lg,
+            vertical: DriverSpacing.sm,
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  failed
+                      ? driverText('提示聲啟用失敗，請重試', '提示音启用失败，请重试',
+                          'Alert sound activation failed. Try again.')
+                      : driverText('點擊啟用新訂單提示聲', '点击启用新订单提示音',
+                          'Tap to enable new order alerts'),
+                  style: const TextStyle(color: DriverColors.warningText),
+                ),
+              ),
+              const SizedBox(width: DriverSpacing.sm),
+              TextButton(
+                onPressed: _activating ? null : _activate,
+                child: Text(_activating
+                    ? driverText('啟用中…', '启用中…', 'Enabling…')
+                    : driverText('啟用', '启用', 'Enable')),
+              ),
+            ],
+          ),
         ),
       ),
     );

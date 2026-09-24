@@ -25,6 +25,7 @@ import 'package:driver_web/add_vehicle_page.dart';
 import 'package:driver_web/core/api/driver_api_client.dart';
 import 'package:driver_web/core/layout/driver_page_shell.dart';
 import 'package:driver_web/core/platform/new_order_alert.dart';
+import 'package:driver_web/core/state/driver_alert_audio_controller.dart';
 import 'package:driver_web/core/state/driver_order_alert_coordinator.dart';
 import 'package:driver_web/core/state/driver_language_preference.dart';
 
@@ -34,6 +35,28 @@ class _SuccessfulNewOrderAlert implements NewOrderAlert {
 
   @override
   Future<bool> play() async => true;
+
+  @override
+  void dispose() {}
+}
+
+class _ControllableNewOrderAlert implements NewOrderAlert {
+  bool unlockResult = true;
+  bool playResult = true;
+  int unlockCalls = 0;
+  int playCalls = 0;
+
+  @override
+  Future<bool> unlock() async {
+    unlockCalls++;
+    return unlockResult;
+  }
+
+  @override
+  Future<bool> play() async {
+    playCalls++;
+    return playResult;
+  }
 
   @override
   void dispose() {}
@@ -669,6 +692,29 @@ void main() {
     expect(find.text('香港機場'), findsOneWidget);
     expect(find.text('香港中環置地廣場東門大堂'), findsNothing);
   });
+  test('audio controller requires activation and recovers after play failure',
+      () async {
+    final alert = _ControllableNewOrderAlert();
+    final controller = DriverAlertAudioController.withAlert(alert);
+    controller.setEnabled(true);
+    controller.setSessionActive(true);
+
+    expect(controller.state, DriverAlertAudioState.requiresGesture);
+    expect(controller.requiresActivation, isTrue);
+    expect(await controller.playNewOrderAlert(), isFalse);
+    expect(alert.playCalls, 0);
+
+    expect(await controller.activate(), isTrue);
+    expect(controller.state, DriverAlertAudioState.ready);
+    expect(controller.requiresActivation, isFalse);
+
+    alert.playResult = false;
+    expect(await controller.playNewOrderAlert(), isFalse);
+    expect(alert.playCalls, 1);
+    expect(controller.state, DriverAlertAudioState.requiresGesture);
+    expect(controller.requiresActivation, isTrue);
+  });
+
   test('detects public and newly assigned alert orders', () {
     final ids = driverAlertTripIds(
       availableTrips: [

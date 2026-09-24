@@ -5,8 +5,8 @@ import 'package:flutter/material.dart';
 
 import '../api/driver_api_client.dart';
 import '../widgets/driver_overlays.dart';
-import '../platform/new_order_alert.dart';
 import '../platform/order_event_stream.dart';
+import '../state/driver_alert_audio_controller.dart';
 import '../state/driver_alert_sound_preference.dart';
 
 Set<String> driverAlertTripIds({
@@ -63,7 +63,7 @@ class DriverOrderAlertCoordinator extends StatefulWidget {
 class _DriverOrderAlertCoordinatorState
     extends State<DriverOrderAlertCoordinator> with WidgetsBindingObserver {
   final _api = DriverApiClient.instance;
-  late final NewOrderAlert _alert = NewOrderAlert();
+  final _alertAudio = DriverAlertAudioController.instance;
   Timer? _refreshTimer;
   Timer? _eventDebounce;
   Timer? _reconnectTimer;
@@ -91,7 +91,6 @@ class _DriverOrderAlertCoordinatorState
     WidgetsBinding.instance.removeObserver(this);
     _api.sessionRevision.removeListener(_syncSession);
     _stop();
-    _alert.dispose();
     super.dispose();
   }
 
@@ -120,6 +119,7 @@ class _DriverOrderAlertCoordinatorState
 
   void _start() {
     _active = true;
+    _alertAudio.setSessionActive(true);
     _knownIds = null;
     unawaited(_refresh());
     unawaited(_connectEvents());
@@ -132,6 +132,7 @@ class _DriverOrderAlertCoordinatorState
 
   void _stop() {
     _active = false;
+    _alertAudio.setSessionActive(false);
     _knownIds = null;
     _cancellationQueue.clear();
     _queuedCancellationIds.clear();
@@ -265,9 +266,9 @@ class _DriverOrderAlertCoordinatorState
       _knownIds = ids;
       if (changed) DriverOrderAlertCoordinator.tripsChanged.value++;
       _enqueueCancellationNotifications(cancellationNotifications);
-      if (play && !await _alert.play()) {
+      if (play && !await _alertAudio.playNewOrderAlert()) {
         developer.log(
-          'New-order alert sound is not enabled for this browser session',
+          'New-order alert sound requires driver activation',
           name: 'driver.order_alert',
         );
       }

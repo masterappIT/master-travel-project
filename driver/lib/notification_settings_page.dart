@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'core/api/driver_api_client.dart';
 import 'core/layout/driver_page_shell.dart';
 import 'core/platform/new_order_alert.dart';
-import 'core/state/driver_alert_sound_preference.dart';
+import 'core/state/driver_alert_audio_controller.dart';
 import 'core/state/driver_language_preference.dart';
 import 'core/tokens/driver_tokens.dart';
 
@@ -19,7 +19,8 @@ class NotificationSettingsPage extends StatefulWidget {
 
 class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
   final _api = DriverApiClient.instance;
-  late final NewOrderAlert _newOrderAlert;
+  late final DriverAlertAudioController _alertAudio;
+  bool _ownsAlertAudio = false;
   bool _loading = true;
   bool _saving = false;
   bool _testingSound = false;
@@ -34,7 +35,12 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
   @override
   void initState() {
     super.initState();
-    _newOrderAlert = widget.newOrderAlert ?? NewOrderAlert();
+    if (widget.newOrderAlert == null) {
+      _alertAudio = DriverAlertAudioController.instance;
+    } else {
+      _alertAudio = DriverAlertAudioController.withAlert(widget.newOrderAlert!);
+      _ownsAlertAudio = true;
+    }
     _load();
   }
 
@@ -48,7 +54,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
         _settlementEnabled = values['settlementOn'] != false;
         _systemEnabled = values['systemOn'] != false;
         _soundEnabled = values['soundOn'] != false;
-        DriverAlertSoundPreference.instance.setEnabled(_soundEnabled);
+        _alertAudio.setEnabled(_soundEnabled);
         _loading = false;
       });
     } on DriverApiException catch (error) {
@@ -62,7 +68,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
 
   @override
   void dispose() {
-    _newOrderAlert.dispose();
+    if (_ownsAlertAudio) _alertAudio.dispose();
     super.dispose();
   }
 
@@ -72,7 +78,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
       _testingSound = true;
       _soundTestMessage = null;
     });
-    final played = await _newOrderAlert.unlock();
+    final played = await _alertAudio.activate();
     if (!mounted) return;
     setState(() {
       _testingSound = false;
@@ -85,7 +91,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
 
   Future<void> _setSoundEnabled(bool value) async {
     bool? activated;
-    if (value) activated = await _newOrderAlert.unlock();
+    if (value) activated = await _alertAudio.activate();
     if (!mounted) return;
     if (activated == false) {
       setState(() {
@@ -97,6 +103,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
     } else if (!value) {
       setState(() => _soundTestMessage = null);
     }
+    _alertAudio.setEnabled(value);
     await _setValue(() => _soundEnabled = value);
   }
 
@@ -122,7 +129,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
         'systemOn': _systemEnabled,
         'soundOn': _soundEnabled,
       });
-      DriverAlertSoundPreference.instance.setEnabled(_soundEnabled);
+      _alertAudio.setEnabled(_soundEnabled);
       if (!mounted) return;
       setState(() => _saving = false);
     } on DriverApiException catch (error) {
@@ -133,6 +140,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
         _settlementEnabled = previous[2];
         _systemEnabled = previous[3];
         _soundEnabled = previous[4];
+        _alertAudio.setEnabled(_soundEnabled);
         _saving = false;
         _error = error.message;
       });
