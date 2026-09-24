@@ -59,6 +59,8 @@ import { createPaymentsActions } from './pages/payments/payments.actions.js'
 import { createAdministratorsActions } from './pages/administrators/administrators.actions.js'
 import { createNotificationsPageState } from './pages/notifications/notifications.state.js'
 import { createNotificationsActions } from './pages/notifications/notifications.actions.js'
+import { createServerListState } from './utils/admin-query-state.js'
+import { loadAllOptions, retainSelectedOptions } from './utils/admin-remote-options.js'
 import { createOperationsActions } from './pages/operations/operations.actions.js'
 import { createCharterActions } from './pages/charters/charters.actions.js'
 import './style.css'
@@ -85,6 +87,7 @@ const paymentSettingsSaved = paymentsPageState.saved
 const driverRaceSaving = paymentsPageState.raceSaving
 const notificationPageState = createNotificationsPageState(notificationUsers, notificationDrivers)
 const notificationRecipientSearch = notificationPageState.recipientSearch
+let notificationOptionRequest = 0
 const { addressForm, userForm, walletAdjustment, tripForm, selectedTrip, dispatchForm, orderUrlForm, charterForm, administratorForm, notificationForm, notificationTemplateForm, mainlandCityForm, membershipForm, categoryForm, vehicleForm, extraForm, personnelForm, driverForm, settlementForm, entryForm, expenseForm } = createAdminFormState()
 const {
   usersPageState, addressesPageState, promotionsPageState, tripsPageState, settlementsPageState, driversPageState, operationsPageState,
@@ -96,6 +99,9 @@ const {
   driverFilter, driverTypeFilter, driverSearch, driverFiltersActive, resetDriverFilters,
   personnelFilter, entryFilter, expenseFilter
 } = createAdminPageStates({ users, addresses, promotions, trips, drivers, personnel, entryItems, expenseItems })
+const membershipOrdersState = createServerListState({ pageSize: 20 })
+const notificationsState = createServerListState({ pageSize: 20 })
+const auditLogsState = createServerListState({ pageSize: 20, filters: { search: '', status: 'all', method: 'all' } })
 const canWrite = computed(() => currentAdministrator.value?.role !== 'VIEWER')
 const isSuperAdministrator = computed(() => currentAdministrator.value?.role === 'SUPER_ADMIN')
 const timeOptions = createTimeOptions()
@@ -120,23 +126,39 @@ const resourceLoader = createAdminResourceLoader({
   loadSettings: settingsLoader.load,
   settings: { exchangeRate, pricingCurrency, severeWeatherEnabled, adminLogo, paymentSettings },
   resourceLoaders: {
-    coreUsers: () => import('./utils/admin-resource-loader.js').then(({ loadCoreUsers }) => loadCoreUsers({ usersApi, users })),
-    drivers: () => import('./utils/admin-resource-loader.js').then(({ loadDriversResources }) => loadDriversResources({ driversApi, vehicleCategories, drivers, allVehicles })),
-    dispatch: () => import('./utils/admin-resource-loader.js').then(({ loadDispatchResources }) => loadDispatchResources({ tripsApi, driversApi, trips, drivers, orderUrls, tripPage })),
-    settlements: () => import('./utils/admin-resource-loader.js').then(({ loadSettlementResources }) => loadSettlementResources({ tripsApi, driversApi, trips, drivers })),
-    trips: () => import('./utils/admin-resource-loader.js').then(({ loadTripsResources }) => loadTripsResources({ tripsApi, driversApi, api, trips, drivers, tripPage, tripCatalog })),
+    coreUsers: () => import('./utils/admin-resource-loader.js').then(({ loadCoreUsers }) => loadCoreUsers({ usersApi, users, state: usersPageState })),
+    drivers: () => import('./utils/admin-resource-loader.js').then(({ loadDriversResources }) => loadDriversResources({ driversApi, vehicleCategories, drivers, allVehicles, state: driversPageState })),
+    dispatch: () => import('./utils/admin-resource-loader.js').then(({ loadDispatchResources }) => loadDispatchResources({ tripsApi, driversApi, trips, drivers, orderUrls, state: tripsPageState })),
+    settlements: () => import('./utils/admin-resource-loader.js').then(({ loadSettlementResources }) => loadSettlementResources({ tripsApi, driversApi, trips, drivers, query: settlementsPageState.query.value, state: settlementsPageState })),
+    trips: () => import('./utils/admin-resource-loader.js').then(({ loadTripsResources }) => loadTripsResources({ tripsApi, usersApi, api, trips, users, state: tripsPageState, tripCatalog })),
     charters: () => import('./utils/admin-resource-loader.js').then(({ loadCharterResources }) => loadCharterResources({ api, charterOrders })),
     addresses: () => import('./utils/admin-resource-loader.js').then(({ loadAddressResources }) => loadAddressResources({ addressesApi, addresses, mainlandCities, displayMainlandCity, displayError })),
-    membership: () => import('./utils/admin-resource-loader.js').then(({ loadMembershipResources }) => loadMembershipResources({ api, membershipPlans, membershipOrders })),
+    membership: () => import('./utils/admin-resource-loader.js').then(({ loadMembershipResources }) => loadMembershipResources({ api, membershipPlans, membershipOrders, query: membershipOrdersState.query.value, state: membershipOrdersState })),
     promotions: () => import('./utils/admin-resource-loader.js').then(({ loadPromotionResources }) => loadPromotionResources({ api, promotions, mileageRules, mileageRewards, mileageAccounts, invitationSettings, invitationWalletCurrency, invitationSummary, invitationRecords })),
     administrators: () => import('./utils/admin-resource-loader.js').then(({ loadAdministratorResources }) => loadAdministratorResources({ api, administrators })),
-    auditLogs: () => import('./utils/admin-resource-loader.js').then(({ loadAuditLogResources }) => loadAuditLogResources({ api, auditLogs })),
-    notifications: () => import('./utils/admin-resource-loader.js').then(({ loadNotificationResources }) => loadNotificationResources({ api, usersApi, driversApi, notifications, notificationTemplates, notificationUsers, notificationDrivers })),
+    auditLogs: () => import('./utils/admin-resource-loader.js').then(({ loadAuditLogResources }) => loadAuditLogResources({ api, auditLogs, query: auditLogsState.query.value }).then(result => { auditLogs.value = auditLogsState.apply(result) })),
+    notifications: () => import('./utils/admin-resource-loader.js').then(({ loadNotificationResources }) => loadNotificationResources({ api, usersApi, driversApi, notifications, notificationTemplates, notificationUsers, notificationDrivers, search: notificationRecipientSearch.value, query: notificationsState.query.value, state: notificationsState })),
     vehicles: () => import('./utils/admin-resource-loader.js').then(({ loadVehicleResources }) => loadVehicleResources({ api, vehiclesApi, categories, vehicles, extras, distancePricing, sortByOrder })),
     routePricing: () => import('./utils/admin-resource-loader.js').then(({ loadRoutePricingResources }) => loadRoutePricingResources({ api, categories, routeMinimumFares }))
   }
 })
 load = resourceLoader.load
+usersPageState.setRefresh(() => { if (view.value === 'users') load() })
+tripsPageState.setRefresh(() => { if (['trips', 'dispatch'].includes(view.value)) load() })
+driversPageState.setRefresh(() => { if (view.value === 'drivers') load() })
+settlementsPageState.setRefresh(() => { if (view.value === 'settlements') load() })
+watch(notificationRecipientSearch, async search => {
+  if (view.value !== 'notifications') return
+  const request = ++notificationOptionRequest
+  const [userResult, driverResult] = await Promise.all([
+    usersApi.options({ page: 1, pageSize: 20, search }),
+    driversApi.options({ page: 1, pageSize: 20, search })
+  ])
+  if (request !== notificationOptionRequest) return
+  notificationUsers.value = retainSelectedOptions(notificationUsers.value, userResult.data, notificationForm.value?.userIds)
+  notificationDrivers.value = retainSelectedOptions(notificationDrivers.value, driverResult.data, notificationForm.value?.driverIds)
+}, { flush: 'post' })
+watch([auditLogsState.page, auditLogsState.search, auditLogsState.status, auditLogsState.method], () => { if (view.value === 'auditLogs') load() }, { flush: 'post' })
 const usersActions = createUsersActions({
   usersApi,
   users,
@@ -161,7 +183,15 @@ const paymentsActions = createPaymentsActions({ api, paymentSettings, paymentSet
 const { savePaymentSettings } = paymentsActions
 const { updateCharterStatus, editCharter, saveCharter } = createCharterActions({ api, charterForm, load, error, displayError, dateTimeInput })
 const { edit: editUser, reset: resetUser, select: selectUser, save: saveUser, updateStatus: updateUserStatus, remove: removeUser, openWalletAdjustment, saveWalletAdjustment } = usersActions
-const tripsActions = createTripsActions({ api, tripsApi, addressesApi, tripForm, selectedTrip, tripQuote, tripBookingStep, tripPaymentMethod, tripUseFareBalance, tripUseCashBalance, tripLocationKeyword, tripLocationResults, tripLocationSearching, tripLocationTarget, dispatchForm, orderUrlForm, createdOrderUrl, users, trips, error, load, displayError, canWrite, requestConfirmation, notify, tripCatalog, dateTimeInput })
+const loadUserOptions = async selectedId => {
+  const options = await loadAllOptions(query => usersApi.options(query))
+  users.value = retainSelectedOptions(users.value, options, [selectedId])
+}
+const loadDriverOptions = async selectedId => {
+  const options = await loadAllOptions(query => driversApi.options(query))
+  drivers.value = retainSelectedOptions(drivers.value, options, [selectedId])
+}
+const tripsActions = createTripsActions({ api, tripsApi, addressesApi, tripForm, selectedTrip, tripQuote, tripBookingStep, tripPaymentMethod, tripUseFareBalance, tripUseCashBalance, tripLocationKeyword, tripLocationResults, tripLocationSearching, tripLocationTarget, dispatchForm, orderUrlForm, createdOrderUrl, users, trips, error, load, loadUserOptions, loadDriverOptions, displayError, canWrite, requestConfirmation, notify, tripCatalog, dateTimeInput })
 const { editTrip, resetTrip, clearTripLocationSearch, searchTripLocation, selectTripLocation, handleTripRegionChange, showTrip, closeTrip, updateTripStatus, settleTrip, unsettleTrip, prepareTripQuote, calculateTripRoute, completeTripBooking, saveTrip, openDispatch, saveDispatch, openOrderUrlForm, createOrderUrl, closeCreatedOrderUrl, copyOrderUrl, revokeOrderUrl } = tripsActions
 const membershipActions = createMembershipActions({ api, membershipForm, membershipPlans, load, error, displayError, requestConfirmation, notify, t })
 const { editMembership, resetMembership, saveMembership, removeMembership, confirmMembershipOrder } = membershipActions
@@ -279,6 +309,9 @@ const App = { setup() {
      notificationForm,
      notificationTemplateForm,
      notificationRecipientSearch,
+     notificationTotal: notificationsState.total,
+     notificationPage: notificationsState.page,
+     notificationPageCount: notificationsState.pageCount,
      filteredNotificationUsers,
      filteredNotificationDrivers,
      resetNotification,
@@ -292,6 +325,10 @@ const App = { setup() {
      view,
      membershipPlans,
      membershipOrders,
+     membershipOrderTotal: membershipOrdersState.total,
+     membershipOrderSummary: membershipOrdersState.summary,
+     membershipOrderPage: membershipOrdersState.page,
+     membershipOrderPageCount: membershipOrdersState.pageCount,
      membershipForm,
      resetMembership,
      editMembership,
@@ -365,6 +402,13 @@ const App = { setup() {
      administrators,
      administratorForm,
      auditLogs,
+     auditTotal: auditLogsState.total,
+     auditSummary: auditLogsState.summary,
+     auditPage: auditLogsState.page,
+     auditPageCount: auditLogsState.pageCount,
+     auditSearch: auditLogsState.search,
+     auditStatusFilter: auditLogsState.status,
+     auditMethodFilter: auditLogsState.method,
      refreshAuditLogs: load,
      resetAdministrator,
      editAdministrator,
@@ -434,6 +478,8 @@ const App = { setup() {
      translateStatus,
      canWrite,
      users,
+     total: usersPageState.total,
+     summary: usersPageState.summary,
      selectedUser,
      walletTransactions,
      topUpWithdrawalHistory,
@@ -518,6 +564,12 @@ const App = { setup() {
      paymentSettingsSaved,
      savePaymentSettings,
      drivers,
+     dispatchTotal: tripsPageState.dispatchTotal,
+     dispatchSummary: tripsPageState.dispatchSummary,
+     driverTotal: driversPageState.total,
+     driversPage: driversPageState.page,
+     driversPageCount: driversPageState.pageCount,
+     driverSummary: driversPageState.summary,
      vehicleCategories,
      selectedDriver,
      driverTrips,
@@ -620,6 +672,8 @@ const App = { setup() {
      passengerTripStatusLabel,
      getPassengerTripStatus,
      trips,
+     tripTotal: tripsPageState.total,
+     tripSummary: tripsPageState.summary,
      users,
      tripForm,
      selectedTrip,
@@ -692,6 +746,8 @@ const App = { setup() {
      filteredSettlements,
      pagedSettlements,
      settlementPageCount,
+     settlementTotal: settlementsPageState.total,
+     settlementSummary: settlementsPageState.summary,
      settledSettlements,
      unsettledSettlements,
      selectedSettlementTrip,

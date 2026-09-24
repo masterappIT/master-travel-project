@@ -80,6 +80,77 @@ type RequestLike = {
   on?: (event: string, listener: () => void) => void;
 };
 type AdminRole = "SUPER_ADMIN" | "OPERATOR" | "VIEWER";
+type AdminListQuery = {
+  page: number;
+  pageSize: number;
+  search: string;
+  sortOrder: "asc" | "desc";
+};
+type AdminListResponse<T, S extends Record<string, unknown> = Record<string, number>> = {
+  data: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+  pageCount: number;
+  summary?: S;
+};
+function adminQueryValue(req: RequestLike, key: string) {
+  return req.query?.[key]?.trim() || "";
+}
+const adminTripStatuses = ["PENDING", "CONFIRMED", "COMPLETED", "CANCELLED"] as const;
+const adminTripExecutionPhases = ["WAITING_DRIVER", "DRIVER_PENDING_ACCEPTANCE", "DRIVER_ASSIGNED", "IN_PROGRESS"] as const;
+function adminTripStatusWhere(statusValue: string, executionPhaseValue: string): Prisma.TripWhereInput {
+  const filters: Prisma.TripWhereInput[] = [];
+  if (adminTripStatuses.includes(statusValue as (typeof adminTripStatuses)[number]))
+    filters.push({ status: statusValue as (typeof adminTripStatuses)[number] });
+  if (statusValue === "IN_PROGRESS") filters.push({ executionPhase: "IN_PROGRESS" });
+  if (adminTripExecutionPhases.includes(executionPhaseValue as (typeof adminTripExecutionPhases)[number]))
+    filters.push({ executionPhase: executionPhaseValue as (typeof adminTripExecutionPhases)[number] });
+  return filters.length ? { AND: filters } : {};
+}
+function parseAdminListQuery(req: RequestLike, defaultPageSize = 25): AdminListQuery {
+  const page = Number.parseInt(adminQueryValue(req, "page"), 10);
+  const pageSize = Number.parseInt(adminQueryValue(req, "pageSize"), 10);
+  const sortOrder = adminQueryValue(req, "sortOrder").toLowerCase();
+  return {
+    page: Number.isSafeInteger(page) && page > 0 ? page : 1,
+    pageSize:
+      Number.isSafeInteger(pageSize) && pageSize > 0
+        ? Math.min(pageSize, 100)
+        : defaultPageSize,
+    search: adminQueryValue(req, "search") || adminQueryValue(req, "q"),
+    sortOrder: sortOrder === "asc" ? "asc" : "desc",
+  };
+}
+function adminQueryBoolean(req: RequestLike, key: string) {
+  const value = adminQueryValue(req, key).toLowerCase();
+  if (!value) return undefined;
+  if (value === "true" || value === "1") return true;
+  if (value === "false" || value === "0") return false;
+  throw new BadRequestException(`${key} must be true or false`);
+}
+function adminQueryDate(req: RequestLike, key: string) {
+  const value = adminQueryValue(req, key);
+  if (!value) return undefined;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) throw new BadRequestException(`${key} must be a valid date`);
+  return date;
+}
+function adminListResponse<T, S extends Record<string, unknown>>(
+  data: T[],
+  total: number,
+  query: AdminListQuery,
+  summary?: S,
+): AdminListResponse<T, S> {
+  return {
+    data,
+    total,
+    page: query.page,
+    pageSize: query.pageSize,
+    pageCount: Math.max(1, Math.ceil(total / query.pageSize)),
+    ...(summary ? { summary } : {}),
+  };
+}
 interface Administrator {
   id: string;
   username: string;
@@ -2621,6 +2692,91 @@ function tripResponse(trip: {
         }
       : null,
     quote: quote ? quoteResponse(quote) : null,
+  };
+}
+const adminTripListSelect = Prisma.validator<Prisma.TripSelect>()({
+  id: true,
+  userId: true,
+  origin: true,
+  destination: true,
+  region: true,
+  scheduledAt: true,
+  passengerName: true,
+  passengerPhone: true,
+  status: true,
+  executionPhase: true,
+  driverId: true,
+  driverPayoutCalculatedAmount: true,
+  driverPayoutAmount: true,
+  driverPayoutCurrency: true,
+  driverName: true,
+  driverPhone: true,
+  vehicleCategory: true,
+  vehiclePlate: true,
+  vehicleHkPlate: true,
+  vehicleMacauPlate: true,
+  vehicleMainlandPlate: true,
+  assignedAt: true,
+  acceptedAt: true,
+  completedAt: true,
+  createdAt: true,
+  updatedAt: true,
+  user: {
+    select: {
+      id: true,
+      countryCode: true,
+      phoneNumber: true,
+      name: true,
+      displayName: true,
+    },
+  },
+  payment: {
+    select: { id: true, total: true, currency: true, status: true },
+  },
+  settlement: {
+    select: { id: true, driverId: true, method: true, settledAt: true },
+  },
+  driver: {
+    select: { id: true, name: true, phone: true, settlementMethod: true },
+  },
+});
+type AdminTripListItem = Prisma.TripGetPayload<{ select: typeof adminTripListSelect }> & {
+  orderUrls?: Array<{
+    id: string;
+    tripId: string;
+    driverId: string | null;
+    validFrom: Date;
+    validUntil: Date;
+    usedAt: Date | null;
+    revokedAt: Date | null;
+    createdAt: Date;
+    driver?: { id: string; name: string; phone: string } | null;
+  }>;
+};
+function adminTripListResponse(trip: AdminTripListItem) {
+  return {
+    ...trip,
+    scheduledAt: trip.scheduledAt.toISOString(),
+    assignedAt: trip.assignedAt?.toISOString() || null,
+    acceptedAt: trip.acceptedAt?.toISOString() || null,
+    completedAt: trip.completedAt?.toISOString() || null,
+    createdAt: trip.createdAt.toISOString(),
+    updatedAt: trip.updatedAt.toISOString(),
+    user: {
+      ...trip.user,
+      phone: `${trip.user.countryCode} ${trip.user.phoneNumber}`,
+    },
+    settlement: trip.settlement
+      ? { ...trip.settlement, settledAt: trip.settlement.settledAt.toISOString() }
+      : null,
+    orderUrls: trip.orderUrls?.map((item) => ({
+      ...item,
+      validFrom: item.validFrom.toISOString(),
+      validUntil: item.validUntil.toISOString(),
+      usedAt: item.usedAt?.toISOString() || null,
+      revokedAt: item.revokedAt?.toISOString() || null,
+      createdAt: item.createdAt.toISOString(),
+    })),
   };
 }
 function driverTripResponse(
@@ -5763,26 +5919,110 @@ class AdminAuthController {
 class AdminController {
   @Get("drivers") async listDrivers(@Req() req: RequestLike) {
     requireAuth(req);
-    const data = await prisma.driver.findMany({
-      include: {
-        vehicleAssignments: {
-          where: { enabled: true },
-          include: { vehicle: true },
-          orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }],
-        },
-      },
-      orderBy: { createdAt: "desc" },
-    });
-    return {
-      data: data.map((driver) => ({
+    const query = parseAdminListQuery(req);
+    const enabledQuery = adminQueryBoolean(req, "enabled");
+    const statusFilter = adminQueryValue(req, "status");
+    const enabled = enabledQuery ?? (statusFilter === "ENABLED" ? true : statusFilter === "DISABLED" ? false : undefined);
+    const reviewStatus = adminQueryValue(req, "reviewStatus");
+    const driverType = adminQueryValue(req, "driverType") || adminQueryValue(req, "type");
+    const online = adminQueryBoolean(req, "isOnline");
+    const where: Prisma.DriverWhereInput = {
+      ...(enabled === undefined ? {} : { enabled }),
+      ...(online === undefined ? {} : { isOnline: online }),
+      ...(reviewStatus && reviewStatus !== "全部" ? { reviewStatus } : {}),
+      ...(driverType && driverType !== "全部" ? { driverType } : {}),
+      ...(query.search
+        ? {
+            OR: [
+              { id: { contains: query.search, mode: "insensitive" } },
+              { name: { contains: query.search, mode: "insensitive" } },
+              { affiliation: { contains: query.search, mode: "insensitive" } },
+              { phone: { contains: query.search, mode: "insensitive" } },
+              { mainlandPhone: { contains: query.search, mode: "insensitive" } },
+            ],
+          }
+        : {}),
+    };
+    const [data, total, all, enabledCount, onlineCount, pendingReviewCount] =
+      await prisma.$transaction([
+        prisma.driver.findMany({
+          where,
+          include: {
+            vehicleAssignments: {
+              where: { enabled: true },
+              include: { vehicle: true },
+              orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }],
+            },
+          },
+          orderBy: [{ createdAt: query.sortOrder }, { id: query.sortOrder }],
+          skip: (query.page - 1) * query.pageSize,
+          take: query.pageSize,
+        }),
+        prisma.driver.count({ where }),
+        prisma.driver.count(),
+        prisma.driver.count({ where: { enabled: true } }),
+        prisma.driver.count({ where: { enabled: true, isOnline: true } }),
+        prisma.driver.count({ where: { reviewStatus: "PENDING" } }),
+      ]);
+    return adminListResponse(
+      data.map((driver) => ({
         ...driverResponse(driver),
         vehicles: driver.vehicleAssignments.map(({ vehicle, isPrimary }) => ({
           ...driverVehicleResponse(vehicle),
           isPrimary,
         })),
       })),
-      total: data.length,
-    };
+      total,
+      query,
+      { total: all, enabled: enabledCount, online: onlineCount, pendingReview: pendingReviewCount },
+    );
+  }
+  @Get("drivers/options") async listDriverOptions(@Req() req: RequestLike) {
+    requireAuth(req);
+    const query = parseAdminListQuery(req, 20);
+    const where: Prisma.DriverWhereInput = query.search ? { OR: [
+      { id: { contains: query.search, mode: "insensitive" } },
+      { name: { contains: query.search, mode: "insensitive" } },
+      { phone: { contains: query.search, mode: "insensitive" } },
+      { mainlandPhone: { contains: query.search, mode: "insensitive" } },
+    ] } : {};
+    const [data, total] = await prisma.$transaction([
+      prisma.driver.findMany({
+        where,
+        select: {
+          id: true,
+          name: true,
+          phoneCountryCode: true,
+          phone: true,
+          mainlandPhone: true,
+          reviewStatus: true,
+          settlementMethod: true,
+          isOnline: true,
+          enabled: true,
+          vehicleAssignments: {
+            where: { enabled: true, vehicle: { enabled: true } },
+            orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }],
+            take: 1,
+            select: {
+              isPrimary: true,
+              vehicle: { select: { hkPlate: true, macauPlate: true, mainlandPlate: true } },
+            },
+          },
+        },
+        orderBy: [{ name: "asc" }, { id: "asc" }],
+        skip: (query.page - 1) * query.pageSize,
+        take: query.pageSize,
+      }),
+      prisma.driver.count({ where }),
+    ]);
+    return adminListResponse(
+      data.map(({ vehicleAssignments, ...driver }) => ({
+        ...driver,
+        vehicles: vehicleAssignments.map(({ vehicle, isPrimary }) => ({ ...vehicle, isPrimary })),
+      })),
+      total,
+      query,
+    );
   }
   @Get("driver-vehicles") async listAllVehicles(@Req() req: RequestLike) {
     requireAuth(req);
@@ -6637,9 +6877,36 @@ class AdminController {
       revokedAdminSessions.set(item.jti, item.expiresAt.getTime());
     return { ok: true };
   }
-  @Get("audit-logs") listAuditLogs(@Req() req: RequestLike) {
+  @Get("audit-logs") async listAuditLogs(@Req() req: RequestLike) {
     requireRole(req, ["SUPER_ADMIN"]);
-    return { data: adminAuditLogs.slice(0, 300), total: adminAuditLogs.length };
+    const query = parseAdminListQuery(req, 50);
+    const status = adminQueryValue(req, "status");
+    const method = adminQueryValue(req, "method");
+    const action = adminQueryValue(req, "action");
+    const resource = adminQueryValue(req, "resource");
+    const from = adminQueryDate(req, "from");
+    const to = adminQueryDate(req, "to");
+    const where: Prisma.AdminAuditLogWhereInput = {
+      ...(status && status !== "all" ? { status } : {}),
+      ...(method && method !== "all" ? { method } : {}),
+      ...(action ? { action } : {}),
+      ...(resource ? { resource } : {}),
+      ...((from || to) ? { createdAt: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } } : {}),
+      ...(query.search ? { OR: [
+        { username: { contains: query.search, mode: "insensitive" } },
+        { action: { contains: query.search, mode: "insensitive" } },
+        { resource: { contains: query.search, mode: "insensitive" } },
+        { ip: { contains: query.search, mode: "insensitive" } },
+      ] } : {}),
+    };
+    const [data, total, all, success, failed] = await prisma.$transaction([
+      prisma.adminAuditLog.findMany({ where, orderBy: [{ createdAt: query.sortOrder }, { id: query.sortOrder }], skip: (query.page - 1) * query.pageSize, take: query.pageSize }),
+      prisma.adminAuditLog.count({ where }),
+      prisma.adminAuditLog.count(),
+      prisma.adminAuditLog.count({ where: { status: "SUCCESS" } }),
+      prisma.adminAuditLog.count({ where: { status: "FAILED" } }),
+    ]);
+    return adminListResponse(data.map((item) => ({ ...item, createdAt: item.createdAt.toISOString() })), total, query, { total: all, success, failed });
   }
 
   @Get("notification-templates") async listNotificationTemplates(
@@ -6713,12 +6980,29 @@ class AdminController {
 
   @Get("notifications") async listNotifications(@Req() req: RequestLike) {
     requireAuth(req);
-    return {
-      data: await prisma.notification.findMany({
-        orderBy: { createdAt: "desc" },
-        take: 300,
-      }),
+    const query = parseAdminListQuery(req);
+    const audience = adminQueryValue(req, "audience");
+    const templateType = adminQueryValue(req, "templateType");
+    const important = adminQueryBoolean(req, "important");
+    const read = adminQueryBoolean(req, "read");
+    const where: Prisma.NotificationWhereInput = {
+      ...(audience ? { audience } : {}),
+      ...(templateType ? { templateType } : {}),
+      ...(important === undefined ? {} : { important }),
+      ...(read === undefined ? {} : { readAt: read ? { not: null } : null }),
+      ...(query.search ? { OR: [
+        { title: { contains: query.search, mode: "insensitive" } },
+        { content: { contains: query.search, mode: "insensitive" } },
+      ] } : {}),
     };
+    const [data, total, all, unread, importantCount] = await prisma.$transaction([
+      prisma.notification.findMany({ where, orderBy: [{ createdAt: query.sortOrder }, { id: query.sortOrder }], skip: (query.page - 1) * query.pageSize, take: query.pageSize }),
+      prisma.notification.count({ where }),
+      prisma.notification.count(),
+      prisma.notification.count({ where: { readAt: null } }),
+      prisma.notification.count({ where: { important: true } }),
+    ]);
+    return adminListResponse(data, total, query, { total: all, unread, important: importantCount });
   }
   @Post("notifications") async createNotification(
     @Req() req: RequestLike,
@@ -7361,11 +7645,54 @@ class AdminController {
   }
   @Get("users") async listUsers(@Req() req: RequestLike) {
     requireAuth(req);
-    const [data, total] = await prisma.$transaction([
-      prisma.user.findMany({ orderBy: { createdAt: "desc" } }),
+    const query = parseAdminListQuery(req);
+    const enabledQuery = adminQueryBoolean(req, "enabled");
+    const statusFilter = adminQueryValue(req, "status");
+    const enabled = enabledQuery ?? (statusFilter === "ENABLED" ? true : statusFilter === "DISABLED" ? false : undefined);
+    const membershipLevel = adminQueryValue(req, "membershipLevel");
+    const region = adminQueryValue(req, "region");
+    const where: Prisma.UserWhereInput = {
+      ...(enabled === undefined ? {} : { enabled }),
+      ...(membershipLevel ? { membershipLevel } : {}),
+      ...(region ? { region } : {}),
+      ...(query.search ? { OR: [
+        { id: { contains: query.search, mode: "insensitive" } },
+        { name: { contains: query.search, mode: "insensitive" } },
+        { displayName: { contains: query.search, mode: "insensitive" } },
+        { phoneNumber: { contains: query.search, mode: "insensitive" } },
+        { email: { contains: query.search, mode: "insensitive" } },
+      ] } : {}),
+    };
+    const [data, total, all, enabledCount, members] = await prisma.$transaction([
+      prisma.user.findMany({ where, orderBy: [{ createdAt: query.sortOrder }, { id: query.sortOrder }], skip: (query.page - 1) * query.pageSize, take: query.pageSize }),
+      prisma.user.count({ where }),
       prisma.user.count(),
+      prisma.user.count({ where: { enabled: true } }),
+      prisma.user.count({ where: { membershipLevel: { not: null } } }),
     ]);
-    return { data: data.map(userResponse), total };
+    return adminListResponse(data.map(userResponse), total, query, { total: all, enabled: enabledCount, members });
+  }
+  @Get("users/options") async listUserOptions(@Req() req: RequestLike) {
+    requireAuth(req);
+    const query = parseAdminListQuery(req, 20);
+    const where: Prisma.UserWhereInput = query.search ? { OR: [
+      { id: { contains: query.search, mode: "insensitive" } },
+      { name: { contains: query.search, mode: "insensitive" } },
+      { displayName: { contains: query.search, mode: "insensitive" } },
+      { phoneNumber: { contains: query.search, mode: "insensitive" } },
+      { email: { contains: query.search, mode: "insensitive" } },
+    ] } : {};
+    const [data, total] = await prisma.$transaction([
+      prisma.user.findMany({
+        where,
+        select: { id: true, countryCode: true, phoneNumber: true, name: true, displayName: true, enabled: true },
+        orderBy: [{ name: "asc" }, { id: "asc" }],
+        skip: (query.page - 1) * query.pageSize,
+        take: query.pageSize,
+      }),
+      prisma.user.count({ where }),
+    ]);
+    return adminListResponse(data.map((user) => ({ ...user, phone: `${user.countryCode} ${user.phoneNumber}` })), total, query);
   }
   @Post("users") async createUser(
     @Req() req: RequestLike,
@@ -7673,24 +8000,158 @@ class AdminController {
       },
       data: { status: "CANCELLED" },
     });
-    const data = await prisma.trip.findMany({
-      include: {
-        user: true,
-        quote: {
-          include: {
-            pricing: { include: { tiers: { orderBy: { order: "asc" } } } },
-            vehicle: true,
-            promotionUsages: { include: { promotion: true } },
-            lines: { orderBy: { order: "asc" } },
-          },
+    const query = parseAdminListQuery(req);
+    const mode = adminQueryValue(req, "mode");
+    const statusValue = adminQueryValue(req, "status");
+    const settlementStatus = mode === "settlements"
+      ? (statusValue && ["ALL", "UNSETTLED", "SETTLED"].includes(statusValue) ? statusValue : "UNSETTLED")
+      : "";
+    const status = !settlementStatus && statusValue !== "ALL" ? statusValue : "";
+    const executionPhase = adminQueryValue(req, "executionPhase");
+    const tripStatusWhere = adminTripStatusWhere(status, executionPhase);
+    const region = adminQueryValue(req, "region");
+    const driverId = adminQueryValue(req, "driverId");
+    const userId = adminQueryValue(req, "userId");
+    const settlement = adminQueryValue(req, "settlement");
+    const dispatch = adminQueryValue(req, "dispatch");
+    const scheduledFrom = adminQueryDate(req, "scheduledFrom");
+    const scheduledTo = adminQueryDate(req, "scheduledTo");
+    const date = adminQueryValue(req, "date");
+    const dateStart = date ? adminQueryDate(req, "date") : undefined;
+    const dateEnd = dateStart ? new Date(dateStart.getTime() + 24 * 60 * 60 * 1000) : undefined;
+    const includeOrderUrls = mode === "dispatch";
+    const where: Prisma.TripWhereInput = {
+      ...tripStatusWhere,
+      ...(region ? { region: region as any } : {}),
+      ...(driverId ? { driverId } : {}),
+      ...(userId ? { userId } : {}),
+      ...(settlement === "settled" || settlementStatus === "SETTLED" ? { status: "COMPLETED", driverId: { not: null }, settlement: { isNot: null } } : {}),
+      ...(settlement === "unsettled" || settlementStatus === "UNSETTLED" ? { status: "COMPLETED", driverId: { not: null }, settlement: { is: null } } : {}),
+      ...(settlementStatus === "ALL" ? { status: "COMPLETED", driverId: { not: null } } : {}),
+      ...(dispatch === "waiting" ? { status: { notIn: ["COMPLETED", "CANCELLED"] } } : {}),
+      ...(dispatch === "assigned" ? { driverId: { not: null } } : {}),
+      ...(dispatch === "unassigned" ? { driverId: null } : {}),
+      ...((scheduledFrom || scheduledTo || dateStart) ? { scheduledAt: { ...(scheduledFrom ? { gte: scheduledFrom } : {}), ...(scheduledTo ? { lte: scheduledTo } : {}), ...(dateStart ? { gte: dateStart, lt: dateEnd } : {}) } } : {}),
+      ...(query.search ? { OR: [
+        { id: { contains: query.search, mode: "insensitive" } },
+        { origin: { contains: query.search, mode: "insensitive" } },
+        { destination: { contains: query.search, mode: "insensitive" } },
+        { passengerName: { contains: query.search, mode: "insensitive" } },
+        { passengerPhone: { contains: query.search, mode: "insensitive" } },
+        { driverName: { contains: query.search, mode: "insensitive" } },
+        { vehiclePlate: { contains: query.search, mode: "insensitive" } },
+        { user: { is: { OR: [
+          { name: { contains: query.search, mode: "insensitive" } },
+          { displayName: { contains: query.search, mode: "insensitive" } },
+          { phoneNumber: { contains: query.search, mode: "insensitive" } },
+        ] } } },
+      ] } : {}),
+    };
+    const [data, total, all, pending, confirmed, completed, cancelled, inProgress, waitingDispatch, unsettled] = await prisma.$transaction([
+      prisma.trip.findMany({
+        where,
+        select: {
+          ...adminTripListSelect,
+          ...(includeOrderUrls ? {
+            orderUrls: {
+              orderBy: { createdAt: "desc" as const },
+              select: {
+                id: true,
+                tripId: true,
+                driverId: true,
+                validFrom: true,
+                validUntil: true,
+                usedAt: true,
+                revokedAt: true,
+                createdAt: true,
+                driver: { select: { id: true, name: true, phone: true } },
+              },
+            },
+          } : {}),
         },
-        payment: true,
-        settlement: true,
-        driver: true,
-      },
-      orderBy: { scheduledAt: "asc" },
-    });
-    return { data: data.map(tripResponse), total: data.length };
+        orderBy: [{ createdAt: query.sortOrder }, { id: query.sortOrder }],
+        skip: (query.page - 1) * query.pageSize,
+        take: query.pageSize,
+      }),
+      prisma.trip.count({ where }),
+      prisma.trip.count(),
+      prisma.trip.count({ where: { status: "PENDING" } }),
+      prisma.trip.count({ where: { status: "CONFIRMED" } }),
+      prisma.trip.count({ where: { status: "COMPLETED" } }),
+      prisma.trip.count({ where: { status: "CANCELLED" } }),
+      prisma.trip.count({ where: { executionPhase: "IN_PROGRESS" } }),
+      prisma.trip.count({ where: { status: "CONFIRMED", executionPhase: "WAITING_DRIVER" } }),
+      prisma.trip.count({ where: { status: "COMPLETED", driverId: { not: null }, settlement: { is: null } } }),
+    ]);
+    const summary: Record<string, unknown> = {
+      total: all,
+      pending,
+      confirmed,
+      completed,
+      cancelled,
+      inProgress,
+      waitingDispatch,
+      unsettled,
+    };
+    if (mode === "settlements") {
+      const eligibleWhere: Prisma.TripWhereInput = {
+        status: "COMPLETED",
+        driverId: { not: null },
+      };
+      const [eligible, globalUnsettled, settled, unsettledTotals, settledTotals] = await prisma.$transaction([
+        prisma.trip.count({ where: eligibleWhere }),
+        prisma.trip.count({ where: { ...eligibleWhere, settlement: { is: null } } }),
+        prisma.trip.count({ where: { ...eligibleWhere, settlement: { isNot: null } } }),
+        prisma.trip.groupBy({
+          by: ["driverPayoutCurrency"],
+          where: { ...eligibleWhere, settlement: { is: null } },
+          orderBy: { driverPayoutCurrency: "asc" },
+          _sum: { driverPayoutAmount: true },
+        }),
+        prisma.trip.groupBy({
+          by: ["driverPayoutCurrency"],
+          where: { ...eligibleWhere, settlement: { isNot: null } },
+          orderBy: { driverPayoutCurrency: "asc" },
+          _sum: { driverPayoutAmount: true },
+        }),
+      ]);
+      const payoutTotals = (items: typeof unsettledTotals) => items.map((item) => ({
+        driverPayoutCurrency: item.driverPayoutCurrency || "HKD",
+        driverPayoutAmount: item._sum?.driverPayoutAmount || 0,
+      }));
+      Object.assign(summary, {
+        eligible,
+        unsettled: globalUnsettled,
+        settled,
+        unsettledTotal: payoutTotals(unsettledTotals),
+        settledTotal: payoutTotals(settledTotals),
+      });
+    } else if (mode === "dispatch") {
+      const now = new Date();
+      const [waiting, activeOrderUrls] = await prisma.$transaction([
+        prisma.trip.count({
+          where: {
+            driverId: null,
+            status: { notIn: ["COMPLETED", "CANCELLED"] },
+          },
+        }),
+        prisma.tripOrderUrl.count({
+          where: {
+            usedAt: null,
+            revokedAt: null,
+            validFrom: { lte: now },
+            validUntil: { gte: now },
+          },
+        }),
+      ]);
+      Object.assign(summary, {
+        total: all,
+        unassigned: waiting,
+        waiting,
+        activeOrderUrls,
+      });
+    }
+    return adminListResponse(data.map(adminTripListResponse), total, query, summary);
   }
   @Post("trips") async createTrip(
     @Req() req: RequestLike,
@@ -8407,8 +8868,34 @@ class AdminController {
   }
   @Get("membership-orders") async listMembershipOrders(@Req() req: RequestLike) {
     requireAuth(req);
-    const data = await prisma.membershipOrder.findMany({ include: { user: { select: { id: true, name: true, displayName: true, phoneNumber: true } }, plan: true, subscription: true }, orderBy: { createdAt: "desc" }, take: 100 });
-    return { data: data.map((order) => ({ ...order, plan: membershipPlanResponse(order.plan) })) };
+    const query = parseAdminListQuery(req);
+    const status = adminQueryValue(req, "status");
+    const billingPeriod = adminQueryValue(req, "billingPeriod");
+    const planId = adminQueryValue(req, "planId");
+    const where: Prisma.MembershipOrderWhereInput = {
+      ...(status ? { status: status as any } : {}),
+      ...(billingPeriod ? { billingPeriod: billingPeriod as any } : {}),
+      ...(planId ? { planId } : {}),
+      ...(query.search ? { OR: [
+        { id: { contains: query.search, mode: "insensitive" } },
+        { user: { is: { OR: [
+          { id: { contains: query.search, mode: "insensitive" } },
+          { name: { contains: query.search, mode: "insensitive" } },
+          { displayName: { contains: query.search, mode: "insensitive" } },
+          { phoneNumber: { contains: query.search, mode: "insensitive" } },
+        ] } } },
+        { plan: { is: { name: { contains: query.search, mode: "insensitive" } } } },
+      ] } : {}),
+    };
+    const [data, total, all, pending, paid, cancelled] = await prisma.$transaction([
+      prisma.membershipOrder.findMany({ where, include: { user: { select: { id: true, name: true, displayName: true, phoneNumber: true } }, plan: true, subscription: true }, orderBy: [{ createdAt: query.sortOrder }, { id: query.sortOrder }], skip: (query.page - 1) * query.pageSize, take: query.pageSize }),
+      prisma.membershipOrder.count({ where }),
+      prisma.membershipOrder.count(),
+      prisma.membershipOrder.count({ where: { status: "PENDING" } }),
+      prisma.membershipOrder.count({ where: { status: "PAID" } }),
+      prisma.membershipOrder.count({ where: { status: "CANCELLED" } }),
+    ]);
+    return adminListResponse(data.map((order) => ({ ...order, plan: membershipPlanResponse(order.plan) })), total, query, { total: all, pending, paid, cancelled });
   }
   @Post("membership-orders/:id/confirm") async confirmMembershipOrder(@Req() req: RequestLike, @Param("id") id: string) {
     requireAuth(req);

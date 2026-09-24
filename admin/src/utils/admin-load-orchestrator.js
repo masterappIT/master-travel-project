@@ -36,7 +36,7 @@ export function createAdminResourceLoader({
         : api('/admin/auth/me')
       let viewPromise = Promise.resolve()
       if (requestedView === 'dashboard') viewPromise = api('/admin/dashboard')
-      if (['users', 'trips', 'charters'].includes(requestedView)) viewPromise = resourceLoaders.coreUsers()
+      if (['users', 'charters'].includes(requestedView)) viewPromise = resourceLoaders.coreUsers()
       if (['drivers', 'driver-vehicles'].includes(requestedView)) viewPromise = resourceLoaders.drivers()
       if (requestedView === 'dispatch') viewPromise = resourceLoaders.dispatch()
       if (requestedView === 'settlements') viewPromise = resourceLoaders.settlements()

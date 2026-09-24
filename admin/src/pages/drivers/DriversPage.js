@@ -46,10 +46,10 @@ export const DriversPage = {
     </div>
   </div>
   <div class="dispatch-summary-grid">
-    <article class="dispatch-summary-card"><span>全部訂單</span><strong>{{trips.length}}</strong><small>目前訂單總數</small></article>
-    <article class="dispatch-summary-card is-warning"><span>待派單</span><strong>{{trips.filter(item => !item.driverId && item.status !== 'COMPLETED' && item.status !== 'CANCELLED').length}}</strong><small>需要安排司機</small></article>
-    <article class="dispatch-summary-card is-success"><span>已派單</span><strong>{{trips.filter(item => item.driverId).length}}</strong><small>已有司機接單</small></article>
-    <article class="dispatch-summary-card is-info"><span>有效 URL</span><strong>{{orderUrls.filter(item => !item.usedAt && !item.revokedAt).length}}</strong><small>等待司機使用</small></article>
+    <article class="dispatch-summary-card"><span>全部訂單</span><strong>{{dispatchTotal}}</strong><small>目前訂單總數</small></article>
+    <article class="dispatch-summary-card is-warning"><span>待派單</span><strong>{{dispatchSummary.waiting ?? dispatchSummary.unassigned ?? 0}}</strong><small>需要安排司機</small></article>
+    <article class="dispatch-summary-card is-success"><span>已派單</span><strong>{{dispatchSummary.assigned ?? Math.max(0, dispatchTotal - (dispatchSummary.unassigned ?? 0))}}</strong><small>已有司機接單</small></article>
+    <article class="dispatch-summary-card is-info"><span>有效 URL</span><strong>{{dispatchSummary.activeOrderUrls ?? 0}}</strong><small>等待司機使用</small></article>
   </div>
   <div class="panel dispatch-table-panel">
     <div class="dispatch-toolbar">

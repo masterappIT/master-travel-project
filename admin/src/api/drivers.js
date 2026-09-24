@@ -1,5 +1,8 @@
+import { serializeAdminQuery } from '../utils/admin-query-state.js'
+
 export const createDriversApi = api => ({
-  list: () => api('/admin/drivers'),
+  list: (query = {}) => api(`/admin/drivers${serializeAdminQuery(query)}`),
+  options: (query = {}) => api(`/admin/drivers/options${serializeAdminQuery(query)}`),
   save: (payload, vehiclePhoto = null, removeVehiclePhoto = false) => {
     if (!vehiclePhoto && !removeVehiclePhoto) {
       return api('/admin/drivers', { method: 'POST', body: JSON.stringify(payload) })

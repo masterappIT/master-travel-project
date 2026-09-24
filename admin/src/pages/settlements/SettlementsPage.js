@@ -90,9 +90,9 @@ export const SettlementsPage = {
       <button type="button" class="secondary" @click="load">更新資料</button>
     </div>
     <div class="settlement-summary-grid">
-      <article><span>可結算行程</span><strong>{{eligibleSettlements.length}}</strong><small>已完成且已指派司機</small></article>
-      <article class="is-warning"><span>待結算</span><strong>{{unsettledSettlements.length}}</strong><small>{{formatSettlementTotal(unsettledSettlements)}}</small></article>
-      <article class="is-success"><span>已結算</span><strong>{{settledSettlements.length}}</strong><small>{{formatSettlementTotal(settledSettlements)}}</small></article>
+      <article><span>可結算行程</span><strong>{{settlementSummary.eligible ?? 0}}</strong><small>已完成且已指派司機</small></article>
+      <article class="is-warning"><span>待結算</span><strong>{{settlementSummary.unsettled ?? 0}}</strong><small>{{formatSettlementTotal(settlementSummary.unsettledTotal)}}</small></article>
+      <article class="is-success"><span>已結算</span><strong>{{settlementSummary.settled ?? 0}}</strong><small>{{formatSettlementTotal(settlementSummary.settledTotal)}}</small></article>
     </div>
     <div class="panel settlement-list-panel">
       <div class="settlement-toolbar">

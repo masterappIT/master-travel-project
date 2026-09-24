@@ -12,7 +12,7 @@ export const NotificationsPage = {
         <h2>消息推送</h2>
         <p class="muted">集中管理乘客端與司機端的站內通知，清楚掌握每次發送內容與受眾。</p>
       </div>
-      <div class="notification-heading-meta"><span class="notification-count"><strong>{{notifications.length}}</strong> 筆歷史推送</span><button type="button" v-if="canWrite" class="notification-primary-action" @click="resetNotification('order')">＋ 新增消息</button></div>
+      <div class="notification-heading-meta"><span class="notification-count"><strong>{{notificationTotal}}</strong> 筆歷史推送</span><button type="button" v-if="canWrite" class="notification-primary-action" @click="resetNotification('order')">＋ 新增消息</button></div>
     </div>
 
     <div class="notification-workspace">

@@ -1,3 +1,16 @@
+import { serializeAdminQuery } from './admin-query-state.js'
+
+export async function loadAllPages(fetchPage, query = {}, pageSize = 100) {
+  const first = await fetchPage({ ...query, page: 1, pageSize })
+  const data = [...(first.data || [])]
+  const pageCount = Number(first.pageCount || 1)
+  for (let page = 2; page <= pageCount; page += 1) {
+    const result = await fetchPage({ ...query, page, pageSize })
+    data.push(...(result.data || []))
+  }
+  return { ...first, data }
+}
+
 export async function loadAddressResources({ addressesApi, addresses, mainlandCities, displayMainlandCity, displayError }) {
   const [addressResult, cityResult] = await Promise.allSettled([
     addressesApi.list(),
@@ -23,22 +36,15 @@ export async function loadAddressResources({ addressesApi, addresses, mainlandCi
   return errors.length ? displayError(errors[0]) : ''
 }
 
-export async function loadDispatchOrderUrls({ trips, tripsApi, orderUrls }) {
-  orderUrls.value = []
-  for (const trip of trips.value) {
-    const result = await tripsApi.orderUrls(trip.id)
-    orderUrls.value.push(...result.data)
-  }
-}
-
-export async function loadNotificationResources({ api, usersApi, driversApi, notifications, notificationTemplates, notificationUsers, notificationDrivers }) {
+export async function loadNotificationResources({ api, usersApi, driversApi, notifications, notificationTemplates, notificationUsers, notificationDrivers, search = '', query = { page: 1, pageSize: 20 }, state }) {
   const [notificationResult, templateResult, userResult, driverResult] = await Promise.all([
-    api('/admin/notifications'),
+    loadAllPages(pageQuery => api(`/admin/notifications${serializeAdminQuery(pageQuery)}`), {}, 100),
     api('/admin/notification-templates'),
-    usersApi.list(),
-    driversApi.list()
+    usersApi.options({ page: 1, pageSize: 20, search }),
+    driversApi.options({ page: 1, pageSize: 20, search })
   ])
   notifications.value = notificationResult.data
+  state?.apply(notificationResult)
   notificationTemplates.value = templateResult.data
   notificationUsers.value = userResult.data
   notificationDrivers.value = driverResult.data
@@ -57,13 +63,14 @@ export async function loadVehicleResources({ api, vehiclesApi, categories, vehic
   distancePricing.value = sortByOrder(pricingResult.data)
 }
 
-export async function loadMembershipResources({ api, membershipPlans, membershipOrders }) {
+export async function loadMembershipResources({ api, membershipPlans, membershipOrders, query = { page: 1, pageSize: 20 }, state }) {
   const [plansResult, ordersResult] = await Promise.all([
     api('/admin/membership-plans'),
-    api('/admin/membership-orders')
+    loadAllPages(pageQuery => api(`/admin/membership-orders${serializeAdminQuery(pageQuery)}`), {}, 100)
   ])
   membershipPlans.value = plansResult.data
   membershipOrders.value = ordersResult.data
+  state?.apply(ordersResult)
 }
 
 export async function loadPromotionResources({ api, promotions, mileageRules, mileageRewards, mileageAccounts, invitationSettings, invitationWalletCurrency, invitationSummary, invitationRecords }) {
@@ -91,37 +98,50 @@ export async function loadRoutePricingResources({ api, categories, routeMinimumF
   routeMinimumFares.value = fareResult.data
 }
 
-export async function loadCoreUsers({ usersApi, users }) {
-  users.value = (await usersApi.list()).data
+export async function loadCoreUsers({ usersApi, users, state }) {
+  const result = await usersApi.list(state?.query.value || { page: 1, pageSize: 10 })
+  if (state) state.apply(result)
+  else users.value = result.data
 }
 
-
-export async function loadDriversResources({ driversApi, vehicleCategories, drivers, allVehicles }) {
-  const [categoryResult, driverResult, vehicleResult] = await Promise.all([driversApi.categories(), driversApi.list(), driversApi.listAllVehicles()])
+export async function loadDriversResources({ driversApi, vehicleCategories, drivers, allVehicles, state, includeVehicles = true }) {
+  const requests = [driversApi.categories(), loadAllPages(query => driversApi.list(query), state?.query.value || {}, 100)]
+  if (includeVehicles) requests.push(driversApi.listAllVehicles())
+  const [categoryResult, driverResult, vehicleResult] = await Promise.all(requests)
   vehicleCategories.value = categoryResult.data.filter(item => item.enabled !== false)
-  drivers.value = driverResult.data
-  allVehicles.value = vehicleResult.data.map(vehicle => ({ ...vehicle, vehiclePhotoUrl: null }))
+  if (state) state.apply(driverResult)
+  else drivers.value = driverResult.data
+  if (vehicleResult) allVehicles.value = vehicleResult.data.map(vehicle => ({ ...vehicle, vehiclePhotoUrl: null }))
 }
 
-export async function loadDispatchResources({ tripsApi, driversApi, trips, drivers, orderUrls, tripPage }) {
-  const [tripResult, driverResult] = await Promise.all([tripsApi.list(), driversApi.list()])
-  trips.value = tripResult.data
+export async function loadDispatchResources({ tripsApi, driversApi, trips, drivers, orderUrls, state }) {
+  const [tripResult, driverResult] = await Promise.all([
+    tripsApi.list(state?.dispatchQuery.value || { page: 1, pageSize: 10, mode: 'dispatch' }),
+    driversApi.options({ page: 1, pageSize: 100 })
+  ])
+  state?.apply(tripResult, 'dispatch')
+  if (!state) trips.value = tripResult.data
   drivers.value = driverResult.data
-  await loadDispatchOrderUrls({ trips, tripsApi, orderUrls })
-  tripPage.value = 1
+  orderUrls.value = tripResult.data.flatMap(trip => trip.orderUrls || [])
 }
 
-export async function loadSettlementResources({ tripsApi, driversApi, trips, drivers }) {
-  const [tripResult, driverResult] = await Promise.all([tripsApi.list(), driversApi.list()])
-  trips.value = tripResult.data
+export async function loadSettlementResources({ tripsApi, driversApi, trips, drivers, query = { page: 1, pageSize: 10, mode: 'settlements' }, state }) {
+  const [tripResult, driverResult] = await Promise.all([tripsApi.list(query), driversApi.options({ page: 1, pageSize: 100 })])
+  if (state) state.apply(tripResult)
+  else trips.value = tripResult.data
   drivers.value = driverResult.data
+  return tripResult
 }
 
-export async function loadTripsResources({ tripsApi, driversApi, api, trips, drivers, tripPage, tripCatalog }) {
-  const [tripResult, catalogResult, driverResult] = await Promise.all([tripsApi.list(), api('/vehicles'), driversApi.list()])
-  trips.value = tripResult.data
-  drivers.value = driverResult.data
-  tripPage.value = 1
+export async function loadTripsResources({ tripsApi, usersApi, api, trips, users, state, tripCatalog }) {
+  const [tripResult, catalogResult, userResult] = await Promise.all([
+    tripsApi.list(state?.query.value || { page: 1, pageSize: 10, mode: 'list' }),
+    api('/vehicles'),
+    usersApi.options({ page: 1, pageSize: 100 })
+  ])
+  state?.apply(tripResult, 'list')
+  if (!state) trips.value = tripResult.data
+  users.value = userResult.data
   tripCatalog.value = catalogResult
 }
 
@@ -133,6 +153,8 @@ export async function loadAdministratorResources({ api, administrators }) {
   administrators.value = (await api('/admin/administrators')).data
 }
 
-export async function loadAuditLogResources({ api, auditLogs }) {
-  auditLogs.value = (await api('/admin/audit-logs')).data
+export async function loadAuditLogResources({ api, auditLogs, query = { page: 1, pageSize: 20 } }) {
+  const result = await api(`/admin/audit-logs${serializeAdminQuery(query)}`)
+  auditLogs.value = result.data
+  return result
 }

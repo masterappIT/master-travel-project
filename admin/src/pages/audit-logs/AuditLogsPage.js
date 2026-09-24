@@ -36,32 +36,23 @@ export const AuditLogsPage = {
   name: 'AuditLogsPage',
   setup() {
     const context = inject('adminAccessContext')
-    const search = ref('')
-    const statusFilter = ref('all')
-    const methodFilter = ref('all')
-    const page = ref(1)
+    const search = context.auditSearch
+    const statusFilter = context.auditStatusFilter
+    const methodFilter = context.auditMethodFilter
+    const page = context.auditPage
     const pageSize = 20
     const selectedLog = ref(null)
     const detailDrawer = ref(null)
     const detailCloseButton = ref(null)
     let detailTrigger = null
 
-    const filteredLogs = computed(() => {
-      const keyword = search.value.trim().toLowerCase()
-      return context.auditLogs.value.filter(item => {
-        const matchesStatus = statusFilter.value === 'all' || item.status === statusFilter.value
-        const matchesMethod = methodFilter.value === 'all' || item.method === methodFilter.value
-        const haystack = [item.username, item.action, item.resource, item.method, item.ip, actionLabel(item), resourceLabel(item)].join(' ').toLowerCase()
-        return matchesStatus && matchesMethod && (!keyword || haystack.includes(keyword))
-      })
-    })
-    const pageCount = computed(() => Math.max(1, Math.ceil(filteredLogs.value.length / pageSize)))
-    const pagedLogs = computed(() => filteredLogs.value.slice((page.value - 1) * pageSize, page.value * pageSize))
-    const successCount = computed(() => context.auditLogs.value.filter(item => item.status === 'SUCCESS').length)
-    const failedCount = computed(() => context.auditLogs.value.filter(item => item.status === 'FAILED').length)
+    const filteredLogs = computed(() => context.auditLogs.value)
+    const pageCount = context.auditPageCount
+    const pagedLogs = computed(() => context.auditLogs.value)
+    const successCount = computed(() => context.auditSummary.value.success ?? context.auditSummary.value.SUCCESS ?? 0)
+    const failedCount = computed(() => context.auditSummary.value.failed ?? context.auditSummary.value.FAILED ?? 0)
 
     watch([search, statusFilter, methodFilter], () => { page.value = 1 })
-    watch(pageCount, count => { if (page.value > count) page.value = count })
 
     function openDetail(item, event) {
       detailTrigger = event?.currentTarget || null
@@ -124,7 +115,7 @@ export const AuditLogsPage = {
       </header>
 
       <div class="audit-log-summary" aria-label="操作日誌摘要">
-        <article><span>日誌總數</span><strong>{{auditLogs.length}}</strong></article>
+        <article><span>日誌總數</span><strong>{{auditTotal}}</strong></article>
         <article><span>成功操作</span><strong>{{successCount}}</strong></article>
         <article><span>失敗操作</span><strong>{{failedCount}}</strong></article>
       </div>
@@ -134,7 +125,7 @@ export const AuditLogsPage = {
           <label class="audit-log-search"><span>搜尋日誌</span><input v-model="search" type="search" placeholder="管理員、操作、資源或 IP" /></label>
           <label><span>操作結果</span><select v-model="statusFilter"><option value="all">全部結果</option><option value="SUCCESS">成功</option><option value="FAILED">失敗</option></select></label>
           <label><span>請求方法</span><select v-model="methodFilter"><option value="all">全部方法</option><option value="GET">GET</option><option value="POST">POST</option><option value="PUT">PUT</option><option value="PATCH">PATCH</option><option value="DELETE">DELETE</option></select></label>
-          <span class="audit-log-result-count"><strong>{{filteredLogs.length}}</strong> 筆結果</span>
+          <span class="audit-log-result-count"><strong>{{auditTotal}}</strong> 筆結果</span>
         </div>
 
         <div class="audit-log-table-wrap">
@@ -151,7 +142,7 @@ export const AuditLogsPage = {
           </tbody></table>
         </div>
 
-        <div v-if="filteredLogs.length > 20" class="audit-log-pagination" aria-label="操作日誌分頁">
+        <div v-if="auditTotal > 20" class="audit-log-pagination" aria-label="操作日誌分頁">
           <button type="button" :disabled="page <= 1" @click="page--">上一頁</button><span>第 {{page}} / {{pageCount}} 頁</span><button type="button" :disabled="page >= pageCount" @click="page++">下一頁</button>
         </div>
       </section>

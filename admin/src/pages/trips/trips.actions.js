@@ -1,4 +1,4 @@
-export function createTripsActions({ api, tripsApi, addressesApi, tripForm, selectedTrip, tripQuote, tripBookingStep, tripPaymentMethod, tripUseFareBalance, tripUseCashBalance, tripLocationKeyword, tripLocationResults, tripLocationSearching, tripLocationTarget, dispatchForm, orderUrlForm, createdOrderUrl, users, trips, error, load, displayError, canWrite, requestConfirmation, notify, tripCatalog, dateTimeInput }) {
+export function createTripsActions({ api, tripsApi, addressesApi, tripForm, selectedTrip, tripQuote, tripBookingStep, tripPaymentMethod, tripUseFareBalance, tripUseCashBalance, tripLocationKeyword, tripLocationResults, tripLocationSearching, tripLocationTarget, dispatchForm, orderUrlForm, createdOrderUrl, users, trips, error, load, loadUserOptions, loadDriverOptions, displayError, canWrite, requestConfirmation, notify, tripCatalog, dateTimeInput }) {
   async function settleTrip(item, method) { if (!canWrite.value || !item?.id || !method?.trim()) return; try { await tripsApi.settle(item.id, method.trim()); await load(); selectedTrip.value = trips.value.find(trip => trip.id === item.id) || null } catch (err) { error.value = displayError(err) } }
   async function unsettleTrip(item) { if (!canWrite.value || !item?.id) return; try { await tripsApi.unsettle(item.id); await load(); selectedTrip.value = trips.value.find(trip => trip.id === item.id) || null } catch (err) { error.value = displayError(err) } }
   function clearTripLocationSearch() {
@@ -7,8 +7,17 @@ export function createTripsActions({ api, tripsApi, addressesApi, tripForm, sele
     tripLocationTarget.value = 'origin'
   }
 
-  function editTrip(item) { selectedTrip.value = null; tripForm.value = { ...item, scheduledAt: dateTimeInput(item.scheduledAt) }; clearTripLocationSearch() }
-  function resetTrip() {
+  async function editTrip(item) {
+    try {
+      const detail = await tripsApi.get(item.id)
+      await loadUserOptions(detail.userId)
+      selectedTrip.value = null
+      tripForm.value = { ...detail, scheduledAt: dateTimeInput(detail.scheduledAt) }
+      clearTripLocationSearch()
+    } catch (err) { error.value = displayError(err) }
+  }
+  async function resetTrip() {
+    await loadUserOptions()
     selectedTrip.value = null
     tripForm.value = { id: '', userId: users.value[0]?.id || '', origin: '', destination: '', originLatitude: '', originLongitude: '', destinationLatitude: '', destinationLongitude: '', originCity: '', destinationCity: '', distanceMeters: 0, categoryId: '', vehicleId: '', extraIds: [], region: 'GUANGDONG', scheduledAt: dateTimeInput(new Date(Date.now() + 3600000).toISOString()), status: 'PENDING' }
     tripQuote.value = null
@@ -35,7 +44,12 @@ export function createTripsActions({ api, tripsApi, addressesApi, tripForm, sele
     tripLocationKeyword.value = ''; tripLocationResults.value = []
   }
   function handleTripRegionChange() { clearTripLocationSearch() }
-  function showTrip(item) { tripForm.value = null; selectedTrip.value = item }
+  async function showTrip(item) {
+    try {
+      tripForm.value = null
+      selectedTrip.value = await tripsApi.get(item.id)
+    } catch (err) { error.value = displayError(err) }
+  }
   function closeTrip() { selectedTrip.value = null }
   async function updateTripStatus(item, status) {
     const currentStatus = item.executionPhase === 'IN_PROGRESS' ? 'IN_PROGRESS' : item.status
@@ -75,13 +89,14 @@ export function createTripsActions({ api, tripsApi, addressesApi, tripForm, sele
     if (!tripId) return
     try {
       const latest = await tripsApi.get(tripId)
+      await loadDriverOptions(latest.driverId)
       const index = trips.value.findIndex(trip => trip.id === tripId)
       if (index >= 0) trips.value[index] = latest
       dispatchForm.value = { tripId, driverId: latest.driverId || '', driverPayoutAmount: latest.driverPayoutAmount ?? latest.driverPayoutCalculatedAmount ?? '', driverPayoutCurrency: latest.driverPayoutCurrency || latest.payment?.currency || '' }
     } catch (err) { error.value = displayError(err) }
   }
   async function saveDispatch() { if (!dispatchForm.value?.tripId || !dispatchForm.value.driverId || dispatchForm.value.driverPayoutAmount === '') return; try { await tripsApi.dispatch(dispatchForm.value.tripId, { driverId: dispatchForm.value.driverId, driverPayoutAmount: Number(dispatchForm.value.driverPayoutAmount) }); dispatchForm.value = null; await load() } catch (err) { error.value = displayError(err) } }
-  function openOrderUrlForm(item) { const now = new Date(); const later = new Date(now.getTime() + 24 * 60 * 60 * 1000); orderUrlForm.value = { tripId: item.id, driverId: item.driverId || '', validFrom: dateTimeInput(now.toISOString()), validUntil: dateTimeInput(later.toISOString()) } }
+  async function openOrderUrlForm(item) { await loadDriverOptions(item.driverId); const now = new Date(); const later = new Date(now.getTime() + 24 * 60 * 60 * 1000); orderUrlForm.value = { tripId: item.id, driverId: item.driverId || '', validFrom: dateTimeInput(now.toISOString()), validUntil: dateTimeInput(later.toISOString()) } }
   async function createOrderUrl() {
     if (!orderUrlForm.value?.tripId || !orderUrlForm.value.validFrom || !orderUrlForm.value.validUntil) return
     if (new Date(orderUrlForm.value.validUntil) <= new Date(orderUrlForm.value.validFrom)) { error.value = '失效日期必須晚於有效日期'; return }

@@ -13,7 +13,7 @@ export const MembershipPage = {
     <div class="membership-summary" aria-label="會員方案摘要">
       <article><span>方案總數</span><strong>{{membershipPlans.length}}</strong><small>個會員方案</small></article>
       <article><span>啟用中</span><strong>{{membershipPlans.filter(item => item.enabled).length}}</strong><small>目前可供訂閱</small></article>
-      <article><span>待處理訂單</span><strong>{{membershipOrders.filter(item => item.status === 'PENDING').length}}</strong><small>筆等待確認</small></article>
+      <article><span>待處理訂單</span><strong>{{membershipOrderSummary.pending ?? 0}}</strong><small>筆等待確認</small></article>
     </div>
     <div class="panel membership-plan-panel">
       <div class="membership-section-heading"><div><h3>方案設定</h3><p>比較價格與會員權益，點選編輯即可調整方案。</p></div><span>{{membershipPlans.length}} 個方案</span></div>
@@ -23,12 +23,11 @@ export const MembershipPage = {
       </tbody></table></div>
     </div>
     <div class="panel membership-order-panel">
-      <div class="membership-section-heading"><div><h3>會員訂單</h3><p>核對付款後確認啟用，待處理訂單會優先顯示。</p></div><span>{{membershipOrders.length}} 筆訂單</span></div>
+      <div class="membership-section-heading"><div><h3>會員訂單</h3><p>核對付款後確認啟用，待處理訂單會優先顯示。</p></div><span>{{membershipOrderTotal}} 筆訂單</span></div>
       <div class="membership-table-wrap"><table class="membership-order-table"><thead><tr><th>會員</th><th>訂閱方案</th><th>週期</th><th>金額</th><th>狀態</th><th>建立時間</th><th>操作</th></tr></thead><tbody>
         <tr v-for="item in membershipOrders" :key="item.id"><td><strong>{{item.user.displayName||item.user.name||'會員'}}</strong><small class="membership-cell-note">{{item.user.phoneNumber}}</small></td><td>{{item.plan.name}}</td><td>{{item.billingPeriod==='MONTHLY'?'月付':'年付'}}</td><td><strong>{{item.currency}} {{item.amount}}</strong></td><td><span class="membership-order-status" :class="item.status.toLowerCase()">{{item.status==='PENDING'?'待確認':item.status==='PAID'?'已啟用':'已取消'}}</span></td><td>{{new Date(item.createdAt).toLocaleString('zh-HK')}}</td><td class="row-actions"><button v-if="item.status==='PENDING'" type="button" class="membership-confirm-action" @click="confirmMembershipOrder(item)">確認收款</button><span v-else class="muted">已處理</span></td></tr>
         <tr v-if="!membershipOrders.length"><td colspan="7"><div class="membership-empty"><strong>暫無會員訂單</strong><span>新訂單建立後會顯示在這裡。</span></div></td></tr>
       </tbody></table></div>
-    </div>
     <div v-if="membershipForm" class="modal-backdrop" @click.self="membershipForm=null"><form class="record-form membership-form" @submit.prevent="saveMembership">
       <div class="membership-form-heading"><div><span class="eyebrow">{{membershipForm.id ? 'EDIT PLAN' : 'NEW PLAN'}}</span><h3>{{membershipForm.id ? '編輯會員方案' : '新增會員方案'}}</h3><p class="muted">設定方案識別、價格與每期會員權益。</p></div><button type="button" class="membership-close-action" aria-label="關閉" @click="membershipForm=null">×</button></div>
       <div class="membership-form-body">

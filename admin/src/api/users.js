@@ -1,5 +1,8 @@
+import { serializeAdminQuery } from '../utils/admin-query-state.js'
+
 export const createUsersApi = api => ({
-  list: () => api('/admin/users'),
+  list: (query = {}) => api(`/admin/users${serializeAdminQuery(query)}`),
+  options: (query = {}) => api(`/admin/users/options${serializeAdminQuery(query)}`),
   save: (id, payload) => api(id ? `/admin/users/${id}` : '/admin/users', {
     method: 'POST',
     body: JSON.stringify(payload)

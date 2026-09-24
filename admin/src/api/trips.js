@@ -1,5 +1,7 @@
+import { serializeAdminQuery } from '../utils/admin-query-state.js'
+
 export const createTripsApi = api => ({
-  list: () => api('/admin/trips'),
+  list: (query = {}) => api(`/admin/trips${serializeAdminQuery(query)}`),
   get: id => api(`/admin/trips/${id}`),
   update: (id, payload) => api(`/admin/trips/${id}`, { method: 'POST', body: JSON.stringify(payload) }),
   dispatch: (id, payload) => api(`/admin/trips/${id}/dispatch`, { method: 'POST', body: JSON.stringify(payload) }),
