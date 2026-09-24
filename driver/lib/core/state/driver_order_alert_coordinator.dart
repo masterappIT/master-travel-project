@@ -45,12 +45,10 @@ class DriverOrderAlertCoordinator extends StatefulWidget {
   const DriverOrderAlertCoordinator({
     super.key,
     required this.child,
-    required this.scaffoldMessengerKey,
     required this.navigatorKey,
   });
 
   final Widget child;
-  final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey;
   final GlobalKey<NavigatorState> navigatorKey;
 
   static final ValueNotifier<int> tripsChanged = ValueNotifier<int>(0);
@@ -75,7 +73,6 @@ class _DriverOrderAlertCoordinatorState
   bool _refreshInFlight = false;
   bool _refreshPending = false;
   bool _active = false;
-  bool _soundPromptShown = false;
   bool _cancellationDialogShowing = false;
   final Set<String> _queuedCancellationIds = {};
   final List<Map<String, dynamic>> _cancellationQueue = [];
@@ -269,10 +266,9 @@ class _DriverOrderAlertCoordinatorState
       _enqueueCancellationNotifications(cancellationNotifications);
       if (play && !await _alert.play()) {
         developer.log(
-          'Browser blocked the new-order alert sound',
+          'New-order alert sound is not enabled for this browser session',
           name: 'driver.order_alert',
         );
-        _showSoundPrompt();
       }
     } on DriverApiException catch (error, stackTrace) {
       developer.log('Unable to refresh driver order alerts',
@@ -404,27 +400,6 @@ class _DriverOrderAlertCoordinatorState
     if (date == null) return '-';
     String two(int number) => number.toString().padLeft(2, '0');
     return '${date.year}/${two(date.month)}/${two(date.day)} ${two(date.hour)}:${two(date.minute)}';
-  }
-
-  void _showSoundPrompt() {
-    if (!mounted || _soundPromptShown) return;
-    _soundPromptShown = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final messenger = widget.scaffoldMessengerKey.currentState;
-      messenger
-          ?.showSnackBar(SnackBar(
-            content: const Text('點擊啟用新訂單提示聲'),
-            action: SnackBarAction(
-              label: '啟用',
-              onPressed: () async {
-                if (await _alert.unlock()) _soundPromptShown = false;
-              },
-            ),
-          ))
-          .closed
-          .then((_) => _soundPromptShown = false);
-    });
   }
 
   @override

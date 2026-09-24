@@ -46,7 +46,6 @@ class DriverApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DriverOrderAlertCoordinator(
-      scaffoldMessengerKey: scaffoldMessengerKey,
       navigatorKey: navigatorKey,
       child: ValueListenableBuilder<String>(
         valueListenable: DriverLanguagePreference.instance,

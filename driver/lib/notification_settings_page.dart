@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'core/api/driver_api_client.dart';
 import 'core/layout/driver_page_shell.dart';
+import 'core/platform/new_order_alert.dart';
 import 'core/state/driver_alert_sound_preference.dart';
 import 'core/state/driver_language_preference.dart';
 import 'core/tokens/driver_tokens.dart';
@@ -16,9 +17,12 @@ class NotificationSettingsPage extends StatefulWidget {
 
 class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
   final _api = DriverApiClient.instance;
+  final _newOrderAlert = NewOrderAlert();
   bool _loading = true;
   bool _saving = false;
+  bool _testingSound = false;
   String? _error;
+  String? _soundTestMessage;
   bool _pushEnabled = true;
   bool _orderEnabled = true;
   bool _settlementEnabled = true;
@@ -51,6 +55,46 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
         _loading = false;
       });
     }
+  }
+
+  @override
+  void dispose() {
+    _newOrderAlert.dispose();
+    super.dispose();
+  }
+
+  Future<void> _testSound() async {
+    if (_testingSound || !_soundEnabled) return;
+    setState(() {
+      _testingSound = true;
+      _soundTestMessage = null;
+    });
+    final played = await _newOrderAlert.unlock();
+    if (!mounted) return;
+    setState(() {
+      _testingSound = false;
+      _soundTestMessage = played
+          ? driverText('提示聲已播放', '提示音已播放', 'Alert sound played')
+          : driverText('無法播放，請檢查瀏覽器及裝置音訊設定', '无法播放，请检查浏览器及设备音频设置',
+              'Unable to play. Check browser and device audio settings.');
+    });
+  }
+
+  Future<void> _setSoundEnabled(bool value) async {
+    bool? activated;
+    if (value) activated = await _newOrderAlert.unlock();
+    if (!mounted) return;
+    if (activated == false) {
+      setState(() {
+        _soundTestMessage = driverText(
+            '提示聲已開啟，但瀏覽器尚未允許播放；請使用測試按鈕重試',
+            '提示音已开启，但浏览器尚未允许播放；请使用测试按钮重试',
+            'Sound is on, but the browser has not allowed playback. Use the test button to retry.');
+      });
+    } else if (!value) {
+      setState(() => _soundTestMessage = null);
+    }
+    await _setValue(() => _soundEnabled = value);
   }
 
   Future<void> _setValue(void Function() update) async {
@@ -142,9 +186,13 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
                   detail: driverText('有新可接訂單時播放提示聲', '有新可接订单时播放提示音',
                       'Play a sound for new available orders'),
                   value: _soundEnabled,
-                  onChanged: _saving
-                      ? null
-                      : (value) => _setValue(() => _soundEnabled = value)),
+                  onChanged: _saving ? null : _setSoundEnabled),
+              _SoundTestRow(
+                enabled: _soundEnabled && !_saving && !_testingSound,
+                testing: _testingSound,
+                message: _soundTestMessage,
+                onPressed: _testSound,
+              ),
               _ToggleRow(
                   title: driverText('結算通知', '结算通知', 'Settlement notifications'),
                   detail: driverText('結算完成或狀態更新時通知我', '结算完成或状态更新时通知我',
@@ -222,6 +270,43 @@ class _SettingsCard extends StatelessWidget {
             if (i < children.length - 1)
               const Divider(height: 1, color: DriverColors.divider)
           ]
+        ]),
+      );
+}
+
+class _SoundTestRow extends StatelessWidget {
+  const _SoundTestRow({
+    required this.enabled,
+    required this.testing,
+    required this.message,
+    required this.onPressed,
+  });
+
+  final bool enabled;
+  final bool testing;
+  final String? message;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.symmetric(
+            horizontal: DriverSpacing.lg, vertical: DriverSpacing.md),
+        child:
+            Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          OutlinedButton.icon(
+            onPressed: enabled ? onPressed : null,
+            icon: const Icon(Icons.volume_up_outlined),
+            label: Text(testing
+                ? driverText('播放中…', '播放中…', 'Playing…')
+                : driverText('測試提示聲', '测试提示音', 'Test alert sound')),
+          ),
+          if (message != null) ...[
+            const SizedBox(height: DriverSpacing.sm),
+            Text(message!,
+                style: const TextStyle(
+                    fontSize: DriverTypography.caption,
+                    color: DriverColors.secondaryText)),
+          ],
         ]),
       );
 }

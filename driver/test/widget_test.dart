@@ -201,9 +201,8 @@ Future<http.Response> _driverFixtureResponse(http.Request request) async {
       'scheduledAt': '2099-03-20T10:00:00Z',
       'passengerName': '陳大文',
       'passengerPhone': '91234567',
-      'acceptedAt': path.endsWith('/trip-accepted')
-          ? '2024-03-20T09:00:00Z'
-          : null,
+      'acceptedAt':
+          path.endsWith('/trip-accepted') ? '2024-03-20T09:00:00Z' : null,
       if (path.endsWith('/trip-accepted'))
         'vehicle': {
           'id': 'vehicle-primary',
@@ -499,6 +498,18 @@ void main() {
 
     expect(find.text('新訂單提示聲'), findsOneWidget);
     expect(find.text('有新可接訂單時播放提示聲'), findsOneWidget);
+    expect(find.text('測試提示聲'), findsOneWidget);
+  });
+
+  testWidgets('tests the new-order alert sound from settings',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(testApp(const NotificationSettingsPage()));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('測試提示聲'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('提示聲已播放'), findsOneWidget);
   });
 
   testWidgets('requires acknowledgement for a cancelled accepted trip',
@@ -550,7 +561,6 @@ void main() {
 
     await tester.pumpWidget(DriverOrderAlertCoordinator(
       navigatorKey: navigatorKey,
-      scaffoldMessengerKey: messengerKey,
       child: MaterialApp(
         navigatorKey: navigatorKey,
         scaffoldMessengerKey: messengerKey,

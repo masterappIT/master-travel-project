@@ -1,6 +1,5 @@
 // ignore_for_file: avoid_web_libraries_in_flutter, deprecated_member_use
 
-import 'dart:async';
 import 'dart:convert';
 import 'dart:html' as html;
 import 'dart:math' as math;
@@ -15,39 +14,21 @@ abstract class NewOrderAlert {
 }
 
 class WebNewOrderAlert implements NewOrderAlert {
-  late final html.AudioElement _audio = html.AudioElement(_createToneDataUri())
-    ..preload = 'auto';
-  bool _unlocked = false;
-  final List<StreamSubscription<html.Event>> _interactionSubscriptions = [];
-
-  WebNewOrderAlert() {
-    final interactions = <Stream<html.Event>>[
-      html.document.onClick,
-      html.document.onMouseDown,
-      html.document.onTouchStart,
-      html.EventStreamProvider<html.Event>('pointerdown')
-          .forTarget(html.document),
-      html.document.onKeyDown,
-    ];
-    for (final interaction in interactions) {
-      _interactionSubscriptions.add(interaction.listen((_) {
-        unawaited(unlock());
-      }));
-    }
-  }
+  static final html.AudioElement _audio =
+      html.AudioElement(_createToneDataUri())..preload = 'auto';
+  static bool _unlocked = false;
 
   @override
   Future<bool> unlock() async {
-    if (_unlocked) return true;
     final volume = _audio.volume;
     try {
-      _audio.volume = 0;
-      await _audio.play();
-      _audio.pause();
+      _audio.volume = 0.22;
       _audio.currentTime = 0;
+      await _audio.play();
       _unlocked = true;
       return true;
     } on Object {
+      _unlocked = false;
       return false;
     } finally {
       _audio.volume = volume;
@@ -56,23 +37,19 @@ class WebNewOrderAlert implements NewOrderAlert {
 
   @override
   Future<bool> play() async {
+    if (!_unlocked) return false;
     try {
       _audio.currentTime = 0;
       await _audio.play();
       return true;
     } on Object {
+      _unlocked = false;
       return false;
     }
   }
 
   @override
-  void dispose() {
-    for (final subscription in _interactionSubscriptions) {
-      subscription.cancel();
-    }
-    _audio.pause();
-    _audio.remove();
-  }
+  void dispose() {}
 }
 
 String _createToneDataUri() {
