@@ -19,6 +19,14 @@ export function createDriversActions({ driversApi, driverForm, selectedDriver, s
   const vehicleForm = ref(null)
   const assignmentVehicle = ref(null)
   const vehicleAssignments = ref([])
+  const driverTrips = ref([])
+  const driverTripsLoading = ref(false)
+  const driverTripsError = ref('')
+  const driverTripsPage = ref(1)
+  const driverTripsPageSize = 10
+  const driverTripsTotal = ref(0)
+  const driverTripsPageCount = ref(1)
+  let driverTripsRequest = 0
   function clearVehiclePhotoUrls(urls) {
     urls.forEach(url => URL.revokeObjectURL(url))
     urls.clear()
@@ -284,11 +292,36 @@ export function createDriversActions({ driversApi, driverForm, selectedDriver, s
     } catch (err) { error.value = displayError(err); notify(error.value, 'error') }
   }
 
+  async function loadDriverTrips(page = 1, driverId = selectedDriver.value?.id) {
+    if (!driverId) return
+    const request = ++driverTripsRequest
+    driverTripsLoading.value = true
+    driverTripsError.value = ''
+    try {
+      const result = await driversApi.listTrips(driverId, { page, pageSize: driverTripsPageSize })
+      if (request !== driverTripsRequest || selectedDriver.value?.id !== driverId) return
+      driverTrips.value = result.data || []
+      driverTripsTotal.value = result.total || 0
+      driverTripsPage.value = result.page || page
+      driverTripsPageCount.value = result.pageCount || 1
+    } catch (err) {
+      if (request === driverTripsRequest) driverTripsError.value = displayError(err)
+    } finally {
+      if (request === driverTripsRequest) driverTripsLoading.value = false
+    }
+  }
+
   async function openDriverDetail(item) {
     const request = ++vehiclePhotoRequest
     clearVehiclePhotoUrls(vehiclePhotoUrls)
+    driverTrips.value = []
+    driverTripsTotal.value = 0
+    driverTripsPage.value = 1
+    driverTripsPageCount.value = 1
+    driverTripsError.value = ''
     const detail = { ...item, vehicles: (item.vehicles || []).map(vehicle => ({ ...vehicle, vehiclePhotoUrl: null, vehiclePhotoLoading: false, vehiclePhotoLoadError: false })) }
     selectedDriver.value = detail
+    void loadDriverTrips(1, detail.id)
     await refreshDriverVehicles(selectedDriver.value)
     if (vehiclePhotoRequest !== request) return
     selectedDriver.value.vehicles = (selectedDriver.value.vehicles || []).map(vehicle => ({ ...vehicle, vehiclePhotoUrl: null, vehiclePhotoLoading: false, vehiclePhotoLoadError: false }))
@@ -297,6 +330,8 @@ export function createDriversActions({ driversApi, driverForm, selectedDriver, s
   function previewDriver(item) { openDriverDetail(item) }
   function closeDriverDetail() {
     vehiclePhotoRequest += 1
+    driverTripsRequest += 1
+    driverTripsLoading.value = false
     clearVehiclePhotoUrls(vehiclePhotoUrls)
     selectedDriver.value = null
     settlementForm.value = null
@@ -351,5 +386,5 @@ export function createDriversActions({ driversApi, driverForm, selectedDriver, s
     } catch (err) { error.value = displayError(err) }
   }
 
-  return { reviewStatusLabel, resetDriver, editDriver, closeDriverForm, formatDriverHongKongPlate, formatDriverMacauPlate, formatDriverMainlandPlate, changeDriverOwnership, uploadDriverPhotos, removeDriverPhoto, saveDriver, updateDriverStatus, removeDriver, openDriverDetail, previewDriver, closeDriverDetail, approveDriver, requestDriverRevision, rejectDriver, resetSettlement, saveSettlement, refreshDriverVehicles, manageVehicleAssignments, closeVehicleAssignments, bindVehicleDriver, setPrimaryVehicle, unbindVehicleDriver, vehicleAssignments, assignmentVehicle, updateVehicleStatus, removeVehicle, vehicleForm, resetVehicleForm, editVehicle, closeVehicleForm, changeVehicleOwnership, uploadVehiclePhoto, saveVehicle }
+  return { reviewStatusLabel, resetDriver, editDriver, closeDriverForm, formatDriverHongKongPlate, formatDriverMacauPlate, formatDriverMainlandPlate, changeDriverOwnership, uploadDriverPhotos, removeDriverPhoto, saveDriver, updateDriverStatus, removeDriver, openDriverDetail, previewDriver, closeDriverDetail, approveDriver, requestDriverRevision, rejectDriver, resetSettlement, saveSettlement, refreshDriverVehicles, loadDriverTrips, driverTrips, driverTripsLoading, driverTripsError, driverTripsPage, driverTripsTotal, driverTripsPageCount, manageVehicleAssignments, closeVehicleAssignments, bindVehicleDriver, setPrimaryVehicle, unbindVehicleDriver, vehicleAssignments, assignmentVehicle, updateVehicleStatus, removeVehicle, vehicleForm, resetVehicleForm, editVehicle, closeVehicleForm, changeVehicleOwnership, uploadVehiclePhoto, saveVehicle }
 }

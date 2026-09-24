@@ -27,6 +27,7 @@ export const createDriversApi = api => ({
   vehiclePhoto: id => api.blob(`/admin/drivers/${id}/vehicle-photo`),
   categories: () => api('/admin/vehicle-categories'),
   listVehicles: driverId => api(`/admin/drivers/${driverId}/vehicles`),
+  listTrips: (driverId, { page = 1, pageSize = 10 } = {}) => api(`/admin/drivers/${driverId}/trips?page=${page}&pageSize=${pageSize}`),
   listAllVehicles: () => api('/admin/driver-vehicles'),
   vehiclePhotoByVehicle: (id, options = {}) => api.blob(`/admin/driver-vehicles/${encodeURIComponent(id)}/photo`, options),
   vehiclePhotoThumbnailByVehicle: (id, options = {}) => api.blob(`/admin/driver-vehicles/${encodeURIComponent(id)}/photo/thumbnail`, options),

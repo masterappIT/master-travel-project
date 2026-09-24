@@ -5804,6 +5804,45 @@ class AdminController {
     response.type(vehicle.vehiclePhotoMime).send(Buffer.from(vehicle.vehiclePhotoData));
   }
 
+  @Get("drivers/:id/trips") async listDriverTrips(
+    @Req() req: RequestLike,
+    @Param("id") id: string,
+  ) {
+    requireAuth(req);
+    if (!(await prisma.driver.findUnique({ where: { id }, select: { id: true } })))
+      throw new HttpException("Driver not found", HttpStatus.NOT_FOUND);
+    const page = Math.max(1, Number.parseInt(req.query?.page || "1", 10) || 1);
+    const pageSize = Math.min(
+      100,
+      Math.max(1, Number.parseInt(req.query?.pageSize || "10", 10) || 10),
+    );
+    const where: Prisma.TripWhereInput = { driverId: id };
+    const [data, total] = await prisma.$transaction([
+      prisma.trip.findMany({
+        where,
+        include: { user: true, payment: true, settlement: true },
+        orderBy: [
+          { acceptedAt: { sort: "desc", nulls: "last" } },
+          { assignedAt: { sort: "desc", nulls: "last" } },
+          { createdAt: "desc" },
+        ],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      prisma.trip.count({ where }),
+    ]);
+    return {
+      data: data.map(({ user, ...trip }) => ({
+        ...trip,
+        user: userResponse(user),
+      })),
+      total,
+      page,
+      pageSize,
+      pageCount: Math.max(1, Math.ceil(total / pageSize)),
+    };
+  }
+
   @Get("drivers/:id/vehicles") async listDriverVehicles(
     @Req() req: RequestLike,
     @Param("id") id: string,
