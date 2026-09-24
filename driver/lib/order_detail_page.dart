@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'core/widgets/driver_overlays.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import 'app/route_names.dart';
@@ -6,6 +9,7 @@ import 'core/api/driver_api_client.dart';
 import 'core/formatters/passenger_name.dart';
 import 'core/layout/driver_page_shell.dart';
 import 'core/navigation/driver_navigation.dart';
+import 'core/state/driver_language_preference.dart';
 
 import 'package:driver_web/core/tokens/driver_tokens.dart';
 
@@ -28,11 +32,27 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
   bool _loading = true;
   bool _accepting = false;
   String? _error;
+  String? _centerNotice;
+  Timer? _centerNoticeTimer;
 
   @override
   void initState() {
     super.initState();
     _loadTrip();
+  }
+
+  @override
+  void dispose() {
+    _centerNoticeTimer?.cancel();
+    super.dispose();
+  }
+
+  void _showCenterNotice(String message) {
+    _centerNoticeTimer?.cancel();
+    setState(() => _centerNotice = message);
+    _centerNoticeTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted) setState(() => _centerNotice = null);
+    });
   }
 
   Future<void> _loadTrip() async {
@@ -96,10 +116,9 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
           arguments: widget.tripId,
         );
       }
-    } on DriverApiException catch (error) {
+    } on DriverApiException {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(error.message)));
+        _showCenterNotice(driverText('搶單失敗', '抢单失败', 'Failed to accept order'));
       }
     } finally {
       if (mounted) setState(() => _accepting = false);
@@ -116,8 +135,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
       }
     } on DriverApiException catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(error.message)));
+        showDriverNotice(context, error.message);
       }
     } finally {
       if (mounted) setState(() => _accepting = false);
@@ -222,148 +240,195 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
         : '車輛資料待確認';
     final inProgress = _trip?['executionPhase'] == 'IN_PROGRESS';
 
-    return DriverPageShell(
-      selectedIndex: 1,
-      showBottomNavigation: false,
-      topPadding: 24,
-      horizontalPadding: 24,
-      bottomPadding: 32,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(children: [
-            Semantics(
-              button: true,
-              label: '返回接單大廳',
-              child: IconButton(
-                onPressed: () => Navigator.of(context).pop(),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-                icon: const Text('<',
-                    style: TextStyle(fontSize: 18, color: DriverColors.text)),
-              ),
-            ),
-            const SizedBox(width: DriverSpacing.sm),
-            Text(widget.completed ? '已完成訂單詳情' : '訂單詳情',
-                style: const TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w700,
-                    color: DriverColors.text)),
-          ]),
-          const SizedBox(height: DriverSpacing.sm),
-          Text(widget.completed ? '行程與結算資料' : '請確認乘客資訊與行程內容',
-              style: const TextStyle(
-                  fontSize: DriverTypography.body,
-                  color: DriverColors.secondaryText)),
-          const SizedBox(height: DriverSpacing.xl),
-          if (_loading)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 120),
-              child: Center(child: CircularProgressIndicator()),
-            )
-          else if (_error != null)
-            _OrderDetailError(message: _error!, onRetry: _loadTrip)
-          else ...[
-            _MapPreview(origin: originRegion, destination: destinationRegion),
-            const SizedBox(height: DriverSpacing.xl),
-            _OrderInfoCard(
-              passenger: passenger,
-              routeOrigin: originRegion,
-              routeDestination: destinationRegion,
-              origin: origin,
-              destination: destination,
-              scheduledAt: scheduledAt,
-              price: _formatPrice(_trip?['price'], _trip?['currency']),
-            ),
-            const SizedBox(height: DriverSpacing.xl),
-            const Text('接單車輛',
-                style: TextStyle(
-                    fontSize: DriverTypography.body,
-                    fontWeight: FontWeight.w700,
-                    color: DriverColors.text)),
-            const SizedBox(height: DriverSpacing.md),
-            if (!accepted && !pendingAssignment)
-              for (var index = 0; index < _vehicles.length; index++) ...[
-                _VehicleCard(
-                  index: index,
-                  title: _vehicles[index]['vehicleColor']
-                              ?.toString()
-                              .trim()
-                              .isNotEmpty ==
-                          true
-                      ? _vehicles[index]['vehicleColor'].toString()
-                      : missingVehicleText,
-                  ownership: _vehicleOwnershipAndPlateType(
-                      _vehicles[index], missingVehicleText),
-                  type: _vehicles[index]['vehicleCategory']
-                              ?.toString()
-                              .trim()
-                              .isNotEmpty ==
-                          true
-                      ? _vehicles[index]['vehicleCategory'].toString()
-                      : missingVehicleText,
-                  plate: _vehiclePlate(_vehicles[index], missingVehicleText),
-                  selected:
-                      _vehicles[index]['id']?.toString() == _selectedVehicleId,
-                  onTap: () => setState(() =>
-                      _selectedVehicleId = _vehicles[index]['id']?.toString()),
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        DriverPageShell(
+          selectedIndex: 1,
+          showBottomNavigation: false,
+          topPadding: 24,
+          horizontalPadding: 24,
+          bottomPadding: 32,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(children: [
+                Semantics(
+                  button: true,
+                  label: '返回接單大廳',
+                  child: IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    padding: EdgeInsets.zero,
+                    constraints:
+                        const BoxConstraints(minWidth: 44, minHeight: 44),
+                    icon: const Text('<',
+                        style:
+                            TextStyle(fontSize: 18, color: DriverColors.text)),
+                  ),
                 ),
-                if (index < _vehicles.length - 1)
-                  const SizedBox(height: DriverSpacing.md),
-              ]
-            else
-              _VehicleCard(
-                index: 0,
-                title: vehicle?['vehicleColor']?.toString().trim().isNotEmpty ==
-                        true
-                    ? vehicle!['vehicleColor'].toString()
-                    : missingVehicleText,
-                ownership:
-                    _vehicleOwnershipAndPlateType(vehicle, missingVehicleText),
-                type:
-                    vehicle?['vehicleCategory']?.toString().trim().isNotEmpty ==
+                const SizedBox(width: DriverSpacing.sm),
+                Text(widget.completed ? '已完成訂單詳情' : '訂單詳情',
+                    style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w700,
+                        color: DriverColors.text)),
+              ]),
+              const SizedBox(height: DriverSpacing.sm),
+              Text(widget.completed ? '行程與結算資料' : '請確認乘客資訊與行程內容',
+                  style: const TextStyle(
+                      fontSize: DriverTypography.body,
+                      color: DriverColors.secondaryText)),
+              const SizedBox(height: DriverSpacing.xl),
+              if (_loading)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 120),
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else if (_error != null)
+                _OrderDetailError(message: _error!, onRetry: _loadTrip)
+              else ...[
+                _MapPreview(
+                    origin: originRegion, destination: destinationRegion),
+                const SizedBox(height: DriverSpacing.xl),
+                _OrderInfoCard(
+                  passenger: passenger,
+                  routeOrigin: originRegion,
+                  routeDestination: destinationRegion,
+                  origin: origin,
+                  destination: destination,
+                  scheduledAt: scheduledAt,
+                  price: _formatPrice(_trip?['price'], _trip?['currency']),
+                ),
+                const SizedBox(height: DriverSpacing.xl),
+                const Text('接單車輛',
+                    style: TextStyle(
+                        fontSize: DriverTypography.body,
+                        fontWeight: FontWeight.w700,
+                        color: DriverColors.text)),
+                const SizedBox(height: DriverSpacing.md),
+                if (!accepted && !pendingAssignment)
+                  for (var index = 0; index < _vehicles.length; index++) ...[
+                    _VehicleCard(
+                      index: index,
+                      title: _vehicles[index]['vehicleColor']
+                                  ?.toString()
+                                  .trim()
+                                  .isNotEmpty ==
+                              true
+                          ? _vehicles[index]['vehicleColor'].toString()
+                          : missingVehicleText,
+                      ownership: _vehicleOwnershipAndPlateType(
+                          _vehicles[index], missingVehicleText),
+                      type: _vehicles[index]['vehicleCategory']
+                                  ?.toString()
+                                  .trim()
+                                  .isNotEmpty ==
+                              true
+                          ? _vehicles[index]['vehicleCategory'].toString()
+                          : missingVehicleText,
+                      plate:
+                          _vehiclePlate(_vehicles[index], missingVehicleText),
+                      selected: _vehicles[index]['id']?.toString() ==
+                          _selectedVehicleId,
+                      onTap: () => setState(() => _selectedVehicleId =
+                          _vehicles[index]['id']?.toString()),
+                    ),
+                    if (index < _vehicles.length - 1)
+                      const SizedBox(height: DriverSpacing.md),
+                  ]
+                else
+                  _VehicleCard(
+                    index: 0,
+                    title: vehicle?['vehicleColor']
+                                ?.toString()
+                                .trim()
+                                .isNotEmpty ==
+                            true
+                        ? vehicle!['vehicleColor'].toString()
+                        : missingVehicleText,
+                    ownership: _vehicleOwnershipAndPlateType(
+                        vehicle, missingVehicleText),
+                    type: vehicle?['vehicleCategory']
+                                ?.toString()
+                                .trim()
+                                .isNotEmpty ==
                             true
                         ? vehicle!['vehicleCategory'].toString()
                         : missingVehicleText,
-                plate: _vehiclePlate(vehicle, missingVehicleText),
-                selected: true,
-                onTap: () {},
-              ),
-            if (!widget.completed) ...[
-              const SizedBox(height: DriverSpacing.xl),
-              if (!accepted)
-                Row(children: [
-                  Expanded(
-                      child: OutlinedButton(
-                          onPressed: _accepting
-                              ? null
-                              : pendingAssignment
-                                  ? _rejectTrip
-                                  : () => Navigator.of(context).pop(),
-                          style: _secondaryButtonStyle(),
-                          child: Text(pendingAssignment ? '不接此單' : '拒絕'))),
-                  const SizedBox(width: DriverSpacing.md),
-                  Expanded(
-                      child: ElevatedButton(
-                          onPressed: _accepting ||
-                                  (!pendingAssignment &&
-                                      _selectedVehicleId == null)
-                              ? null
-                              : _acceptTrip,
-                          style: _primaryButtonStyle(),
-                          child: Text(_accepting ? '處理中…' : '確認接單'))),
-                ])
-              else
-                ElevatedButton(
-                  onPressed:
-                      inProgress ? _openInProgressTrip : _openAcceptedTrip,
-                  style: _primaryButtonStyle(),
-                  child: Text(inProgress ? '查看進行中行程' : '查看已接行程'),
-                ),
+                    plate: _vehiclePlate(vehicle, missingVehicleText),
+                    selected: true,
+                    onTap: () {},
+                  ),
+                if (!widget.completed) ...[
+                  const SizedBox(height: DriverSpacing.xl),
+                  if (!accepted)
+                    Row(children: [
+                      Expanded(
+                          child: OutlinedButton(
+                              onPressed: _accepting
+                                  ? null
+                                  : pendingAssignment
+                                      ? _rejectTrip
+                                      : () => Navigator.of(context).pop(),
+                              style: _secondaryButtonStyle(),
+                              child: Text(pendingAssignment ? '不接此單' : '拒絕'))),
+                      const SizedBox(width: DriverSpacing.md),
+                      Expanded(
+                          child: ElevatedButton(
+                              onPressed: _accepting ||
+                                      (!pendingAssignment &&
+                                          _selectedVehicleId == null)
+                                  ? null
+                                  : _acceptTrip,
+                              style: _primaryButtonStyle(),
+                              child: Text(_accepting ? '處理中…' : '確認接單'))),
+                    ])
+                  else
+                    ElevatedButton(
+                      onPressed:
+                          inProgress ? _openInProgressTrip : _openAcceptedTrip,
+                      style: _primaryButtonStyle(),
+                      child: Text(inProgress ? '查看進行中行程' : '查看已接行程'),
+                    ),
+                ],
+              ],
             ],
-          ],
-        ],
-      ),
+          ),
+        ),
+        if (_centerNotice != null)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: Center(
+                child: Semantics(
+                  liveRegion: true,
+                  label: _centerNotice,
+                  child: Container(
+                    constraints: const BoxConstraints(maxWidth: 280),
+                    margin: const EdgeInsets.all(DriverSpacing.xl),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: DriverSpacing.xl,
+                      vertical: DriverSpacing.lg,
+                    ),
+                    decoration: BoxDecoration(
+                      color: DriverColors.text,
+                      borderRadius: BorderRadius.circular(DriverRadii.card),
+                      boxShadow: DriverShadows.floating,
+                    ),
+                    child: Text(
+                      _centerNotice!,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: DriverColors.onPrimary,
+                        fontSize: DriverTypography.bodyLarge,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

@@ -182,6 +182,7 @@ Future<http.Response> _driverFixtureResponse(http.Request request) async {
         'price': 180,
         'currency': 'HKD',
         'scheduledAt': '2024-03-03T08:00:00Z',
+        'acceptedAt': '2024-03-03T06:00:00Z',
         'cancelledAt': '2024-03-03T07:00:00Z',
         'cancellationSource': 'PASSENGER',
         'status': 'CANCELLED',
@@ -195,10 +196,24 @@ Future<http.Response> _driverFixtureResponse(http.Request request) async {
         'price': 460,
         'currency': 'HKD',
         'scheduledAt': '2024-03-04T08:00:00Z',
+        'acceptedAt': '2024-03-04T06:00:00Z',
         'cancelledAt': '2024-03-04T06:30:00Z',
         'cancellationSource': 'PLATFORM',
         'status': 'CANCELLED',
         'passengerName': '何',
+        'settlement': null,
+      },
+      {
+        'id': 'trip-failed-accept',
+        'pickupAddress': '不應顯示的起點',
+        'dropoffAddress': '不應顯示的終點',
+        'price': 200,
+        'currency': 'HKD',
+        'scheduledAt': '2024-03-05T08:00:00Z',
+        'cancelledAt': '2024-03-05T07:00:00Z',
+        'cancellationSource': 'PASSENGER',
+        'status': 'CANCELLED',
+        'passengerName': '失敗訂單',
         'settlement': null,
       },
     ]);
@@ -285,6 +300,41 @@ void main() {
     await tester.tap(find.text('我的行程'));
     await tester.pump();
     expect(find.text('查看等待中行程'), findsOneWidget);
+  });
+
+  testWidgets('shows grab failure without navigating to accepted order',
+      (WidgetTester tester) async {
+    DriverApiClient.instance = DriverApiClient(
+      client: MockClient((request) async {
+        if (request.url.path.endsWith('/accept')) {
+          return http.Response(
+            jsonEncode({'message': 'Trip is no longer available'}),
+            409,
+            headers: {'content-type': 'application/json; charset=utf-8'},
+          );
+        }
+        return _driverFixtureResponse(request);
+      }),
+    );
+
+    await tester
+        .pumpWidget(testApp(const OrderDetailPage(tripId: 'trip-available')));
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('確認接單'));
+    await tester.tap(find.text('確認接單'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('搶單失敗'), findsOneWidget);
+    expect(find.byType(SnackBar), findsNothing);
+    expect(find.text('訂單詳情'), findsOneWidget);
+    expect(find.text('成功接單'), findsNothing);
+
+    await tester.pump(const Duration(seconds: 2));
+    expect(find.text('搶單失敗'), findsOneWidget);
+
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('搶單失敗'), findsNothing);
   });
 
   testWidgets('system back returns from accepted trip to the order hall',
@@ -785,6 +835,7 @@ void main() {
     expect(find.text('司機取消'), findsOneWidget);
     expect(find.text('乘客取消'), findsOneWidget);
     expect(find.text('平台取消'), findsOneWidget);
+    expect(find.text('不應顯示的起點'), findsNothing);
 
     await tester.tap(find.text('未結算').first);
     await tester.pump();

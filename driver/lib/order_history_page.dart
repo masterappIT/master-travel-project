@@ -93,8 +93,8 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
               .where((trip) =>
                   trip is Map &&
                   (trip['completedAt'] != null ||
-                      trip['cancelledAt'] != null ||
-                      trip['cancellationSource'] != null))
+                      trip['acceptedAt'] != null ||
+                      trip['cancellationSource'] == 'DRIVER'))
               .map((trip) => Map<String, dynamic>.from(trip as Map))
               .toList()
             ..sort((left, right) {

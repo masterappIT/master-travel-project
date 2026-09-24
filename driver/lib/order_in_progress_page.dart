@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'core/widgets/driver_overlays.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'app/route_names.dart';
 import 'core/api/driver_api_client.dart';
@@ -93,13 +94,11 @@ class _OrderInProgressPageState extends State<OrderInProgressPage> {
       }
     } on StateError {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('找不到進行中的訂單')));
+        showDriverNotice(context, '找不到進行中的訂單');
       }
     } on DriverApiException catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(error.message)));
+        showDriverNotice(context, error.message);
       }
     } finally {
       if (mounted) setState(() => _loading = false);

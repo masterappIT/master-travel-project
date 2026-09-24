@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/widgets/driver_overlays.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
@@ -79,8 +80,7 @@ class _LoginPageState extends State<LoginPage> {
       });
       final message =
           developmentCode == null ? '驗證碼已發送' : '開發環境驗證碼：$developmentCode';
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(message)));
+      showDriverNotice(context, message);
     } on DriverApiException catch (error) {
       if (mounted) setState(() => _error = error.message);
     } finally {
@@ -426,16 +426,16 @@ class _ActionCard extends StatelessWidget {
                 width: 45,
                 height: 45,
                 semanticLabel: '微信登入',
-                onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('此登入方式尚未開放，請使用手機驗證碼登入')))),
+                onPressed: () =>
+                    showDriverNotice(context, '此登入方式尚未開放，請使用手機驗證碼登入')),
             const SizedBox(width: DriverSpacing.xl),
             _SocialLogo(
                 asset: 'assets/login-apple.svg',
                 width: 40,
                 height: 40,
                 semanticLabel: '以 Apple 登入',
-                onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('此登入方式尚未開放，請使用手機驗證碼登入')))),
+                onPressed: () =>
+                    showDriverNotice(context, '此登入方式尚未開放，請使用手機驗證碼登入')),
           ]),
         ],
       );

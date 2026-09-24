@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'core/widgets/driver_overlays.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import 'app/route_names.dart';
@@ -93,18 +94,14 @@ class _OrderAcceptedPageState extends State<OrderAcceptedPage> {
             : '$countryCode$localPhone';
     if (scheduledAt == null || phone == null || phone.isEmpty) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('暫時沒有客戶電話號碼')),
-        );
+        showDriverNotice(context, '暫時沒有客戶電話號碼');
       }
       return;
     }
     if (DateTime.now()
         .isBefore(scheduledAt.subtract(const Duration(hours: 1)))) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('出發時間前一小時才可以致電客戶')),
-        );
+        showDriverNotice(context, '出發時間前一小時才可以致電客戶');
       }
       return;
     }
@@ -117,9 +114,9 @@ class _OrderAcceptedPageState extends State<OrderAcceptedPage> {
   }
 
   Future<void> _cancelTrip() async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showDriverDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
+      builder: (dialogContext) => DriverDialog(
         title: const Text('取消接單？'),
         content: const Text('取消後訂單會回到接單大廳，乘客訂單及付款不會被取消。'),
         actions: [
@@ -146,13 +143,11 @@ class _OrderAcceptedPageState extends State<OrderAcceptedPage> {
       }
     } on StateError {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('找不到可取消的訂單')));
+        showDriverNotice(context, '找不到可取消的訂單');
       }
     } on DriverApiException catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(error.message)));
+        showDriverNotice(context, error.message);
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -192,13 +187,11 @@ class _OrderAcceptedPageState extends State<OrderAcceptedPage> {
       }
     } on StateError {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('找不到可處理的訂單')));
+        showDriverNotice(context, '找不到可處理的訂單');
       }
     } on DriverApiException catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(error.message)));
+        showDriverNotice(context, error.message);
       }
     } finally {
       if (mounted) setState(() => _loading = false);

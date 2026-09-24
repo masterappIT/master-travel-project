@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'core/widgets/driver_overlays.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import 'core/tokens/driver_tokens.dart';
@@ -36,9 +37,7 @@ class VehicleLegacyPage extends StatelessWidget {
                         height: 56,
                         child: ElevatedButton(
                           onPressed: () =>
-                              ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('編輯功能請由個人資料頁開啟')),
-                          ),
+                              showDriverNotice(context, '編輯功能請由個人資料頁開啟'),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: DriverColors.activeBlue,
                             foregroundColor: DriverColors.surface,

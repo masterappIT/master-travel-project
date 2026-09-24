@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'core/widgets/driver_overlays.dart';
 
 import 'package:driver_web/core/api/driver_api_client.dart';
 import 'package:driver_web/core/tokens/driver_tokens.dart';
@@ -79,9 +80,7 @@ class _DriverProfilePageState extends State<DriverProfilePage> {
     FocusScope.of(context).unfocus();
     final name = _nameController.text.trim();
     if (name.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('請輸入姓名')),
-      );
+      showDriverNotice(context, '請輸入姓名');
       return;
     }
     setState(() => _isSaving = true);
@@ -106,15 +105,11 @@ class _DriverProfilePageState extends State<DriverProfilePage> {
         'mainlandPhone': '+86 $mainlandPhone',
       };
       setState(() => _isEditing = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('個人資料已儲存')),
-      );
+      showDriverNotice(context, '個人資料已儲存');
       Navigator.of(context).pop(result);
     } on DriverApiException catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error.message)),
-        );
+        showDriverNotice(context, error.message);
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);
@@ -377,9 +372,9 @@ class _ProfilePhoneField extends StatelessWidget {
   final String? prefix;
 
   void _showRegionPicker(BuildContext context) {
-    showDialog<void>(
+    showDriverDialog<void>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
+      builder: (dialogContext) => DriverDialog(
         title: const Text('選擇區號'),
         contentPadding: const EdgeInsets.symmetric(vertical: DriverSpacing.sm),
         content: Column(

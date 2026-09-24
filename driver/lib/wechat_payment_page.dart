@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'core/widgets/driver_overlays.dart';
 
 import 'core/api/driver_api_client.dart';
 import 'core/layout/driver_page_shell.dart';
@@ -96,8 +97,7 @@ class _WechatPaymentPageState extends State<WechatPaymentPage> {
         mimeType: _mimeType,
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('微信支付設定已儲存')));
+      showDriverNotice(context, '微信支付設定已儲存');
       Navigator.of(context).pop(driver);
     } on DriverApiException catch (error) {
       if (mounted) setState(() => _error = error.message);

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'core/widgets/driver_overlays.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import 'app/route_names.dart';
@@ -71,13 +72,13 @@ class _HomePageState extends State<HomePage> {
         if (title != null && title.isNotEmpty) title,
         if (content != null && content.isNotEmpty) content,
       ];
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(lines.isEmpty ? '收到新通知' : lines.join('\n'))),
+      showDriverNotice(
+        context,
+        lines.isEmpty ? '收到新通知' : lines.join('\n'),
       );
     } on DriverApiException catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(error.message)));
+        showDriverNotice(context, error.message);
       }
     }
   }
@@ -169,8 +170,7 @@ class _HomePageState extends State<HomePage> {
       );
     } on DriverApiException catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(error.message)));
+        showDriverNotice(context, error.message);
       }
     }
   }

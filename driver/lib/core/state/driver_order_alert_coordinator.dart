@@ -4,6 +4,7 @@ import 'dart:developer' as developer;
 import 'package:flutter/material.dart';
 
 import '../api/driver_api_client.dart';
+import '../widgets/driver_overlays.dart';
 import '../platform/new_order_alert.dart';
 import '../platform/order_event_stream.dart';
 import '../state/driver_alert_sound_preference.dart';
@@ -321,13 +322,13 @@ class _DriverOrderAlertCoordinatorState
           : <String, dynamic>{};
       var acknowledging = false;
       String? errorMessage;
-      await showDialog<void>(
+      await showDriverDialog<void>(
         context: dialogContext,
         barrierDismissible: false,
         builder: (dialogContext) => PopScope(
           canPop: false,
           child: StatefulBuilder(
-            builder: (context, setDialogState) => AlertDialog(
+            builder: (context, setDialogState) => DriverDialog(
               title: Text(item['title']?.toString() ?? '行程已取消'),
               content: Column(
                 mainAxisSize: MainAxisSize.min,

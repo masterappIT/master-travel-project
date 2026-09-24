@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'core/widgets/driver_overlays.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
@@ -182,8 +183,8 @@ class _AddVehiclePageState extends State<AddVehiclePage> {
       });
     } on Object catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(error is StateError ? error.message : '圖片處理失敗')));
+        showDriverNotice(
+            context, error is StateError ? error.message : '圖片處理失敗');
       }
     } finally {
       if (mounted) setState(() => _isProcessingPhoto = false);
@@ -192,14 +193,12 @@ class _AddVehiclePageState extends State<AddVehiclePage> {
 
   Future<void> _save() async {
     if (_category == null || _category!.trim().isEmpty) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('請選擇車輛類別')));
+      showDriverNotice(context, '請選擇車輛類別');
       return;
     }
     if (_plateInputs.any((input) =>
         input.required && _controllerFor(input.label).text.trim().isEmpty)) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('請完成所有車牌資料')));
+      showDriverNotice(context, '請完成所有車牌資料');
       return;
     }
     final mainlandPlate = composeMainlandPlate(_mainlandPlate.text, _ownership);
@@ -210,8 +209,7 @@ class _AddVehiclePageState extends State<AddVehiclePage> {
       mainlandPlate: mainlandPlate,
     );
     if (plateError != null) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(plateError)));
+      showDriverNotice(context, plateError);
       return;
     }
     setState(() => _isSaving = true);
@@ -253,8 +251,7 @@ class _AddVehiclePageState extends State<AddVehiclePage> {
     } on DriverApiException catch (error) {
       if (!mounted) return;
       setState(() => _isSaving = false);
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(error.message)));
+      showDriverNotice(context, error.message);
     }
   }
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'core/widgets/driver_overlays.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import 'add_vehicle_page.dart';
@@ -72,8 +73,7 @@ class _VehiclePageState extends State<VehiclePage> {
       await _loadVehicle();
     } on DriverApiException catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(error.message)));
+        showDriverNotice(context, error.message);
       }
     } finally {
       if (mounted) setState(() => _busyVehicleId = null);
@@ -82,9 +82,9 @@ class _VehiclePageState extends State<VehiclePage> {
 
   Future<void> _deleteVehicle(VehicleFormData data) async {
     if (data.id == null || _busyVehicleId != null) return;
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showDriverDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => DriverDialog(
         title: const Text('刪除車輛'),
         content: const Text('刪除後不會影響已完成訂單的車輛紀錄。是否繼續？'),
         actions: [
@@ -104,8 +104,7 @@ class _VehiclePageState extends State<VehiclePage> {
       await _loadVehicle();
     } on DriverApiException catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(error.message)));
+        showDriverNotice(context, error.message);
       }
     } finally {
       if (mounted) setState(() => _busyVehicleId = null);

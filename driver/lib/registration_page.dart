@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'core/widgets/driver_overlays.dart';
 
 import 'app/route_names.dart';
 import 'core/api/driver_api_client.dart';
@@ -131,16 +132,14 @@ class _RegistrationPageState extends State<RegistrationPage> {
     } on DriverApiException catch (error) {
       if (!mounted) return;
       setState(() => _loadingVehicleCategories = false);
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(error.message)));
+      showDriverNotice(context, error.message);
     }
   }
 
   Future<void> _selectVehicleCategory() async {
     if (_loadingVehicleCategories) return;
     if (_vehicleCategoryOptions.isEmpty) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('目前沒有可選的車輛類別')));
+      showDriverNotice(context, '目前沒有可選的車輛類別');
       return;
     }
     final value = await showModalBottomSheet<String>(
@@ -176,8 +175,8 @@ class _RegistrationPageState extends State<RegistrationPage> {
       });
     } on Object catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(error is StateError ? error.message : '圖片處理失敗')));
+        showDriverNotice(
+            context, error is StateError ? error.message : '圖片處理失敗');
       }
     } finally {
       if (mounted) setState(() => _processingVehiclePhoto = false);
@@ -254,8 +253,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
     final phone = _phoneController.text.trim();
     final expectedLength = _countryCode == '+86' ? 11 : 8;
     if (!RegExp(r'^\d+$').hasMatch(phone) || phone.length != expectedLength) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('請先輸入 $expectedLength 位手機號碼')));
+      showDriverNotice(context, '請先輸入 $expectedLength 位手機號碼');
       return;
     }
     try {
@@ -271,13 +269,11 @@ class _RegistrationPageState extends State<RegistrationPage> {
         });
         final message =
             developmentCode == null ? '驗證碼已發送' : '開發環境驗證碼：$developmentCode';
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(message)));
+        showDriverNotice(context, message);
       }
     } on DriverApiException catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(error.message)));
+        showDriverNotice(context, error.message);
       }
     }
   }
@@ -285,8 +281,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
   Future<void> _verifyRegistrationCode() async {
     final code = _verificationCodeController.text.trim();
     if (_registrationChallengeId == null || code.length != 5) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('請先取得並輸入 5 位驗證碼')));
+      showDriverNotice(context, '請先取得並輸入 5 位驗證碼');
       return;
     }
     setState(() => _loading = true);
@@ -300,8 +295,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
       });
     } on DriverApiException catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(error.message)));
+        showDriverNotice(context, error.message);
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -328,18 +322,15 @@ class _RegistrationPageState extends State<RegistrationPage> {
         (widget.revisionDriver == null && _vehiclePhotoBytes == null) ||
         (requiresMainlandPlate &&
             _mainlandPlateController.text.trim().isEmpty)) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('請完成所有必填資料')));
+      showDriverNotice(context, '請完成所有必填資料');
       return;
     }
     if (!RegExp(r'^\d{8}$').hasMatch(hongKongMacauPhone)) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('請輸入 8 位香港／澳門號碼')));
+      showDriverNotice(context, '請輸入 8 位香港／澳門號碼');
       return;
     }
     if (!RegExp(r'^\d{11}$').hasMatch(mainlandPhone)) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('請輸入 11 位中國內地號碼')));
+      showDriverNotice(context, '請輸入 11 位中國內地號碼');
       return;
     }
     final mainlandPlate =
@@ -351,21 +342,18 @@ class _RegistrationPageState extends State<RegistrationPage> {
       mainlandPlate: mainlandPlate,
     );
     if (plateError != null) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(plateError)));
+      showDriverNotice(context, plateError);
       return;
     }
     if (!RegExp(r'^\d+$').hasMatch(phone) || phone.length != expectedLength) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('請輸入 $expectedLength 位手機號碼')));
+      showDriverNotice(context, '請輸入 $expectedLength 位手機號碼');
       return;
     }
     if (widget.revisionDriver == null &&
         (!_phoneVerified ||
             _registrationChallengeId == null ||
             _verificationCodeController.text.trim().length != 5)) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('請先完成手機驗證')));
+      showDriverNotice(context, '請先完成手機驗證');
       return;
     }
     setState(() => _loading = true);
@@ -417,8 +405,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
       }
     } on DriverApiException catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(error.message)));
+        showDriverNotice(context, error.message);
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -1188,9 +1175,9 @@ class _PhoneField extends StatelessWidget {
   final bool readOnly;
 
   void _showRegionPicker(BuildContext context) {
-    showDialog<void>(
+    showDriverDialog<void>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
+      builder: (dialogContext) => DriverDialog(
         title: const Text('選擇區號'),
         contentPadding: const EdgeInsets.symmetric(vertical: DriverSpacing.sm),
         content: Column(
