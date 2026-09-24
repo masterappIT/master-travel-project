@@ -1,3 +1,13 @@
+export function normalizeTripDetail(detail) {
+  if (!detail || typeof detail !== 'object') return detail
+  return {
+    ...detail,
+    quote: detail.quote && typeof detail.quote === 'object'
+      ? { ...detail.quote, lines: Array.isArray(detail.quote.lines) ? detail.quote.lines : [] }
+      : detail.quote
+  }
+}
+
 export function createTripsActions({ api, tripsApi, addressesApi, tripForm, selectedTrip, tripQuote, tripBookingStep, tripPaymentMethod, tripUseFareBalance, tripUseCashBalance, tripLocationKeyword, tripLocationResults, tripLocationSearching, tripLocationTarget, dispatchForm, orderUrlForm, createdOrderUrl, users, trips, error, load, loadUserOptions, loadDriverOptions, displayError, canWrite, requestConfirmation, notify, tripCatalog, dateTimeInput }) {
   async function settleTrip(item, method) { if (!canWrite.value || !item?.id || !method?.trim()) return; try { await tripsApi.settle(item.id, method.trim()); await load(); selectedTrip.value = trips.value.find(trip => trip.id === item.id) || null } catch (err) { error.value = displayError(err) } }
   async function unsettleTrip(item) { if (!canWrite.value || !item?.id) return; try { await tripsApi.unsettle(item.id); await load(); selectedTrip.value = trips.value.find(trip => trip.id === item.id) || null } catch (err) { error.value = displayError(err) } }
@@ -47,7 +57,7 @@ export function createTripsActions({ api, tripsApi, addressesApi, tripForm, sele
   async function showTrip(item) {
     try {
       tripForm.value = null
-      selectedTrip.value = await tripsApi.get(item.id)
+      selectedTrip.value = normalizeTripDetail(await tripsApi.get(item.id))
     } catch (err) { error.value = displayError(err) }
   }
   function closeTrip() { selectedTrip.value = null }
