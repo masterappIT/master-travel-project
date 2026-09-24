@@ -18,7 +18,7 @@
       <image class="coupon-info" src="/static/vehicles/coupon-info.svg" mode="aspectFit" @tap.stop="detailPriceOpen = true" />
       <view class="payment-bar">
         <view class="available" @tap="openCoupons">可用優惠</view>
-        <view class="total"><text class="price-label">優惠價</text><text class="amount">{{ format(total) }}</text></view>
+        <view class="total"><text class="price-label">優惠價</text><text class="amount">{{ formatSummaryAmount(total) }}</text></view>
         <view class="pay" @tap="payNow">立即出行</view>
       </view>
       <view class="notice"><image src="/static/vehicles/confirm-notice.svg" mode="aspectFit" /><text>訂單成功支付後，若取消或修改訂單規則。</text></view>
@@ -118,7 +118,7 @@ import { formatCurrencyAmount, normalizeCurrency, useCurrency } from '../../comp
 import { reactive } from 'vue'
 import { persistWallet, readWallet, type WalletState } from '../../utils/wallet'
 const { responsiveStyle } = useResponsiveCanvas()
-const { currency, format, convertAmountTo, formatConvertedAmount: formatWalletAmount, setExchangeRate } = useCurrency()
+const { currency, convertAmountTo, formatConvertedAmount: formatWalletAmount, setExchangeRate } = useCurrency()
 const wallet = reactive<WalletState>(readWallet())
 const paymentSettings = ref<AppSettings>({
   language: "zh-HK",
