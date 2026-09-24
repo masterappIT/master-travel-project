@@ -58,17 +58,19 @@ class _DriverNoticeState extends State<_DriverNotice> {
                   vertical: DriverSpacing.lg,
                 ),
                 decoration: BoxDecoration(
-                  color: DriverColors.text,
+                  color: DriverColors.surface,
                   borderRadius: BorderRadius.circular(DriverRadii.card),
+                  border: Border.all(color: DriverColors.border),
                   boxShadow: DriverShadows.floating,
                 ),
                 child: Text(
                   widget.message,
                   textAlign: TextAlign.center,
                   style: const TextStyle(
-                    color: DriverColors.onPrimary,
+                    color: DriverColors.text,
                     fontSize: DriverTypography.bodyLarge,
                     fontWeight: FontWeight.w700,
+                    decoration: TextDecoration.none,
                   ),
                 ),
               ),
@@ -132,6 +134,7 @@ class DriverDialog extends StatelessWidget {
                         color: DriverColors.text,
                         fontSize: 20,
                         fontWeight: FontWeight.w700,
+                        decoration: TextDecoration.none,
                       ),
                       child: title!,
                     ),
@@ -144,6 +147,7 @@ class DriverDialog extends StatelessWidget {
                         style: const TextStyle(
                           color: DriverColors.text,
                           fontSize: DriverTypography.bodyLarge,
+                          decoration: TextDecoration.none,
                         ),
                         child: content!,
                       ),
