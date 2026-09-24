@@ -243,7 +243,7 @@ class _DriverOrderAlertCoordinatorState
     }
     _refreshInFlight = true;
     try {
-      final assignedTrips = await _api.trips();
+      final assignedTrips = await _api.activeTrips();
       final cancellationNotifications =
           await _api.pendingCancellationNotifications();
       List<dynamic> availableTrips;

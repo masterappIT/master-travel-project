@@ -392,6 +392,7 @@ function tripVehicleSnapshot(vehicle: {
   id: string;
   vehicleCategory: string;
   vehicleColor: string;
+  vehicleOwnership: string;
   plateType: string;
   hkPlate: string | null;
   macauPlate: string | null;
@@ -401,6 +402,7 @@ function tripVehicleSnapshot(vehicle: {
     vehicleId: vehicle.id,
     vehicleCategory: vehicle.vehicleCategory,
     vehicleColor: vehicle.vehicleColor,
+    vehicleOwnership: vehicle.vehicleOwnership,
     vehiclePlateType: vehicle.plateType,
     vehiclePlate:
       vehicle.hkPlate || vehicle.macauPlate || vehicle.mainlandPlate || null,
@@ -2640,6 +2642,7 @@ function driverTripResponse(
   vehicleId: string | null;
   vehicleCategory: string | null;
   vehicleColor: string | null;
+  vehicleOwnership: string | null;
   vehiclePlateType: string | null;
   vehiclePlate: string | null;
   vehicleHkPlate: string | null;
@@ -2703,6 +2706,7 @@ function driverTripResponse(
             id: trip.vehicleId,
             vehicleCategory: trip.vehicleCategory,
             vehicleColor: trip.vehicleColor,
+            vehicleOwnership: trip.vehicleOwnership,
             plateType: trip.vehiclePlateType,
             vehiclePlate: trip.vehiclePlate,
             hkPlate: trip.vehicleHkPlate,
@@ -4762,6 +4766,21 @@ class DriverAuthController {
       },
       recentOrders,
     };
+  }
+
+  @Get("trips/active")
+  async activeTrips(@Req() req: RequestLike) {
+    const { session } = await reviewedDriverFrom(req);
+    const trips = await prisma.trip.findMany({
+      where: {
+        driverId: session.sub,
+        completedAt: null,
+        status: { not: "CANCELLED" },
+      },
+      include: { user: true, settlement: true },
+      orderBy: { scheduledAt: "asc" },
+    });
+    return trips.map((trip) => driverTripResponse(trip, true));
   }
 
   @Get("trips")

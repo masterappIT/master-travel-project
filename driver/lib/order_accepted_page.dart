@@ -205,6 +205,10 @@ class _OrderAcceptedPageState extends State<OrderAcceptedPage> {
     }
   }
 
+  void _returnToOrderHall() {
+    DriverNavigation.replaceAll(context, DriverRouteNames.orders);
+  }
+
   @override
   Widget build(BuildContext context) {
     final origin = _tripText('pickupAddress', '起點待確認');
@@ -216,93 +220,100 @@ class _OrderAcceptedPageState extends State<OrderAcceptedPage> {
       currentVehicle: null,
     );
 
-    return DriverPageShell(
-      selectedIndex: 1,
-      showBottomNavigation: false,
-      topPadding: 24,
-      horizontalPadding: 24,
-      bottomPadding: 24,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              InkWell(
-                onTap: () => Navigator.of(context).pop(),
-                child: Row(children: [
-                  const Text('<',
-                      style: TextStyle(fontSize: 20, color: DriverColors.text)),
-                  const SizedBox(width: DriverSpacing.sm),
-                  const Text('返回接單大廳',
-                      style: TextStyle(
-                          fontSize: DriverTypography.bodyLarge,
-                          fontWeight: FontWeight.w500,
-                          color: DriverColors.text)),
-                ]),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: DriverSpacing.md, vertical: DriverSpacing.xs),
-                decoration: BoxDecoration(
-                    color: DriverColors.successBackground,
-                    borderRadius: BorderRadius.circular(DriverRadii.pill)),
-                child: const Text('成功接單',
-                    style: TextStyle(
-                        fontSize: DriverTypography.label,
-                        fontWeight: FontWeight.w700,
-                        color: DriverColors.success)),
-              ),
-            ],
-          ),
-          const SizedBox(height: DriverSpacing.xl),
-          if (_loading)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 120),
-              child: Center(child: CircularProgressIndicator()),
-            )
-          else if (_error != null)
-            _AcceptedError(message: _error!, onRetry: _loadTrip)
-          else ...[
-            _AcceptedMapPreview(
-              origin: _region(origin, '起點待確認'),
-              destination: _region(destination, '終點待確認'),
-            ),
-            const SizedBox(height: DriverSpacing.xl),
-            _AcceptedOrderCard(
-              origin: origin,
-              destination: destination,
-              scheduledAt: _formatDate(_trip?['scheduledAt']),
-              passenger: formatPassengerName(_trip),
-              price: _formatPrice(_trip?['price'], _trip?['currency']),
-              onCallPassenger: _callPassenger,
-            ),
-            const SizedBox(height: DriverSpacing.xl),
-            _AcceptedVehicleCard(vehicle: vehicle),
-            const SizedBox(height: DriverSpacing.xl),
-          ],
-          if (!_loading && _error == null)
-            Row(children: [
-              Expanded(
-                  child: OutlinedButton(
-                      onPressed: _loading ? null : _cancelTrip,
-                      style: _cancelStyle(),
-                      child: const Text('取消訂單'))),
-              const SizedBox(width: DriverSpacing.md),
-              Expanded(
-                  child: ElevatedButton(
-                onPressed: _loading ? null : _advanceTrip,
-                style: _arrivedStyle(),
-                child: Text(
-                  _loading
-                      ? '處理中…'
-                      : _trip?['arrivedAt'] == null
-                          ? '確認到達上車點'
-                          : '開始行程',
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) _returnToOrderHall();
+      },
+      child: DriverPageShell(
+        selectedIndex: 1,
+        showBottomNavigation: false,
+        topPadding: 24,
+        horizontalPadding: 24,
+        bottomPadding: 24,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                InkWell(
+                  onTap: _returnToOrderHall,
+                  child: Row(children: [
+                    const Text('<',
+                        style:
+                            TextStyle(fontSize: 20, color: DriverColors.text)),
+                    const SizedBox(width: DriverSpacing.sm),
+                    const Text('返回接單大廳',
+                        style: TextStyle(
+                            fontSize: DriverTypography.bodyLarge,
+                            fontWeight: FontWeight.w500,
+                            color: DriverColors.text)),
+                  ]),
                 ),
-              )),
-            ]),
-        ],
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: DriverSpacing.md, vertical: DriverSpacing.xs),
+                  decoration: BoxDecoration(
+                      color: DriverColors.successBackground,
+                      borderRadius: BorderRadius.circular(DriverRadii.pill)),
+                  child: const Text('成功接單',
+                      style: TextStyle(
+                          fontSize: DriverTypography.label,
+                          fontWeight: FontWeight.w700,
+                          color: DriverColors.success)),
+                ),
+              ],
+            ),
+            const SizedBox(height: DriverSpacing.xl),
+            if (_loading)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 120),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (_error != null)
+              _AcceptedError(message: _error!, onRetry: _loadTrip)
+            else ...[
+              _AcceptedMapPreview(
+                origin: _region(origin, '起點待確認'),
+                destination: _region(destination, '終點待確認'),
+              ),
+              const SizedBox(height: DriverSpacing.xl),
+              _AcceptedOrderCard(
+                origin: origin,
+                destination: destination,
+                scheduledAt: _formatDate(_trip?['scheduledAt']),
+                passenger: formatPassengerName(_trip),
+                price: _formatPrice(_trip?['price'], _trip?['currency']),
+                onCallPassenger: _callPassenger,
+              ),
+              const SizedBox(height: DriverSpacing.xl),
+              _AcceptedVehicleCard(vehicle: vehicle),
+              const SizedBox(height: DriverSpacing.xl),
+            ],
+            if (!_loading && _error == null)
+              Row(children: [
+                Expanded(
+                    child: OutlinedButton(
+                        onPressed: _loading ? null : _cancelTrip,
+                        style: _cancelStyle(),
+                        child: const Text('取消訂單'))),
+                const SizedBox(width: DriverSpacing.md),
+                Expanded(
+                    child: ElevatedButton(
+                  onPressed: _loading ? null : _advanceTrip,
+                  style: _arrivedStyle(),
+                  child: Text(
+                    _loading
+                        ? '處理中…'
+                        : _trip?['arrivedAt'] == null
+                            ? '確認到達上車點'
+                            : '開始行程',
+                  ),
+                )),
+              ]),
+          ],
+        ),
       ),
     );
   }

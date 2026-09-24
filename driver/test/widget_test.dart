@@ -106,7 +106,7 @@ Future<http.Response> _driverFixtureResponse(http.Request request) async {
       },
     ]);
   }
-  if (path == '/driver/auth/trips') {
+  if (path == '/driver/auth/trips/active') {
     return _jsonResponse([
       {
         'id': 'trip-waiting',
@@ -133,6 +133,10 @@ Future<http.Response> _driverFixtureResponse(http.Request request) async {
         'startedAt': '2024-03-01T09:00:00Z',
         'executionPhase': 'IN_PROGRESS',
       },
+    ]);
+  }
+  if (path == '/driver/auth/trips') {
+    return _jsonResponse([
       {
         'id': 'trip-completed',
         'pickupAddress': '香港中環',
@@ -197,6 +201,18 @@ Future<http.Response> _driverFixtureResponse(http.Request request) async {
       'scheduledAt': '2099-03-20T10:00:00Z',
       'passengerName': '陳大文',
       'passengerPhone': '91234567',
+      'acceptedAt': path.endsWith('/trip-accepted')
+          ? '2024-03-20T09:00:00Z'
+          : null,
+      if (path.endsWith('/trip-accepted'))
+        'vehicle': {
+          'id': 'vehicle-primary',
+          'vehicleOwnership': '香港',
+          'plateType': '兩地牌',
+          'vehicleCategory': '轎車',
+          'vehicleColor': '白色',
+          'hkPlate': 'AB 1234',
+        },
     });
   }
   return _jsonResponse(<String, dynamic>{});
@@ -214,7 +230,8 @@ void main() {
 
   testWidgets('shows vehicle ownership and type on order detail cards',
       (WidgetTester tester) async {
-    await tester.pumpWidget(testApp(const OrderDetailPage(tripId: 'trip-1')));
+    await tester
+        .pumpWidget(testApp(const OrderDetailPage(tripId: 'trip-accepted')));
     await tester.pumpAndSettle();
 
     expect(find.text('車輛所屬地：香港·兩地牌'), findsOneWidget);
@@ -233,6 +250,42 @@ void main() {
     await tester.tap(find.bySemanticsLabel('致電客戶'));
     await tester.pump();
     expect(find.text('出發時間前一小時才可以致電客戶'), findsOneWidget);
+  });
+
+  testWidgets('returns directly to refreshed order hall after accepting a trip',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(testApp(const OrderHallPage()));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('香港中環置地廣場東門大堂'));
+    await tester.pumpAndSettle();
+    expect(find.text('訂單詳情'), findsOneWidget);
+
+    await tester.ensureVisible(find.text('確認接單'));
+    await tester.tap(find.text('確認接單'));
+    await tester.pumpAndSettle();
+    expect(find.text('成功接單'), findsOneWidget);
+
+    await tester.tap(find.text('返回接單大廳'));
+    await tester.pumpAndSettle();
+    expect(find.text('接單大廳'), findsOneWidget);
+    expect(find.text('訂單詳情'), findsNothing);
+
+    await tester.tap(find.text('我的行程'));
+    await tester.pump();
+    expect(find.text('查看等待中行程'), findsOneWidget);
+  });
+
+  testWidgets('system back returns from accepted trip to the order hall',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(testApp(const OrderAcceptedPage(tripId: 'trip-1')));
+    await tester.pumpAndSettle();
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+
+    expect(find.text('接單大廳'), findsOneWidget);
+    expect(find.text('成功接單'), findsNothing);
   });
 
   testWidgets('renders the driver login page', (WidgetTester tester) async {
@@ -460,7 +513,7 @@ void main() {
           'driver': {'id': 'driver-1', 'reviewStatus': 'APPROVED'},
         });
       }
-      if (path == '/driver/auth/trips') return _jsonResponse([]);
+      if (path == '/driver/auth/trips/active') return _jsonResponse([]);
       if (path == '/driver/auth/trips/available') return _jsonResponse([]);
       if (path == '/driver/auth/trips/events/ticket' ||
           path == '/driver/auth/notifications/events/ticket') {
@@ -854,6 +907,7 @@ void main() {
         requests.add(request);
         if (request.method == 'GET' &&
             (request.url.path == '/driver/auth/trips' ||
+                request.url.path == '/driver/auth/trips/active' ||
                 request.url.path == '/driver/auth/trips/available')) {
           return http.Response('[]', 200);
         }
@@ -862,6 +916,7 @@ void main() {
     );
 
     await api.trips();
+    await api.activeTrips();
     await api.availableTrips();
     await api.trip('trip/1');
     await api.acceptTrip('trip/1', vehicleId: 'vehicle/2');
@@ -870,10 +925,12 @@ void main() {
       'GET',
       'GET',
       'GET',
+      'GET',
       'POST',
     ]);
     expect(requests.map((request) => request.url.path), [
       '/driver/auth/trips',
+      '/driver/auth/trips/active',
       '/driver/auth/trips/available',
       '/driver/auth/trips/trip%2F1',
       '/driver/auth/trips/trip%2F1/accept',

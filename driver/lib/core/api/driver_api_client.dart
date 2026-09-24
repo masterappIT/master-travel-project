@@ -360,8 +360,9 @@ class DriverApiClient {
   Future<Map<String, dynamic>> statistics() async => _decode(await _client
       .get(Uri.parse('$baseUrl/driver/auth/statistics'), headers: _headers));
 
-  Future<Map<String, dynamic>> notificationEventTicket() async => _decode(
-      await _client.post(Uri.parse('$baseUrl/driver/auth/notifications/events/ticket'),
+  Future<Map<String, dynamic>> notificationEventTicket() async =>
+      _decode(await _client.post(
+          Uri.parse('$baseUrl/driver/auth/notifications/events/ticket'),
           headers: _headers));
   Future<Map<String, dynamic>> orderEventTicket() async => _decode(
       await _client.post(Uri.parse('$baseUrl/driver/auth/trips/events/ticket'),
@@ -369,6 +370,8 @@ class DriverApiClient {
   Future<List<dynamic>> availableTrips() async => _decodeList(await _client.get(
       Uri.parse('$baseUrl/driver/auth/trips/available'),
       headers: _headers));
+  Future<List<dynamic>> activeTrips() async => _decodeList(await _client
+      .get(Uri.parse('$baseUrl/driver/auth/trips/active'), headers: _headers));
   Future<List<dynamic>> trips() async => _decodeList(await _client
       .get(Uri.parse('$baseUrl/driver/auth/trips'), headers: _headers));
   Future<Map<String, dynamic>> trip(String id) async =>

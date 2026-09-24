@@ -71,7 +71,7 @@ class _OrderHallPageState extends State<OrderHallPage>
     if (_refreshInFlight) return;
     _refreshInFlight = true;
     try {
-      final acceptedTrips = await _api.trips();
+      final acceptedTrips = await _api.activeTrips();
       List<dynamic> availableTrips;
       try {
         availableTrips = await _api.availableTrips();

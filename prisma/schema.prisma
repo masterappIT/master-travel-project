@@ -518,6 +518,7 @@ model Trip {
   vehicleId                    String?
   vehicleCategory              String?
   vehicleColor                 String?
+  vehicleOwnership             String?
   vehiclePlateType             String?
   vehiclePlate                 String?
   vehicleHkPlate               String?

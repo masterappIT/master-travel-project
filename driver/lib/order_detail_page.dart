@@ -90,7 +90,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
               ? null
               : _selectedVehicleId);
       if (mounted) {
-        DriverNavigation.push(
+        await DriverNavigation.replace(
           context,
           DriverRouteNames.orderAccepted,
           arguments: widget.tripId,
