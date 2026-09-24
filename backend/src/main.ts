@@ -5943,14 +5943,55 @@ class AdminController {
           }
         : {}),
     };
-    const [data, total, all, enabledCount, onlineCount, pendingReviewCount] =
+    const [data, total, all, enabledCount, onlineCount, pendingReviewCount, revisionReviewCount, approvedReviewCount] =
       await prisma.$transaction([
         prisma.driver.findMany({
           where,
-          include: {
+          select: {
+            id: true,
+            driverType: true,
+            name: true,
+            affiliation: true,
+            phoneCountryCode: true,
+            phone: true,
+            hongKongMacauCountryCode: true,
+            hongKongMacauPhone: true,
+            mainlandPhone: true,
+            reviewStatus: true,
+            reviewReason: true,
+            reviewSubmittedAt: true,
+            reviewedAt: true,
+            reviewedBy: true,
+            settlementMethod: true,
+            settlementAccount: true,
+            wechatId: true,
+            wechatQrCodeMime: true,
+            isOnline: true,
+            enabled: true,
+            createdAt: true,
+            updatedAt: true,
             vehicleAssignments: {
               where: { enabled: true },
-              include: { vehicle: true },
+              select: {
+                isPrimary: true,
+                vehicle: {
+                  select: {
+                    id: true,
+                    plateType: true,
+                    hkPlate: true,
+                    mainlandPlate: true,
+                    macauPlate: true,
+                    vehicleOwnership: true,
+                    vehicleCategory: true,
+                    vehicleColor: true,
+                    vehiclePhotos: true,
+                    vehiclePhotoMime: true,
+                    enabled: true,
+                    createdAt: true,
+                    updatedAt: true,
+                  },
+                },
+              },
               orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }],
             },
           },
@@ -5963,6 +6004,8 @@ class AdminController {
         prisma.driver.count({ where: { enabled: true } }),
         prisma.driver.count({ where: { enabled: true, isOnline: true } }),
         prisma.driver.count({ where: { reviewStatus: "PENDING" } }),
+        prisma.driver.count({ where: { reviewStatus: "REVISION_REQUIRED" } }),
+        prisma.driver.count({ where: { reviewStatus: "APPROVED" } }),
       ]);
     return adminListResponse(
       data.map((driver) => ({
@@ -5974,7 +6017,14 @@ class AdminController {
       })),
       total,
       query,
-      { total: all, enabled: enabledCount, online: onlineCount, pendingReview: pendingReviewCount },
+      {
+        total: all,
+        enabled: enabledCount,
+        online: onlineCount,
+        pendingReview: pendingReviewCount,
+        revisionRequired: revisionReviewCount,
+        approved: approvedReviewCount,
+      },
     );
   }
   @Get("drivers/options") async listDriverOptions(@Req() req: RequestLike) {

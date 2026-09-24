@@ -38,7 +38,7 @@ export async function loadAddressResources({ addressesApi, addresses, mainlandCi
 
 export async function loadNotificationResources({ api, usersApi, driversApi, notifications, notificationTemplates, notificationUsers, notificationDrivers, search = '', query = { page: 1, pageSize: 20 }, state }) {
   const [notificationResult, templateResult, userResult, driverResult] = await Promise.all([
-    loadAllPages(pageQuery => api(`/admin/notifications${serializeAdminQuery(pageQuery)}`), {}, 100),
+    api(`/admin/notifications${serializeAdminQuery(query)}`),
     api('/admin/notification-templates'),
     usersApi.options({ page: 1, pageSize: 20, search }),
     driversApi.options({ page: 1, pageSize: 20, search })
@@ -66,7 +66,7 @@ export async function loadVehicleResources({ api, vehiclesApi, categories, vehic
 export async function loadMembershipResources({ api, membershipPlans, membershipOrders, query = { page: 1, pageSize: 20 }, state }) {
   const [plansResult, ordersResult] = await Promise.all([
     api('/admin/membership-plans'),
-    loadAllPages(pageQuery => api(`/admin/membership-orders${serializeAdminQuery(pageQuery)}`), {}, 100)
+    api(`/admin/membership-orders${serializeAdminQuery(query)}`)
   ])
   membershipPlans.value = plansResult.data
   membershipOrders.value = ordersResult.data
@@ -105,7 +105,7 @@ export async function loadCoreUsers({ usersApi, users, state }) {
 }
 
 export async function loadDriversResources({ driversApi, vehicleCategories, drivers, allVehicles, state, includeVehicles = true }) {
-  const requests = [driversApi.categories(), loadAllPages(query => driversApi.list(query), state?.query.value || {}, 100)]
+  const requests = [driversApi.categories(), driversApi.list(state?.query.value || { page: 1, pageSize: 20 })]
   if (includeVehicles) requests.push(driversApi.listAllVehicles())
   const [categoryResult, driverResult, vehicleResult] = await Promise.all(requests)
   vehicleCategories.value = categoryResult.data.filter(item => item.enabled !== false)

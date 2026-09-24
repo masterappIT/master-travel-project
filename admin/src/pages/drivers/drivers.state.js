@@ -1,6 +1,6 @@
 import { computed, ref, watch } from 'vue'
 
-export function createDriversPageState(drivers, pageSize = 100) {
+export function createDriversPageState(drivers, pageSize = 20) {
   const searchQuery = ref('')
   const statusFilter = ref('全部')
   const typeFilter = ref('全部')
@@ -24,6 +24,7 @@ export function createDriversPageState(drivers, pageSize = 100) {
 
   return {
     searchQuery, statusFilter, typeFilter, page, pageSize, total, pageCount, summary, filtered, hasActiveFilters, resetFilters, apply,
+    goToPage: nextPage => { page.value = Math.min(Math.max(1, nextPage), pageCount.value) },
     query: computed(() => ({
       page: page.value,
       pageSize,

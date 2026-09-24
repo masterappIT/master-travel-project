@@ -5,7 +5,7 @@ import { createUsersApi } from '../src/api/users.js'
 import { createTripsApi } from '../src/api/trips.js'
 import { createServerListState, normalizeListResult, serializeAdminQuery } from '../src/utils/admin-query-state.js'
 import { createRemoteOptionsLoader, loadAllOptions, retainSelectedOptions } from '../src/utils/admin-remote-options.js'
-import { loadAllPages, loadNotificationResources } from '../src/utils/admin-resource-loader.js'
+import { loadAllPages, loadDriversResources, loadMembershipResources, loadNotificationResources } from '../src/utils/admin-resource-loader.js'
 
 test('serializes bounded server list queries and omits neutral filters', () => {
   assert.equal(serializeAdminQuery({ page: 2, pageSize: 20, search: 'Amy Lee', status: 'ALL', date: '' }), '?page=2&pageSize=20&search=Amy+Lee')
@@ -58,13 +58,15 @@ test('accumulates every page while preserving first response metadata', async ()
   assert.deepEqual(result, { data: [1, 2], total: 2, page: 1, pageCount: 2, summary: { pending: 1 } })
 })
 
-test('notification resource load restores templates and complete history', async () => {
+test('notification resource load requests only the current history page', async () => {
   const notifications = ref([])
   const notificationTemplates = ref([])
   const notificationUsers = ref([])
   const notificationDrivers = ref([])
   let applied
+  const paths = []
   const api = async path => {
+    paths.push(path)
     if (path.startsWith('/admin/notifications?')) return { data: [{ id: 'notice' }], total: 1, pageCount: 1 }
     if (path === '/admin/notification-templates') return { data: [{ id: 'template' }] }
     throw new Error(`Unexpected path: ${path}`)
@@ -77,11 +79,52 @@ test('notification resource load restores templates and complete history', async
     notificationTemplates,
     notificationUsers,
     notificationDrivers,
+    query: { page: 3, pageSize: 20 },
     state: { apply: result => { applied = result } }
   })
+  assert.deepEqual(paths, ['/admin/notifications?page=3&pageSize=20', '/admin/notification-templates'])
   assert.deepEqual(notificationTemplates.value, [{ id: 'template' }])
   assert.deepEqual(notifications.value, [{ id: 'notice' }])
   assert.equal(applied.total, 1)
+})
+
+test('driver and membership loaders request only the current server page', async () => {
+  const driverQueries = []
+  const drivers = ref([])
+  const vehicleCategories = ref([])
+  const allVehicles = ref([])
+  let driverApplied
+  await loadDriversResources({
+    driversApi: {
+      categories: async () => ({ data: [] }),
+      list: async query => { driverQueries.push(query); return { data: [{ id: 'driver' }], total: 45, page: 2, pageCount: 3 } }
+    },
+    vehicleCategories,
+    drivers,
+    allVehicles,
+    includeVehicles: false,
+    state: { query: ref({ page: 2, pageSize: 20 }), apply: result => { driverApplied = result; drivers.value = result.data } }
+  })
+  assert.deepEqual(driverQueries, [{ page: 2, pageSize: 20 }])
+  assert.equal(driverApplied.pageCount, 3)
+
+  const paths = []
+  const membershipPlans = ref([])
+  const membershipOrders = ref([])
+  await loadMembershipResources({
+    api: async path => {
+      paths.push(path)
+      return path === '/admin/membership-plans'
+        ? { data: [] }
+        : { data: [{ id: 'order' }], total: 25, page: 2, pageCount: 2 }
+    },
+    membershipPlans,
+    membershipOrders,
+    query: { page: 2, pageSize: 20 },
+    state: { apply: result => { membershipOrders.value = result.data } }
+  })
+  assert.deepEqual(paths, ['/admin/membership-plans', '/admin/membership-orders?page=2&pageSize=20'])
+  assert.deepEqual(membershipOrders.value, [{ id: 'order' }])
 })
 
 test('remote options discard stale responses', async () => {

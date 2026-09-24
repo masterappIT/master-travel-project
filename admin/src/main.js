@@ -147,6 +147,8 @@ usersPageState.setRefresh(() => { if (view.value === 'users') load() })
 tripsPageState.setRefresh(() => { if (['trips', 'dispatch'].includes(view.value)) load() })
 driversPageState.setRefresh(() => { if (view.value === 'drivers') load() })
 settlementsPageState.setRefresh(() => { if (view.value === 'settlements') load() })
+watch(membershipOrdersState.page, () => { if (view.value === 'membership') load() }, { flush: 'post' })
+watch(notificationsState.page, () => { if (view.value === 'notifications') load() }, { flush: 'post' })
 watch(notificationRecipientSearch, async search => {
   if (view.value !== 'notifications') return
   const request = ++notificationOptionRequest
@@ -312,6 +314,7 @@ const App = { setup() {
      notificationTotal: notificationsState.total,
      notificationPage: notificationsState.page,
      notificationPageCount: notificationsState.pageCount,
+     goToNotificationPage: notificationsState.goToPage,
      filteredNotificationUsers,
      filteredNotificationDrivers,
      resetNotification,
@@ -329,6 +332,7 @@ const App = { setup() {
      membershipOrderSummary: membershipOrdersState.summary,
      membershipOrderPage: membershipOrdersState.page,
      membershipOrderPageCount: membershipOrdersState.pageCount,
+     goToMembershipOrderPage: membershipOrdersState.goToPage,
      membershipForm,
      resetMembership,
      editMembership,
@@ -569,6 +573,7 @@ const App = { setup() {
      driverTotal: driversPageState.total,
      driversPage: driversPageState.page,
      driversPageCount: driversPageState.pageCount,
+     goToDriversPage: driversPageState.goToPage,
      driverSummary: driversPageState.summary,
      vehicleCategories,
      selectedDriver,
