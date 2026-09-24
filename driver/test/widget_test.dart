@@ -24,8 +24,20 @@ import 'package:driver_web/registration_page.dart';
 import 'package:driver_web/add_vehicle_page.dart';
 import 'package:driver_web/core/api/driver_api_client.dart';
 import 'package:driver_web/core/layout/driver_page_shell.dart';
+import 'package:driver_web/core/platform/new_order_alert.dart';
 import 'package:driver_web/core/state/driver_order_alert_coordinator.dart';
 import 'package:driver_web/core/state/driver_language_preference.dart';
+
+class _SuccessfulNewOrderAlert implements NewOrderAlert {
+  @override
+  Future<bool> unlock() async => true;
+
+  @override
+  Future<bool> play() async => true;
+
+  @override
+  void dispose() {}
+}
 
 Widget testApp(Widget home) {
   final routes = Map<String, WidgetBuilder>.from(DriverRouter.builders)
@@ -503,7 +515,9 @@ void main() {
 
   testWidgets('tests the new-order alert sound from settings',
       (WidgetTester tester) async {
-    await tester.pumpWidget(testApp(const NotificationSettingsPage()));
+    await tester.pumpWidget(testApp(NotificationSettingsPage(
+      newOrderAlert: _SuccessfulNewOrderAlert(),
+    )));
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('測試提示聲'));

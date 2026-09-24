@@ -8,7 +8,9 @@ import 'core/state/driver_language_preference.dart';
 import 'core/tokens/driver_tokens.dart';
 
 class NotificationSettingsPage extends StatefulWidget {
-  const NotificationSettingsPage({super.key});
+  const NotificationSettingsPage({super.key, this.newOrderAlert});
+
+  final NewOrderAlert? newOrderAlert;
 
   @override
   State<NotificationSettingsPage> createState() =>
@@ -17,7 +19,7 @@ class NotificationSettingsPage extends StatefulWidget {
 
 class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
   final _api = DriverApiClient.instance;
-  final _newOrderAlert = NewOrderAlert();
+  late final NewOrderAlert _newOrderAlert;
   bool _loading = true;
   bool _saving = false;
   bool _testingSound = false;
@@ -32,6 +34,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
   @override
   void initState() {
     super.initState();
+    _newOrderAlert = widget.newOrderAlert ?? NewOrderAlert();
     _load();
   }
 
