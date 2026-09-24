@@ -403,24 +403,29 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                   liveRegion: true,
                   label: _centerNotice,
                   child: Container(
-                    constraints: const BoxConstraints(maxWidth: 280),
+                    width: double.infinity,
+                    constraints: const BoxConstraints(
+                      maxWidth: DriverDimensions.maxContentWidth,
+                    ),
                     margin: const EdgeInsets.all(DriverSpacing.xl),
                     padding: const EdgeInsets.symmetric(
                       horizontal: DriverSpacing.xl,
-                      vertical: DriverSpacing.lg,
+                      vertical: DriverSpacing.xl,
                     ),
                     decoration: BoxDecoration(
-                      color: DriverColors.text,
+                      color: DriverColors.surface,
                       borderRadius: BorderRadius.circular(DriverRadii.card),
+                      border: Border.all(color: DriverColors.border),
                       boxShadow: DriverShadows.floating,
                     ),
                     child: Text(
                       _centerNotice!,
                       textAlign: TextAlign.center,
                       style: const TextStyle(
-                        color: DriverColors.onPrimary,
-                        fontSize: DriverTypography.bodyLarge,
+                        color: DriverColors.text,
+                        fontSize: DriverTypography.body,
                         fontWeight: FontWeight.w700,
+                        decoration: TextDecoration.none,
                       ),
                     ),
                   ),

@@ -28,6 +28,7 @@ import 'package:driver_web/core/platform/new_order_alert.dart';
 import 'package:driver_web/core/state/driver_alert_audio_controller.dart';
 import 'package:driver_web/core/state/driver_order_alert_coordinator.dart';
 import 'package:driver_web/core/state/driver_language_preference.dart';
+import 'package:driver_web/core/tokens/driver_tokens.dart';
 
 class _SuccessfulNewOrderAlert implements NewOrderAlert {
   @override
@@ -350,6 +351,19 @@ void main() {
 
     expect(find.text('搶單失敗'), findsOneWidget);
     expect(find.byType(SnackBar), findsNothing);
+    final failureNotice = tester.widget<Container>(
+      find.ancestor(
+        of: find.text('搶單失敗'),
+        matching: find.byType(Container),
+      ).first,
+    );
+    final failureDecoration = failureNotice.decoration! as BoxDecoration;
+    expect(failureDecoration.color, DriverColors.surface);
+    expect(failureDecoration.border, isNotNull);
+    final failureText = tester.widget<Text>(find.text('搶單失敗'));
+    expect(failureText.style?.color, DriverColors.text);
+    expect(failureText.style?.fontSize, DriverTypography.body);
+    expect(failureText.style?.decoration, TextDecoration.none);
     expect(find.text('訂單詳情'), findsOneWidget);
     expect(find.text('成功接單'), findsNothing);
 
