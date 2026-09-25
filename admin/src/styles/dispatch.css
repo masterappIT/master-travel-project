@@ -108,6 +108,42 @@
 .text-action { min-width: 44px; min-height: 44px; padding: 8px 6px; border: 0; border-radius: 8px; color: inherit; background: transparent; font-size: 11px; font-weight: 750; text-decoration: underline; }
 .order-url-form label { display: grid; gap: 6px; color: #425974; font-size: 12px; font-weight: 700; }
 @media (max-width: 700px) { .shell aside.order-url-drawer { width: 100%; max-width: 100%; height: 100%; min-height: 0; flex: 0 0 100%; border-radius: 0; padding: 0; }.order-url-drawer > header { padding-right: 18px; padding-left: 18px; }.order-url-drawer-summary { grid-template-columns: repeat(3, 1fr); padding-right: 18px; padding-left: 18px; }.order-url-create-btn { grid-column: 1 / -1; width: 100%; }.order-url-drawer-content { padding: 16px 18px 24px; } }
+@media (max-width: 600px) {
+  .modal-backdrop:has(.order-url-form) {
+    align-items: end;
+    padding: 12px;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+  }
+  .shell .record-form.order-url-form {
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+    max-height: calc(100dvh - 24px - env(safe-area-inset-bottom));
+    gap: 13px;
+    padding: 22px 18px 18px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    border-radius: 18px;
+  }
+  .order-url-form > h3,
+  .order-url-form > p,
+  .order-url-form > select,
+  .order-url-form > label,
+  .order-url-form > button {
+    grid-column: 1;
+    min-width: 0;
+  }
+  .order-url-form > select,
+  .order-url-form label input {
+    width: 100%;
+    max-width: 100%;
+  }
+  .shell .record-form.order-url-form > button {
+    width: 100%;
+    min-height: 44px;
+    height: 44px;
+    justify-self: stretch;
+  }
+}
 
 
 .operations-management .panel, .operations-report .panel { overflow: hidden; }
