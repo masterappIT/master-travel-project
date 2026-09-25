@@ -131,6 +131,7 @@ jobs:
           ADMIN_SESSION_SECRET: ${{ vars.GCP_ADMIN_SESSION_SECRET }}
           AMAP_WEB_SERVICE_KEY_SECRET: ${{ vars.GCP_AMAP_WEB_SERVICE_KEY_SECRET }}
           APP_CORS_ORIGINS: ${{ vars.APP_CORS_ORIGINS }}
+          DRIVER_ORDER_URL_BASE: ${{ vars.DRIVER_ORDER_URL_BASE }}
         run: ./deploy/cloud-run/deploy.sh
 
       - name: Deploy production frontends
