@@ -8,6 +8,7 @@
     "prisma:migrate:deploy": "prisma migrate deploy --schema ../prisma/schema.prisma",
     "prebuild": "npm run prisma:generate",
     "build": "tsc -p tsconfig.json",
+    "test": "tsx --test src/*.test.ts",
     "start": "node dist/main.js"
   },
   "dependencies": {

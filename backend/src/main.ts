@@ -47,6 +47,12 @@ import {
   DiscountType,
   PromotionStackingMode,
 } from "../generated/prisma";
+import {
+  adminTripDetailInclude,
+  tripDriverResponse,
+  tripDriverSelect,
+  type TripDriverSummary,
+} from "./trip-payload";
 
 try {
   loadEnvFile("../.env");
@@ -2689,6 +2695,7 @@ function tripResponse(trip: {
   createdAt: Date;
   updatedAt: Date;
   user: Parameters<typeof userResponse>[0];
+  driver?: TripDriverSummary | null;
   quote?: PersistedQuote | null;
   payment?: {
     id: string;
@@ -2719,6 +2726,7 @@ function tripResponse(trip: {
     createdAt: trip.createdAt.toISOString(),
     updatedAt: trip.updatedAt.toISOString(),
     user: userResponse(trip.user),
+    driver: trip.driver ? tripDriverResponse(trip.driver) : null,
     payment: trip.payment
       ? {
           id: trip.payment.id,
@@ -2788,10 +2796,9 @@ const adminTripListSelect = Prisma.validator<Prisma.TripSelect>()({
   settlement: {
     select: { id: true, driverId: true, method: true, settledAt: true },
   },
-  driver: {
-    select: { id: true, name: true, phone: true, settlementMethod: true },
-  },
+  driver: { select: tripDriverSelect },
 });
+
 type AdminTripListItem = Prisma.TripGetPayload<{ select: typeof adminTripListSelect }> & {
   orderUrls?: Array<{
     id: string;
@@ -8822,20 +8829,7 @@ class AdminController {
     requireAuth(req);
     const trip = await prisma.trip.findUnique({
       where: { id },
-      include: {
-        user: true,
-        quote: {
-          include: {
-            pricing: { include: { tiers: { orderBy: { order: "asc" } } } },
-            vehicle: true,
-            promotionUsages: { include: { promotion: true } },
-            lines: { orderBy: { order: "asc" } },
-          },
-        },
-        payment: true,
-        settlement: true,
-        driver: true,
-      },
+      include: adminTripDetailInclude,
     });
     if (!trip)
       throw new HttpException("Trip not found", HttpStatus.NOT_FOUND);
