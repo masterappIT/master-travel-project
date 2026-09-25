@@ -89,6 +89,19 @@ jobs:
           driver|driver/build/web
           EOF
 
+      - name: Build and push immutable share renderer image
+        id: renderer-image
+        env:
+          PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+          REGION: ${{ vars.GCP_REGION }}
+          REPOSITORY: ${{ vars.GCP_ARTIFACT_REPOSITORY }}
+        run: |
+          set -euo pipefail
+          image="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/share-renderer:${GITHUB_SHA}"
+          docker buildx build --platform linux/amd64 --file deploy/share-renderer/Dockerfile --tag "$image" --push --provenance=false .
+          digest="$(gcloud artifacts docker images describe "$image" --format='value(image_summary.digest)')"
+          printf 'image=%s@%s\n' "${image%:*}" "$digest" >> "$GITHUB_OUTPUT"
+
       - name: Build and push immutable API image
         id: image
         env:
@@ -132,6 +145,10 @@ jobs:
           AMAP_WEB_SERVICE_KEY_SECRET: ${{ vars.GCP_AMAP_WEB_SERVICE_KEY_SECRET }}
           APP_CORS_ORIGINS: ${{ vars.APP_CORS_ORIGINS }}
           DRIVER_ORDER_URL_BASE: ${{ vars.DRIVER_ORDER_URL_BASE }}
+          SHARE_RENDERER_ORIGIN: ${{ vars.SHARE_RENDERER_ORIGIN }}
+          SHARE_RENDERER_SERVICE_NAME: ${{ vars.GCP_SHARE_RENDERER_SERVICE }}
+          SHARE_RENDERER_IMAGE: ${{ steps.renderer-image.outputs.image }}
+          SHARE_RENDERER_SERVICE_ACCOUNT: ${{ vars.GCP_SHARE_RENDERER_SERVICE_ACCOUNT || vars.GCP_RUNTIME_SERVICE_ACCOUNT }}
         run: ./deploy/cloud-run/deploy.sh
 
       - name: Deploy production frontends

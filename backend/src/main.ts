@@ -57,10 +57,7 @@ import {
   type TripDriverSummary,
 } from "./trip-payload";
 import { buildDriverOrderUrl } from "./order-url";
-import {
-  inviteShareHtml,
-  renderInviteCard,
-} from "./order-invite-share";
+import { inviteShareHtml } from "./order-invite-share";
 import { publicDriverOrderChannelFilter } from "./driver-order-channel";
 
 try {
@@ -5777,11 +5774,15 @@ class DriverOrderInviteShareController {
     const token = typeof request.query?.token === "string" ? request.query.token : "";
     if (!token) throw new HttpException("Order invitation not found", HttpStatus.NOT_FOUND);
     await this.invites.details(token);
-    const base = new URL(process.env.DRIVER_ORDER_URL_BASE || "http://localhost:8081/order-invite");
+    const rendererOrigin = process.env.SHARE_RENDERER_ORIGIN?.trim();
+    if (!rendererOrigin) throw new HttpException("Preview unavailable", HttpStatus.SERVICE_UNAVAILABLE);
+    const rendererUrl = new URL("/order-invite/share-image", rendererOrigin);
+    rendererUrl.searchParams.set("token", token);
     try {
-      const png = await renderInviteCard(base, token);
+      const rendered = await fetch(rendererUrl, { signal: AbortSignal.timeout(30000) });
+      if (!rendered.ok) throw new Error(`Renderer returned ${rendered.status}`);
       response.setHeader("Cache-Control", "private, max-age=60");
-      response.type("png").send(png);
+      response.type("png").send(Buffer.from(await rendered.arrayBuffer()));
     } catch (error) {
       console.error("Failed to render order invitation preview", error);
       throw new HttpException("Preview unavailable", HttpStatus.SERVICE_UNAVAILABLE);
