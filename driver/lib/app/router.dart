@@ -23,11 +23,13 @@ import '../core/api/driver_api_client.dart';
 import '../settlement_overview_page.dart';
 import '../language_settings_page.dart';
 import '../notification_settings_page.dart';
+import '../order_invite/order_invite_page.dart';
 import 'route_names.dart';
 
 abstract final class DriverRouter {
   static Map<String, WidgetBuilder> get builders => {
         DriverRouteNames.login: (_) => const LoginPage(),
+        DriverRouteNames.orderInvite: (_) => const OrderInvitePage(),
         DriverRouteNames.registration: (context) {
           final arguments = ModalRoute.of(context)?.settings.arguments;
           final values = arguments is Map<String, String>

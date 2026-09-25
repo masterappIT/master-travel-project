@@ -191,6 +191,11 @@ type MasterBoxMessage = {
 type SupportSession = { conversationId: string; riderId: string; exp: number };
 type ClientSession = { sub: string; exp: number; jti: string };
 type DriverSessionToken = { sub: string; exp: number; jti: string };
+type ProvisionalDriverSessionToken = DriverSessionToken & {
+  orderUrlId: string;
+  tripId: string;
+  scope: "ORDER_INVITE";
+};
 type PhoneChallenge = {
   countryCode: string;
   phoneNumber: string;
@@ -1927,7 +1932,54 @@ function orderUrlTokenHash(token: string) {
   return createHash("sha256").update(token).digest("hex");
 }
 function orderUrlValue(token: string) {
-  return `${process.env.DRIVER_ORDER_URL_BASE || "/driver/order"}?token=${encodeURIComponent(token)}`;
+  return `${process.env.DRIVER_ORDER_URL_BASE || "/driver/order-invite"}?token=${encodeURIComponent(token)}`;
+}
+function provisionalDriverTokenFor(session: ProvisionalDriverSessionToken) {
+  const payload = Buffer.from(JSON.stringify(session)).toString("base64url");
+  return `${payload}.${createHmac("sha256", driverSecret()).update(payload).digest("base64url")}`;
+}
+async function provisionalDriverSessionFrom(req: RequestLike) {
+  const value = req.headers.authorization?.replace(/^Bearer\s+/i, "");
+  const [payload, signature] = value?.split(".") || [];
+  if (!payload || !signature)
+    throw new UnauthorizedException("Valid provisional driver session required");
+  const expected = createHmac("sha256", driverSecret())
+    .update(payload)
+    .digest("base64url");
+  try {
+    if (!timingSafeEqual(Buffer.from(signature), Buffer.from(expected)))
+      throw new Error("signature mismatch");
+    const session = JSON.parse(
+      Buffer.from(payload, "base64url").toString(),
+    ) as ProvisionalDriverSessionToken;
+    if (
+      session.scope !== "ORDER_INVITE" ||
+      !session.sub ||
+      !session.jti ||
+      !session.orderUrlId ||
+      !session.tripId ||
+      session.exp <= Date.now()
+    )
+      throw new Error("invalid session");
+    const stored = await prisma.provisionalDriverSession.findUnique({
+      where: { jti: session.jti },
+      include: { driver: true, orderUrl: true },
+    });
+    if (
+      !stored ||
+      stored.revokedAt ||
+      stored.expiresAt.getTime() <= Date.now() ||
+      stored.driverId !== session.sub ||
+      stored.tripId !== session.tripId ||
+      stored.orderUrlId !== session.orderUrlId ||
+      !stored.driver.enabled ||
+      stored.orderUrl.revokedAt
+    )
+      throw new Error("revoked session");
+    return session;
+  } catch {
+    throw new UnauthorizedException("Valid provisional driver session required");
+  }
 }
 async function driverAuthResponse(driver: any) {
   if (!driver.enabled)
@@ -2745,6 +2797,12 @@ type AdminTripListItem = Prisma.TripGetPayload<{ select: typeof adminTripListSel
     id: string;
     tripId: string;
     driverId: string | null;
+    source: string;
+    createdByAdminId: string | null;
+    reservedAt: Date | null;
+    acceptedAt: Date | null;
+    completedAt: Date | null;
+    provisionalDriverId: string | null;
     validFrom: Date;
     validUntil: Date;
     usedAt: Date | null;
@@ -2773,6 +2831,9 @@ function adminTripListResponse(trip: AdminTripListItem) {
       ...item,
       validFrom: item.validFrom.toISOString(),
       validUntil: item.validUntil.toISOString(),
+      reservedAt: item.reservedAt?.toISOString() || null,
+      acceptedAt: item.acceptedAt?.toISOString() || null,
+      completedAt: item.completedAt?.toISOString() || null,
       usedAt: item.usedAt?.toISOString() || null,
       revokedAt: item.revokedAt?.toISOString() || null,
       createdAt: item.createdAt.toISOString(),
@@ -2880,6 +2941,25 @@ function driverTripResponse(
           settledAt: trip.settlement.settledAt.toISOString(),
         }
       : null,
+  };
+}
+function invitationTripResponse(
+  trip: Parameters<typeof driverTripResponse>[0],
+  now = new Date(),
+) {
+  const phoneVisibleAt = new Date(trip.scheduledAt.getTime() - 60 * 60 * 1000);
+  const phoneVisible = now >= phoneVisibleAt;
+  const response = driverTripResponse(trip, phoneVisible);
+  const phone = trip.passengerPhone || trip.user?.phoneNumber || null;
+  return {
+    ...response,
+    passengerPhone: phoneVisible ? response.passengerPhone : phone ? phone.replace(/.(?=.{4})/g, "*") : null,
+    passengerPhoneCountryCode: phoneVisible
+      ? response.passengerPhoneCountryCode
+      : trip.passengerPhoneRegion || trip.user?.countryCode || null,
+    passengerPhoneVisible: phoneVisible,
+    passengerPhoneVisibleAt: phoneVisibleAt.toISOString(),
+    canCancel: !trip.startedAt && !trip.completedAt && trip.status !== "CANCELLED" && Boolean(trip.driverId),
   };
 }
 function parseDistancePricing(
@@ -5196,6 +5276,10 @@ class DriverAuthController {
           },
         });
       }
+      await tx.tripOrderUrl.updateMany({
+        where: { tripId: completed.id, driverId: session.sub, usedAt: { not: null } },
+        data: { completedAt: completed.completedAt },
+      });
       await rewardInvitation(tx, completed.userId, completed.id);
       return completed;
     });
@@ -5596,6 +5680,442 @@ class DriverAuthController {
       include: { user: true },
     });
     return updated ? driverTripResponse(updated, true) : null;
+  }
+}
+
+@Controller("driver/order-invites")
+class DriverOrderInviteController {
+  @Get(":token")
+  async details(@Param("token") token: string) {
+    const item = await prisma.tripOrderUrl.findUnique({
+      where: { tokenHash: orderUrlTokenHash(token) },
+      include: { trip: { include: { payment: true } } },
+    });
+    if (!item)
+      throw new HttpException("Order invitation not found", HttpStatus.NOT_FOUND);
+    const now = new Date();
+    if (item.revokedAt || item.usedAt || now < item.validFrom || now > item.validUntil)
+      throw new HttpException("Order invitation has expired", HttpStatus.GONE);
+    if (
+      item.trip.status !== "CONFIRMED" ||
+      item.trip.executionPhase !== "WAITING_DRIVER" ||
+      item.trip.driverId ||
+      item.trip.acceptedAt ||
+      item.trip.payment?.status !== "PAID" ||
+      tripOfferIsExpired(item.trip.scheduledAt, now)
+    )
+      throw new HttpException("Trip is no longer available", HttpStatus.CONFLICT);
+    return {
+      invitation: {
+        id: item.id,
+        status: item.reservedAt ? "RESERVED" : "ACTIVE",
+        validFrom: item.validFrom.toISOString(),
+        validUntil: item.validUntil.toISOString(),
+      },
+      trip: {
+        id: item.trip.id,
+        origin: item.trip.origin,
+        destination: item.trip.destination,
+        region: item.trip.region,
+        scheduledAt: item.trip.scheduledAt.toISOString(),
+        vehicleCategory: item.trip.vehicleCategory,
+        payoutAmount: item.trip.driverPayoutAmount,
+        payoutCurrency: item.trip.driverPayoutCurrency,
+      },
+    };
+  }
+
+  @Post(":token/phone/request")
+  async requestCode(
+    @Param("token") token: string,
+    @Body() body: { countryCode?: string; phoneNumber?: string },
+  ) {
+    const invitation = await this.details(token);
+    const identity = parsePhoneIdentity(body);
+    const existing = await prisma.driver.findFirst({
+      where: {
+        OR: [
+          { phoneCountryCode: identity.countryCode, phone: identity.phoneNumber },
+          ...(identity.countryCode === "+86"
+            ? [{ mainlandPhone: identity.phoneNumber }]
+            : [{ hongKongMacauCountryCode: identity.countryCode, hongKongMacauPhone: identity.phoneNumber }]),
+        ],
+      },
+      select: { id: true },
+    });
+    if (existing)
+      throw new HttpException("REGISTERED_DRIVER", HttpStatus.CONFLICT);
+    const code = "00000";
+    const challengeId = randomBytes(18).toString("hex");
+    const expiresAt = new Date(Date.now() + PHONE_CODE_TTL_MS);
+    await prisma.driverOtpChallenge.create({
+      data: {
+        id: challengeId,
+        invitationOrderUrlId: invitation.invitation.id,
+        countryCode: identity.countryCode,
+        phone: identity.phoneNumber,
+        codeHash: hashPassword(code),
+        expiresAt,
+      },
+    });
+    return {
+      challengeId,
+      expiresAt: expiresAt.toISOString(),
+      ...(process.env.NODE_ENV !== "production" ? { developmentCode: code } : {}),
+    };
+  }
+
+  @Post(":token/phone/verify")
+  async verifyCode(
+    @Param("token") token: string,
+    @Body() body: { challengeId?: string; code?: string },
+  ) {
+    const invitation = await this.details(token);
+    const challenge = await prisma.driverOtpChallenge.findUnique({
+      where: { id: body.challengeId?.trim() || "" },
+    });
+    const code = body.code?.trim() || "";
+    if (
+      !challenge || challenge.driverId || challenge.consumedAt ||
+      challenge.invitationOrderUrlId !== invitation.invitation.id ||
+      challenge.expiresAt.getTime() <= Date.now() || code.length !== 5 ||
+      !verifyPassword(code, challenge.codeHash)
+    )
+      throw new UnauthorizedException("Invalid invitation verification code");
+    return { ok: true, challengeId: challenge.id, countryCode: challenge.countryCode, phone: challenge.phone };
+  }
+
+  @Post(":token/register-and-accept")
+  @UseInterceptors(FileInterceptor("vehiclePhoto", {
+    limits: { fileSize: 2 * 1024 * 1024 },
+    fileFilter: (_req, file, cb) => cb(null, /^image\/(jpeg|png|webp)$/.test(file.mimetype)),
+  }))
+  async registerAndAccept(
+    @Param("token") token: string,
+    @Body() body: Record<string, unknown>,
+    @UploadedFile() vehiclePhoto?: Express.Multer.File,
+  ) {
+    const preview = await this.details(token);
+    const name = typeof body.name === "string" ? body.name.trim() : "";
+    const { vehicleOwnership, plateType, hkPlate, macauPlate, mainlandPlate } = normalizeVehiclePlateData({
+      ...body,
+      vehicleOwnership: body.vehicleOwnership ?? "香港",
+    });
+    const vehicleCategory = typeof body.vehicleCategory === "string" ? body.vehicleCategory.trim() : "";
+    const vehicleColor = typeof body.vehicleColor === "string" ? body.vehicleColor.trim() : "";
+    if (!name || !vehicleCategory || !vehicleColor || !vehiclePhoto ||
+        !validVehiclePlateData({ vehicleOwnership, plateType, hkPlate, macauPlate, mainlandPlate }))
+      throw new HttpException("Valid driver registration fields and vehicle photo are required", HttpStatus.BAD_REQUEST);
+    const identity = parsePhoneIdentity({
+      countryCode: typeof body.phoneCountryCode === "string" ? body.phoneCountryCode : undefined,
+      phoneNumber: typeof body.phone === "string" ? body.phone : undefined,
+    });
+    const hongKongMacauIdentity = parsePhoneIdentity({
+      countryCode: typeof body.hongKongMacauCountryCode === "string" ? body.hongKongMacauCountryCode : undefined,
+      phoneNumber: typeof body.hongKongMacauPhone === "string" ? body.hongKongMacauPhone : undefined,
+    });
+    const mainlandIdentity = parsePhoneIdentity({
+      countryCode: "+86",
+      phoneNumber: typeof body.mainlandPhone === "string" ? body.mainlandPhone : undefined,
+    });
+    if (!["+852", "+853"].includes(hongKongMacauIdentity.countryCode))
+      throw new HttpException("Hong Kong/Macau phone country code must be +852 or +853", HttpStatus.BAD_REQUEST);
+    const verifiedPhoneMatches = identity.countryCode === "+86"
+      ? mainlandIdentity.phoneNumber === identity.phoneNumber
+      : hongKongMacauIdentity.countryCode === identity.countryCode && hongKongMacauIdentity.phoneNumber === identity.phoneNumber;
+    if (!verifiedPhoneMatches)
+      throw new HttpException("Verified phone number must match the corresponding registration phone", HttpStatus.BAD_REQUEST);
+    const challengeId = typeof body.challengeId === "string" ? body.challengeId.trim() : "";
+    const code = typeof body.code === "string" ? body.code.trim() : "";
+    const challenge = await prisma.driverOtpChallenge.findUnique({ where: { id: challengeId } });
+    if (!challenge || challenge.driverId || challenge.consumedAt ||
+        challenge.invitationOrderUrlId !== preview.invitation.id ||
+        challenge.expiresAt.getTime() <= Date.now() ||
+        challenge.countryCode !== identity.countryCode || challenge.phone !== identity.phoneNumber ||
+        code.length !== 5 || !verifyPassword(code, challenge.codeHash))
+      throw new UnauthorizedException("Invalid invitation verification code");
+    const activeCategory = await prisma.vehicleCategory.findFirst({ where: { name: vehicleCategory, enabled: true }, select: { id: true } });
+    if (!activeCategory)
+      throw new HttpException("Vehicle category is not available", HttpStatus.BAD_REQUEST);
+    const now = new Date();
+    const result = await prisma.$transaction(async (tx) => {
+      const item = await tx.tripOrderUrl.findUnique({ where: { id: preview.invitation.id } });
+      const trip = await tx.trip.findUnique({ where: { id: preview.trip.id } });
+      if (!item || !trip || item.usedAt || item.revokedAt || now < item.validFrom || now > item.validUntil ||
+          trip.status !== "CONFIRMED" || trip.executionPhase !== "WAITING_DRIVER" || trip.driverId || trip.acceptedAt)
+        throw new HttpException("Order invitation is no longer available", HttpStatus.CONFLICT);
+      const existing = await tx.driver.findFirst({
+        where: { OR: [
+          { phoneCountryCode: identity.countryCode, phone: identity.phoneNumber },
+          { hongKongMacauCountryCode: hongKongMacauIdentity.countryCode, hongKongMacauPhone: hongKongMacauIdentity.phoneNumber },
+          { mainlandPhone: mainlandIdentity.phoneNumber },
+        ] },
+      });
+      if (existing) throw new HttpException("REGISTERED_DRIVER", HttpStatus.CONFLICT);
+      const driver = await tx.driver.create({ data: {
+        id: `driver-${Date.now()}-${randomBytes(4).toString("hex")}`,
+        driverType: "臨時司機",
+        name,
+        affiliation: vehicleOwnership,
+        phoneCountryCode: identity.countryCode,
+        phone: identity.phoneNumber,
+        hongKongMacauCountryCode: hongKongMacauIdentity.countryCode,
+        hongKongMacauPhone: hongKongMacauIdentity.phoneNumber,
+        mainlandPhone: mainlandIdentity.phoneNumber,
+        reviewStatus: "PROVISIONAL",
+        reviewSubmittedAt: now,
+      } });
+      const vehicle = await tx.driverVehicle.create({ data: {
+        id: `vehicle-${Date.now()}-${randomBytes(4).toString("hex")}`,
+        vehicleOwnership, plateType, hkPlate: hkPlate || null, macauPlate: macauPlate || null,
+        mainlandPlate: mainlandPlate || null, vehicleCategory, vehicleColor, vehiclePhotos: [],
+        vehiclePhotoData: new Uint8Array(vehiclePhoto.buffer), vehiclePhotoMime: vehiclePhoto.mimetype,
+        assignments: { create: { driverId: driver.id, isPrimary: true } },
+      } });
+      const claimed = await tx.tripOrderUrl.updateMany({
+        where: { id: item.id, usedAt: null, revokedAt: null },
+        data: { usedAt: now, acceptedAt: now, reservedAt: item.reservedAt || now, driverId: driver.id, provisionalDriverId: driver.id },
+      });
+      if (claimed.count !== 1) throw new HttpException("Order invitation is no longer available", HttpStatus.CONFLICT);
+      const accepted = await tx.trip.updateMany({
+        where: { id: trip.id, driverId: null, status: "CONFIRMED", executionPhase: "WAITING_DRIVER", acceptedAt: null, completedAt: null },
+        data: { driverId: driver.id, driverName: driver.name, driverPhone: `${driver.phoneCountryCode} ${driver.phone}`,
+          ...tripVehicleSnapshot(vehicle), executionPhase: "DRIVER_ASSIGNED", assignedAt: now, acceptedAt: now },
+      });
+      if (accepted.count !== 1) throw new HttpException("Trip is no longer available", HttpStatus.CONFLICT);
+      await tx.driverOtpChallenge.update({ where: { id: challenge.id }, data: { consumedAt: now, driverId: driver.id } });
+      const exp = Math.min(item.validUntil.getTime(), now.getTime() + 30 * 24 * 60 * 60 * 1000);
+      const session: ProvisionalDriverSessionToken = {
+        sub: driver.id, exp, jti: randomBytes(16).toString("hex"), orderUrlId: item.id, tripId: trip.id, scope: "ORDER_INVITE",
+      };
+      await tx.provisionalDriverSession.create({ data: {
+        jti: session.jti, orderUrlId: item.id, tripId: trip.id, driverId: driver.id, expiresAt: new Date(exp),
+      } });
+      return { driver, session };
+    });
+    await publishDriverOrderEvent({ reason: "taken", tripId: preview.trip.id });
+    return {
+      token: provisionalDriverTokenFor(result.session),
+      expiresAt: new Date(result.session.exp).toISOString(),
+      driver: driverResponse(result.driver),
+      tripId: preview.trip.id,
+      scope: result.session.scope,
+    };
+  }
+
+  private async scopedSession(req: RequestLike, token: string) {
+    const session = await provisionalDriverSessionFrom(req);
+    const item = await prisma.tripOrderUrl.findUnique({
+      where: { tokenHash: orderUrlTokenHash(token) },
+    });
+    if (!item || item.id !== session.orderUrlId || item.tripId !== session.tripId)
+      throw new ForbiddenException("Session is not valid for this invitation");
+    const trip = await prisma.trip.findUnique({
+      where: { id: session.tripId },
+      include: { user: true, settlement: true },
+    });
+    if (!trip || trip.driverId !== session.sub)
+      throw new ForbiddenException("Session is not valid for this trip");
+    return { session, item, trip };
+  }
+
+  @Get(":token/session")
+  async session(@Req() req: RequestLike, @Param("token") token: string) {
+    const { trip } = await this.scopedSession(req, token);
+    return invitationTripResponse(trip);
+  }
+
+  @Post(":token/trip/cancel")
+  async cancel(@Req() req: RequestLike, @Param("token") token: string) {
+    const { session, item, trip } = await this.scopedSession(req, token);
+    if (trip.startedAt || trip.completedAt || trip.status === "CANCELLED")
+      throw new HttpException("Trip cannot be cancelled after it starts", HttpStatus.CONFLICT);
+    const cancelledAt = new Date();
+    const updated = await prisma.$transaction(async (tx) => {
+      const update = await tx.trip.updateMany({
+        where: {
+          id: trip.id,
+          driverId: session.sub,
+          startedAt: null,
+          completedAt: null,
+          status: { not: "CANCELLED" },
+        },
+        data: {
+          status: "CANCELLED",
+          executionPhase: null,
+          cancelledAt,
+          cancellationSource: "DRIVER",
+        },
+      });
+      if (update.count !== 1)
+        throw new HttpException("Trip cannot be cancelled after it starts", HttpStatus.CONFLICT);
+      await tx.driverTripCancellation.create({
+        data: { tripId: trip.id, driverId: session.sub, cancelledAt },
+      });
+      await tx.tripOrderUrl.update({
+        where: { id: item.id },
+        data: { revokedAt: cancelledAt },
+      });
+      return tx.trip.findUniqueOrThrow({
+        where: { id: trip.id },
+        include: { user: true, settlement: true },
+      });
+    });
+    await publishDriverOrderEvent({ reason: "cancelled", tripId: trip.id });
+    return invitationTripResponse(updated);
+  }
+
+  @Post(":token/trip/arrive")
+  async arrive(@Req() req: RequestLike, @Param("token") token: string) {
+    const { session, trip } = await this.scopedSession(req, token);
+    if (!trip.acceptedAt || trip.startedAt || trip.completedAt || trip.status === "CANCELLED")
+      throw new HttpException("Trip cannot be marked arrived", HttpStatus.CONFLICT);
+    const update = await prisma.trip.updateMany({
+      where: {
+        id: trip.id,
+        driverId: session.sub,
+        acceptedAt: { not: null },
+        startedAt: null,
+        completedAt: null,
+        status: { not: "CANCELLED" },
+      },
+      data: { arrivedAt: new Date() },
+    });
+    if (update.count !== 1)
+      throw new HttpException("Trip cannot be marked arrived", HttpStatus.CONFLICT);
+    const updated = await prisma.trip.findUniqueOrThrow({
+      where: { id: trip.id },
+      include: { user: true },
+    });
+    return invitationTripResponse(updated);
+  }
+
+  @Post(":token/trip/start")
+  async start(@Req() req: RequestLike, @Param("token") token: string) {
+    const { session, trip } = await this.scopedSession(req, token);
+    if (!trip.acceptedAt || !trip.arrivedAt || trip.startedAt || trip.completedAt || trip.status === "CANCELLED")
+      throw new HttpException("Trip cannot be started", HttpStatus.CONFLICT);
+    const update = await prisma.trip.updateMany({
+      where: {
+        id: trip.id,
+        driverId: session.sub,
+        acceptedAt: { not: null },
+        arrivedAt: { not: null },
+        startedAt: null,
+        completedAt: null,
+        status: { not: "CANCELLED" },
+      },
+      data: { startedAt: new Date(), executionPhase: "IN_PROGRESS" },
+    });
+    if (update.count !== 1)
+      throw new HttpException("Trip cannot be started", HttpStatus.CONFLICT);
+    const updated = await prisma.trip.findUniqueOrThrow({
+      where: { id: trip.id },
+      include: { user: true },
+    });
+    return invitationTripResponse(updated);
+  }
+
+  @Post(":token/trip/complete")
+  async complete(
+    @Req() req: RequestLike,
+    @Param("token") token: string,
+    @Body() body: { settlementMethod?: unknown; settlementAccount?: unknown },
+  ) {
+    const settlementMethod = typeof body.settlementMethod === "string" ? body.settlementMethod.trim() : "";
+    const settlementAccount = typeof body.settlementAccount === "string" ? body.settlementAccount.trim() : "";
+    if (!settlementMethod)
+      throw new HttpException("Settlement method is required", HttpStatus.BAD_REQUEST);
+    if (!settlementAccount)
+      throw new HttpException("Settlement account is required", HttpStatus.BAD_REQUEST);
+    if (settlementMethod.length > 64 || settlementAccount.length > 128)
+      throw new HttpException("Settlement details are too long", HttpStatus.BAD_REQUEST);
+    const { session, item, trip } = await this.scopedSession(req, token);
+    if (!trip.startedAt || trip.completedAt || trip.status === "CANCELLED")
+      throw new HttpException("Trip cannot be completed", HttpStatus.CONFLICT);
+    const updated = await prisma.$transaction(async (tx) => {
+      const completedAt = new Date();
+      const update = await tx.trip.updateMany({
+        where: {
+          id: trip.id,
+          driverId: session.sub,
+          startedAt: { not: null },
+          completedAt: null,
+          status: { not: "CANCELLED" },
+        },
+        data: { completedAt, status: "COMPLETED", executionPhase: null },
+      });
+      if (update.count !== 1)
+        throw new HttpException("Trip cannot be completed", HttpStatus.CONFLICT);
+      await tx.driverSettlement.create({
+        data: {
+          id: `settlement-${Date.now()}-${randomBytes(4).toString("hex")}`,
+          tripId: trip.id,
+          driverId: session.sub,
+          method: `${settlementMethod}：${settlementAccount}`,
+          settledAt: completedAt,
+        },
+      });
+      await tx.tripOrderUrl.update({
+        where: { id: item.id },
+        data: { completedAt },
+      });
+      const completed = await tx.trip.findUniqueOrThrow({
+        where: { id: trip.id },
+        include: { user: true, payment: true, settlement: true },
+      });
+      const mileageSettings = await tx.appSetting.findUniqueOrThrow({
+        where: { id: appSettingsDefaults.id },
+      });
+      const spendPerKm = Math.max(0.01, mileageSettings.mileageSpendPerKm);
+      const earned = completed.payment
+        ? Math.max(0, Math.floor(Number(completed.payment.total) / spendPerKm))
+        : 0;
+      if (earned > 0) {
+        const account = await tx.mileageAccount.upsert({
+          where: { userId: completed.userId },
+          create: { userId: completed.userId, balance: earned, lifetimeEarned: earned },
+          update: { balance: { increment: earned }, lifetimeEarned: { increment: earned } },
+        });
+        await tx.mileageLedger.create({
+          data: {
+            userId: completed.userId,
+            amount: earned,
+            balanceAfter: account.balance,
+            type: "EARN",
+            reason: "完成跨境行程",
+            tripId: completed.id,
+            expiresAt: new Date(new Date().setMonth(new Date().getMonth() + mileageSettings.mileageValidityMonths)),
+          },
+        });
+      }
+      await rewardInvitation(tx, completed.userId, completed.id);
+      return completed;
+    });
+    return invitationTripResponse(updated);
+  }
+
+  @Post(":token/formal-review")
+  async submitFormalReview(@Req() req: RequestLike, @Param("token") token: string) {
+    const { session, trip } = await this.scopedSession(req, token);
+    if (!trip.completedAt || trip.status !== "COMPLETED")
+      throw new HttpException("Formal review is available after trip completion", HttpStatus.CONFLICT);
+    const driver = await prisma.driver.findUnique({ where: { id: session.sub } });
+    if (!driver || driver.reviewStatus !== "PROVISIONAL")
+      throw new HttpException("Driver is not eligible for formal review", HttpStatus.CONFLICT);
+    const updated = await prisma.driver.update({
+      where: { id: driver.id },
+      data: {
+        driverType: "正式司機",
+        reviewStatus: "PENDING",
+        reviewReason: null,
+        reviewSubmittedAt: new Date(),
+        reviewedAt: null,
+        reviewedBy: null,
+        isOnline: false,
+      },
+    });
+    return driverResponse(updated);
   }
 }
 
@@ -8109,6 +8629,12 @@ class AdminController {
                 id: true,
                 tripId: true,
                 driverId: true,
+                source: true,
+                createdByAdminId: true,
+                reservedAt: true,
+                acceptedAt: true,
+                completedAt: true,
+                provisionalDriverId: true,
                 validFrom: true,
                 validUntil: true,
                 usedAt: true,
@@ -8695,7 +9221,7 @@ class AdminController {
     @Body()
     body: { driverId?: string; validFrom?: string; validUntil?: string },
   ) {
-    requireRole(req, ["SUPER_ADMIN", "OPERATOR"]);
+    const session = requireRole(req, ["SUPER_ADMIN", "OPERATOR"]);
     const validFrom = new Date(body.validFrom || "");
     const validUntil = new Date(body.validUntil || "");
     if (
@@ -8733,6 +9259,8 @@ class AdminController {
         tokenHash: orderUrlTokenHash(token),
         tripId: id,
         driverId: driver?.id || null,
+        source: "ADMIN",
+        createdByAdminId: session.sub,
         validFrom,
         validUntil,
       },
@@ -8754,18 +9282,40 @@ class AdminController {
     requireAuth(req);
     const data = await prisma.tripOrderUrl.findMany({
       where: { tripId: id },
-      include: { driver: true },
+      include: { driver: true, provisionalDriver: true },
       orderBy: { createdAt: "desc" },
     });
     return {
       data: data.map((item) => ({
         id: item.id,
         tripId: item.tripId,
+        source: item.source,
+        createdByAdminId: item.createdByAdminId,
         driver: item.driver ? driverResponse(item.driver) : null,
+        provisionalDriver: item.provisionalDriver
+          ? driverResponse(item.provisionalDriver)
+          : null,
         validFrom: item.validFrom.toISOString(),
         validUntil: item.validUntil.toISOString(),
+        reservedAt: item.reservedAt?.toISOString() || null,
+        acceptedAt: item.acceptedAt?.toISOString() || null,
+        completedAt: item.completedAt?.toISOString() || null,
         usedAt: item.usedAt?.toISOString() || null,
         revokedAt: item.revokedAt?.toISOString() || null,
+        createdAt: item.createdAt.toISOString(),
+        lifecycleStatus: item.revokedAt
+          ? "REVOKED"
+          : item.completedAt
+            ? "COMPLETED"
+            : item.acceptedAt
+              ? "ACCEPTED"
+              : item.reservedAt
+                ? "RESERVED"
+                : item.usedAt
+                  ? "USED"
+                  : new Date() > item.validUntil
+                    ? "EXPIRED"
+                    : "ACTIVE",
       })),
       total: data.length,
     };
@@ -13024,6 +13574,7 @@ class HealthController {
     ClientOrdersController,
     ClientAuthController,
     DriverAuthController,
+    DriverOrderInviteController,
     DriverOrderUrlController,
     AdminAuthController,
     AdminController,

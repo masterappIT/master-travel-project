@@ -6,6 +6,7 @@ import 'core/api/driver_api_client.dart';
 import 'core/state/driver_alert_audio_controller.dart';
 import 'core/state/driver_language_preference.dart';
 import 'core/state/driver_order_alert_coordinator.dart';
+import 'order_invite/order_invite_page.dart';
 
 import 'package:driver_web/core/tokens/driver_tokens.dart';
 
@@ -13,12 +14,20 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final api = DriverApiClient.instance;
   await api.restoreSession();
+  final fragmentUri = Uri.tryParse(Uri.base.fragment);
+  final directToken = Uri.base.queryParameters['token'];
+  final fragmentToken = fragmentUri?.queryParameters['token'];
+  final isOrderInvite = Uri.base.path.endsWith('/order-invite') ||
+      fragmentUri?.path == DriverRouteNames.orderInvite;
   runApp(DriverApp(
-    initialRoute: api.token == null
-        ? DriverRouteNames.login
-        : api.isApproved
-            ? DriverRouteNames.home
-            : DriverRouteNames.reviewStatus,
+    initialRoute: isOrderInvite
+        ? DriverRouteNames.orderInvite
+        : api.token == null
+            ? DriverRouteNames.login
+            : api.isApproved
+                ? DriverRouteNames.home
+                : DriverRouteNames.reviewStatus,
+    orderInviteToken: isOrderInvite ? directToken ?? fragmentToken : null,
   ));
 }
 
@@ -38,9 +47,14 @@ class _NoPageTransitionBuilder extends PageTransitionsBuilder {
 }
 
 class DriverApp extends StatelessWidget {
-  const DriverApp({super.key, required this.initialRoute});
+  const DriverApp({
+    super.key,
+    required this.initialRoute,
+    this.orderInviteToken,
+  });
 
   final String initialRoute;
+  final String? orderInviteToken;
   static final scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
   static final navigatorKey = GlobalKey<NavigatorState>();
 
@@ -101,6 +115,14 @@ class DriverApp extends StatelessWidget {
           routes: DriverRouter.builders,
           home: null,
           initialRoute: initialRoute,
+          onGenerateInitialRoutes: (_) => [
+            MaterialPageRoute<void>(
+              settings: RouteSettings(name: initialRoute),
+              builder: initialRoute == DriverRouteNames.orderInvite
+                  ? (_) => OrderInvitePage(token: orderInviteToken)
+                  : DriverRouter.builders[initialRoute]!,
+            ),
+          ],
         ),
       ),
     );

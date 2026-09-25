@@ -22,7 +22,7 @@ model Administrator {
   createdAt           DateTime        @default(now())
   updatedAt           DateTime        @updatedAt
   sessions            AdminSession[]
-  auditLogs            AdminAuditLog[]
+  auditLogs           AdminAuditLog[]
 
   @@index([enabled, role])
 }
@@ -83,15 +83,15 @@ model Notification {
 }
 
 model DriverNotificationPreference {
-  driverId          String   @id
-  notificationsOn   Boolean  @default(true)
-  orderOn           Boolean  @default(true)
-  settlementOn      Boolean  @default(true)
-  systemOn          Boolean  @default(true)
-  soundOn           Boolean  @default(true)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  driver            Driver   @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  driverId        String   @id
+  notificationsOn Boolean  @default(true)
+  orderOn         Boolean  @default(true)
+  settlementOn    Boolean  @default(true)
+  systemOn        Boolean  @default(true)
+  soundOn         Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  driver          Driver   @relation(fields: [driverId], references: [id], onDelete: Cascade)
 }
 
 model NotificationTemplate {
@@ -477,9 +477,9 @@ enum WalletTransactionType {
 }
 
 model Trip {
-  id                           String              @id @default(cuid())
+  id                           String                     @id @default(cuid())
   userId                       String
-  quoteId                      String?             @unique
+  quoteId                      String?                    @unique
   origin                       String
   originRegion                 String?
   originCity                   String?
@@ -491,13 +491,13 @@ model Trip {
   destinationCity              String?
   destinationDistrict          String?
   destinationPlace             String?
-  destinationDetail                 String?
-  originLatitude                   Float?
-  originLongitude                  Float?
-  destinationLatitude              Float?
-  destinationLongitude             Float?
-  routePoints                      Json?
-  region                           Region
+  destinationDetail            String?
+  originLatitude               Float?
+  originLongitude              Float?
+  destinationLatitude          Float?
+  destinationLongitude         Float?
+  routePoints                  Json?
+  region                       Region
   scheduledAt                  DateTime
   passengerName                String?
   passengerPhone               String?
@@ -506,7 +506,7 @@ model Trip {
   passengerDocumentType        String?
   passengerPassportCountry     String?
   estimatedArrivalAt           DateTime?
-  status                       TripStatus          @default(PENDING)
+  status                       TripStatus                 @default(PENDING)
   executionPhase               TripExecutionPhase?
   driverId                     String?
   driverPayoutPercentage       Float?
@@ -531,21 +531,22 @@ model Trip {
   completedAt                  DateTime?
   cancelledAt                  DateTime?
   cancellationSource           String?
-  fareBalancePaid              Float               @default(0)
-  cashBalancePaid              Float               @default(0)
-  externalPaid                 Float               @default(0)
+  fareBalancePaid              Float                      @default(0)
+  cashBalancePaid              Float                      @default(0)
+  externalPaid                 Float                      @default(0)
   externalPaymentMethod        String?
-  createdAt                    DateTime            @default(now())
-  updatedAt                    DateTime            @updatedAt
-  user                         User                @relation(fields: [userId], references: [id])
-  driver                       Driver?             @relation(fields: [driverId], references: [id], onDelete: SetNull)
+  createdAt                    DateTime                   @default(now())
+  updatedAt                    DateTime                   @updatedAt
+  user                         User                       @relation(fields: [userId], references: [id])
+  driver                       Driver?                    @relation(fields: [driverId], references: [id], onDelete: SetNull)
   orderUrls                    TripOrderUrl[]
   payment                      Payment?
   settlement                   DriverSettlement?
-  quote                        FareQuote?          @relation(fields: [quoteId], references: [id], onDelete: SetNull)
+  quote                        FareQuote?                 @relation(fields: [quoteId], references: [id], onDelete: SetNull)
   mileageLedger                MileageLedger[]
   notifications                Notification[]
   driverCancellations          DriverTripCancellation[]
+  provisionalSessions          ProvisionalDriverSession[]
 
   @@index([userId, status])
   @@index([scheduledAt])
@@ -611,7 +612,7 @@ model AppSetting {
   exchangeRate                    Float
   adminLogo                       String?  @db.Text
   severeWeatherEnabled            Boolean  @default(false)
-  dispatchSchedulingEnabled Boolean  @default(true)
+  dispatchSchedulingEnabled       Boolean  @default(true)
   driverRaceEnabled               Boolean  @default(false)
   driverPayoutPercentage          Float    @default(100)
   fareBalancePayEnabled           Boolean  @default(true)
@@ -673,18 +674,18 @@ model VehicleCategory {
 }
 
 model Driver {
-  id                       String                @id
-  driverType               String                @default("內部司機")
+  id                       String                        @id
+  driverType               String                        @default("內部司機")
   name                     String
   affiliation              String
-  phoneCountryCode         String                @default("+852")
+  phoneCountryCode         String                        @default("+852")
   phone                    String
   hongKongMacauCountryCode String?
   hongKongMacauPhone       String?
-  mainlandPhone            String?               @unique
-  reviewStatus             String                @default("PENDING")
+  mainlandPhone            String?                       @unique
+  reviewStatus             String                        @default("PENDING")
   reviewReason             String?
-  reviewSubmittedAt        DateTime              @default(now())
+  reviewSubmittedAt        DateTime                      @default(now())
   reviewedAt               DateTime?
   reviewedBy               String?
   settlementMethod         String?
@@ -692,10 +693,10 @@ model Driver {
   wechatId                 String?
   wechatQrCodeData         Bytes?
   wechatQrCodeMime         String?
-  isOnline                 Boolean               @default(false)
-  enabled                  Boolean               @default(true)
-  createdAt                DateTime              @default(now())
-  updatedAt                DateTime              @updatedAt
+  isOnline                 Boolean                       @default(false)
+  enabled                  Boolean                       @default(true)
+  createdAt                DateTime                      @default(now())
+  updatedAt                DateTime                      @updatedAt
   trips                    Trip[]
   settlements              DriverSettlement[]
   onlineSessions           DriverOnlineSession[]
@@ -706,7 +707,9 @@ model Driver {
   notifications            Notification[]
   tripCancellations        DriverTripCancellation[]
   notificationPreference   DriverNotificationPreference?
-  orderUrls                TripOrderUrl[]
+  orderUrls                TripOrderUrl[]                @relation("AssignedOrderUrlDriver")
+  provisionalOrderUrls     TripOrderUrl[]                @relation("ProvisionalOrderUrlDriver")
+  provisionalSessions      ProvisionalDriverSession[]
   vehicleAssignments       DriverVehicleAssignment[]
 
   @@unique([hongKongMacauCountryCode, hongKongMacauPhone])
@@ -728,20 +731,20 @@ model DriverTripCancellation {
 }
 
 model DriverVehicle {
-  id               String   @id
+  id               String                    @id
   plateType        String
   hkPlate          String?
   mainlandPlate    String?
   macauPlate       String?
-  vehicleOwnership String   @default("香港")
+  vehicleOwnership String                    @default("香港")
   vehicleCategory  String
   vehicleColor     String
   vehiclePhotos    Json
   vehiclePhotoData Bytes?
   vehiclePhotoMime String?
-  enabled          Boolean  @default(true)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  enabled          Boolean                   @default(true)
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
   assignments      DriverVehicleAssignment[]
 
   @@index([hkPlate])
@@ -802,21 +805,49 @@ model DriverRating {
 }
 
 model TripOrderUrl {
-  id         String    @id @default(cuid())
-  tokenHash  String    @unique
-  tripId     String
-  driverId   String?
-  validFrom  DateTime
-  validUntil DateTime
-  usedAt     DateTime?
-  revokedAt  DateTime?
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-  trip       Trip      @relation(fields: [tripId], references: [id], onDelete: Cascade)
-  driver     Driver?   @relation(fields: [driverId], references: [id], onDelete: SetNull)
+  id                  String                     @id @default(cuid())
+  tokenHash           String                     @unique
+  tripId              String
+  driverId            String?
+  source              String                     @default("ADMIN")
+  createdByAdminId    String?
+  reservedAt          DateTime?
+  acceptedAt          DateTime?
+  completedAt         DateTime?
+  provisionalDriverId String?
+  validFrom           DateTime
+  validUntil          DateTime
+  usedAt              DateTime?
+  revokedAt           DateTime?
+  createdAt           DateTime                   @default(now())
+  updatedAt           DateTime                   @updatedAt
+  trip                Trip                       @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  driver              Driver?                    @relation("AssignedOrderUrlDriver", fields: [driverId], references: [id], onDelete: SetNull)
+  provisionalDriver   Driver?                    @relation("ProvisionalOrderUrlDriver", fields: [provisionalDriverId], references: [id], onDelete: SetNull)
+  provisionalSessions ProvisionalDriverSession[]
 
   @@index([tripId])
   @@index([driverId, validFrom, validUntil])
+  @@index([provisionalDriverId])
+  @@index([createdByAdminId, createdAt])
+}
+
+model ProvisionalDriverSession {
+  id         String       @id @default(cuid())
+  jti        String       @unique
+  orderUrlId String
+  tripId     String
+  driverId   String
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  createdAt  DateTime     @default(now())
+  orderUrl   TripOrderUrl @relation(fields: [orderUrlId], references: [id], onDelete: Cascade)
+  trip       Trip         @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  driver     Driver       @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
+  @@index([orderUrlId, revokedAt])
+  @@index([tripId, driverId])
+  @@index([expiresAt])
 }
 
 model DriverAuthIdentity {
@@ -833,18 +864,20 @@ model DriverAuthIdentity {
 }
 
 model DriverOtpChallenge {
-  id          String    @id @default(cuid())
-  driverId    String?
-  countryCode String
-  phone       String
-  codeHash    String
-  expiresAt   DateTime
-  consumedAt  DateTime?
-  createdAt   DateTime  @default(now())
-  driver      Driver?   @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  id                   String    @id @default(cuid())
+  driverId             String?
+  invitationOrderUrlId String?
+  countryCode          String
+  phone                String
+  codeHash             String
+  expiresAt            DateTime
+  consumedAt           DateTime?
+  createdAt            DateTime  @default(now())
+  driver               Driver?   @relation(fields: [driverId], references: [id], onDelete: Cascade)
 
   @@index([phone, expiresAt])
   @@index([driverId, expiresAt])
+  @@index([invitationOrderUrlId, expiresAt])
 }
 
 model DriverSession {

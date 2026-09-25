@@ -23,4 +23,5 @@ abstract final class DriverRouteNames {
   static const orderAccepted = '/orders/accepted';
   static const orderInProgress = '/orders/in-progress';
   static const orderCompleted = '/orders/completed';
+  static const orderInvite = '/order-invite';
 }
