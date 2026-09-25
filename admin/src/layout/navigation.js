@@ -25,10 +25,9 @@ export const operationsNavigation = Object.freeze([
   { id: 'expenses', label: 'expenseDetails' }
 ])
 
-export function createNavigationController({ view, load, mobileNavOpen }) {
+export function createNavigationController({ view, load }) {
   return target => {
     view.value = target
-    mobileNavOpen.value = false
     return load()
   }
 }
