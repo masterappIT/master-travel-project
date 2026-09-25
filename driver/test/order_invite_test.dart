@@ -17,6 +17,7 @@ void main() {
     var arrived = false;
     var started = false;
     var completed = false;
+    var settled = false;
     var reviewSubmitted = false;
     final api = OrderInviteApiClient(
       baseUrl: 'https://driver.test',
@@ -35,16 +36,24 @@ void main() {
         if (request.url.path.endsWith('/session')) {
           return http.Response.bytes(
               utf8.encode(jsonEncode(_tripResponse(
-                  arrived: arrived, started: started, completed: completed))),
+                  arrived: arrived,
+                  started: started,
+                  completed: completed,
+                  settled: settled))),
               200);
         }
         if (request.url.path.endsWith('/trip/arrive')) arrived = true;
         if (request.url.path.endsWith('/trip/start')) started = true;
         if (request.url.path.endsWith('/trip/complete')) {
+          expect(request.body, isEmpty);
+          completed = true;
+        }
+        if (request.url.path.endsWith('/trip/settlement')) {
+          expect(completed, isTrue);
           final body = jsonDecode(request.body) as Map<String, dynamic>;
           expect(body['settlementMethod'], '微信支付');
           expect(body['settlementAccount'], 'driver-wechat');
-          completed = true;
+          settled = true;
         }
         if (request.url.path.endsWith('/formal-review')) {
           reviewSubmitted = true;
@@ -53,7 +62,10 @@ void main() {
         if (request.url.path.contains('/trip/')) {
           return http.Response.bytes(
               utf8.encode(jsonEncode(_tripResponse(
-                  arrived: arrived, started: started, completed: completed))),
+                  arrived: arrived,
+                  started: started,
+                  completed: completed,
+                  settled: settled))),
               200);
         }
         return http.Response.bytes(
@@ -87,16 +99,24 @@ void main() {
     await tester.tap(find.text('開始行程'));
     await tester.pumpAndSettle();
     expect(find.text('取消訂單'), findsNothing);
-    expect(find.text('提交並完成訂單'), findsOneWidget);
+    expect(find.text('結算方式'), findsNothing);
+    expect(find.text('完成行程'), findsOneWidget);
     expect(find.text('陳小姐（女）'), findsOneWidget);
     expect(find.text('+852 ****5678'), findsOneWidget);
     expect(find.text('HKD 380'), findsOneWidget);
 
+    await tester.ensureVisible(find.text('完成行程'));
+    await tester.tap(find.text('完成行程'));
+    await tester.pumpAndSettle();
+    expect(find.text('結算方式'), findsWidgets);
+    expect(find.text('提交結算方式'), findsOneWidget);
+
     await tester.enterText(
         find.widgetWithText(TextField, '請填寫微信 ID'), 'driver-wechat');
-    await tester.ensureVisible(find.text('提交並完成訂單'));
-    await tester.tap(find.text('提交並完成訂單'));
+    await tester.ensureVisible(find.text('提交結算方式'));
+    await tester.tap(find.text('提交結算方式'));
     await tester.pumpAndSettle();
+    expect(settled, isTrue);
     expect(find.text('提交正式司機審核'), findsOneWidget);
 
     await tester.ensureVisible(find.text('提交正式司機審核'));
@@ -223,7 +243,8 @@ void main() {
 Map<String, dynamic> _tripResponse(
         {required bool arrived,
         required bool started,
-        required bool completed}) =>
+        required bool completed,
+        bool settled = false}) =>
     {
       'id': 'trip-1',
       'pickupAddress': '中環',
@@ -241,6 +262,12 @@ Map<String, dynamic> _tripResponse(
       'arrivedAt': arrived ? '2026-10-01T08:05:00.000Z' : null,
       'startedAt': started ? '2026-10-01T08:10:00.000Z' : null,
       'completedAt': completed ? '2026-10-01T09:00:00.000Z' : null,
+      'settlement': settled
+          ? {
+              'method': '微信支付：driver-wechat',
+              'settledAt': '2026-10-01T09:01:00.000Z',
+            }
+          : null,
     };
 
 class _MemorySessionStore implements OrderInviteSessionStore {

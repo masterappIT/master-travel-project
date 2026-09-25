@@ -102,13 +102,18 @@ class OrderInviteApiClient {
           token, provisionalSessionToken, 'trip/cancel', 'POST');
 
   Future<Map<String, dynamic>> complete(
+          String token, String provisionalSessionToken) =>
+      _authorizedPostOrGet(
+          token, provisionalSessionToken, 'trip/complete', 'POST');
+
+  Future<Map<String, dynamic>> submitSettlement(
     String token,
     String provisionalSessionToken, {
     required String settlementMethod,
     required String settlementAccount,
   }) =>
       _authorizedPostOrGet(
-          token, provisionalSessionToken, 'trip/complete', 'POST',
+          token, provisionalSessionToken, 'trip/settlement', 'POST',
           body: {
             'settlementMethod': settlementMethod,
             'settlementAccount': settlementAccount,

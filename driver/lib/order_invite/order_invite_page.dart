@@ -338,13 +338,22 @@ class _OrderInvitePageState extends State<OrderInvitePage> {
   Future<void> _completeTrip() async {
     final sessionToken = _provisionalSessionToken;
     if (sessionToken == null) return;
+    await _run(() async {
+      final trip = await _api.complete(_token, sessionToken);
+      if (mounted) setState(() => _trip = trip);
+    });
+  }
+
+  Future<void> _submitSettlement() async {
+    final sessionToken = _provisionalSessionToken;
+    if (sessionToken == null) return;
     final account = _settlementAccount.text.trim();
     if (account.isEmpty) {
       _notice('請填寫結算帳戶');
       return;
     }
     await _run(() async {
-      final trip = await _api.complete(
+      final trip = await _api.submitSettlement(
         _token,
         sessionToken,
         settlementMethod: _settlementMethod,
@@ -513,6 +522,7 @@ class _OrderInvitePageState extends State<OrderInvitePage> {
     final started = trip['startedAt'] != null;
     final completed =
         trip['completedAt'] != null || trip['status'] == 'COMPLETED';
+    final settled = trip['settlement'] != null;
     final cancelled = trip['status'] == 'CANCELLED';
     final canCancel = trip['canCancel'] == true && !started && !completed;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -588,9 +598,16 @@ class _OrderInvitePageState extends State<OrderInvitePage> {
                 label: const Text('取消訂單')),
           ],
         ] else if (!completed) ...[
+          FilledButton.icon(
+              onPressed: _busy ? null : _completeTrip,
+              icon: const Icon(Icons.flag_outlined),
+              label: const Text('完成行程')),
+        ] else if (!settled) ...[
+          const _InlineStatus(icon: Icons.check_circle_outline, text: '訂單已完成'),
+          const SizedBox(height: DriverSpacing.lg),
           const _SectionHeading(
             title: '結算方式',
-            description: '填寫收款資料後，提交並完成本次訂單。',
+            description: '行程已完成，請填寫本次收款資料。',
           ),
           const SizedBox(height: DriverSpacing.md),
           _dropdown('結算方式', _settlementMethod, const ['微信支付'],
@@ -604,9 +621,9 @@ class _OrderInvitePageState extends State<OrderInvitePage> {
           ),
           const SizedBox(height: DriverSpacing.lg),
           FilledButton.icon(
-              onPressed: _busy ? null : _completeTrip,
-              icon: const Icon(Icons.flag_outlined),
-              label: const Text('提交並完成訂單')),
+              onPressed: _busy ? null : _submitSettlement,
+              icon: const Icon(Icons.account_balance_wallet_outlined),
+              label: const Text('提交結算方式')),
         ] else
           const _InlineStatus(icon: Icons.check_circle_outline, text: '訂單已完成'),
       ]),
