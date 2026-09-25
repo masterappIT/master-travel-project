@@ -2454,8 +2454,15 @@ type PersistedQuote = {
     };
   }>;
 };
+function asIsoDate(value: Date | string | null | undefined) {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
 function quoteResponse(quote: PersistedQuote) {
-  const discountLines = quote.lines.filter(
+  const lines = Array.isArray(quote.lines) ? quote.lines : [];
+  const promotionUsages = Array.isArray(quote.promotionUsages) ? quote.promotionUsages : [];
+  const discountLines = lines.filter(
     (line) => line.type === "DISCOUNT" && line.totalAmount < 0,
   );
   return {
@@ -2466,21 +2473,21 @@ function quoteResponse(quote: PersistedQuote) {
     currency: quote.currency,
     subtotal: quote.subtotal,
     total: quote.total,
-    createdAt: quote.createdAt.toISOString(),
-    expiresAt: quote.expiresAt?.toISOString() || null,
+    createdAt: asIsoDate(quote.createdAt),
+    expiresAt: asIsoDate(quote.expiresAt),
     pricing: quote.pricing && {
       categoryId: quote.pricing.categoryId,
       categoryName: quote.pricing.categoryName,
       tabLabel: quote.pricing.tabLabel,
       minimumFare: quote.pricing.minimumFare,
       currency: quote.pricing.currency,
-      tiers: quote.pricing.tiers.map((tier) => ({
+      tiers: Array.isArray(quote.pricing.tiers) ? quote.pricing.tiers.map((tier) => ({
         id: tier.sourceTierId,
         fromKm: tier.fromKm,
         toKm: tier.toKm,
         pricePerKm: tier.pricePerKm,
         order: tier.order,
-      })),
+      })) : [],
     },
     vehicle: quote.vehicle && {
       id: quote.vehicle.vehicleId,
@@ -2506,7 +2513,7 @@ function quoteResponse(quote: PersistedQuote) {
           currency: discountLines[0].currency,
         }
       : null,
-    promotions: (quote.promotionUsages || []).map((usage) => ({
+    promotions: promotionUsages.filter((usage) => usage.promotion).map((usage) => ({
       id: usage.promotion.id,
       usageId: usage.id,
       name: usage.promotion.name,
@@ -2518,16 +2525,16 @@ function quoteResponse(quote: PersistedQuote) {
       maximumDiscount: usage.promotion.maximumDiscount,
       couponCode: usage.promotion.couponCode,
       status: usage.status,
-      createdAt: usage.createdAt.toISOString(),
-      usedAt: usage.usedAt?.toISOString() || null,
-      releasedAt: usage.releasedAt?.toISOString() || null,
+      createdAt: asIsoDate(usage.createdAt),
+      usedAt: asIsoDate(usage.usedAt),
+      releasedAt: asIsoDate(usage.releasedAt),
       discount: roundMoney(
         discountLines
           .filter((line) => line.sourceId === usage.promotionId)
           .reduce((sum, line) => sum + Math.abs(line.totalAmount), 0),
       ),
     })),
-    lines: quote.lines.map((line) => ({
+    lines: lines.map((line) => ({
       type: line.type,
       sourceId: line.sourceId,
       label: line.label,
@@ -2765,9 +2772,9 @@ function tripResponse(trip: {
   const { quote, ...data } = trip;
   return {
     ...data,
-    scheduledAt: trip.scheduledAt.toISOString(),
-    createdAt: trip.createdAt.toISOString(),
-    updatedAt: trip.updatedAt.toISOString(),
+    scheduledAt: asIsoDate(trip.scheduledAt),
+    createdAt: asIsoDate(trip.createdAt),
+    updatedAt: asIsoDate(trip.updatedAt),
     user: userResponse(trip.user),
     driver: trip.driver ? tripDriverResponse(trip.driver) : null,
     payment: trip.payment
@@ -2781,9 +2788,9 @@ function tripResponse(trip: {
           externalPaymentMethod: trip.payment.externalPaymentMethod,
           externalReference: trip.payment.externalReference,
           status: trip.payment.status,
-          refundedAt: trip.payment.refundedAt?.toISOString() || null,
-          createdAt: trip.payment.createdAt.toISOString(),
-          updatedAt: trip.payment.updatedAt.toISOString(),
+          refundedAt: asIsoDate(trip.payment.refundedAt),
+          createdAt: asIsoDate(trip.payment.createdAt),
+          updatedAt: asIsoDate(trip.payment.updatedAt),
         }
       : null,
     settlement: trip.settlement
@@ -2791,7 +2798,7 @@ function tripResponse(trip: {
           id: trip.settlement.id,
           driverId: trip.settlement.driverId,
           method: trip.settlement.method,
-          settledAt: trip.settlement.settledAt.toISOString(),
+          settledAt: asIsoDate(trip.settlement.settledAt),
         }
       : null,
     quote: quote ? quoteResponse(quote) : null,

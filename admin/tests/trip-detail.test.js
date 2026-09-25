@@ -1,7 +1,32 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { normalizeTripDetail } from '../src/pages/trips/trips.actions.js'
+import { createTripDetailController, normalizeTripDetail } from '../src/pages/trips/trip-detail.controller.js'
+
+const deferred = () => {
+  let resolve
+  let reject
+  const promise = new Promise((onResolve, onReject) => { resolve = onResolve; reject = onReject })
+  return { promise, resolve, reject }
+}
+
+const ref = value => ({ value })
+const createController = get => {
+  const state = {
+    selectedTrip: ref(null),
+    loading: ref(false),
+    error: ref(''),
+    selectedId: ref('')
+  }
+  return {
+    state,
+    controller: createTripDetailController({
+      tripsApi: { get },
+      ...state,
+      displayError: cause => cause.message
+    })
+  }
+}
 
 test('normalizes missing quote lines without changing other detail fields', () => {
   const detail = { id: 'trip-1', quote: { distanceKm: null, lines: null }, payment: { status: null } }
@@ -19,4 +44,52 @@ test('preserves valid quote lines and absent quotes', () => {
 
   assert.strictEqual(normalizeTripDetail({ quote: { lines } }).quote.lines, lines)
   assert.deepEqual(normalizeTripDetail({ id: 'trip-2', quote: null }), { id: 'trip-2', quote: null })
+})
+
+test('ignores a detail response after the panel is closed', async () => {
+  const request = deferred()
+  const { controller, state } = createController(() => request.promise)
+
+  const opening = controller.open({ id: 'trip-1' })
+  controller.close()
+  request.resolve({ id: 'trip-1' })
+  await opening
+
+  assert.equal(state.selectedTrip.value, null)
+  assert.equal(state.selectedId.value, '')
+  assert.equal(state.loading.value, false)
+})
+
+test('only applies the latest detail request when switching orders', async () => {
+  const first = deferred()
+  const second = deferred()
+  const { controller, state } = createController(id => id === 'trip-1' ? first.promise : second.promise)
+
+  const openingFirst = controller.open({ id: 'trip-1' })
+  const openingSecond = controller.open({ id: 'trip-2' })
+  second.resolve({ id: 'trip-2' })
+  await openingSecond
+  first.resolve({ id: 'trip-1' })
+  await openingFirst
+
+  assert.deepEqual(state.selectedTrip.value, { id: 'trip-2' })
+  assert.equal(state.selectedId.value, 'trip-2')
+  assert.equal(state.error.value, '')
+})
+
+test('retry clears the previous error and loads the same order', async () => {
+  let attempts = 0
+  const { controller, state } = createController(async id => {
+    attempts += 1
+    if (attempts === 1) throw new Error('temporary failure')
+    return { id }
+  })
+
+  await controller.open({ id: 'trip-1' })
+  assert.equal(state.error.value, 'temporary failure')
+
+  await controller.retry()
+  assert.deepEqual(state.selectedTrip.value, { id: 'trip-1' })
+  assert.equal(state.error.value, '')
+  assert.equal(state.loading.value, false)
 })

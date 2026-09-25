@@ -26,7 +26,7 @@ export const DriversPage = {
       <p class="muted">手動開啟後，已完成審核的司機才可查看及搶單。</p>
     </div>
     <div class="dispatch-race-actions">
-      <label>司機金額比例（%）<input v-model.number="paymentSettings.driverPayoutPercentage" type="number" min="0" max="100" step="0.01" :disabled="!canWrite" required/></label>
+      <label class="dispatch-payout-field">司機金額比例（%）<span class="dispatch-payout-input"><input v-model.number="paymentSettings.driverPayoutPercentage" type="number" min="0" max="100" step="0.01" inputmode="decimal" :disabled="!canWrite" required/><span aria-hidden="true">%</span></span></label>
       <div class="dispatch-race-status"><span class="dispatch-race-status-dot" :class="{enabled: paymentSettings.driverRaceEnabled}"></span><span>{{ paymentSettings.driverRaceEnabled ? '搶單已開啟' : '搶單已關閉' }}</span></div>
       <label class="switch dispatch-race-switch" :aria-label="paymentSettings.driverRaceEnabled ? '關閉司機搶單' : '開啟司機搶單'">
         <input type="checkbox" v-model="paymentSettings.driverRaceEnabled" :disabled="!canWrite"/>

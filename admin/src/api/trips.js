@@ -2,7 +2,7 @@ import { serializeAdminQuery } from '../utils/admin-query-state.js'
 
 export const createTripsApi = api => ({
   list: (query = {}) => api(`/admin/trips${serializeAdminQuery(query)}`),
-  get: id => api(`/admin/trips/${id}`),
+  get: id => api(`/admin/trips/${id}`, { cancelOnNavigate: false }),
   update: (id, payload) => api(`/admin/trips/${id}`, { method: 'POST', body: JSON.stringify(payload) }),
   dispatch: (id, payload) => api(`/admin/trips/${id}/dispatch`, { method: 'POST', body: JSON.stringify(payload) }),
   settle: (id, method) => api(`/admin/trips/${id}/settlement`, { method: 'POST', body: JSON.stringify({ method }) }),

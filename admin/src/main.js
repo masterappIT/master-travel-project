@@ -88,7 +88,7 @@ const driverRaceSaving = paymentsPageState.raceSaving
 const notificationPageState = createNotificationsPageState(notificationUsers, notificationDrivers)
 const notificationRecipientSearch = notificationPageState.recipientSearch
 let notificationOptionRequest = 0
-const { addressForm, userForm, walletAdjustment, tripForm, selectedTrip, dispatchForm, orderUrlForm, charterForm, administratorForm, notificationForm, notificationTemplateForm, mainlandCityForm, membershipForm, categoryForm, vehicleForm, extraForm, personnelForm, driverForm, settlementForm, entryForm, expenseForm } = createAdminFormState()
+const { addressForm, userForm, walletAdjustment, tripForm, selectedTrip, tripDetailLoading, tripDetailError, tripDetailId, dispatchForm, orderUrlForm, charterForm, administratorForm, notificationForm, notificationTemplateForm, mainlandCityForm, membershipForm, categoryForm, vehicleForm, extraForm, personnelForm, driverForm, settlementForm, entryForm, expenseForm } = createAdminFormState()
 const {
   usersPageState, addressesPageState, promotionsPageState, tripsPageState, settlementsPageState, driversPageState, operationsPageState,
   addressRegionFilter, addressCityFilter, totalAddressCount, enabledAddressCount, mainlandAddressCount,
@@ -193,8 +193,8 @@ const loadDriverOptions = async selectedId => {
   const options = await loadAllOptions(query => driversApi.options(query))
   drivers.value = retainSelectedOptions(drivers.value, options, [selectedId])
 }
-const tripsActions = createTripsActions({ api, tripsApi, addressesApi, tripForm, selectedTrip, tripQuote, tripBookingStep, tripPaymentMethod, tripUseFareBalance, tripUseCashBalance, tripLocationKeyword, tripLocationResults, tripLocationSearching, tripLocationTarget, dispatchForm, orderUrlForm, createdOrderUrl, users, trips, error, load, loadUserOptions, loadDriverOptions, displayError, canWrite, requestConfirmation, notify, tripCatalog, dateTimeInput })
-const { editTrip, resetTrip, clearTripLocationSearch, searchTripLocation, selectTripLocation, handleTripRegionChange, showTrip, closeTrip, updateTripStatus, settleTrip, unsettleTrip, prepareTripQuote, calculateTripRoute, completeTripBooking, saveTrip, openDispatch, saveDispatch, openOrderUrlForm, openOrderUrlExpiryForm, createOrderUrl, closeCreatedOrderUrl, copyOrderUrl, copyExistingOrderUrl, revokeOrderUrl } = tripsActions
+const tripsActions = createTripsActions({ api, tripsApi, addressesApi, tripForm, selectedTrip, tripDetailLoading, tripDetailError, tripDetailId, tripQuote, tripBookingStep, tripPaymentMethod, tripUseFareBalance, tripUseCashBalance, tripLocationKeyword, tripLocationResults, tripLocationSearching, tripLocationTarget, dispatchForm, orderUrlForm, createdOrderUrl, users, trips, error, load, loadUserOptions, loadDriverOptions, displayError, canWrite, requestConfirmation, notify, tripCatalog, dateTimeInput })
+const { editTrip, resetTrip, clearTripLocationSearch, searchTripLocation, selectTripLocation, handleTripRegionChange, showTrip, closeTrip, retryTrip, updateTripStatus, settleTrip, unsettleTrip, prepareTripQuote, calculateTripRoute, completeTripBooking, saveTrip, openDispatch, saveDispatch, openOrderUrlForm, openOrderUrlExpiryForm, createOrderUrl, closeCreatedOrderUrl, copyOrderUrl, copyExistingOrderUrl, revokeOrderUrl } = tripsActions
 const membershipActions = createMembershipActions({ api, membershipForm, membershipPlans, load, error, displayError, requestConfirmation, notify, t })
 const { editMembership, resetMembership, saveMembership, removeMembership, confirmMembershipOrder } = membershipActions
 const promotionsActions = createPromotionsActions({ api, promotionForm, promotionSaving, promotionDeletingId, promotionTogglingId, pricingCurrency, dateTimeInput, nextTick, load, error, displayError, notify, requestConfirmation, t, generateRandomCouponCodeStr, mileageRules, mileageRewardForm, mileageLedger, mileageSelectedAccount, mileageSaving, invitationSettings, invitationSaving })
@@ -684,7 +684,9 @@ const App = { setup() {
      users,
      tripForm,
      selectedTrip,
-     tripCatalog,
+     tripDetailLoading,
+     tripDetailError,
+     tripDetailId,
      tripQuote,
      tripSearchQuery,
      tripStatusFilter,
@@ -710,6 +712,7 @@ const App = { setup() {
      editTrip,
      showTrip,
      closeTrip,
+     retryTrip,
      saveTrip,
      updateTripStatus,
      settleTrip,

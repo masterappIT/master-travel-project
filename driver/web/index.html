@@ -62,6 +62,27 @@
     For more details:
     * https://docs.flutter.dev/platform-integration/web/initialization
   -->
-  <script src="flutter_bootstrap.js" async></script>
+  <script>
+    // Remove service workers/caches left by older Flutter Web releases before boot.
+    window.__driverCacheMigration = (async () => {
+      const migrationKey = 'driver-flutter-cache-migration-v1';
+      if (localStorage.getItem(migrationKey) === 'done') return false;
+
+      const registrations = await navigator.serviceWorker?.getRegistrations?.() ?? [];
+      await Promise.all(registrations.map((registration) => registration.unregister()));
+
+      if (window.caches) {
+        const cacheNames = await caches.keys();
+        await Promise.all(cacheNames.map((cacheName) => caches.delete(cacheName)));
+      }
+
+      localStorage.setItem(migrationKey, 'done');
+      return registrations.length > 0;
+    })().catch(() => {
+      localStorage.setItem('driver-flutter-cache-migration-v1', 'done');
+      return false;
+    });
+  </script>
+  <script src="flutter_bootstrap.js"></script>
 </body>
 </html>

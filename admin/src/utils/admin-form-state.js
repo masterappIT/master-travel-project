@@ -6,6 +6,9 @@ export function createAdminFormState() {
   const walletAdjustment = ref(null)
   const tripForm = ref(null)
   const selectedTrip = ref(null)
+  const tripDetailLoading = ref(false)
+  const tripDetailError = ref('')
+  const tripDetailId = ref('')
   const dispatchForm = ref(null)
   const orderUrlForm = ref(null)
   const charterForm = ref(null)
@@ -29,6 +32,9 @@ export function createAdminFormState() {
     walletAdjustment,
     tripForm,
     selectedTrip,
+    tripDetailLoading,
+    tripDetailError,
+    tripDetailId,
     dispatchForm,
     orderUrlForm,
     charterForm,

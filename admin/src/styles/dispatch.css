@@ -11,6 +11,13 @@
 .dispatch-race-control h3 { margin: 5px 0 4px; color: #172b45; font-size: 17px; }
 .dispatch-race-control p { margin: 0; }
 .dispatch-race-actions { display: flex; align-items: center; justify-content: flex-end; gap: 14px; }
+.dispatch-payout-field { display: grid; gap: 6px; color: #425974; font-size: 12px; font-weight: 700; }
+.dispatch-payout-input { display: flex; align-items: center; width: 132px; height: 42px; padding: 0 12px; border: 1px solid #c9d9ec; border-radius: 10px; color: #29415f; background: #f8fbff; box-shadow: inset 0 1px 2px rgba(27,65,105,.04); transition: border-color .16s ease, background .16s ease, box-shadow .16s ease; }
+.dispatch-payout-input:focus-within { border-color: #4a8df0; background: #fff; box-shadow: 0 0 0 3px rgba(74,141,240,.13); }
+.dispatch-payout-input input { min-width: 0; width: 100%; height: 100%; padding: 0; border: 0; border-radius: 0; outline: 0; color: inherit; background: transparent; font: inherit; font-size: 14px; font-weight: 700; appearance: textfield; -moz-appearance: textfield; }
+.dispatch-payout-input input::-webkit-inner-spin-button, .dispatch-payout-input input::-webkit-outer-spin-button { margin: 0; appearance: none; -webkit-appearance: none; }
+.dispatch-payout-input > span { color: #6f8299; font-size: 13px; font-weight: 700; }
+.dispatch-payout-input:has(input:disabled) { cursor: not-allowed; opacity: .62; }
 .dispatch-race-status { display: inline-flex; align-items: center; gap: 7px; color: #5d718d; font-size: 12px; font-weight: 750; white-space: nowrap; }
 .dispatch-race-status-dot { width: 8px; height: 8px; border-radius: 50%; background: #a8b5c5; box-shadow: 0 0 0 4px #edf1f5; }
 .dispatch-race-status-dot.enabled { background: #21b477; box-shadow: 0 0 0 4px #dff7ec; }

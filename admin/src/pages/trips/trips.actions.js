@@ -1,14 +1,7 @@
-export function normalizeTripDetail(detail) {
-  if (!detail || typeof detail !== 'object') return detail
-  return {
-    ...detail,
-    quote: detail.quote && typeof detail.quote === 'object'
-      ? { ...detail.quote, lines: Array.isArray(detail.quote.lines) ? detail.quote.lines : [] }
-      : detail.quote
-  }
-}
+import { createTripDetailController } from './trip-detail.controller.js'
 
-export function createTripsActions({ api, tripsApi, addressesApi, tripForm, selectedTrip, tripQuote, tripBookingStep, tripPaymentMethod, tripUseFareBalance, tripUseCashBalance, tripLocationKeyword, tripLocationResults, tripLocationSearching, tripLocationTarget, dispatchForm, orderUrlForm, createdOrderUrl, users, trips, error, load, loadUserOptions, loadDriverOptions, displayError, canWrite, requestConfirmation, notify, tripCatalog, dateTimeInput }) {
+export function createTripsActions({ api, tripsApi, addressesApi, tripForm, selectedTrip, tripDetailLoading, tripDetailError, tripDetailId, tripQuote, tripBookingStep, tripPaymentMethod, tripUseFareBalance, tripUseCashBalance, tripLocationKeyword, tripLocationResults, tripLocationSearching, tripLocationTarget, dispatchForm, orderUrlForm, createdOrderUrl, users, trips, error, load, loadUserOptions, loadDriverOptions, displayError, canWrite, requestConfirmation, notify, tripCatalog, dateTimeInput }) {
+  const tripDetail = createTripDetailController({ tripsApi, selectedTrip, loading: tripDetailLoading, error: tripDetailError, selectedId: tripDetailId, displayError })
   async function settleTrip(item, method) { if (!canWrite.value || !item?.id || !method?.trim()) return; try { await tripsApi.settle(item.id, method.trim()); await load(); selectedTrip.value = trips.value.find(trip => trip.id === item.id) || null } catch (err) { error.value = displayError(err) } }
   async function unsettleTrip(item) { if (!canWrite.value || !item?.id) return; try { await tripsApi.unsettle(item.id); await load(); selectedTrip.value = trips.value.find(trip => trip.id === item.id) || null } catch (err) { error.value = displayError(err) } }
   function clearTripLocationSearch() {
@@ -55,12 +48,10 @@ export function createTripsActions({ api, tripsApi, addressesApi, tripForm, sele
   }
   function handleTripRegionChange() { clearTripLocationSearch() }
   async function showTrip(item) {
-    try {
-      tripForm.value = null
-      selectedTrip.value = normalizeTripDetail(await tripsApi.get(item.id))
-    } catch (err) { error.value = displayError(err) }
+    tripForm.value = null
+    await tripDetail.open(item)
   }
-  function closeTrip() { selectedTrip.value = null }
+  function closeTrip() { tripDetail.close() }
   async function updateTripStatus(item, status) {
     const currentStatus = item.executionPhase === 'IN_PROGRESS' ? 'IN_PROGRESS' : item.status
     if (!canWrite.value || currentStatus === status) return
@@ -138,5 +129,5 @@ export function createTripsActions({ api, tripsApi, addressesApi, tripForm, sele
     }
   }
   async function revokeOrderUrl(item) { if (!await requestConfirmation({ title: '撤銷訂單 URL', message: '確定要撤銷此訂單 URL？', confirmLabel: '撤銷', danger: true })) return; try { await tripsApi.revokeOrderUrl(item.tripId, item.id); notify('訂單 URL 已撤銷'); await load() } catch (err) { error.value = displayError(err); notify(error.value, 'error') } }
-  return { editTrip, resetTrip, clearTripLocationSearch, searchTripLocation, selectTripLocation, handleTripRegionChange, showTrip, closeTrip, updateTripStatus, settleTrip, unsettleTrip, prepareTripQuote, calculateTripRoute, completeTripBooking, saveTrip, openDispatch, saveDispatch, openOrderUrlForm, openOrderUrlExpiryForm, createOrderUrl, closeCreatedOrderUrl, copyOrderUrl, copyExistingOrderUrl, revokeOrderUrl }
+  return { editTrip, resetTrip, clearTripLocationSearch, searchTripLocation, selectTripLocation, handleTripRegionChange, showTrip, closeTrip, retryTrip: tripDetail.retry, updateTripStatus, settleTrip, unsettleTrip, prepareTripQuote, calculateTripRoute, completeTripBooking, saveTrip, openDispatch, saveDispatch, openOrderUrlForm, openOrderUrlExpiryForm, createOrderUrl, closeCreatedOrderUrl, copyOrderUrl, copyExistingOrderUrl, revokeOrderUrl }
 }
