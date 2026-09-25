@@ -57,6 +57,10 @@ import {
   type TripDriverSummary,
 } from "./trip-payload";
 import { buildDriverOrderUrl } from "./order-url";
+import {
+  inviteShareHtml,
+  renderInviteCard,
+} from "./order-invite-share";
 import { publicDriverOrderChannelFilter } from "./driver-order-channel";
 
 try {
@@ -5748,6 +5752,40 @@ class DriverAuthController {
       include: { user: true },
     });
     return updated ? driverTripResponse(updated, true) : null;
+  }
+}
+
+@Controller("order-invite")
+class DriverOrderInviteShareController {
+  private readonly invites = new DriverOrderInviteController();
+
+  @Get()
+  async page(@Req() request: RequestLike, @Res() response: Response) {
+    const token = typeof request.query?.token === "string" ? request.query.token : "";
+    if (!token) throw new HttpException("Order invitation not found", HttpStatus.NOT_FOUND);
+    const details = await this.invites.details(token);
+    const base = new URL(process.env.DRIVER_ORDER_URL_BASE || "http://localhost:8081/order-invite");
+    response.setHeader("Cache-Control", "no-store");
+    response.type("html").send(inviteShareHtml(base, token, {
+      ...details.trip,
+      payoutAmount: details.trip.payoutAmount?.toString() ?? "",
+    }));
+  }
+
+  @Get("share-image")
+  async image(@Req() request: RequestLike, @Res() response: Response) {
+    const token = typeof request.query?.token === "string" ? request.query.token : "";
+    if (!token) throw new HttpException("Order invitation not found", HttpStatus.NOT_FOUND);
+    await this.invites.details(token);
+    const base = new URL(process.env.DRIVER_ORDER_URL_BASE || "http://localhost:8081/order-invite");
+    try {
+      const png = await renderInviteCard(base, token);
+      response.setHeader("Cache-Control", "private, max-age=60");
+      response.type("png").send(png);
+    } catch (error) {
+      console.error("Failed to render order invitation preview", error);
+      throw new HttpException("Preview unavailable", HttpStatus.SERVICE_UNAVAILABLE);
+    }
   }
 }
 
@@ -13758,6 +13796,7 @@ class HealthController {
     ClientOrdersController,
     ClientAuthController,
     DriverAuthController,
+    DriverOrderInviteShareController,
     DriverOrderInviteController,
     DriverOrderUrlController,
     AdminAuthController,

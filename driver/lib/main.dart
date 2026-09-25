@@ -18,6 +18,7 @@ Future<void> main() async {
   final directToken = Uri.base.queryParameters['token'];
   final fragmentToken = fragmentUri?.queryParameters['token'];
   final isOrderInvite = Uri.base.path.endsWith('/order-invite') ||
+      Uri.base.path.endsWith('/order-invite-preview') ||
       fragmentUri?.path == DriverRouteNames.orderInvite;
   runApp(DriverApp(
     initialRoute: isOrderInvite

@@ -8,6 +8,7 @@ import '../core/vehicle_plate_rules.dart';
 import 'order_invite_api_client.dart';
 import 'order_invite_recognition.dart';
 import 'order_invite_session_store.dart';
+import 'order_invite_seo.dart';
 
 List<String> orderInvitePlateLabels(String ownership, String plateType) {
   if (plateType == '三地牌') {
@@ -82,9 +83,13 @@ class _OrderInvitePageState extends State<OrderInvitePage> {
       Uri.tryParse(Uri.base.fragment)?.queryParameters['token'] ??
       '';
 
+  bool get _previewMode =>
+      Uri.base.queryParameters['preview'] == '1' ||
+      Uri.base.path.endsWith('/order-invite-preview');
   @override
   void initState() {
     super.initState();
+    setOrderInviteSeo('MasterApp｜司機端 ｜邀請接單');
     _load();
   }
 
@@ -399,105 +404,127 @@ class _OrderInvitePageState extends State<OrderInvitePage> {
       .showSnackBar(SnackBar(content: Text(message)));
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-        backgroundColor: DriverColors.background,
-        appBar: AppBar(
-          backgroundColor: DriverColors.background,
-          surfaceTintColor: Colors.transparent,
-          title: const Text('訂單邀請'),
-          centerTitle: true,
-        ),
-        body: SafeArea(
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(
-                  maxWidth: DriverDimensions.maxContentWidth),
-              child: _error != null
-                  ? _ErrorState(message: _error!)
-                  : _preview == null
-                      ? const _LoadingState()
-                      : SingleChildScrollView(
-                          padding: const EdgeInsets.fromLTRB(
-                            DriverSpacing.lg,
-                            DriverSpacing.sm,
-                            DriverSpacing.lg,
-                            DriverSpacing.xl,
-                          ),
-                          child: _step == 3
-                              ? _successContent()
-                              : Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
-                                  children: [
-                                    const _InviteHeader(),
-                                    const SizedBox(height: DriverSpacing.lg),
-                                    _InviteProgress(step: _step),
-                                    const SizedBox(height: DriverSpacing.lg),
-                                    _OrderPreview(data: _preview!),
-                                    const SizedBox(height: DriverSpacing.lg),
-                                    if (_step == 0) ...[
-                                      FilledButton.icon(
-                                        onPressed: _busy
-                                            ? null
-                                            : () => setState(() => _step = 1),
-                                        icon: const Icon(
-                                            Icons.check_circle_outline),
-                                        label: const Text('接受邀請'),
-                                      ),
-                                      const SizedBox(height: DriverSpacing.xs),
-                                      TextButton(
-                                        onPressed: _busy
-                                            ? null
-                                            : () => setState(
-                                                () => _error = '已拒絕此訂單邀請'),
-                                        child: const Text('拒絕'),
-                                      ),
-                                    ] else if (_step == 1) ...[
-                                      _phoneVerification(),
-                                      const SizedBox(height: DriverSpacing.xl),
-                                      const _OrDivider(),
-                                      const SizedBox(height: DriverSpacing.xl),
-                                      OutlinedButton.icon(
-                                        onPressed:
-                                            _busy ? null : _acceptRegistered,
-                                        icon: const Icon(Icons.badge_outlined),
-                                        label: const Text('使用已登入正式司機身份接受'),
-                                      ),
-                                    ] else ...[
-                                      _SectionHeading(
-                                        title: '司機及車輛資料',
-                                        description: '欄位順序與正式司機登記一致，請逐項核對。',
-                                        trailing: OutlinedButton.icon(
-                                          onPressed:
-                                              _busy ? null : _pasteRecognition,
-                                          icon: const Icon(Icons.content_paste,
-                                              size: 18),
-                                          label: const Text('文字識別'),
-                                        ),
-                                      ),
-                                      const SizedBox(height: DriverSpacing.md),
-                                      _registrationForm(),
-                                      const SizedBox(height: DriverSpacing.lg),
-                                      FilledButton.icon(
-                                        onPressed: _busy ? null : _submit,
-                                        icon: _busy
-                                            ? const SizedBox.square(
-                                                dimension: 18,
-                                                child:
-                                                    CircularProgressIndicator(
-                                                        strokeWidth: 2),
-                                              )
-                                            : const Icon(Icons.send_outlined),
-                                        label: const Text('提交資料並接受訂單'),
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                        ),
+  Widget build(BuildContext context) {
+    if (_previewMode) {
+      if (_error != null) return _ErrorState(message: _error!);
+      if (_preview == null) return const _LoadingState();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) markOrderInvitePreviewReady();
+      });
+      return ColoredBox(
+        color: DriverColors.background,
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              maxWidth: DriverDimensions.maxContentWidth,
+            ),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(DriverSpacing.lg),
+              child: _OrderPreview(data: _preview!),
             ),
           ),
         ),
       );
+    }
+
+    return Scaffold(
+      backgroundColor: DriverColors.background,
+      appBar: AppBar(
+        backgroundColor: DriverColors.background,
+        surfaceTintColor: Colors.transparent,
+        title: const Text('訂單邀請'),
+        centerTitle: true,
+      ),
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+                maxWidth: DriverDimensions.maxContentWidth),
+            child: _error != null
+                ? _ErrorState(message: _error!)
+                : _preview == null
+                    ? const _LoadingState()
+                    : SingleChildScrollView(
+                        padding: const EdgeInsets.fromLTRB(
+                          DriverSpacing.lg,
+                          DriverSpacing.sm,
+                          DriverSpacing.lg,
+                          DriverSpacing.xl,
+                        ),
+                        child: _step == 3
+                            ? _successContent()
+                            : Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  const _InviteHeader(),
+                                  const SizedBox(height: DriverSpacing.lg),
+                                  _InviteProgress(step: _step),
+                                  const SizedBox(height: DriverSpacing.lg),
+                                  _OrderPreview(data: _preview!),
+                                  const SizedBox(height: DriverSpacing.lg),
+                                  if (_step == 0) ...[
+                                    FilledButton.icon(
+                                      onPressed: _busy
+                                          ? null
+                                          : () => setState(() => _step = 1),
+                                      icon: const Icon(
+                                          Icons.check_circle_outline),
+                                      label: const Text('接受邀請'),
+                                    ),
+                                    const SizedBox(height: DriverSpacing.xs),
+                                    TextButton(
+                                      onPressed: _busy
+                                          ? null
+                                          : () => setState(
+                                              () => _error = '已拒絕此訂單邀請'),
+                                      child: const Text('拒絕'),
+                                    ),
+                                  ] else if (_step == 1) ...[
+                                    _phoneVerification(),
+                                    const SizedBox(height: DriverSpacing.xl),
+                                    const _OrDivider(),
+                                    const SizedBox(height: DriverSpacing.xl),
+                                    OutlinedButton.icon(
+                                      onPressed:
+                                          _busy ? null : _acceptRegistered,
+                                      icon: const Icon(Icons.badge_outlined),
+                                      label: const Text('使用已登入正式司機身份接受'),
+                                    ),
+                                  ] else ...[
+                                    _SectionHeading(
+                                      title: '司機及車輛資料',
+                                      description: '欄位順序與正式司機登記一致，請逐項核對。',
+                                      trailing: OutlinedButton.icon(
+                                        onPressed:
+                                            _busy ? null : _pasteRecognition,
+                                        icon: const Icon(Icons.content_paste,
+                                            size: 18),
+                                        label: const Text('文字識別'),
+                                      ),
+                                    ),
+                                    const SizedBox(height: DriverSpacing.md),
+                                    _registrationForm(),
+                                    const SizedBox(height: DriverSpacing.lg),
+                                    FilledButton.icon(
+                                      onPressed: _busy ? null : _submit,
+                                      icon: _busy
+                                          ? const SizedBox.square(
+                                              dimension: 18,
+                                              child: CircularProgressIndicator(
+                                                  strokeWidth: 2),
+                                            )
+                                          : const Icon(Icons.send_outlined),
+                                      label: const Text('提交資料並接受訂單'),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                      ),
+          ),
+        ),
+      ),
+    );
+  }
 
   String _formatDeparture(dynamic value) {
     final parsed = DateTime.tryParse(value?.toString() ?? '')?.toLocal();

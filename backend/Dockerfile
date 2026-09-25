@@ -19,7 +19,7 @@ FROM node:20-bookworm-slim AS runtime
 ENV NODE_ENV=production
 WORKDIR /app/backend
 RUN apt-get update \
-  && apt-get install --yes --no-install-recommends openssl \
+  && apt-get install --yes --no-install-recommends openssl chromium \
   && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /app/backend/package.json /app/backend/package-lock.json ./

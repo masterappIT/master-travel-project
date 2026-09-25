@@ -32,6 +32,11 @@
   <link rel="icon" type="image/svg+xml" href="favicon.svg"/>
 
   <title>Master App Driver</title>
+  <script>
+    if (window.location.pathname.replace(/\/+$/, '') === '/order-invite') {
+      document.title = 'MasterApp｜司機端 ｜邀請接單';
+    }
+  </script>
   <link rel="manifest" href="manifest.json">
   <style>
     html,
