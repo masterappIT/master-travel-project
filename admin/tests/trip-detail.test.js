@@ -50,7 +50,8 @@ test('ignores a detail response after the panel is closed', async () => {
   const request = deferred()
   const { controller, state } = createController(() => request.promise)
 
-  const opening = controller.open({ id: 'trip-1' })
+  const opening = controller.open({ id: 'trip-1', origin: '香港', destination: '廣州' })
+  assert.deepEqual(state.selectedTrip.value, { id: 'trip-1', origin: '香港', destination: '廣州' })
   controller.close()
   request.resolve({ id: 'trip-1' })
   await opening
@@ -67,6 +68,8 @@ test('only applies the latest detail request when switching orders', async () =>
 
   const openingFirst = controller.open({ id: 'trip-1' })
   const openingSecond = controller.open({ id: 'trip-2' })
+  assert.deepEqual(state.selectedTrip.value, { id: 'trip-2' })
+  assert.equal(state.loading.value, true)
   second.resolve({ id: 'trip-2' })
   await openingSecond
   first.resolve({ id: 'trip-1' })
@@ -85,10 +88,13 @@ test('retry clears the previous error and loads the same order', async () => {
     return { id }
   })
 
-  await controller.open({ id: 'trip-1' })
+  await controller.open({ id: 'trip-1', origin: '香港' })
   assert.equal(state.error.value, 'temporary failure')
+  assert.deepEqual(state.selectedTrip.value, { id: 'trip-1', origin: '香港' })
 
-  await controller.retry()
+  const retrying = controller.retry()
+  assert.deepEqual(state.selectedTrip.value, { id: 'trip-1', origin: '香港' })
+  await retrying
   assert.deepEqual(state.selectedTrip.value, { id: 'trip-1', quote: undefined })
   assert.equal(state.error.value, '')
   assert.equal(state.loading.value, false)

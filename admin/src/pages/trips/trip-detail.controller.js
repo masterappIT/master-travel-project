@@ -17,7 +17,7 @@ export function createTripDetailController({ tripsApi, selectedTrip, loading, er
 
     const request = ++requestSequence
     selectedId.value = tripId
-    selectedTrip.value = null
+    selectedTrip.value = { ...item }
     error.value = ''
     loading.value = true
 
@@ -42,7 +42,7 @@ export function createTripDetailController({ tripsApi, selectedTrip, loading, er
   }
 
   function retry() {
-    return open({ id: selectedId.value })
+    return open(selectedTrip.value?.id === selectedId.value ? selectedTrip.value : { id: selectedId.value })
   }
 
   return { open, close, retry }
