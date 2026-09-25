@@ -678,6 +678,7 @@ const App = { setup() {
      paymentMethodLabel,
      translateRegion,
      translateStatus,
+     promotionKindLabel,
      passengerTripStatusLabel,
      getPassengerTripStatus,
      trips,
