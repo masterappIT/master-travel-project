@@ -807,6 +807,7 @@ model DriverRating {
 model TripOrderUrl {
   id                  String                     @id @default(cuid())
   tokenHash           String                     @unique
+  encryptedToken      String?
   tripId              String
   driverId            String?
   source              String                     @default("ADMIN")

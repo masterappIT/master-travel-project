@@ -9,5 +9,7 @@ export const createTripsApi = api => ({
   unsettle: id => api(`/admin/trips/${id}/settlement/unsettle`, { method: 'POST' }),
   orderUrls: id => api(`/admin/trips/${id}/order-urls`),
   createOrderUrl: (id, payload) => api(`/admin/trips/${id}/order-url`, { method: 'POST', body: JSON.stringify(payload) }),
+  updateOrderUrlExpiry: (tripId, orderUrlId, validUntil) => api(`/admin/trips/${tripId}/order-urls/${orderUrlId}/expiry`, { method: 'POST', body: JSON.stringify({ validUntil }) }),
+  copyOrderUrl: (tripId, orderUrlId) => api(`/admin/trips/${tripId}/order-urls/${orderUrlId}/copy`, { method: 'POST' }),
   revokeOrderUrl: (tripId, orderUrlId) => api(`/admin/trips/${tripId}/order-urls/${orderUrlId}/revoke`, { method: 'POST' })
 })

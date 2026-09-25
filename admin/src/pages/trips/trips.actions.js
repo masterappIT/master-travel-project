@@ -107,13 +107,36 @@ export function createTripsActions({ api, tripsApi, addressesApi, tripForm, sele
   }
   async function saveDispatch() { if (!dispatchForm.value?.tripId || !dispatchForm.value.driverId || dispatchForm.value.driverPayoutAmount === '') return; try { await tripsApi.dispatch(dispatchForm.value.tripId, { driverId: dispatchForm.value.driverId, driverPayoutAmount: Number(dispatchForm.value.driverPayoutAmount) }); dispatchForm.value = null; await load() } catch (err) { error.value = displayError(err) } }
   async function openOrderUrlForm(item) { await loadDriverOptions(item.driverId); const now = new Date(); const later = new Date(now.getTime() + 24 * 60 * 60 * 1000); orderUrlForm.value = { tripId: item.id, driverId: item.driverId || '', validFrom: dateTimeInput(now.toISOString()), validUntil: dateTimeInput(later.toISOString()) } }
+  function openOrderUrlExpiryForm(item) { orderUrlForm.value = { tripId: item.tripId, urlId: item.id, validFrom: dateTimeInput(item.validFrom), validUntil: dateTimeInput(item.validUntil) } }
   async function createOrderUrl() {
-    if (!orderUrlForm.value?.tripId || !orderUrlForm.value.validFrom || !orderUrlForm.value.validUntil) return
-    if (new Date(orderUrlForm.value.validUntil) <= new Date(orderUrlForm.value.validFrom)) { error.value = '失效日期必須晚於有效日期'; return }
-    try { const result = await tripsApi.createOrderUrl(orderUrlForm.value.tripId, orderUrlForm.value); createdOrderUrl.value = result.url; try { await navigator.clipboard?.writeText(result.url) } catch {}; orderUrlForm.value = null; await load() } catch (err) { error.value = displayError(err) }
+    if (!orderUrlForm.value?.tripId || !orderUrlForm.value.validUntil) return
+    if (!orderUrlForm.value.urlId && (!orderUrlForm.value.validFrom || new Date(orderUrlForm.value.validUntil) <= new Date(orderUrlForm.value.validFrom))) { error.value = '失效日期必須晚於有效日期'; return }
+    if (orderUrlForm.value.urlId && new Date(orderUrlForm.value.validUntil) <= new Date()) { error.value = '失效日期必須晚於目前時間'; return }
+    try {
+      if (orderUrlForm.value.urlId) {
+        await tripsApi.updateOrderUrlExpiry(orderUrlForm.value.tripId, orderUrlForm.value.urlId, orderUrlForm.value.validUntil)
+        notify('URL 失效時間已更新')
+      } else {
+        const result = await tripsApi.createOrderUrl(orderUrlForm.value.tripId, orderUrlForm.value)
+        createdOrderUrl.value = result.url
+        try { await navigator.clipboard?.writeText(result.url) } catch {}
+      }
+      orderUrlForm.value = null
+      await load()
+    } catch (err) { error.value = displayError(err) }
   }
   function closeCreatedOrderUrl() { createdOrderUrl.value = '' }
   async function copyOrderUrl() { if (!createdOrderUrl.value) return; try { await navigator.clipboard.writeText(createdOrderUrl.value) } catch { error.value = '複製 URL 失敗，請手動複製' } }
+  async function copyExistingOrderUrl(item) {
+    try {
+      const result = await tripsApi.copyOrderUrl(item.tripId, item.id)
+      await navigator.clipboard.writeText(result.url)
+      notify(result.rotated ? 'URL 已重新產生並複製，舊連結已失效' : 'URL 已複製')
+    } catch (err) {
+      error.value = displayError(err)
+      notify(error.value, 'error')
+    }
+  }
   async function revokeOrderUrl(item) { if (!await requestConfirmation({ title: '撤銷訂單 URL', message: '確定要撤銷此訂單 URL？', confirmLabel: '撤銷', danger: true })) return; try { await tripsApi.revokeOrderUrl(item.tripId, item.id); notify('訂單 URL 已撤銷'); await load() } catch (err) { error.value = displayError(err); notify(error.value, 'error') } }
-  return { editTrip, resetTrip, clearTripLocationSearch, searchTripLocation, selectTripLocation, handleTripRegionChange, showTrip, closeTrip, updateTripStatus, settleTrip, unsettleTrip, prepareTripQuote, calculateTripRoute, completeTripBooking, saveTrip, openDispatch, saveDispatch, openOrderUrlForm, createOrderUrl, closeCreatedOrderUrl, copyOrderUrl, revokeOrderUrl }
+  return { editTrip, resetTrip, clearTripLocationSearch, searchTripLocation, selectTripLocation, handleTripRegionChange, showTrip, closeTrip, updateTripStatus, settleTrip, unsettleTrip, prepareTripQuote, calculateTripRoute, completeTripBooking, saveTrip, openDispatch, saveDispatch, openOrderUrlForm, openOrderUrlExpiryForm, createOrderUrl, closeCreatedOrderUrl, copyOrderUrl, copyExistingOrderUrl, revokeOrderUrl }
 }

@@ -194,7 +194,7 @@ const loadDriverOptions = async selectedId => {
   drivers.value = retainSelectedOptions(drivers.value, options, [selectedId])
 }
 const tripsActions = createTripsActions({ api, tripsApi, addressesApi, tripForm, selectedTrip, tripQuote, tripBookingStep, tripPaymentMethod, tripUseFareBalance, tripUseCashBalance, tripLocationKeyword, tripLocationResults, tripLocationSearching, tripLocationTarget, dispatchForm, orderUrlForm, createdOrderUrl, users, trips, error, load, loadUserOptions, loadDriverOptions, displayError, canWrite, requestConfirmation, notify, tripCatalog, dateTimeInput })
-const { editTrip, resetTrip, clearTripLocationSearch, searchTripLocation, selectTripLocation, handleTripRegionChange, showTrip, closeTrip, updateTripStatus, settleTrip, unsettleTrip, prepareTripQuote, calculateTripRoute, completeTripBooking, saveTrip, openDispatch, saveDispatch, openOrderUrlForm, createOrderUrl, closeCreatedOrderUrl, copyOrderUrl, revokeOrderUrl } = tripsActions
+const { editTrip, resetTrip, clearTripLocationSearch, searchTripLocation, selectTripLocation, handleTripRegionChange, showTrip, closeTrip, updateTripStatus, settleTrip, unsettleTrip, prepareTripQuote, calculateTripRoute, completeTripBooking, saveTrip, openDispatch, saveDispatch, openOrderUrlForm, openOrderUrlExpiryForm, createOrderUrl, closeCreatedOrderUrl, copyOrderUrl, copyExistingOrderUrl, revokeOrderUrl } = tripsActions
 const membershipActions = createMembershipActions({ api, membershipForm, membershipPlans, load, error, displayError, requestConfirmation, notify, t })
 const { editMembership, resetMembership, saveMembership, removeMembership, confirmMembershipOrder } = membershipActions
 const promotionsActions = createPromotionsActions({ api, promotionForm, promotionSaving, promotionDeletingId, promotionTogglingId, pricingCurrency, dateTimeInput, nextTick, load, error, displayError, notify, requestConfirmation, t, generateRandomCouponCodeStr, mileageRules, mileageRewardForm, mileageLedger, mileageSelectedAccount, mileageSaving, invitationSettings, invitationSaving })
@@ -559,8 +559,10 @@ const App = { setup() {
      openDispatch,
      saveDispatch,
      openOrderUrlForm,
+     openOrderUrlExpiryForm,
      createOrderUrl,
      copyOrderUrl,
+     copyExistingOrderUrl,
      closeCreatedOrderUrl,
      revokeOrderUrl,
      paymentSettings,
@@ -732,8 +734,10 @@ const App = { setup() {
      openDispatch,
      saveDispatch,
      openOrderUrlForm,
+     openOrderUrlExpiryForm,
      createOrderUrl,
      copyOrderUrl,
+     copyExistingOrderUrl,
      closeCreatedOrderUrl,
      revokeOrderUrl
    })

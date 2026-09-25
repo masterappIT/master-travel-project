@@ -28,6 +28,8 @@ import { NestExpressApplication } from "@nestjs/platform-express";
 import { Response } from "express";
 import { APP_INTERCEPTOR } from "@nestjs/core";
 import {
+  createCipheriv,
+  createDecipheriv,
   createHash,
   createHmac,
   randomBytes,
@@ -53,6 +55,8 @@ import {
   tripDriverSelect,
   type TripDriverSummary,
 } from "./trip-payload";
+import { buildDriverOrderUrl } from "./order-url";
+import { publicDriverOrderChannelFilter } from "./driver-order-channel";
 
 try {
   loadEnvFile("../.env");
@@ -750,6 +754,7 @@ async function openEligibleTripsForDispatch(
       status: "CONFIRMED",
       executionPhase: null,
       driverId: null,
+      ...publicDriverOrderChannelFilter,
       scheduledAt: { gt: tripOfferCutoff() },
       payment: { is: { status: "PAID" } },
     },
@@ -770,6 +775,7 @@ async function openEligibleTripsForDispatch(
         status: "CONFIRMED",
         executionPhase: null,
         driverId: null,
+        ...publicDriverOrderChannelFilter,
       },
       data: {
         executionPhase: "WAITING_DRIVER",
@@ -1937,8 +1943,45 @@ function driverTokenFor(session: DriverSessionToken) {
 function orderUrlTokenHash(token: string) {
   return createHash("sha256").update(token).digest("hex");
 }
+function orderUrlTokenEncryptionKey() {
+  const secret =
+    process.env.ORDER_URL_ENCRYPTION_SECRET || process.env.ADMIN_SESSION_SECRET;
+  if (!secret) throw new Error("ORDER_URL_ENCRYPTION_SECRET must be configured");
+  return createHash("sha256").update(secret).digest();
+}
+function encryptOrderUrlToken(token: string) {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", orderUrlTokenEncryptionKey(), iv);
+  const encrypted = Buffer.concat([cipher.update(token, "utf8"), cipher.final()]);
+  return [iv, cipher.getAuthTag(), encrypted]
+    .map((value) => value.toString("base64url"))
+    .join(".");
+}
+function decryptOrderUrlToken(value: string) {
+  const parts = value.split(".");
+  if (parts.length !== 3) throw new Error("Invalid encrypted order URL token");
+  const [iv, authTag, encrypted] = parts.map((part) =>
+    Buffer.from(part, "base64url"),
+  );
+  const decipher = createDecipheriv(
+    "aes-256-gcm",
+    orderUrlTokenEncryptionKey(),
+    iv,
+  );
+  decipher.setAuthTag(authTag);
+  return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString(
+    "utf8",
+  );
+}
 function orderUrlValue(token: string) {
-  return `${process.env.DRIVER_ORDER_URL_BASE || "/driver/order-invite"}?token=${encodeURIComponent(token)}`;
+  try {
+    return buildDriverOrderUrl(token);
+  } catch (error) {
+    throw new HttpException(
+      error instanceof Error ? error.message : "Invalid driver order URL configuration",
+      HttpStatus.INTERNAL_SERVER_ERROR,
+    );
+  }
 }
 function provisionalDriverTokenFor(session: ProvisionalDriverSessionToken) {
   const payload = Buffer.from(JSON.stringify(session)).toString("base64url");
@@ -5133,6 +5176,11 @@ class DriverAuthController {
       });
       if (update.count !== 1) {
         await tx.driverTripCancellation.delete({ where: { id: cancellation.id } });
+      } else {
+        await tx.tripOrderUrl.updateMany({
+          where: { tripId: id, revokedAt: null },
+          data: { revokedAt: cancelledAt },
+        });
       }
       return update;
     });
@@ -5532,6 +5580,7 @@ class DriverAuthController {
             }),
         scheduledAt: { gt: tripOfferCutoff() },
         payment: { is: { status: "PAID" } },
+        ...publicDriverOrderChannelFilter,
       },
       include: { user: true },
       orderBy: { scheduledAt: "asc" },
@@ -5575,6 +5624,9 @@ class DriverAuthController {
       visibleTrip.status === "CONFIRMED" &&
       visibleTrip.executionPhase === "WAITING_DRIVER" &&
       visibleTrip.payment?.status === "PAID" &&
+      (await prisma.tripOrderUrl.count({
+        where: { tripId: visibleTrip.id, revokedAt: null },
+      })) === 0 &&
       settings.driverRaceEnabled &&
       driver.isOnline &&
       !tripOfferIsExpired(visibleTrip.scheduledAt);
@@ -5664,6 +5716,7 @@ class DriverAuthController {
                 }),
             scheduledAt: { gt: tripOfferCutoff(now) },
             payment: { is: { status: "PAID" } },
+            ...publicDriverOrderChannelFilter,
           },
       data: {
         driverId: driver.id,
@@ -6027,16 +6080,7 @@ class DriverOrderInviteController {
   async complete(
     @Req() req: RequestLike,
     @Param("token") token: string,
-    @Body() body: { settlementMethod?: unknown; settlementAccount?: unknown },
   ) {
-    const settlementMethod = typeof body.settlementMethod === "string" ? body.settlementMethod.trim() : "";
-    const settlementAccount = typeof body.settlementAccount === "string" ? body.settlementAccount.trim() : "";
-    if (!settlementMethod)
-      throw new HttpException("Settlement method is required", HttpStatus.BAD_REQUEST);
-    if (!settlementAccount)
-      throw new HttpException("Settlement account is required", HttpStatus.BAD_REQUEST);
-    if (settlementMethod.length > 64 || settlementAccount.length > 128)
-      throw new HttpException("Settlement details are too long", HttpStatus.BAD_REQUEST);
     const { session, item, trip } = await this.scopedSession(req, token);
     if (!trip.startedAt || trip.completedAt || trip.status === "CANCELLED")
       throw new HttpException("Trip cannot be completed", HttpStatus.CONFLICT);
@@ -6054,15 +6098,6 @@ class DriverOrderInviteController {
       });
       if (update.count !== 1)
         throw new HttpException("Trip cannot be completed", HttpStatus.CONFLICT);
-      await tx.driverSettlement.create({
-        data: {
-          id: `settlement-${Date.now()}-${randomBytes(4).toString("hex")}`,
-          tripId: trip.id,
-          driverId: session.sub,
-          method: `${settlementMethod}：${settlementAccount}`,
-          settledAt: completedAt,
-        },
-      });
       await tx.tripOrderUrl.update({
         where: { id: item.id },
         data: { completedAt },
@@ -6098,6 +6133,41 @@ class DriverOrderInviteController {
       }
       await rewardInvitation(tx, completed.userId, completed.id);
       return completed;
+    });
+    return invitationTripResponse(updated);
+  }
+
+  @Post(":token/trip/settlement")
+  async submitSettlement(
+    @Req() req: RequestLike,
+    @Param("token") token: string,
+    @Body() body: { settlementMethod?: unknown; settlementAccount?: unknown },
+  ) {
+    const settlementMethod = typeof body.settlementMethod === "string" ? body.settlementMethod.trim() : "";
+    const settlementAccount = typeof body.settlementAccount === "string" ? body.settlementAccount.trim() : "";
+    if (!settlementMethod)
+      throw new HttpException("Settlement method is required", HttpStatus.BAD_REQUEST);
+    if (!settlementAccount)
+      throw new HttpException("Settlement account is required", HttpStatus.BAD_REQUEST);
+    if (settlementMethod.length > 64 || settlementAccount.length > 128)
+      throw new HttpException("Settlement details are too long", HttpStatus.BAD_REQUEST);
+    const { session, trip } = await this.scopedSession(req, token);
+    if (!trip.completedAt || trip.status !== "COMPLETED")
+      throw new HttpException("Settlement is available after trip completion", HttpStatus.CONFLICT);
+    if (trip.settlement)
+      throw new HttpException("Settlement has already been submitted", HttpStatus.CONFLICT);
+    await prisma.driverSettlement.create({
+      data: {
+        id: `settlement-${Date.now()}-${randomBytes(4).toString("hex")}`,
+        tripId: trip.id,
+        driverId: session.sub,
+        method: `${settlementMethod}：${settlementAccount}`,
+        settledAt: new Date(),
+      },
+    });
+    const updated = await prisma.trip.findUniqueOrThrow({
+      where: { id: trip.id },
+      include: { user: true, settlement: true },
     });
     return invitationTripResponse(updated);
   }
@@ -9152,6 +9222,14 @@ class AdminController {
       }),
     ]);
     if (!trip) throw new HttpException("Trip not found", HttpStatus.NOT_FOUND);
+    const activeOrderUrlCount = await prisma.tripOrderUrl.count({
+      where: { tripId: id, revokedAt: null },
+    });
+    if (activeOrderUrlCount > 0)
+      throw new HttpException(
+        "This trip is reserved for URL acceptance",
+        HttpStatus.CONFLICT,
+      );
     if (!driver)
       throw new HttpException("Driver not found", HttpStatus.BAD_REQUEST);
     requireReviewedDriver(driver);
@@ -9247,22 +9325,46 @@ class AdminController {
     if (body.driverId && !driver)
       throw new HttpException("Driver not found", HttpStatus.BAD_REQUEST);
     if (driver) requireReviewedDriver(driver);
-    const token = randomBytes(32).toString("base64url");
-    const item = await prisma.tripOrderUrl.create({
-      data: {
-        tokenHash: orderUrlTokenHash(token),
-        tripId: id,
-        driverId: driver?.id || null,
-        source: "ADMIN",
-        createdByAdminId: session.sub,
-        validFrom,
-        validUntil,
-      },
+    const existingOrderUrl = await prisma.tripOrderUrl.findFirst({
+      where: { tripId: id, revokedAt: null },
+      select: { id: true },
     });
+    if (existingOrderUrl)
+      throw new HttpException(
+        "This trip already has an order URL. Revoke it before creating another one",
+        HttpStatus.CONFLICT,
+      );
+    const token = randomBytes(32).toString("base64url");
+    const url = orderUrlValue(token);
+    const item = await prisma.tripOrderUrl
+      .create({
+        data: {
+          tokenHash: orderUrlTokenHash(token),
+          encryptedToken: encryptOrderUrlToken(token),
+          tripId: id,
+          driverId: driver?.id || null,
+          source: "ADMIN",
+          createdByAdminId: session.sub,
+          validFrom,
+          validUntil,
+        },
+      })
+      .catch((error: unknown) => {
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === "P2002"
+        )
+          throw new HttpException(
+            "This trip already has an order URL. Revoke it before creating another one",
+            HttpStatus.CONFLICT,
+          );
+        throw error;
+      });
+    await publishDriverOrderEvent({ reason: "taken", tripId: id });
     return {
       id: item.id,
       token,
-      url: orderUrlValue(token),
+      url,
       tripId: id,
       driverId: item.driverId,
       validFrom: validFrom.toISOString(),
@@ -9314,6 +9416,72 @@ class AdminController {
       total: data.length,
     };
   }
+  @Post("trips/:id/order-urls/:urlId/copy")
+  async copyOrderUrl(
+    @Req() req: RequestLike,
+    @Param("id") id: string,
+    @Param("urlId") urlId: string,
+  ) {
+    requireRole(req, ["SUPER_ADMIN", "OPERATOR"]);
+    const item = await prisma.tripOrderUrl.findFirst({
+      where: { id: urlId, tripId: id },
+      include: { trip: true },
+    });
+    if (!item)
+      throw new HttpException("Order URL not found", HttpStatus.NOT_FOUND);
+    if (item.revokedAt || item.trip.status === "CANCELLED" || item.trip.cancelledAt)
+      throw new HttpException("This order URL is no longer available", HttpStatus.CONFLICT);
+    let token: string;
+    let rotated = false;
+    if (item.encryptedToken) {
+      token = decryptOrderUrlToken(item.encryptedToken);
+    } else {
+      rotated = true;
+      token = randomBytes(32).toString("base64url");
+      await prisma.tripOrderUrl.update({
+        where: { id: item.id },
+        data: {
+          tokenHash: orderUrlTokenHash(token),
+          encryptedToken: encryptOrderUrlToken(token),
+        },
+      });
+    }
+    return { id: item.id, url: orderUrlValue(token), rotated };
+  }
+  @Post("trips/:id/order-urls/:urlId/expiry")
+  async updateOrderUrlExpiry(
+    @Req() req: RequestLike,
+    @Param("id") id: string,
+    @Param("urlId") urlId: string,
+    @Body() body: { validUntil?: string },
+  ) {
+    requireRole(req, ["SUPER_ADMIN", "OPERATOR"]);
+    const validUntil = new Date(body.validUntil || "");
+    if (Number.isNaN(validUntil.getTime()) || validUntil <= new Date())
+      throw new HttpException(
+        "URL expiry must be later than the current time",
+        HttpStatus.BAD_REQUEST,
+      );
+    const item = await prisma.tripOrderUrl.findFirst({
+      where: { id: urlId, tripId: id },
+      include: { trip: true },
+    });
+    if (!item)
+      throw new HttpException("Order URL not found", HttpStatus.NOT_FOUND);
+    if (item.revokedAt)
+      throw new HttpException("Revoked order URLs cannot be changed", HttpStatus.CONFLICT);
+    if (item.trip.status === "CANCELLED" || item.trip.cancelledAt)
+      throw new HttpException("Cancelled trip order URLs cannot be changed", HttpStatus.CONFLICT);
+    const updated = await prisma.tripOrderUrl.update({
+      where: { id: urlId },
+      data: { validUntil },
+    });
+    return {
+      id: updated.id,
+      validUntil: updated.validUntil.toISOString(),
+      updatedAt: updated.updatedAt.toISOString(),
+    };
+  }
   @Post("trips/:id/order-urls/:urlId/revoke")
   async revokeOrderUrl(
     @Req() req: RequestLike,
@@ -9326,10 +9494,19 @@ class AdminController {
     });
     if (!item)
       throw new HttpException("Order URL not found", HttpStatus.NOT_FOUND);
-    const updated = await prisma.tripOrderUrl.update({
-      where: { id: urlId },
-      data: { revokedAt: new Date() },
+    const updated = await prisma.$transaction(async (tx) => {
+      const result = await tx.tripOrderUrl.update({
+        where: { id: urlId },
+        data: { revokedAt: new Date() },
+      });
+      await tx.provisionalDriverSession.updateMany({
+        where: { orderUrlId: urlId, revokedAt: null },
+        data: { revokedAt: result.revokedAt },
+      });
+      return result;
     });
+    if (!item.revokedAt)
+      await publishDriverOrderEvent({ reason: "available", tripId: id });
     return {
       id: updated.id,
       revokedAt: updated.revokedAt?.toISOString() || null,
@@ -13435,12 +13612,13 @@ class ClientOrdersController {
             });
         }
       }
+      const cancelledAt = new Date();
       const updated = await tx.trip.update({
         where: { id: trip.id },
         data: {
           status: "CANCELLED",
           executionPhase: null,
-          cancelledAt: new Date(),
+          cancelledAt,
           cancellationSource: "PASSENGER",
         },
         include: {
@@ -13465,6 +13643,10 @@ class ClientOrdersController {
             },
           },
         },
+      });
+      await tx.tripOrderUrl.updateMany({
+        where: { tripId: trip.id, revokedAt: null },
+        data: { revokedAt: cancelledAt },
       });
       if (trip.driverId && trip.acceptedAt) {
         await tx.notification.create({
