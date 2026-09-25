@@ -72,7 +72,7 @@ test('only applies the latest detail request when switching orders', async () =>
   first.resolve({ id: 'trip-1' })
   await openingFirst
 
-  assert.deepEqual(state.selectedTrip.value, { id: 'trip-2' })
+  assert.deepEqual(state.selectedTrip.value, { id: 'trip-2', quote: undefined })
   assert.equal(state.selectedId.value, 'trip-2')
   assert.equal(state.error.value, '')
 })
@@ -89,7 +89,7 @@ test('retry clears the previous error and loads the same order', async () => {
   assert.equal(state.error.value, 'temporary failure')
 
   await controller.retry()
-  assert.deepEqual(state.selectedTrip.value, { id: 'trip-1' })
+  assert.deepEqual(state.selectedTrip.value, { id: 'trip-1', quote: undefined })
   assert.equal(state.error.value, '')
   assert.equal(state.loading.value, false)
 })

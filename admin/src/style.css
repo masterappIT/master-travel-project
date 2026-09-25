@@ -6,6 +6,7 @@
 @import './styles/forms.css';
 @import './styles/states.css';
 @import './styles/users.css';
+@import './styles/admin-date-time-picker.css';
 @import './styles/drivers.css';
 @import './styles/dispatch.css';
 @import './styles/trips.css';

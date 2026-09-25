@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { adminTripDetailInclude, tripDriverResponse, type TripDriverSummary } from "./trip-payload";
+import { adminTripDetailSelect, tripDriverResponse, type TripDriverSummary } from "./trip-payload";
 
 test("admin trip detail only selects and serializes trip-safe driver fields", () => {
-  assert.deepEqual(adminTripDetailInclude.driver, {
+  assert.deepEqual(adminTripDetailSelect.driver, {
     select: {
       id: true,
       name: true,
@@ -21,6 +21,6 @@ test("admin trip detail only selects and serializes trip-safe driver fields", ()
   } satisfies TripDriverSummary;
 
   assert.deepEqual(tripDriverResponse(driver), driver);
-  assert.equal("wechatQrCodeData" in adminTripDetailInclude.driver.select, false);
-  assert.equal("wechatQrCodeMime" in adminTripDetailInclude.driver.select, false);
+  assert.equal("wechatQrCodeData" in adminTripDetailSelect.driver.select, false);
+  assert.equal("wechatQrCodeMime" in adminTripDetailSelect.driver.select, false);
 });

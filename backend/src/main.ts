@@ -50,9 +50,10 @@ import {
   PromotionStackingMode,
 } from "../generated/prisma";
 import {
-  adminTripDetailInclude,
+  adminTripDetailSelect,
   tripDriverResponse,
   tripDriverSelect,
+  type AdminTripDetail,
   type TripDriverSummary,
 } from "./trip-payload";
 import { buildDriverOrderUrl } from "./order-url";
@@ -1720,7 +1721,7 @@ type ManagedUser = {
   phoneNumber: string;
   name: string | null;
   displayName: string | null;
-  avatarUrl: string | null;
+  avatarUrl?: string | null;
   avatarData: Uint8Array | null;
   email: string | null;
   passwordHash: string | null;
@@ -2740,7 +2741,7 @@ function validDriverPayload(body: Partial<Prisma.DriverCreateInput> & Record<str
   });
 }
 
-function tripResponse(trip: {
+function tripResponse(trip: AdminTripDetail | ({
   scheduledAt: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -2768,7 +2769,7 @@ function tripResponse(trip: {
     settledAt: Date;
   } | null;
   [key: string]: unknown;
-}) {
+})) {
   const { quote, ...data } = trip;
   return {
     ...data,
@@ -8906,7 +8907,7 @@ class AdminController {
     requireAuth(req);
     const trip = await prisma.trip.findUnique({
       where: { id },
-      include: adminTripDetailInclude,
+      select: adminTripDetailSelect,
     });
     if (!trip)
       throw new HttpException("Trip not found", HttpStatus.NOT_FOUND);
