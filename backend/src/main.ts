@@ -5762,6 +5762,14 @@ class DriverOrderInviteShareController {
     if (!token) throw new HttpException("Order invitation not found", HttpStatus.NOT_FOUND);
     const details = await this.invites.details(token);
     const base = new URL(process.env.DRIVER_ORDER_URL_BASE || "http://localhost:8081/order-invite");
+    const appPage = new URL("/order-invite-app", base);
+    appPage.searchParams.set("token", token);
+    const userAgent = String(request.headers?.["user-agent"] ?? "");
+    const isCrawler = /(facebookexternalhit|Facebot|Twitterbot|WhatsApp|LinkedInBot|Slackbot|Discordbot|TelegramBot|Googlebot)/i.test(userAgent);
+    if (!isCrawler) {
+      response.redirect(302, appPage.href);
+      return;
+    }
     response.setHeader("Cache-Control", "no-store");
     response.type("html").send(inviteShareHtml(base, token, {
       ...details.trip,
