@@ -99,7 +99,7 @@ export const SettlementsPage = {
         <div><h2>結算紀錄</h2><span class="muted">金額與狀態同步司機端</span></div>
         <div class="settlement-filters">
           <input v-model="settlementSearchQuery" placeholder="搜尋訂單、司機或路線" aria-label="搜尋結算紀錄"/>
-          <select v-model="settlementStatusFilter" aria-label="結算狀態"><option value="ALL">全部狀態</option><option value="UNSETTLED">待結算</option><option value="SETTLED">已結算</option></select>
+          <AdminSelect v-model="settlementStatusFilter" aria-label="結算狀態"><option value="ALL">全部狀態</option><option value="UNSETTLED">待結算</option><option value="SETTLED">已結算</option></AdminSelect>
         </div>
       </div>
       <div class="settlement-table-wrap"><table class="settlement-table"><thead><tr><th>訂單／完成時間</th><th>司機</th><th>應付金額</th><th>結算方式</th><th>狀態</th><th>操作</th></tr></thead><tbody>
@@ -107,7 +107,7 @@ export const SettlementsPage = {
           <td><strong>{{formatOrderNumber(trip.id)}}</strong><small>{{formatDate(trip.completedAt || trip.updatedAt, true)}}</small></td>
           <td><strong>{{settlementDriverFor(trip)?.name || '—'}}</strong><small>{{settlementDriverFor(trip)?.phone || '—'}}</small></td>
           <td><strong>{{trip.driverPayoutCurrency || 'HKD'}} {{Number(trip.driverPayoutAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}}</strong></td>
-          <td><span v-if="trip.settlement">{{trip.settlement.method}}</span><select v-else v-model="settlementMethods[trip.id]" :disabled="!canWrite" class="settlement-method-select"><option value="" disabled>選擇收款方式</option><option value="微信支付">微信支付</option><option value="支付寶">支付寶</option><option value="FPS 轉數快">FPS 轉數快</option></select><small v-if="!trip.settlement && !settlementDriverFor(trip)?.settlementMethod" class="settlement-method-warning">司機尚未設定結算方式</small></td>
+          <td><span v-if="trip.settlement">{{trip.settlement.method}}</span><AdminSelect v-else v-model="settlementMethods[trip.id]" :disabled="!canWrite" class="settlement-method-select"><option value="" disabled>選擇收款方式</option><option value="微信支付">微信支付</option><option value="支付寶">支付寶</option><option value="FPS 轉數快">FPS 轉數快</option></AdminSelect><small v-if="!trip.settlement && !settlementDriverFor(trip)?.settlementMethod" class="settlement-method-warning">司機尚未設定結算方式</small></td>
           <td><span class="settlement-status" :class="trip.settlement ? 'settled' : 'unsettled'">{{trip.settlement ? '已結算' : '待結算'}}</span><small v-if="trip.settlement">{{formatDate(trip.settlement.settledAt, true)}}</small></td>
           <td class="settlement-actions"><div class="settlement-action-group"><button type="button" class="settlement-view-action" @click="openSettlementDetail(trip, $event)">查看詳情</button><button v-if="!trip.settlement && canWrite" type="button" class="settlement-primary-action" :disabled="!settlementMethods[trip.id]" @click="settleTrip(trip, settlementMethods[trip.id])">確認結算</button><button v-else-if="trip.settlement && canWrite" type="button" class="settlement-secondary-action" @click="unsettleTrip(trip)">撤銷結算</button><span v-else>—</span></div></td>
         </tr>

@@ -123,8 +123,8 @@ export const AuditLogsPage = {
       <section class="audit-log-panel">
         <div class="audit-log-toolbar">
           <label class="audit-log-search"><span>搜尋日誌</span><input v-model="search" type="search" placeholder="管理員、操作、資源或 IP" /></label>
-          <label><span>操作結果</span><select v-model="statusFilter"><option value="all">全部結果</option><option value="SUCCESS">成功</option><option value="FAILED">失敗</option></select></label>
-          <label><span>請求方法</span><select v-model="methodFilter"><option value="all">全部方法</option><option value="GET">GET</option><option value="POST">POST</option><option value="PUT">PUT</option><option value="PATCH">PATCH</option><option value="DELETE">DELETE</option></select></label>
+          <label><span>操作結果</span><AdminSelect v-model="statusFilter"><option value="all">全部結果</option><option value="SUCCESS">成功</option><option value="FAILED">失敗</option></AdminSelect></label>
+          <label><span>請求方法</span><AdminSelect v-model="methodFilter"><option value="all">全部方法</option><option value="GET">GET</option><option value="POST">POST</option><option value="PUT">PUT</option><option value="PATCH">PATCH</option><option value="DELETE">DELETE</option></AdminSelect></label>
           <span class="audit-log-result-count"><strong>{{auditTotal}}</strong> 筆結果</span>
         </div>
 

@@ -86,17 +86,17 @@ export const PromotionsPage = {
 
               <label class="form-group">
                 <span class="label-text">優惠類型</span>
-                <select v-model="promotionForm.kind">
+                <AdminSelect v-model="promotionForm.kind">
                   <option value="CAMPAIGN">折扣活動</option>
                   <option value="COUPON">優惠碼</option>
                   <option value="MEMBER">會員專屬</option>
-                </select>
+                </AdminSelect>
               </label>
 
               <label class="form-group switch-group">
                 <span class="label-text">啟用狀態</span>
                 <div class="toggle-wrapper">
-                  <input id="promo-enabled-toggle" v-model="promotionForm.enabled" type="checkbox" class="toggle-checkbox" />
+                  <AdminCheckbox id="promo-enabled-toggle" v-model="promotionForm.enabled" type="checkbox" class="toggle-checkbox" />
                   <label for="promo-enabled-toggle" class="toggle-label"></label>
                   <span class="toggle-text">{{ promotionForm.enabled ? '已啟用' : '已停用' }}</span>
                 </div>
@@ -119,10 +119,10 @@ export const PromotionsPage = {
               <template v-if="promotionForm.kind === 'MEMBER'">
                 <label class="form-group col-span-2">
                   <span class="label-text">適用會員等級 <span class="required">*</span></span>
-                  <select v-model="promotionForm.membershipLevel" required>
+                  <AdminSelect v-model="promotionForm.membershipLevel" required>
                     <option value="" disabled>請選擇會員等級</option>
                     <option v-for="plan in membershipPlans" :key="plan.level" :value="plan.level">{{plan.name}}（{{plan.level}}）</option>
-                  </select>
+                  </AdminSelect>
                 </label>
               </template>
             </div>
@@ -133,11 +133,11 @@ export const PromotionsPage = {
             <div class="form-grid">
               <label class="form-group">
                 <span class="label-text">優惠方式</span>
-                <select v-model="promotionForm.discountType">
+                <AdminSelect v-model="promotionForm.discountType">
                   <option value="PERCENTAGE">總金額打折（百分比）</option>
                   <option value="FIXED_AMOUNT">現金券（固定折抵金額）</option>
                   <option value="TOTAL_PRICE">折後固定總價</option>
-                </select>
+                </AdminSelect>
               </label>
 
               <label class="form-group">
@@ -154,11 +154,11 @@ export const PromotionsPage = {
 
               <label class="form-group">
                 <span class="label-text">優惠組合（疊加模式）</span>
-                <select v-model="promotionForm.stackingMode">
+                <AdminSelect v-model="promotionForm.stackingMode">
                   <option value="NONE">不可與其他優惠合併</option>
                   <option value="PERCENTAGE_AND_VOUCHER">百分比優惠＋現金券可合併</option>
                   <option value="ALL">可與所有優惠合併</option>
-                </select>
+                </AdminSelect>
               </label>
 
               <label class="form-group">
@@ -192,12 +192,12 @@ export const PromotionsPage = {
             <div class="form-grid">
               <label class="form-group">
                 <span class="label-text">出發地區</span>
-                <select v-model="promotionForm.originRegion">
+                <AdminSelect v-model="promotionForm.originRegion">
                   <option value="">不限出發地區</option>
                   <option>香港</option>
                   <option>澳門</option>
                   <option>大陸</option>
-                </select>
+                </AdminSelect>
               </label>
 
               <label class="form-group">
@@ -207,12 +207,12 @@ export const PromotionsPage = {
 
               <label class="form-group">
                 <span class="label-text">目的地區</span>
-                <select v-model="promotionForm.destinationRegion">
+                <AdminSelect v-model="promotionForm.destinationRegion">
                   <option value="">不限目的地區</option>
                   <option>香港</option>
                   <option>澳門</option>
                   <option>大陸</option>
-                </select>
+                </AdminSelect>
               </label>
 
               <label class="form-group">
@@ -246,22 +246,22 @@ export const PromotionsPage = {
 
               <label class="form-group">
                 <span class="label-text">每日開始時間</span>
-                <input v-model="promotionForm.timeStart" type="time" />
+                <AdminTimePicker v-model="promotionForm.timeStart"  />
               </label>
 
               <label class="form-group">
                 <span class="label-text">每日結束時間</span>
-                <input v-model="promotionForm.timeEnd" type="time" />
+                <AdminTimePicker v-model="promotionForm.timeEnd"  />
               </label>
 
               <label class="form-group">
                 <span class="label-text">活動開始日期時間</span>
-                <input v-model="promotionForm.startsAt" type="datetime-local" />
+                <AdminDateTimePicker v-model="promotionForm.startsAt"  />
               </label>
 
               <label class="form-group">
                 <span class="label-text">活動結束日期時間</span>
-                <input v-model="promotionForm.endsAt" type="datetime-local" />
+                <AdminDateTimePicker v-model="promotionForm.endsAt"  />
               </label>
             </div>
           </div>
@@ -377,10 +377,10 @@ export const PromotionsPage = {
           <label class="form-group"><span class="label-text">名稱</span><input v-model.trim="mileageRewardForm.name" required /></label>
           <label class="form-group"><span class="label-text">所需 KM</span><input v-model.number="mileageRewardForm.cost" type="number" min="1" step="1" required /></label>
           <label class="form-group"><span class="label-text">庫存（留空為不限）</span><input v-model="mileageRewardForm.stock" type="number" min="0" step="1" /></label>
-          <label class="form-group"><span class="label-text">關聯優惠</span><select v-model="mileageRewardForm.promotionId"><option value="">不關聯</option><option v-for="promo in promotions.filter(item => item.kind === 'COUPON')" :key="promo.id" :value="promo.id">{{promo.name}}（{{promo.couponCode}}）</option></select></label>
+          <label class="form-group"><span class="label-text">關聯優惠</span><AdminSelect v-model="mileageRewardForm.promotionId"><option value="">不關聯</option><option v-for="promo in promotions.filter(item => item.kind === 'COUPON')" :key="promo.id" :value="promo.id">{{promo.name}}（{{promo.couponCode}}）</option></AdminSelect></label>
           <label class="form-group col-span-2"><span class="label-text">說明</span><input v-model.trim="mileageRewardForm.description" required /></label>
           <label class="form-group"><span class="label-text">顯示優惠面額</span><input v-model="mileageRewardForm.couponValue" type="number" min="0.01" step="0.01" /></label>
-          <label class="form-group switch-group"><span class="label-text">啟用</span><input v-model="mileageRewardForm.enabled" type="checkbox" /></label>
+          <label class="form-group switch-group"><span class="label-text">啟用</span><AdminCheckbox v-model="mileageRewardForm.enabled" type="checkbox" /></label>
           <div class="mileage-form-actions"><button type="button" class="btn-cancel" @click="mileageRewardForm = null">取消</button><button type="submit" class="btn-save" :disabled="mileageSaving">保存兌換品</button></div>
         </form>
       </div>
@@ -419,7 +419,7 @@ export const PromotionsPage = {
       </div>
       <div class="invitation-status-row">
         <div><strong>邀請好友功能</strong><p>{{invitationSettings.enabled ? '新會員可使用邀請碼綁定活動' : '已停止接受新的邀請碼綁定，既有邀請仍按原規則履約'}}</p></div>
-        <label class="toggle-wrapper"><input v-model="invitationSettings.enabled" type="checkbox" class="toggle-checkbox" :disabled="!canWrite" /><span class="toggle-label"></span><span class="toggle-text">{{invitationSettings.enabled ? '已開啟' : '已關閉'}}</span></label>
+        <label class="toggle-wrapper"><AdminCheckbox v-model="invitationSettings.enabled" type="checkbox" class="toggle-checkbox" :disabled="!canWrite" /><span class="toggle-label"></span><span class="toggle-text">{{invitationSettings.enabled ? '已開啟' : '已關閉'}}</span></label>
       </div>
       <div class="invitation-setting-grid">
         <label class="form-group"><span class="label-text">邀請人里程獎勵（KM）</span><input v-model.number="invitationSettings.inviterMileage" type="number" min="0" max="1000000" step="1" :disabled="!canWrite" /></label>
@@ -433,7 +433,7 @@ export const PromotionsPage = {
     <section class="panel">
       <div class="admin-toolbar promo-toolbar">
         <div><h2>邀請紀錄</h2><span class="muted">查詢邀請關係、達標狀態及實際獎勵快照</span></div>
-        <div class="invitation-record-filters"><select v-model="invitationStatusFilter"><option value="ALL">全部狀態</option><option value="REGISTERED">待完成首趟</option><option value="REWARDED">已發放</option><option value="EXPIRED">已失效</option></select><input v-model.trim="invitationSearchQuery" placeholder="搜尋邀請人、受邀人或邀請碼" /></div>
+        <div class="invitation-record-filters"><AdminSelect v-model="invitationStatusFilter"><option value="ALL">全部狀態</option><option value="REGISTERED">待完成首趟</option><option value="REWARDED">已發放</option><option value="EXPIRED">已失效</option></AdminSelect><input v-model.trim="invitationSearchQuery" placeholder="搜尋邀請人、受邀人或邀請碼" /></div>
       </div>
       <div class="promo-table-wrapper"><table><thead><tr><th>邀請人</th><th>受邀人</th><th>邀請碼</th><th>獎勵快照</th><th>期限</th><th>狀態</th></tr></thead><tbody>
         <tr v-if="!invitationRecords.length"><td colspan="6" class="promotion-empty">尚無邀請紀錄</td></tr>

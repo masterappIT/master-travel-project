@@ -3,6 +3,9 @@ import { createAdminApi } from './utils/admin-api.js'
 import { LoadingState, ErrorState, ToastHost, ConfirmDialog } from './components/index.js'
 import { AdminDatePicker } from './components/AdminDatePicker.js'
 import { AdminDateTimePicker } from './components/AdminDateTimePicker.js'
+import { AdminTimePicker } from './components/AdminTimePicker.js'
+import { AdminSelect } from './components/AdminSelect.js'
+import { AdminCheckbox } from './components/AdminCheckbox.js'
 import { DriverReviewActions } from './components/DriverReviewActions.js'
 import { VehiclePhotoViewer } from './components/VehiclePhotoViewer.js'
 import { LazyVehiclePhotoViewer } from './components/LazyVehiclePhotoViewer.js'
@@ -910,6 +913,9 @@ registerAdminComponents(app, {
   ConfirmDialog,
   AdminDatePicker,
   AdminDateTimePicker,
+  AdminTimePicker,
+  AdminSelect,
+  AdminCheckbox,
   DriverReviewActions,
   VehiclePhotoViewer,
   LazyVehiclePhotoViewer

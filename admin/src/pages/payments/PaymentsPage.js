@@ -22,7 +22,7 @@ export const PaymentsPage = {
           <span>{{t('fareBalancePayHint')}}</span>
         </div>
         <label class="switch">
-          <input type="checkbox" v-model="paymentSettings.fareBalancePayEnabled" :disabled="!canWrite"/>
+          <AdminCheckbox type="checkbox" v-model="paymentSettings.fareBalancePayEnabled" :disabled="!canWrite"/>
           <span class="slider"></span>
         </label>
       </div>
@@ -32,7 +32,7 @@ export const PaymentsPage = {
           <span>{{t('cashBalancePayHint')}}</span>
         </div>
         <label class="switch">
-          <input type="checkbox" v-model="paymentSettings.cashBalancePayEnabled" :disabled="!canWrite"/>
+          <AdminCheckbox type="checkbox" v-model="paymentSettings.cashBalancePayEnabled" :disabled="!canWrite"/>
           <span class="slider"></span>
         </label>
       </div>
@@ -49,7 +49,7 @@ export const PaymentsPage = {
           <span>{{t('wechatPayHint')}}</span>
         </div>
         <label class="switch">
-          <input type="checkbox" v-model="paymentSettings.wechatPayEnabled" :disabled="!canWrite"/>
+          <AdminCheckbox type="checkbox" v-model="paymentSettings.wechatPayEnabled" :disabled="!canWrite"/>
           <span class="slider"></span>
         </label>
       </div>
@@ -59,7 +59,7 @@ export const PaymentsPage = {
           <span>{{t('alipayPayHint')}}</span>
         </div>
         <label class="switch">
-          <input type="checkbox" v-model="paymentSettings.alipayPayEnabled" :disabled="!canWrite"/>
+          <AdminCheckbox type="checkbox" v-model="paymentSettings.alipayPayEnabled" :disabled="!canWrite"/>
           <span class="slider"></span>
         </label>
       </div>
@@ -69,7 +69,7 @@ export const PaymentsPage = {
           <span>{{t('bankCardPayHint')}}</span>
         </div>
         <label class="switch">
-          <input type="checkbox" v-model="paymentSettings.bankCardPayEnabled" :disabled="!canWrite"/>
+          <AdminCheckbox type="checkbox" v-model="paymentSettings.bankCardPayEnabled" :disabled="!canWrite"/>
           <span class="slider"></span>
         </label>
       </div>
@@ -86,7 +86,7 @@ export const PaymentsPage = {
           <span>{{t('sandboxModeHint')}}</span>
         </div>
         <label class="switch">
-          <input type="checkbox" v-model="paymentSettings.sandboxMode" :disabled="!canWrite"/>
+          <AdminCheckbox type="checkbox" v-model="paymentSettings.sandboxMode" :disabled="!canWrite"/>
           <span class="slider"></span>
         </label>
       </div>
