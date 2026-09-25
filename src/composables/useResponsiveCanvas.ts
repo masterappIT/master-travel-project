@@ -62,5 +62,5 @@ export const useResponsiveCanvas = () => {
     }
   })
 
-  return { responsiveStyle }
+  return { responsiveStyle, refreshViewport: updateViewport }
 }

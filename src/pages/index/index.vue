@@ -5,7 +5,7 @@
         <!-- #ifndef APP-PLUS -->
         <HomeMap v-if="activePagePath === '/pages/index/index'" map-id="home-main-map" :latitude="mapLatitude" :longitude="mapLongitude" :scale="mapScale" :markers="mapMarkers" :polyline="mapPolyline" :center-trigger="mapCenterTrigger" :booking-picker-open="bookingTimePicker" :pickup-label="origin" :destination-label="destination" :route-summary="routeSummary" />
         <!-- #endif -->
-        <HomeHeader :location-label="locationLabel" />
+        <HomeHeader :key="headerRenderKey" :location-label="locationLabel" />
         <HomeTravelModeSwitch :mode="rideMode" @update:mode="switchRideMode" />
         <!-- #ifndef APP-PLUS -->
         <HomeMapActions @location="handleMapLocation" />
@@ -194,8 +194,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, nextTick } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
+// #ifdef MP-WEIXIN || MP-TOUTIAO
+import { onHide } from '@dcloudio/uni-app'
+// #endif
 import { useTripStore } from '../../stores/trip'
 // #ifdef H5
 import { useH5ResponsiveCanvas } from '../../composables/useH5ResponsiveCanvas'
@@ -223,7 +226,7 @@ import { findLocalRegion } from '../../utils/localRegions'
 const { responsiveStyle } = useH5ResponsiveCanvas()
 // #endif
 // #ifdef MP-WEIXIN || MP-TOUTIAO
-const { responsiveStyle } = useResponsiveCanvas()
+const { responsiveStyle, refreshViewport } = useResponsiveCanvas()
 // #endif
 const pageStyle = computed(() => {
   // #ifdef H5 || MP-WEIXIN || MP-TOUTIAO
@@ -327,6 +330,7 @@ const mapScale = ref(13)
 const mapCenterTrigger = ref(0)
 const locationLabel = ref('香港 · 油尖旺區')
 const detailedAddress = ref('香港九龍站附近')
+const headerRenderKey = ref(0)
 const bookingTimePicker = ref(false)
 const airportModeHintVisible = ref(false)
 let hasShown = false
@@ -361,13 +365,36 @@ const switchRideMode = (mode: RideMode) => {
   rideMode.value = mode
 }
 
+// #ifdef MP-WEIXIN || MP-TOUTIAO
+let viewportRefreshTimer: ReturnType<typeof setTimeout> | undefined
+let viewportRefreshRun = 0
+const refreshHomeViewport = async (remountHeader: boolean) => {
+  const run = ++viewportRefreshRun
+  refreshViewport()
+  await nextTick()
+  if (run !== viewportRefreshRun) return
+  viewportRefreshTimer = setTimeout(() => {
+    if (run !== viewportRefreshRun) return
+    refreshViewport()
+    if (remountHeader) headerRenderKey.value += 1
+    viewportRefreshTimer = undefined
+  }, 50)
+}
+
+onHide(() => {
+  viewportRefreshRun += 1
+  if (viewportRefreshTimer) clearTimeout(viewportRefreshTimer)
+  viewportRefreshTimer = undefined
+})
+// #endif
+
 onShow(() => {
   if (!homeAccessGranted.value) return
-  if (hasShown) {
-    rideMode.value = 'cross-border'
-  } else {
-    void useCurrentLocation(false, true)
-  }
+  // #ifdef MP-WEIXIN || MP-TOUTIAO
+  if (viewportRefreshTimer) clearTimeout(viewportRefreshTimer)
+  void refreshHomeViewport(hasShown)
+  // #endif
+  if (!hasShown) void useCurrentLocation(false, true)
   hasShown = true
 })
 
