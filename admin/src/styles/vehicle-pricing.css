@@ -1,10 +1,18 @@
 @import './tokens.css';
 
-.shell .vehicle-admin { display: grid; gap: 18px; }
+.shell .vehicle-admin { display: grid; gap: 20px; }
+.shell .route-pricing-admin { display: grid; gap: 20px; }
+.shell .vehicle-page-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; }
+.shell .vehicle-page-heading h2 { margin: 6px 0 5px; color: #12243b; font-size: 28px; letter-spacing: -.035em; }
+.shell .vehicle-page-heading p { margin: 0; }
+.shell .vehicle-section-tabs { display: inline-flex; width: fit-content; gap: 4px; padding: 4px; border: 1px solid #dce7f5; border-radius: 10px; background: #f1f5f9; }
+.shell .vehicle-section-tabs button { min-height: 40px; border: 0; border-radius: 7px; padding: 8px 20px; color: #52657d; background: transparent; font-weight: 700; cursor: pointer; }
+.shell .vehicle-section-tabs button.active { color: #fff; background: #1769e0; box-shadow: 0 2px 8px rgb(23 105 224 / 20%); }
 .shell .admin-toolbar { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px 0; }
 .shell .admin-toolbar h2 { margin: 0; color: #12243b; font-size: 18px; }
 .shell .vehicle-record-form { grid-template-columns: repeat(4, minmax(120px, 1fr)); }
 .shell .vehicle-thumb { width: 96px; height: 54px; object-fit: contain; }
+.shell .vehicle-admin .status { display: inline-flex; align-items: center; white-space: nowrap; }
 .shell .vehicle-image-field { display: grid; align-content: start; gap: 7px; }
 .shell .vehicle-image-field > span { color: #29415f; font-size: 13px; font-weight: 700; }
 .shell .vehicle-image-upload { display: inline-flex; align-items: center; justify-content: center; width: fit-content; min-height: 40px; border: 1px solid #b8cad8; border-radius: 8px; padding: 0 14px; color: #31526d; background: #fff; font-size: 13px; font-weight: 750; cursor: pointer; }
@@ -30,24 +38,29 @@
 .shell .currency-switcher button { height: 44px; min-height: 44px; border: 0; border-radius: 9px; padding: 10px 14px; color: #fff; background: #1769e0; font-weight: 700; }
 .shell .vehicle-tabs { display: none; }
 
+@media (max-width: 700px) {
+  .shell .vehicle-section-tabs { display: grid; width: 100%; grid-template-columns: repeat(2, 1fr); box-sizing: border-box; }
+  .shell .vehicle-section-tabs button { padding: 8px 6px; }
+}
+
 /* Desktop vehicle and pricing workspace: intentionally separate from mobile rules. */
 @media (min-width: 701px) {
   .shell .vehicle-admin button,
   .shell .route-pricing-admin button { font-family: inherit; font-weight: 750; letter-spacing: .01em; cursor: pointer; }
   .shell .vehicle-admin .record-form > button[type='submit'],
   .shell .route-pricing-admin .record-form > button[type='submit'],
-  .shell .vehicle-admin .extra-editor button[type='submit'] { min-height: 40px; height: 40px; border: 0; border-radius: 8px; padding: 0 19px; color: #fff; background: #163b5c; box-shadow: 3px 3px 0 #8bb9c5; transition: transform .16s ease, box-shadow .16s ease, background .16s ease; }
+  .shell .vehicle-admin .extra-editor button[type='submit'] { min-height: 44px; height: 44px; border: 0; border-radius: 10px; padding: 10px 16px; color: #fff; background: linear-gradient(135deg, #2563eb, #3b82f6); box-shadow: 0 4px 12px rgb(37 99 235 / 25%); transition: all .2s ease; }
   .shell .vehicle-admin .record-form > button[type='submit']:hover,
   .shell .route-pricing-admin .record-form > button[type='submit']:hover,
-  .shell .vehicle-admin .extra-editor button[type='submit']:hover { background: #287f9d; transform: translate(-2px, -2px); box-shadow: 5px 5px 0 #8bb9c5; }
+  .shell .vehicle-admin .extra-editor button[type='submit']:hover { background: linear-gradient(135deg, #2563eb, #3b82f6); filter: brightness(1.08); transform: translateY(-1px); box-shadow: 0 5px 14px rgb(37 99 235 / 30%); }
   .shell .vehicle-admin .admin-toolbar button,
   .shell .route-pricing-admin .admin-toolbar button,
   .shell .vehicle-admin .pricing-actions button,
-  .shell .vehicle-admin .currency-switcher button { border: 0; border-radius: 8px; padding: 0 19px; color: #fff; background: #163b5c; box-shadow: 3px 3px 0 #8bb9c5; transition: transform .16s ease, box-shadow .16s ease, background .16s ease; }
+  .shell .vehicle-admin .currency-switcher button { min-height: 44px; height: 44px; border: 0; border-radius: 10px; padding: 10px 16px; color: #fff; background: linear-gradient(135deg, #2563eb, #3b82f6); box-shadow: 0 4px 12px rgb(37 99 235 / 25%); transition: all .2s ease; }
   .shell .vehicle-admin .admin-toolbar button:hover,
   .shell .route-pricing-admin .admin-toolbar button:hover,
   .shell .vehicle-admin .pricing-actions button:hover,
-  .shell .vehicle-admin .currency-switcher button:hover { background: #287f9d; transform: translate(-2px, -2px); box-shadow: 5px 5px 0 #8bb9c5; }
+  .shell .vehicle-admin .currency-switcher button:hover { background: linear-gradient(135deg, #2563eb, #3b82f6); filter: brightness(1.08); transform: translateY(-1px); box-shadow: 0 5px 14px rgb(37 99 235 / 30%); }
   .shell .vehicle-admin .row-actions,
   .shell .route-pricing-admin .row-actions { display: flex; flex-wrap: wrap; gap: 7px; }
   .shell .vehicle-admin .row-actions button,
@@ -73,14 +86,34 @@
   .shell .vehicle-admin .modal-backdrop .record-form > button { width: auto; margin-top: 8px; }
   .shell .vehicle-admin .modal-backdrop .record-form > button[type='submit'] { justify-self: end; }
   .shell .vehicle-admin .modal-backdrop .record-form > button.secondary { justify-self: start; }
-  .shell .vehicle-admin .modal-backdrop .record-form .catalog-enabled { display: flex; align-items: center; gap: 7px; min-height: 28px; color: #29415f; font-size: 14px; font-weight: 700; }
-  .shell .vehicle-admin .modal-backdrop .record-form .catalog-enabled input { width: 17px; height: 17px; min-height: 17px; }
-  .shell .vehicle-admin .modal-backdrop .record-form .editor-actions { display: flex; grid-column: 1 / -1; align-items: center; justify-content: flex-end; gap: 10px; margin-top: 4px; }
-  .shell .vehicle-admin .modal-backdrop .record-form .editor-actions button { width: 104px; min-width: 0; height: 38px; min-height: 38px; margin: 0; border-radius: 8px; font-size: 14px; font-weight: 800; box-shadow: none; transform: none; }
-  .shell .vehicle-admin .modal-backdrop .record-form .editor-actions button.secondary { border: 1px solid #d6e0ec; color: #375271; background: #e8eef7; }
-  .shell .vehicle-admin .modal-backdrop .record-form .editor-actions button.secondary:hover { border-color: #c5d3e3; color: #294765; background: #dfe8f3; transform: none; }
-  .shell .vehicle-admin .modal-backdrop .record-form .editor-actions button[type='submit'] { border: 0; color: #fff; background: #087df5; }
-  .shell .vehicle-admin .modal-backdrop .record-form .editor-actions button[type='submit']:hover { background: #006fe8; transform: none; box-shadow: none; }
+  .shell .vehicle-admin .modal-backdrop .record-form .catalog-enabled,
+  .shell .route-pricing-admin .modal-backdrop .record-form > label { display: inline-flex; align-items: center; justify-self: start; gap: 8px; min-height: 28px; margin: 0; color: #29415f; font: inherit; font-size: 13px; font-weight: 700; line-height: 1.2; }
+  .shell .vehicle-admin .modal-backdrop .record-form .catalog-enabled input,
+  .shell .route-pricing-admin .modal-backdrop .record-form > label input[type='checkbox'] { flex: 0 0 18px; width: 18px; height: 18px; min-width: 18px; min-height: 18px; margin: 0; padding: 0; border: 1px solid #b8cad8; border-radius: 5px; appearance: none; -webkit-appearance: none; color: #fff; background: #fff; cursor: pointer; }
+  .shell .vehicle-admin .modal-backdrop .record-form .catalog-enabled input:checked,
+  .shell .route-pricing-admin .modal-backdrop .record-form > label input[type='checkbox']:checked { border-color: #1769e0; background: #1769e0; box-shadow: 0 2px 6px rgb(23 105 224 / 20%); }
+  .shell .vehicle-admin .modal-backdrop .record-form .catalog-enabled input:checked::after,
+  .shell .route-pricing-admin .modal-backdrop .record-form > label input[type='checkbox']:checked::after { content: ''; display: block; width: 5px; height: 9px; margin: 2px 0 0 5px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+  .shell .vehicle-admin .modal-backdrop .record-form .catalog-enabled input:focus-visible,
+  .shell .route-pricing-admin .modal-backdrop .record-form > label input[type='checkbox']:focus-visible { outline: 3px solid rgb(37 99 235 / 20%); outline-offset: 2px; }
+  .shell .vehicle-admin .modal-backdrop .record-form .catalog-enabled input:hover,
+  .shell .route-pricing-admin .modal-backdrop .record-form > label input[type='checkbox']:hover { border-color: #1769e0; }
+  .shell .vehicle-admin .modal-backdrop .record-form .editor-actions,
+  .shell .route-pricing-admin .modal-backdrop .record-form .editor-actions { display: flex; grid-column: 1 / -1; align-items: center; justify-content: flex-end; gap: 10px; margin-top: 4px; }
+  .shell .vehicle-admin .modal-backdrop .record-form .editor-actions button,
+  .shell .route-pricing-admin .modal-backdrop .record-form .editor-actions button { width: 88px; min-width: 0; height: 34px; min-height: 34px; margin: 0; border: 1px solid transparent; border-radius: 7px; padding: 0 12px; appearance: none; -webkit-appearance: none; font: inherit; font-size: 13px; font-weight: 700; line-height: 1; cursor: pointer; transition: background .2s ease, border-color .2s ease, box-shadow .2s ease, color .2s ease, transform .2s ease; }
+  .shell .vehicle-admin .modal-backdrop .record-form .editor-actions button.secondary,
+  .shell .route-pricing-admin .modal-backdrop .record-form .editor-actions button.secondary { color: #52657d; background: #f1f5f9; border-color: #dce7f5; box-shadow: none; }
+  .shell .vehicle-admin .modal-backdrop .record-form .editor-actions button.secondary:hover,
+  .shell .route-pricing-admin .modal-backdrop .record-form .editor-actions button.secondary:hover { border-color: #bfd2e8; color: #31526d; background: #e8f0fa; transform: translateY(-1px); }
+  .shell .vehicle-admin .modal-backdrop .record-form .editor-actions button[type='submit'],
+  .shell .route-pricing-admin .modal-backdrop .record-form .editor-actions button[type='submit'] { color: #fff; background: linear-gradient(135deg, #2563eb, #3b82f6); border-color: transparent; box-shadow: 0 4px 12px rgb(37 99 235 / 25%); }
+  .shell .vehicle-admin .modal-backdrop .record-form .editor-actions button[type='submit']:hover,
+  .shell .route-pricing-admin .modal-backdrop .record-form .editor-actions button[type='submit']:hover { filter: brightness(1.08); transform: translateY(-1px); box-shadow: 0 5px 14px rgb(37 99 235 / 30%); }
+  .shell .vehicle-admin .modal-backdrop .record-form .editor-actions button:focus-visible,
+  .shell .route-pricing-admin .modal-backdrop .record-form .editor-actions button:focus-visible { outline: 3px solid rgb(37 99 235 / 22%); outline-offset: 2px; }
+  .shell .vehicle-admin .modal-backdrop .record-form .editor-actions button:active,
+  .shell .route-pricing-admin .modal-backdrop .record-form .editor-actions button:active { transform: translateY(0); }
   .shell .editor-section:has(.pricing-form),
   .shell .editor-section:has(.record-form) { display: grid; gap: 22px; max-width: 1180px; }
 
@@ -96,30 +129,20 @@
   }
 
   .shell .vehicle-admin > .panel:nth-of-type(1) {
-    position: relative;
     overflow: visible;
-    padding: 24px;
-    background: linear-gradient(135deg, #102a43 0%, #1e4d73 58%, #287f9d 100%);
-    color: #fff;
+    padding: 0;
+    background: #fff;
+    color: inherit;
   }
-  .shell .vehicle-admin > .panel:nth-of-type(1)::after {
-    position: absolute;
-    right: 28px;
-    bottom: 20px;
-    color: rgb(255 255 255 / 18%);
-    content: 'PRICING CONTROL';
-    font-size: 11px;
-    font-weight: 800;
-    letter-spacing: .18em;
-  }
-  .shell .vehicle-admin > .panel:nth-of-type(1) h2,
-  .shell .vehicle-admin > .panel:nth-of-type(1) .muted { color: #fff; }
-  .shell .currency-switcher { display: flex; align-items: center; justify-content: space-between; gap: 28px; min-height: 112px; padding: 24px 28px; }
-  .shell .currency-switcher h2 { margin: 0 0 6px; font-size: 22px; letter-spacing: -.03em; }
-  .shell .currency-switcher .muted { display: block; max-width: 590px; color: #d5e8f5; line-height: 1.55; }
+  .shell .vehicle-admin > .panel:nth-of-type(1)::after { display: none; }
+  .shell .vehicle-admin > .panel:nth-of-type(1) h2 { color: #12243b; }
+  .shell .vehicle-admin > .panel:nth-of-type(1) .muted { color: #71849b; }
+  .shell .currency-switcher { display: flex; align-items: center; justify-content: space-between; gap: 28px; min-height: 112px; padding: 24px 26px; }
+  .shell .currency-switcher h2 { margin: 0 0 6px; font-size: 21px; letter-spacing: -.025em; }
+  .shell .currency-switcher .muted { display: block; max-width: 590px; line-height: 1.55; }
   .shell .currency-switcher-actions { position: relative; z-index: 1; display: flex; gap: 10px; }
-  .shell .currency-switcher select { min-width: 170px; border-color: rgb(255 255 255 / 35%); color: #173957; background: #fff; }
-  .shell .currency-switcher button { background: #f6c453; color: #173957; box-shadow: none; }
+  .shell .currency-switcher select { min-width: 170px; }
+  .shell .currency-switcher button { background: linear-gradient(135deg, #2563eb, #3b82f6); color: #fff; box-shadow: 0 4px 12px rgb(37 99 235 / 25%); }
 
   .shell .vehicle-admin > .panel:not(:first-child) { overflow: hidden; }
   .shell .admin-toolbar { align-items: flex-end; gap: 18px; padding: 24px 26px 18px; border-bottom: 1px solid #edf2f7; }
@@ -154,4 +177,142 @@
   .shell .editor-section:has(.record-form) .panel { overflow: hidden; }
   .shell .editor-section:has(.record-form) .record-form { margin: 0 26px 22px; padding: 18px; border: 1px solid #e1eaf3; border-radius: 13px; background: #f7fafc; }
   .shell .editor-section:has(.record-form) .admin-toolbar { align-items: flex-start; }
+}
+
+@media (max-width: 700px) {
+  .shell .vehicle-admin,
+  .shell .route-pricing-admin { gap: 14px; }
+  .shell .vehicle-page-heading { align-items: flex-start; gap: 6px; }
+  .shell .vehicle-page-heading h2 { margin: 4px 0; font-size: 23px; }
+  .shell .vehicle-page-heading p { font-size: 12px; line-height: 1.45; }
+  .shell .vehicle-section-tabs { gap: 3px; padding: 3px; border-radius: 9px; }
+  .shell .vehicle-section-tabs button { min-height: 38px; padding: 7px 5px; font-size: 12px; line-height: 1.2; }
+  .shell .vehicle-admin > .panel,
+  .shell .editor-section:has(.record-form) > .panel { border-radius: 14px; }
+  .shell .admin-toolbar { align-items: stretch; gap: 10px; padding: 14px 14px 12px; }
+  .shell .admin-toolbar h2 { font-size: 17px; line-height: 1.35; }
+  .shell .admin-toolbar .muted { margin-top: 4px; font-size: 12px; line-height: 1.45; }
+  .shell .admin-toolbar button { align-self: stretch; width: 100%; min-height: 42px; }
+  .shell .vehicle-admin table,
+  .shell .editor-section:has(.record-form) table { display: block; width: 100%; max-width: 100%; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; scrollbar-width: thin; scrollbar-color: #8aa4c2 #edf2f7; }
+  .shell .vehicle-admin table::-webkit-scrollbar,
+  .shell .editor-section:has(.record-form) table::-webkit-scrollbar { height: 8px; }
+  .shell .vehicle-admin table::-webkit-scrollbar-track,
+  .shell .editor-section:has(.record-form) table::-webkit-scrollbar-track { background: #edf2f7; border-radius: 999px; }
+  .shell .vehicle-admin table::-webkit-scrollbar-thumb,
+  .shell .editor-section:has(.record-form) table::-webkit-scrollbar-thumb { background: #8aa4c2; border-radius: 999px; }
+  .shell .vehicle-admin table thead,
+  .shell .vehicle-admin table tbody,
+  .shell .editor-section:has(.record-form) table thead,
+  .shell .editor-section:has(.record-form) table tbody { display: table; width: max-content; min-width: 620px; }
+  .shell .vehicle-admin td,
+  .shell .vehicle-admin th,
+  .shell .editor-section:has(.record-form) td,
+  .shell .editor-section:has(.record-form) th { padding: 12px 14px; white-space: nowrap; }
+  .shell .vehicle-admin .row-actions,
+  .shell .route-pricing-admin .row-actions { flex-wrap: nowrap; }
+  .shell .vehicle-admin .row-actions button,
+  .shell .route-pricing-admin .row-actions button { flex: 0 0 auto; min-height: 38px; height: 38px; }
+  .shell .currency-switcher { align-items: stretch; gap: 12px; min-height: 0; padding: 14px; }
+  .shell .currency-switcher h2 { font-size: 17px; }
+  .shell .currency-switcher-actions { display: grid; grid-template-columns: 1fr; gap: 8px; }
+  .shell .currency-switcher select,
+  .shell .currency-switcher button { width: 100%; min-height: 42px; }
+  .shell .pricing-form { padding: 0 14px 16px; overflow: hidden; }
+  .shell .pricing-settings { grid-template-columns: 1fr; gap: 10px; margin-bottom: 14px; padding: 13px; }
+  .shell .pricing-settings label { align-items: center; font-size: 12px; }
+  .shell .pricing-settings input { width: min(170px, 55%); min-height: 40px; }
+  .shell .pricing-table-scroll,
+  .shell .extra-table-scroll { width: 100%; max-width: 100%; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; scrollbar-width: thin; scrollbar-color: #8aa4c2 #edf2f7; }
+  .shell .pricing-table-scroll table,
+  .shell .extra-table-scroll table { display: table; width: max-content; min-width: 620px; }
+  .shell .pricing-table-scroll::-webkit-scrollbar,
+  .shell .extra-table-scroll::-webkit-scrollbar { height: 8px; }
+  .shell .pricing-table-scroll::-webkit-scrollbar-thumb,
+  .shell .extra-table-scroll::-webkit-scrollbar-thumb { background: #8aa4c2; border-radius: 999px; }
+  .shell .pricing-form td input { width: 112px; }
+  .shell .pricing-actions { align-items: stretch; gap: 9px; padding-top: 14px; }
+  .shell .pricing-actions button { width: 100%; min-height: 44px; }
+  .shell .pricing-actions .muted { line-height: 1.45; }
+  .shell .vehicle-admin .modal-backdrop,
+  .shell .route-pricing-admin .modal-backdrop { align-items: start; padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom)); overflow-y: auto; }
+  .shell .vehicle-admin .modal-backdrop .record-form,
+  .shell .route-pricing-admin .modal-backdrop .record-form { width: 100%; max-height: none; box-sizing: border-box; margin: 0; padding: 20px 16px; border-radius: 16px; gap: 13px; }
+  .shell .vehicle-admin .modal-backdrop .vehicle-editor { grid-template-columns: 1fr; }
+  .shell .vehicle-admin .modal-backdrop .record-form h3,
+  .shell .route-pricing-admin .modal-backdrop .record-form h3 { font-size: 19px; }
+  .shell .vehicle-admin .modal-backdrop .record-form > button,
+  .shell .route-pricing-admin .modal-backdrop .record-form > button { width: 100%; }
+  .shell .vehicle-admin .modal-backdrop .record-form .editor-actions,
+  .shell .route-pricing-admin .modal-backdrop .record-form .editor-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .shell .vehicle-admin .modal-backdrop .record-form .editor-actions button,
+  .shell .route-pricing-admin .modal-backdrop .record-form .editor-actions button { width: 100%; min-height: 40px; height: 40px; }
+  .shell .vehicle-image-preview { align-items: flex-start; flex-wrap: wrap; }
+  .shell .vehicle-image-preview img { width: min(140px, 100%); }
+  .shell .route-pricing-admin .admin-toolbar { align-items: stretch; }
+  .shell .route-pricing-admin .admin-toolbar > div { min-width: 0; }
+  .shell .route-pricing-admin .admin-toolbar .muted { max-width: none; }
+  .shell .route-pricing-admin .record-form.route-minimum-fare-editor { grid-template-columns: 1fr; }
+  .shell .route-pricing-admin > .panel { overflow: hidden; }
+  .shell .route-pricing-admin > .panel > table { display: block; width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .shell .route-pricing-admin > .panel > table thead,
+  .shell .route-pricing-admin > .panel > table tbody { display: table; width: 100%; min-width: 560px; }
+  .shell .route-pricing-admin > .panel > table th,
+  .shell .route-pricing-admin > .panel > table td { padding: 12px 14px; white-space: nowrap; }
+  .shell .route-pricing-admin > .panel > table .row-actions { flex-wrap: nowrap; }
+  .shell .extra-settings { padding: 0; }
+  .shell .extra-settings .admin-toolbar { padding: 14px; }
+  .shell .extra-settings .admin-toolbar > div { min-width: 0; }
+  .shell .extra-settings .admin-toolbar h2 { font-size: 17px; }
+  .shell .extra-settings .trigger-cards { grid-template-columns: 1fr; gap: 16px; padding: 0 16px 18px; }
+  .shell .extra-settings .trigger-card { min-height: 0; margin: 0; padding: 16px; }
+  .shell .extra-settings .trigger-card-head { gap: 8px; }
+  .shell .extra-settings .trigger-card h3 { font-size: 16px; }
+  .shell .extra-settings .trigger-card p { min-height: 0; margin: 10px 0 13px; }
+  .shell .extra-settings .card-action { width: 100%; min-height: 40px; }
+  .shell .extra-settings .extra-editor { margin: 0 14px 14px; padding: 14px; }
+  .shell .extra-settings .editor-heading { align-items: flex-start; margin-bottom: 12px; }
+  .shell .extra-settings .editor-heading > button { flex: 0 0 auto; min-height: 38px; }
+  .shell .extra-settings .extra-editor .record-form { grid-template-columns: 1fr; gap: 12px; }
+  .shell .extra-settings .extra-editor .record-form > button { width: 100%; }
+  .shell .extra-settings .extra-table { overflow: hidden; }
+  .shell .extra-settings .table-heading { display: block; padding: 14px 14px 4px; }
+  .shell .extra-settings .extra-sort-toolbar { align-items: stretch; flex-direction: column; gap: 10px; margin-top: 12px; padding: 12px; }
+  .shell .extra-settings .extra-sort-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .shell .extra-settings .extra-sort-actions select { grid-column: 1 / -1; width: 100%; min-width: 0; min-height: 42px; }
+  .shell .extra-settings .extra-sort-actions button { width: 100%; min-height: 40px; }
+  .shell .extra-settings table { display: block; width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .shell .extra-settings table thead,
+  .shell .extra-settings table tbody { display: table; width: 100%; min-width: 620px; }
+  .shell .extra-settings th,
+  .shell .extra-settings td { padding: 12px 14px; white-space: nowrap; }
+  .shell .extra-settings .row-actions { flex-wrap: nowrap; }
+  .shell .vehicle-admin .extra-settings .extra-table { min-width: 0; width: 100%; box-sizing: border-box; }
+  .shell .vehicle-admin .extra-table-scroll { min-width: 0; width: 100%; max-width: 100%; }
+  .shell .vehicle-admin .extra-table-scroll table { display: table; width: max-content; min-width: 760px; max-width: none; overflow: visible; }
+  .shell .vehicle-admin .extra-table-scroll table thead { display: table-header-group; }
+  .shell .vehicle-admin .extra-table-scroll table tbody { display: table-row-group; }
+  .shell .vehicle-admin .extra-table-scroll table thead,
+  .shell .vehicle-admin .extra-table-scroll table tbody { width: auto; min-width: 0; }
+  .shell .vehicle-admin .extra-sort-toolbar,
+  .shell .vehicle-admin .extra-sort-actions { min-width: 0; width: 100%; box-sizing: border-box; }
+  .shell .vehicle-admin .extra-sort-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .shell .vehicle-admin .extra-editor-backdrop { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgb(15 23 42 / 45%); box-sizing: border-box; }
+  .shell .vehicle-admin .extra-editor-backdrop .extra-editor { width: min(100%, 480px); max-width: 480px; max-height: calc(100dvh - 40px); overflow-y: auto; margin: 0; padding: 24px; box-sizing: border-box; background: #fff; border-radius: 16px; box-shadow: 0 20px 60px rgb(15 23 42 / 25%); }
+  .shell .vehicle-admin .extra-editor-backdrop .editor-heading { margin: 0 0 22px; }
+  .shell .vehicle-admin .extra-editor-backdrop .editor-heading h3 { margin: 0 0 6px; }
+  .shell .vehicle-admin .extra-editor-backdrop .record-form { width: 100%; margin: 0; padding: 0; border: 0; background: transparent; grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .shell .vehicle-admin .extra-editor-backdrop .record-form label { min-width: 0; gap: 8px; line-height: 1.35; }
+  .shell .vehicle-admin .extra-editor-backdrop input,
+  .shell .vehicle-admin .extra-editor-backdrop select { box-sizing: border-box; width: 100%; max-width: 100%; min-width: 0; min-height: 44px; padding: 10px 14px; font-family: inherit; font-size: 14px; }
+  .shell .vehicle-admin .extra-editor-backdrop .check-field { min-height: 32px; gap: 9px; margin: 2px 0; }
+  .shell .vehicle-admin .extra-editor-backdrop .editor-actions { display: grid; grid-template-columns: 1fr; gap: 10px; margin-top: 2px; }
+  .shell .vehicle-admin .extra-editor-backdrop .editor-actions button { width: 100%; }
+  .shell .vehicle-admin .extra-editor button { appearance: none; font: inherit; font-size: 13px; min-height: 40px; padding: 8px 14px; border: 1px solid #dce7f5; border-radius: 8px; color: #52657d; background: #f1f5f9; cursor: pointer; }
+  .shell .vehicle-admin .extra-editor button[type='submit'] { color: #fff; background: #1769e0; border-color: #1769e0; }
+  .shell .vehicle-admin .extra-editor .check-field { min-height: 36px; }
+  .shell .vehicle-admin .extra-editor input[type='checkbox'] { appearance: none; width: 18px; height: 18px; min-height: 18px; padding: 0; border: 1px solid #9fb3cb; border-radius: 4px; background: #fff; display: inline-grid; place-content: center; flex: 0 0 auto; }
+  .shell .vehicle-admin .extra-editor input[type='checkbox']:checked { background: #1769e0; border-color: #1769e0; }
+  .shell .vehicle-admin .extra-editor input[type='checkbox']:checked::after { content: ''; width: 8px; height: 4px; border: solid #fff; border-width: 0 0 2px 2px; transform: rotate(-45deg); }
+  .shell .vehicle-admin .extra-editor input[type='checkbox']:focus-visible { outline: 3px solid rgb(23 105 224 / 25%); outline-offset: 2px; }
 }

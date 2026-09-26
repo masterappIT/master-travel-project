@@ -427,6 +427,7 @@ const App = { setup() {
    })
    provide('adminVehiclePricingContext', {
      view,
+     navigate,
      t,
      canWrite,
      timeOptions,
@@ -467,6 +468,7 @@ const App = { setup() {
      resetExtra,
      editExtra,
      saveExtra,
+     moveExtra,
      removeExtra,
      addPricingTier,
      removePricingTier,
@@ -759,6 +761,9 @@ const App = { setup() {
      settlementStatusFilter,
      settlementPage,
      settlementMethods,
+     paymentSettings,
+     paymentSettingsSaved,
+     savePaymentSettings,
      eligibleSettlements,
      filteredSettlements,
      pagedSettlements,
@@ -861,15 +866,7 @@ const App = { setup() {
   <button type="button" :class="{active:view==='settlements'}" @click="navigate('settlements')">{{t('settlements')}}</button>
   <button type="button" :class="{active:view==='charters'}" @click="navigate('charters')">{{t('charters')}}</button>
   <button type="button" :class="{active:view==='addresses'}" @click="navigate('addresses')">{{t('addresses')}}</button>
-  <div class="nav-group vehicle-nav">
-    <button type="button" class="nav-group-toggle" :class="{active:view==='vehicles'||view==='route-pricing'}" aria-expanded="true">車型與定價 <span>⌄</span></button>
-    <div class="nav-group-items">
-      <button type="button" :class="{active:view==='vehicles'&&vehicleTab==='catalog'}" @click="setVehicleView('catalog')">車型資料</button>
-      <button type="button" :class="{active:view==='vehicles'&&vehicleTab==='pricing'}" @click="setVehicleView('pricing')">車型定價</button>
-      <button type="button" :class="{active:view==='vehicles'&&vehicleTab==='extras'}" @click="setVehicleView('extras')">額外服務</button>
-      <button type="button" :class="{active:view==='route-pricing'}" @click="navigate('route-pricing')">路線最低價</button>
-    </div>
-  </div>
+  <button type="button" :class="{active:view==='vehicles'||view==='route-pricing'}" @click="setVehicleView(vehicleTab === 'route-pricing' ? 'catalog' : vehicleTab)">車型與定價</button>
   <button type="button" :class="{active:view==='membership'}" @click="navigate('membership')">{{t('membership')}}</button>
   <button type="button" :class="{active:view==='promotions'}" @click="navigate('promotions')">優惠設定</button>
   <button type="button" :class="{active:view==='payments'}" @click="navigate('payments')">{{t('paymentSettings')}}</button>

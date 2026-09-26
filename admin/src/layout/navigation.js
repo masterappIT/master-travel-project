@@ -8,7 +8,6 @@ export const primaryNavigation = Object.freeze([
   { id: 'charters', label: 'charters' },
   { id: 'addresses', label: 'addresses' },
   { id: 'vehicles', label: 'vehicleManagement' },
-  { id: 'route-pricing', label: 'routePricing' },
   { id: 'membership', label: 'membership' },
   { id: 'promotions', label: 'promotions' },
   { id: 'payments', label: 'paymentSettings' },
