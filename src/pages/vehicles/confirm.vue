@@ -1,6 +1,6 @@
 <template>
   <view class="page" :style="responsiveStyle">
-    <HomeMap v-if="confirmMapVisible" map-id="vehicle-confirm-map" :latitude="mapCenter.latitude" :longitude="mapCenter.longitude" :scale="13" :markers="mapMarkers" :polyline="mapPolyline" :pickup-label="mapOriginLabel" :destination-label="mapDestinationLabel" :route-summary="mapRouteSummary" :native-height="confirmMapHeight" :map-top="0" />
+    <HomeMap v-if="confirmMapVisible && showTripMap" map-id="vehicle-confirm-map" :latitude="mapCenter.latitude" :longitude="mapCenter.longitude" :scale="13" :markers="mapMarkers" :polyline="mapPolyline" :pickup-label="mapOriginLabel" :destination-label="mapDestinationLabel" :route-summary="mapRouteSummary" :native-height="confirmMapHeight" :map-top="0" />
     <view class="back" @tap="goBack"><image src="/static/vehicles/confirm-back.svg" mode="aspectFit" /></view>
     <view class="summary-panel">
       <view class="route" @tap="editSheetOpen = true">
@@ -105,6 +105,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, nextTick } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
+import { isIosApp } from '../../platform'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { useTripStore } from '../../stores/trip'
 import { createFareQuote, planDrivingRoute, getSettings, getWalletMe, payTrip, createPendingTrip, getClientProfile, updateClientProfile, listCommonPassengers, type AppSettings, type TripPassenger, type CommonPassenger, type TripAddress } from '../../services/api'
@@ -118,6 +119,7 @@ import { formatCurrencyAmount, normalizeCurrency, useCurrency } from '../../comp
 import { reactive } from 'vue'
 import { persistWallet, readWallet, type WalletState } from '../../utils/wallet'
 const { responsiveStyle } = useResponsiveCanvas()
+const showTripMap = !isIosApp()
 const { currency, convertAmountTo, formatConvertedAmount: formatWalletAmount, setExchangeRate } = useCurrency()
 const wallet = reactive<WalletState>(readWallet())
 const paymentSettings = ref<AppSettings>({

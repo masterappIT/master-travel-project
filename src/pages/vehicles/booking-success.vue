@@ -1,6 +1,6 @@
 <template>
   <view class="page booking-success-page" :style="responsiveStyle">
-      <TripRouteMap map-id="booking-success-map" :latitude="mapLatitude" :longitude="mapLongitude" :markers="mapMarkers" :polyline="mapPolyline" :route-summary="routeSummary" :pickup-label="mapOriginLabel" :destination-label="mapDestinationLabel" :safe-bottom="243" />
+      <TripRouteMap v-if="showTripMap" map-id="booking-success-map" :latitude="mapLatitude" :longitude="mapLongitude" :markers="mapMarkers" :polyline="mapPolyline" :route-summary="routeSummary" :pickup-label="mapOriginLabel" :destination-label="mapDestinationLabel" :safe-bottom="243" />
     <view class="back" @tap="goBack"><image class="page-back" src="/static/vehicles/confirm-back.svg" mode="aspectFit" /></view>
     <view class="status-panel">
       <view class="route-card">
@@ -24,6 +24,7 @@
 <script setup lang="ts">
 import TripRouteMap from '../../components/vehicles/TripRouteMap.vue'
 import { computed, onUnmounted, ref, watch } from 'vue'
+import { isIosApp } from '../../platform'
 import { onLoad } from '@dcloudio/uni-app'
 import { getClientTrip, cancelClientTrip, type ClientTrip } from '../../services/api'
 import { cachedPagePath, cachedPageUrl, getCachedPageOrderQuery, isCachedPageActive, openCachedPage } from '../../utils/navigation'
@@ -34,6 +35,7 @@ import { formatOrderCardAddress, formatOrderSummaryAddress } from '../../utils/o
 import { useTripRouteMap } from '../../composables/useTripRouteMap'
 
 const { responsiveStyle } = useResponsiveCanvas()
+const showTripMap = !isIosApp()
 const trip = ref<ClientTrip | null>(null)
 const { latitude: mapLatitude, longitude: mapLongitude, markers: mapMarkers, polyline: mapPolyline, routeSummary } = useTripRouteMap(trip)
 const tripId = ref('')

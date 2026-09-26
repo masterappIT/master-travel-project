@@ -2,7 +2,7 @@
   <view v-show="homeAccessGranted && activePagePath === '/pages/index/index'" class="page" :style="pageStyle">
     <view v-if="rideMode === 'cross-border'" class="page-content">
       <view class="canvas">
-        <!-- #ifndef APP-PLUS -->
+        <!-- #ifdef H5 || MP-WEIXIN || MP-TOUTIAO || MP-ALIPAY || MP-XHS -->
         <HomeMap v-if="activePagePath === '/pages/index/index'" map-id="home-main-map" :latitude="mapLatitude" :longitude="mapLongitude" :scale="mapScale" :markers="mapMarkers" :polyline="mapPolyline" :center-trigger="mapCenterTrigger" :booking-picker-open="bookingTimePicker" :pickup-label="origin" :destination-label="destination" :route-summary="routeSummary" />
         <!-- #endif -->
         <HomeHeader :key="headerRenderKey" :location-label="locationLabel" />

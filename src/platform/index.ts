@@ -15,3 +15,13 @@ export function getPlatform(): Platform {
   const platform = getUniPlatform() ?? 'app'
   return platform === 'mp-weixin' ? 'weixin' : platform === 'mp-alipay' ? 'alipay' : platform === 'mp-toutiao' ? 'toutiao' : platform === 'mp-xhs' ? 'xhs' : 'app'
 }
+
+export function isIosApp(): boolean {
+  try {
+    if (typeof uni === 'undefined' || typeof uni.getSystemInfoSync !== 'function') return false
+    const systemInfo = uni.getSystemInfoSync()
+    return systemInfo?.uniPlatform === 'app' && String(systemInfo?.osName || '').toLowerCase() === 'ios'
+  } catch {
+    return false
+  }
+}

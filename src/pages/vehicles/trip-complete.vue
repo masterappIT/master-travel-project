@@ -1,7 +1,7 @@
 <template>
   <view class="page trip-complete-page" :style="responsiveStyle">
     <view class="canvas">
-      <TripRouteMap map-id="trip-complete-map" :latitude="mapLatitude" :longitude="mapLongitude" :markers="mapMarkers" :polyline="mapPolyline" :route-summary="routeSummary" :pickup-label="mapOriginLabel" :destination-label="mapDestinationLabel" :safe-bottom="243" />
+      <TripRouteMap v-if="showTripMap" map-id="trip-complete-map" :latitude="mapLatitude" :longitude="mapLongitude" :markers="mapMarkers" :polyline="mapPolyline" :route-summary="routeSummary" :pickup-label="mapOriginLabel" :destination-label="mapDestinationLabel" :safe-bottom="243" />
       <view class="back-button" @tap="goBack">
         <image src="/static/vehicles/trip-complete/back.svg" mode="aspectFit" />
       </view>
@@ -39,6 +39,7 @@
 import TripRouteMap from '../../components/vehicles/TripRouteMap.vue'
 import { computed, ref, watch } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
+import { isIosApp } from '../../platform'
 import { getClientTrip, type ClientTrip } from '../../services/api'
 import { formatOrderCardAddress, formatOrderSummaryAddress } from '../../utils/orderAddress'
 import { cachedPagePath, cachedPageUrl, getCachedPageOrderQuery, openCachedPage } from '../../utils/navigation'
@@ -47,6 +48,7 @@ import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { useTripRouteMap } from '../../composables/useTripRouteMap'
 
 const { responsiveStyle } = useResponsiveCanvas()
+const showTripMap = !isIosApp()
 const trip = ref<ClientTrip | null>(null)
 const { latitude: mapLatitude, longitude: mapLongitude, markers: mapMarkers, polyline: mapPolyline, routeSummary } = useTripRouteMap(trip)
 const tripId = ref('')
