@@ -79,6 +79,10 @@ class DriverApp extends StatelessWidget {
           ),
           navigatorKey: navigatorKey,
           scaffoldMessengerKey: scaffoldMessengerKey,
+          title: 'MasterApp｜司機端',
+          onGenerateTitle: (context) => initialRoute == DriverRouteNames.orderInvite
+              ? 'MasterApp｜司機端 ｜邀請接單'
+              : 'MasterApp｜司機端',
           debugShowCheckedModeBanner: false,
           locale: language == DriverLanguagePreference.english
               ? const Locale('en')
