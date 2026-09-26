@@ -5789,7 +5789,8 @@ class DriverOrderInviteShareController {
     try {
       const rendered = await fetch(rendererUrl, { signal: AbortSignal.timeout(30000) });
       if (!rendered.ok) throw new Error(`Renderer returned ${rendered.status}`);
-      response.setHeader("Cache-Control", "private, max-age=60");
+      response.setHeader("Cache-Control", "public, max-age=600, stale-while-revalidate=60");
+      response.setHeader("X-Share-Image-Cache", rendered.headers.get("x-share-image-cache") || "MISS");
       response.type("png").send(Buffer.from(await rendered.arrayBuffer()));
     } catch (error) {
       console.error("Failed to render order invitation preview", error);

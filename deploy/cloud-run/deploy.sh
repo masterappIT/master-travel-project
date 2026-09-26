@@ -23,6 +23,7 @@ fi
 gcloud run deploy "$SHARE_RENDERER_SERVICE_NAME" \
   --project "$PROJECT_ID" --region "$REGION" --image "$SHARE_RENDERER_IMAGE" \
   --service-account "$SHARE_RENDERER_SERVICE_ACCOUNT" --memory 1Gi --concurrency 1 \
+  --min-instances 1 --max-instances 3 \
   --set-env-vars "DRIVER_ORDER_URL_BASE=${DRIVER_ORDER_URL_BASE}" \
   --startup-probe "httpGet.path=/health/live,httpGet.port=8080,initialDelaySeconds=0,timeoutSeconds=3,periodSeconds=5,failureThreshold=12" \
   --allow-unauthenticated --quiet
