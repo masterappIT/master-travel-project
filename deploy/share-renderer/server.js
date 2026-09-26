@@ -1,15 +1,33 @@
 import http from "node:http";
+import { createHash } from "node:crypto";
+import { Storage } from "@google-cloud/storage";
 import { chromium } from "playwright";
 
 const port = Number(process.env.PORT || 8080);
 const driverUrlBase = process.env.DRIVER_ORDER_URL_BASE;
+const shareImageBucketName = process.env.SHARE_IMAGE_BUCKET;
 if (!driverUrlBase) throw new Error("DRIVER_ORDER_URL_BASE is required");
+if (!shareImageBucketName) throw new Error("SHARE_IMAGE_BUCKET is required");
+const storage = new Storage();
+const shareImageBucket = storage.bucket(shareImageBucketName);
 const browserPromise = chromium.launch({ headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage"] });
 const imageCache = new Map();
 const inFlight = new Map();
 const cacheTtlMs = 10 * 60 * 1000;
 const maxCacheEntries = 100;
 let active = false;
+
+function cacheKey(token) {
+  return `order-invites/${createHash("sha256").update(token).digest("hex")}.png`;
+}
+
+async function readStoredImage(token) {
+  const [exists] = await shareImageBucket.file(cacheKey(token)).exists();
+  if (!exists) return null;
+  const [image] = await shareImageBucket.file(cacheKey(token)).download();
+  storeImage(token, image);
+  return image;
+}
 
 function cachedImage(token) {
   const entry = imageCache.get(token);
@@ -30,11 +48,13 @@ function storeImage(token, image) {
 }
 
 async function renderImage(token) {
-  const cached = cachedImage(token);
-  if (cached) return cached;
   const existing = inFlight.get(token);
   if (existing) return existing;
   const render = (async () => {
+    const memoryCached = cachedImage(token);
+    if (memoryCached) return { image: memoryCached, cacheHit: true };
+    const stored = await readStoredImage(token);
+    if (stored) return { image: stored, cacheHit: true };
     if (active) throw new Error("renderer busy");
     active = true;
     try {
@@ -48,7 +68,12 @@ async function renderImage(token) {
         await page.evaluate(() => document.fonts.ready);
         const image = await page.screenshot({ type: "png", animations: "disabled", timeout: 10000 });
         storeImage(token, image);
-        return image;
+        await shareImageBucket.file(cacheKey(token)).save(image, {
+          resumable: false,
+          contentType: "image/png",
+          metadata: { cacheControl: "public,max-age=86400,immutable" },
+        });
+        return { image, cacheHit: false };
       } finally { await page.close(); }
     } finally {
       active = false;
@@ -80,13 +105,12 @@ const server = http.createServer(async (request, response) => {
   const token = tokenFrom(request.url);
   if (!token) { response.writeHead(400).end("token is required"); return; }
   try {
-    const cached = cachedImage(token);
-    const image = await renderImage(token);
+    const result = await renderImage(token);
     response.writeHead(200, {
       "content-type": "image/png",
-      "cache-control": "public, max-age=600, stale-while-revalidate=60",
-      "x-share-image-cache": cached ? "HIT" : "MISS",
-    }).end(image);
+      "cache-control": "public, max-age=86400, immutable",
+      "x-share-image-cache": result.cacheHit ? "HIT" : "MISS",
+    }).end(result.image);
   } catch (error) {
     console.error("Failed to render invite image", error);
     if (!response.headersSent) response.writeHead(503).end("preview unavailable");

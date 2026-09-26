@@ -146,6 +146,7 @@ jobs:
           APP_CORS_ORIGINS: ${{ vars.APP_CORS_ORIGINS }}
           DRIVER_ORDER_URL_BASE: ${{ vars.DRIVER_ORDER_URL_BASE }}
           SHARE_RENDERER_ORIGIN: ${{ vars.SHARE_RENDERER_ORIGIN }}
+          SHARE_IMAGE_BUCKET: ${{ vars.GCP_SHARE_IMAGE_BUCKET || 'master-travel-share-images' }}
           SHARE_RENDERER_SERVICE_NAME: ${{ vars.GCP_SHARE_RENDERER_SERVICE }}
           SHARE_RENDERER_IMAGE: ${{ steps.renderer-image.outputs.image }}
           SHARE_RENDERER_SERVICE_ACCOUNT: ${{ vars.GCP_SHARE_RENDERER_SERVICE_ACCOUNT || vars.GCP_RUNTIME_SERVICE_ACCOUNT }}

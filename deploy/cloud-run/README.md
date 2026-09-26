@@ -15,7 +15,7 @@ Production access must use separate runtime, migration, and GitHub deploy servic
 ## Required resources
 
 - Artifact Registry Docker repository.
-- Publicly invokable Cloud Run API and share-renderer services, plus a non-public migration job in the same region as Cloud SQL. The renderer uses Playwright only, has at least 1Gi memory and concurrency 1, and accepts only invite-token image requests.
+- Publicly invokable Cloud Run API and share-renderer services, plus a non-public migration job in the same region as Cloud SQL. The renderer uses Playwright only, has at least 1Gi memory and concurrency 1, and accepts only invite-token image requests. Set `GCP_SHARE_IMAGE_BUCKET` to the private Cloud Storage bucket used for cross-instance share-image caching (defaults to `master-travel-share-images`).
 - Cloud SQL PostgreSQL with high availability as required, automated backups, point-in-time recovery, deletion protection, and a private or approved connector path.
 - Secret Manager secrets for `DATABASE_URL`, `ADMIN_PASSWORD`, and `ADMIN_SESSION_SECRET`.
 - GitHub `production` Environment with required reviewers and the variables referenced by `deploy-production.yml`, including `DRIVER_ORDER_URL_BASE` set to the absolute HTTPS driver Web URL ending in `/order-invite`, `GCP_SHARE_RENDERER_SERVICE`, and `SHARE_RENDERER_ORIGIN` set to that renderer's HTTPS Cloud Run URL.
