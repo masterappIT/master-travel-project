@@ -5794,7 +5794,10 @@ class DriverOrderInviteShareController {
       response.type("png").send(Buffer.from(await rendered.arrayBuffer()));
     } catch (error) {
       console.error("Failed to render order invitation preview", error);
-      throw new HttpException("Preview unavailable", HttpStatus.SERVICE_UNAVAILABLE);
+      const driverBase = new URL(
+        process.env.DRIVER_ORDER_URL_BASE || "http://localhost:8081/order-invite",
+      );
+      response.redirect(302, new URL("/favicon.svg", driverBase).href);
     }
   }
 }
