@@ -14,7 +14,7 @@
         />
         <template v-if="authenticated">
           <view class="upgrade-position"><UpgradeCard @tap="openMembership" /></view>
-          <view class="wallet-position"><WalletCard :cash-balance="cashBalance" @select="handleWalletAction" /></view>
+          <view class="wallet-position"><WalletCard :cash-balance="cashBalance" :mileage-balance="mileageBalance" :coupon-count="couponCount" @select="handleWalletAction" /></view>
           <view class="orders-position"><OrdersCard @select="handleOrderAction" /></view>
           <view class="common-position"><CommonActions @select="handleCommonAction" /></view>
         </template>
@@ -39,7 +39,7 @@ import WalletCard from '../../components/profile/WalletCard.vue'
 import OrdersCard from '../../components/profile/OrdersCard.vue'
 import CommonActions from '../../components/profile/CommonActions.vue'
 import ProfileBottomNav from '../../components/profile/ProfileBottomNav.vue'
-import { getClientProfile, listNotifications, listClientTrips } from '../../services/api'
+import { getClientProfile, listNotifications, listClientTrips, getMileageSummary, listPublicPromotions } from '../../services/api'
 import { persistWallet, readWallet } from '../../utils/wallet'
 import { selectNextPendingTrip } from '../../utils/pendingTrip'
 
@@ -48,8 +48,28 @@ const avatarUrl = ref('')
 const displayName = ref('')
 const cashBalance = ref(0)
 const fareBalance = ref(0)
+const mileageBalance = ref(0)
+const couponCount = ref(0)
 const authenticated = ref(false)
 let profilePollTimer: ReturnType<typeof setInterval> | undefined
+let walletStatsRequest: Promise<void> | undefined
+let walletStatsToken = ''
+
+const refreshWalletStats = (authToken: string) => {
+  if (walletStatsRequest && walletStatsToken === authToken) return walletStatsRequest
+  walletStatsToken = authToken
+  const request = (async () => {
+    const [mileage, promotions] = await Promise.allSettled([getMileageSummary(), listPublicPromotions()])
+    if (!isAuthSessionCurrent(authToken)) return
+    mileageBalance.value = mileage.status === 'fulfilled' ? Number(mileage.value.balance) || 0 : 0
+    couponCount.value = promotions.status === 'fulfilled'
+      ? promotions.value.filter((promotion) => promotion.kind === 'COUPON').length
+      : 0
+  })()
+  walletStatsRequest = request
+  void request.finally(() => { if (walletStatsRequest === request) walletStatsRequest = undefined })
+  return request
+}
 
 const refreshProfile = async () => {
   authenticated.value = isAuthenticated()
@@ -71,6 +91,7 @@ const refreshProfile = async () => {
       fareBalance.value = Number(remote.fareBalance) || 0
       persistWallet({ ...wallet, withdrawable: cashBalance.value, fare: fareBalance.value })
     } catch { /* keep cached profile when offline */ }
+    void refreshWalletStats(authToken)
     try {
       const notifications = await listNotifications()
       if (!isAuthSessionCurrent(authToken)) return
@@ -80,6 +101,8 @@ const refreshProfile = async () => {
     }
   } else {
     unreadCount.value = 0
+    mileageBalance.value = 0
+    couponCount.value = 0
   }
   const wallet = readWallet()
   cashBalance.value = wallet.withdrawable
@@ -95,6 +118,8 @@ const unsubscribeAuthUser = subscribeAuthUser((user) => {
     unreadCount.value = 0
     cashBalance.value = 0
     fareBalance.value = 0
+    mileageBalance.value = 0
+    couponCount.value = 0
     if (profilePollTimer) clearInterval(profilePollTimer)
     profilePollTimer = undefined
   }
