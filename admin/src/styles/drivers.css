@@ -27,7 +27,7 @@
 .driver-table-wrap td:nth-child(3) { overflow-wrap: anywhere; }
 .driver-table-wrap .vehicle-plate-cell, .driver-table-wrap .vehicle-spec-cell { white-space: normal; overflow-wrap: anywhere; word-break: break-word; }
 .driver-table-wrap .vehicle-plate-cell strong, .driver-table-wrap .vehicle-plate-cell small, .driver-table-wrap .vehicle-alt-plates span, .driver-table-wrap .vehicle-spec-cell strong, .driver-table-wrap .vehicle-spec-cell small { overflow-wrap: anywhere; word-break: break-word; white-space: normal; }
-.driver-table-wrap .vehicle-alt-plates { display: grid; gap: 2px; margin-top: 3px; }
+.driver-table-wrap .vehicle-alt-plates { display: grid; justify-items: start; gap: 2px; margin-top: 3px; }
 .driver-table-wrap .driver-phone-cell { text-align: center; }
 .driver-table-wrap .driver-phone-cell span, .driver-table-wrap .driver-phone-cell small { display: block; white-space: nowrap; }
 .driver-table-wrap .driver-phone-cell small { margin-top: 4px; }

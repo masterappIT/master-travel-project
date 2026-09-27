@@ -105,7 +105,7 @@ const {
   personnelFilter, entryFilter, expenseFilter
 } = createAdminPageStates({ users, addresses, promotions, trips, drivers, personnel, entryItems, expenseItems })
 const membershipOrdersState = createServerListState({ pageSize: 20 })
-const notificationsState = createServerListState({ pageSize: 20 })
+const notificationsState = createServerListState({ pageSize: 10 })
 const auditLogsState = createServerListState({ pageSize: 20, filters: { search: '', status: 'all', method: 'all' } })
 const canWrite = computed(() => currentAdministrator.value?.role !== 'VIEWER')
 const isSuperAdministrator = computed(() => currentAdministrator.value?.role === 'SUPER_ADMIN')

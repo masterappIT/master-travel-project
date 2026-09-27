@@ -79,10 +79,10 @@ test('notification resource load requests only the current history page', async 
     notificationTemplates,
     notificationUsers,
     notificationDrivers,
-    query: { page: 3, pageSize: 20 },
+    query: { page: 3, pageSize: 10 },
     state: { apply: result => { applied = result } }
   })
-  assert.deepEqual(paths, ['/admin/notifications?page=3&pageSize=20', '/admin/notification-templates'])
+  assert.deepEqual(paths, ['/admin/notifications?page=3&pageSize=10', '/admin/notification-templates'])
   assert.deepEqual(notificationTemplates.value, [{ id: 'template' }])
   assert.deepEqual(notifications.value, [{ id: 'notice' }])
   assert.equal(applied.total, 1)
