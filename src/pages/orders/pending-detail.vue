@@ -7,7 +7,7 @@
     <view class="assist"><image src="/static/orders/help.svg" mode="aspectFit" /><text>訂單協助</text></view>
       <view class="status"><image src="/static/orders/status-pending.svg" mode="aspectFit" /><text>待確認</text></view>
       <view class="traveling-card standard-detail-card pending-card" :class="{ 'long-addresses': hasLongAddress }">
-      <view class="locations"><view :class="{ 'long-location': isLongAddress(originLabel) }"><image src="/static/orders/origin.svg" mode="aspectFit" /><text>{{ formatAddressLabel(originLabel) }}</text></view><view :class="{ 'long-location': isLongAddress(destinationLabel) }"><image src="/static/orders/destination.svg" mode="aspectFit" /><text>{{ formatAddressLabel(destinationLabel) }}</text></view></view>
+      <view class="locations"><view :class="{ 'long-location': isLongAddress(originLabel) }"><image src="/static/orders/origin.svg" mode="aspectFit" /><text>{{ formatOrderDetailAddressLine(originLabel) }}</text></view><view :class="{ 'long-location': isLongAddress(destinationLabel) }"><image src="/static/orders/destination.svg" mode="aspectFit" /><text>{{ formatOrderDetailAddressLine(destinationLabel) }}</text></view></view>
       <view class="times"><text>預約時間 ：{{ bookingTime }}</text><text>預計到達時間 ：{{ arrivalTime }}</text></view>
       <view class="passenger-title">乘客及聯絡資料：</view><view class="passenger"><view><image src="/static/orders/passenger.svg" mode="aspectFit" /><text>{{ passengerLabel }}</text></view><view><image src="/static/orders/phone.svg" mode="aspectFit" /><text>{{ passengerPhoneLabel }}</text></view></view>
       <view :class="['payment', { completed: isCompleted, pending: !isCompleted }]">
@@ -42,7 +42,7 @@ import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { useTripStore } from '../../stores/trip'
 import { closeCachedPage, cachedPageUrl, openCachedPage, replaceCachedPage, pagePath, getCachedPagePreviousPath, getCachedPageOrderQuery, getCachedPageUrl, isCachedPageActive } from '../../utils/navigation'
 import OrdersBackButton from '../../components/orders/OrdersBackButton.vue'
-import { formatOrderDetailAddress } from '../../utils/orderAddress'
+import { formatOrderDetailAddress, formatOrderDetailAddressLine } from '../../utils/orderAddress'
 import { formatCurrencyAmount, normalizeCurrency } from '../../composables/useCurrency'
 import { cancelClientTrip, getClientTrip, getFareQuote, getWalletMe, payTrip, type ClientTrip, type FareQuote } from '../../services/api'
 import { readWallet } from '../../utils/wallet'
@@ -215,17 +215,7 @@ const passengerPhoneLabel = computed(() => {
   const passenger = storedOrder.value?.passenger
   return passenger ? `${passenger.countryCode} - ${passenger.phoneNumber}` : '—'
 })
-const isLongAddress = (value: string) => Array.from(value.replace(/\s/g, '')).length > 20
-const formatAddressLabel = (value: string) => {
-  const characters = Array.from(value)
-  let nonWhitespaceCount = 0
-  const splitIndex = characters.findIndex(character => {
-    if (!/\s/.test(character)) nonWhitespaceCount += 1
-    return nonWhitespaceCount === 21
-  })
-  if (splitIndex < 0) return value
-  return `${characters.slice(0, splitIndex).join('')}\n${characters.slice(splitIndex).join('')}`
-}
+const isLongAddress = (value: string) => Array.from(value.replace(/\s/g, '')).length > 14
 const hasLongAddress = computed(() => isLongAddress(originLabel.value) || isLongAddress(destinationLabel.value))
 const formatDateTime = (value?: string) => {
   const date = value ? new Date(value) : null

@@ -74,3 +74,16 @@ export const formatOrderDetailAddress = (value: string | OrderAddress | undefine
   const cityAndDistrict = [address.city, address.district].filter(Boolean).join(' · ')
   return [cityAndDistrict, removeHouseNumber(address.place)].filter(Boolean).join('') || fallbackCity
 }
+
+/** Break detailed route labels after 14 non-whitespace Unicode characters. */
+export const formatOrderDetailAddressLine = (value: string) => {
+  const characters = Array.from(value)
+  let nonWhitespaceCount = 0
+  const splitIndex = characters.findIndex((character) => {
+    if (!/\s/u.test(character)) nonWhitespaceCount += 1
+    return nonWhitespaceCount === 15
+  })
+  return splitIndex < 0
+    ? value
+    : `${characters.slice(0, splitIndex).join('')}\n${characters.slice(splitIndex).join('')}`
+}

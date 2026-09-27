@@ -11,7 +11,7 @@
       <scroll-view class="traveling-detail-scroll" scroll-y>
         <view class="traveling-detail-content">
           <view class="traveling-detail-card">
-            <view class="card-top"><view class="locations"><view :class="{ 'long-location': isLongAddress(originLabel) }"><image src="/static/orders/origin.svg" mode="aspectFit" /><text>{{ formatAddressLabel(originLabel) }}</text></view><view :class="{ 'long-location': isLongAddress(destinationLabel) }"><image src="/static/orders/destination.svg" mode="aspectFit" /><text>{{ formatAddressLabel(destinationLabel) }}</text></view></view><view class="payment completed"><view class="paid-tag">已付款</view></view></view>
+            <view class="card-top"><view class="locations"><view :class="{ 'long-location': isLongAddress(originLabel) }"><image src="/static/orders/origin.svg" mode="aspectFit" /><text>{{ formatOrderDetailAddressLine(originLabel) }}</text></view><view :class="{ 'long-location': isLongAddress(destinationLabel) }"><image src="/static/orders/destination.svg" mode="aspectFit" /><text>{{ formatOrderDetailAddressLine(destinationLabel) }}</text></view></view><view class="payment completed"><view class="paid-tag">已付款</view></view></view>
             <view class="times"><text>預約時間 ：{{ bookingTime }}</text><text>預計到達時間 ：{{ arrivalTime }}</text></view>
             <view class="passenger-title">乘客及聯絡資料：</view>
             <view class="passenger"><view><image src="/static/orders/passenger.svg" mode="aspectFit" /><text>{{ passengerLabel }}</text></view><view><image src="/static/orders/phone.svg" mode="aspectFit" /><text>{{ passengerPhoneLabel }}</text></view>            </view>
@@ -37,7 +37,7 @@ import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { useTripStore } from '../../stores/trip'
 import { closeCachedPage, cachedPageUrl, cachedPageStack, openCachedPage, returnToBookingSuccess, pagePath, isCachedPageActive } from '../../utils/navigation'
 import OrdersBackButton from '../../components/orders/OrdersBackButton.vue'
-import { formatOrderDetailAddress } from '../../utils/orderAddress'
+import { formatOrderDetailAddress, formatOrderDetailAddressLine } from '../../utils/orderAddress'
 import { getClientTrip, type ClientTrip } from '../../services/api'
 import { formatCurrencyAmount, normalizeCurrency } from '../../composables/useCurrency'
 
@@ -128,16 +128,6 @@ const discountLabel = computed(() => { const line = quoteLines.value.find(item =
 const paymentTotal = computed(() => storedOrder.value?.payment?.total || storedOrder.value?.quote?.total || 0)
 const detailDateLabel = computed(() => { const value = storedOrder.value?.scheduledAt; const date = value ? new Date(value) : null; return date && !Number.isNaN(date.valueOf()) ? `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')}` : '—' })
 const isLongAddress = (value: string) => Array.from(value.replace(/\s/g, '')).length > 14
-const formatAddressLabel = (value: string) => {
-  const characters = Array.from(value)
-  let nonWhitespaceCount = 0
-  const splitIndex = characters.findIndex(character => {
-    if (!/\s/.test(character)) nonWhitespaceCount += 1
-    return nonWhitespaceCount === 15
-  })
-  if (splitIndex < 0) return value
-  return `${characters.slice(0, splitIndex).join('')}\n${characters.slice(splitIndex).join('')}`
-}
 const summaryLabel = computed(() => storedOrder.value?.executionPhase === 'IN_PROGRESS' ? '行程進行中' : storedOrder.value?.executionPhase === 'DRIVER_ASSIGNED' ? '司機已安排' : '正在為您安排司機')
 const getCurrentPageSource = () => { const candidates = [routeUrl.value, cachedPageUrl.value, typeof window !== 'undefined' ? window.location.hash : '']; for (const candidate of candidates) { const params = parseQueryParams(candidate); if (params.from || params.returnTo) return params.from || params.returnTo } return '' }
 const goBack = () => {
