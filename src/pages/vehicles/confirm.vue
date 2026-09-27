@@ -460,6 +460,13 @@ const goBack = () => closeCachedPage('/pages/vehicles/selected')
 const openCoupons = () => openCachedPage('/pages/coupons/coupons?from=/pages/vehicles/confirm')
 const payNow = async () => {
   if (!await ensurePassenger()) return
+  try {
+    if (!requiredDataReady()) throw new Error('行程或車型資料已失效，請重新選擇。')
+    await restoreQuote()
+  } catch (error) {
+    uni.showToast({ title: error instanceof Error ? error.message : '報價暫時無法取得', icon: 'none' })
+    return
+  }
   if (!selectedFareQuote.value) {
     uni.showToast({ title: '報價暫時無法取得', icon: 'none' })
     return
@@ -509,6 +516,7 @@ const closePayment = async () => {
     })
     paymentOpen.value = false
     stopCountdown()
+    tripStore.resetDraft()
     openCachedPage('/pages/orders/orders')
   } catch (error) {
     uni.showToast({ title: error instanceof Error ? error.message : '待付款訂單建立失敗', icon: 'none' })
@@ -544,6 +552,7 @@ const confirmPayment = async () => {
       })
       paymentOpen.value = false
       stopCountdown()
+      tripStore.resetDraft()
       uni.showToast({ title: '錢包餘額不足，訂單已保存為待付款', icon: 'none' })
       setTimeout(() => openCachedPage('/pages/orders/orders'), 800)
     } catch (error) {
@@ -600,6 +609,7 @@ const confirmPayment = async () => {
 }
 const closePaymentSuccess = () => {
   paymentSuccessOpen.value = false
+  tripStore.resetDraft()
   openCachedPage(`/pages/vehicles/booking-success?id=${encodeURIComponent(paidTripId.value)}`)
 }
 </script>

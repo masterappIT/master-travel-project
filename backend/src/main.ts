@@ -59,6 +59,7 @@ import {
 import { buildDriverOrderUrl } from "./order-url";
 import { inviteShareHtml } from "./order-invite-share";
 import { publicDriverOrderChannelFilter } from "./driver-order-channel";
+import { billableExtraSelections, withinImmediateWindow } from "./quote-extras";
 
 try {
   loadEnvFile("../.env");
@@ -916,9 +917,7 @@ const extraTriggerMatches = (
   if (triggerType === "IMMEDIATE") {
     const window = extra.requiredWithinMinutes;
     if (window === null) return false;
-    const minutesUntilDeparture =
-      (scheduledAt.getTime() - now.getTime()) / 60000;
-    return minutesUntilDeparture <= window;
+    return withinImmediateWindow(scheduledAt, now, window);
   }
   if (triggerType === "WEATHER") return severeWeatherEnabled;
   if (triggerType !== "NIGHT") return false;
@@ -10866,10 +10865,11 @@ class PublicQuotesController {
           settings.severeWeatherEnabled,
         ),
       );
-      for (const extra of requiredExtras) {
-        if (!requestedExtras.some((selection) => selection.id === extra.id))
-          requestedExtras.push({ id: extra.id, quantity: 1 });
-      }
+      const billableExtras = billableExtraSelections(
+        requestedExtras,
+        extras,
+        requiredExtras.map((extra) => extra.id),
+      );
 
       const exchangeRate = Number(settings.exchangeRate);
       if (!Number.isFinite(exchangeRate) || exchangeRate <= 0)
@@ -10935,7 +10935,7 @@ class PublicQuotesController {
           ),
           currency: currencyLabels[currency],
         })),
-        ...requestedExtras.map((selection) => {
+        ...billableExtras.map((selection) => {
           const extra = extraById.get(selection.id)!;
           const unitAmount = convertCurrency(
             extra.price,

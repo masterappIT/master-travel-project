@@ -17,7 +17,7 @@
 
     <scroll-view v-if="visibleExtras.length" class="extras" :class="{ 'without-promo': !showPromoCard }" scroll-y :show-scrollbar="false">
       <view class="extras-title"><image src="/static/vehicles/extra-cart.svg" mode="aspectFit" /><text>額外選擇</text></view>
-      <view v-for="extra in visibleExtras" :key="extra.id" class="extra-row" :aria-disabled="isRequiredExtra(extra) ? 'true' : 'false'" @tap="handleExtraTap(extra)"><image :src="selectedExtras.includes(extra.id) ? '/static/vehicles/extra-selected.svg' : '/static/vehicles/extra-radio.svg'" mode="aspectFit" /><text>{{ extra.label }}</text><text class="extra-price">{{ formatExtraPrice(extra.price, extra.currency) }}</text></view>
+      <view v-for="extra in visibleExtras" :key="extra.id" class="extra-row" :aria-disabled="isRequiredExtra(extra) ? 'true' : 'false'" @tap="handleExtraTap(extra)"><image :src="(isTriggerExtra(extra) ? quoteExtraIds.has(extra.id) : selectedExtras.includes(extra.id)) ? '/static/vehicles/extra-selected.svg' : '/static/vehicles/extra-radio.svg'" mode="aspectFit" /><text>{{ extra.label }}</text><text class="extra-price">{{ formatExtraPrice(extra.price, extra.currency) }}</text></view>
     </scroll-view>
     <view class="next-button" @tap="goNext">下一步</view>
     <TripEditSheet
@@ -121,6 +121,7 @@ const promotions = ref<PublicPromotion[]>([])
 const extras = ref<PublicVehicleExtra[]>([])
 const severeWeatherEnabled = ref(false)
 const selectedExtras = computed(() => tripStore.activeDraft.extras)
+const quoteExtraIds = computed(() => new Set(tripStore.selectedFareQuote?.lines.filter(line => line.type === 'EXTRA').map(line => line.sourceId) || []))
 const cashCoupon = computed(() => {
   const couponCode = tripStore.activeDraft.couponCode?.trim().toUpperCase()
   return promotions.value.find(promotion =>
@@ -185,20 +186,14 @@ const isTriggeredExtra = (extra: PublicVehicleExtra) => {
   return !Number.isNaN(departure.valueOf()) && departure.getTime() - Date.now() <= extra.requiredWithinMinutes * 60 * 1000
 }
 const isRequiredExtra = (extra: PublicVehicleExtra) => isTriggeredExtra(extra)
-const isTriggeredRule = (extra: PublicVehicleExtra) => isTriggeredExtra(extra)
-const isTriggerExtra = (extra: PublicVehicleExtra) => (extra.triggerType || (extra.requiredForImmediate ? 'IMMEDIATE' : 'NONE')) !== 'NONE'
+const isTriggerExtra = (extra: PublicVehicleExtra) => extra.triggerType !== 'NONE' || extra.requiredForImmediate
 const visibleExtras = computed(() => extras.value
   .filter(extra => isTriggerExtra(extra) ? isTriggeredExtra(extra) : extra.enabled)
   .sort((a, b) => a.order - b.order || a.id.localeCompare(b.id)))
-const syncRequiredExtras = () => {
-  const requiredIds = new Set(extras.value.filter(isTriggeredExtra).map(extra => extra.id))
-  const synchronizedIds = selectedExtras.value
-    .filter(id => extras.value.some(extra => extra.id === id && (extra.enabled || requiredIds.has(id))))
-  for (const id of requiredIds) {
-    if (!synchronizedIds.includes(id)) synchronizedIds.push(id)
-  }
-  if (synchronizedIds.length !== selectedExtras.value.length || synchronizedIds.some((id, index) => id !== selectedExtras.value[index])) {
-    tripStore.updateActiveDraft({ extras: synchronizedIds })
+const syncManualExtras = () => {
+  const manualIds = selectedExtras.value.filter(id => extras.value.some(extra => extra.id === id && extra.enabled && !isTriggerExtra(extra)))
+  if (manualIds.length !== selectedExtras.value.length || manualIds.some((id, index) => id !== selectedExtras.value[index])) {
+    tripStore.updateActiveDraft({ extras: manualIds })
   }
 }
 const routeRegion = (value: string | undefined, fallback: string) => {
@@ -211,19 +206,16 @@ const routeRegion = (value: string | undefined, fallback: string) => {
 let quoteRequestId = 0
 const formatExtraPrice = (amount: number, extraCurrency: string) => formatCurrencyAmount(amount, normalizeCurrency(extraCurrency) || 'RMB', 0)
 const formatCouponAmount = (amount: number, couponCurrency?: string) => formatCurrencyAmount(amount, normalizeCurrency(couponCurrency) || currency.value, 0)
-const refreshQuote = async (extraIds = selectedExtras.value) => {
-  syncRequiredExtras()
-  const requiredIds = new Set(extras.value.filter(isTriggeredExtra).map(extra => extra.id))
-  const synchronizedExtraIds = Array.from(new Set([
-    ...extraIds.filter(id => !extras.value.some(extra => extra.id === id && isTriggeredRule(extra)) || requiredIds.has(id)),
-    ...requiredIds
-  ]))
+const refreshQuote = async (): Promise<boolean> => {
+  if (extras.value.length) syncManualExtras()
   const chosenVehicle = tripStore.chosenVehicle
   const categoryId = chosenVehicle?.categoryId || tripStore.selectedFareQuote?.pricing?.categoryId
   const distanceMeters = tripStore.activeDraft.distanceMeters
-  if (!chosenVehicle || !categoryId || !Number.isFinite(distanceMeters)) return
+  if (!chosenVehicle || !categoryId || !Number.isFinite(distanceMeters)) return false
 
   const requestId = ++quoteRequestId
+  const departureTime = tripStore.departureTime
+  const selectedIds = [...selectedExtras.value]
   try {
     const quote = await createFareQuote({
       categoryId,
@@ -234,22 +226,25 @@ const refreshQuote = async (extraIds = selectedExtras.value) => {
       originCity: tripStore.activeDraft.route.originCity,
       destinationRegion: tripStore.activeDraft.route.destinationRegion || routeRegion(tripStore.activeDraft.route.destination, ''),
       destinationCity: tripStore.activeDraft.route.destinationCity,
-      scheduledAt: tripStore.departureTime,
+      scheduledAt: departureTime,
       couponCode: tripStore.activeDraft.couponCode,
-      extraIds: synchronizedExtraIds,
+      extraIds: selectedIds,
       displayCurrency: currency.value
     })
-    if (requestId !== quoteRequestId) return
+    if (requestId !== quoteRequestId || departureTime !== tripStore.departureTime ||
+      selectedIds.join(',') !== selectedExtras.value.join(',')) return false
     if (tripStore.activeDraft.couponCode && !quote.appliedPromotion) {
       tripStore.setCouponCode()
       promoApplied.value = false
       tripStore.setFareQuote(quote)
       showPromoToast('優惠已失效，已取消使用')
-      return
+      return true
     }
     tripStore.setFareQuote(quote)
+    return true
   } catch (error) {
     if (requestId === quoteRequestId) uni.showToast({ title: error instanceof Error ? error.message : '報價暫時無法取得', icon: 'none' })
+    return false
   }
 }
 const loadExtras = async () => {
@@ -260,10 +255,7 @@ const loadExtras = async () => {
     if (refreshedVehicle) tripStore.setChosenVehicle({ ...refreshedVehicle, selectable: currentVehicle.selectable, modelChoice: Boolean(refreshedVehicle.modelChoiceLabel) })
     extras.value = [...catalog.extras].sort((a, b) => a.order - b.order)
     severeWeatherEnabled.value = catalog.severeWeatherEnabled
-    syncRequiredExtras()
-    const availableExtraIds = new Set(extras.value.map(extra => extra.id))
-    const validExtraIds = selectedExtras.value.filter(id => availableExtraIds.has(id))
-    if (validExtraIds.length !== selectedExtras.value.length) tripStore.updateActiveDraft({ extras: validExtraIds })
+    syncManualExtras()
   } catch (error) {
     uni.showToast({ title: error instanceof Error ? error.message : '額外選擇暫時無法載入', icon: 'none' })
   }
@@ -311,20 +303,19 @@ const togglePromo = () => {
 }
 const toggleExtra = (id: string) => {
   const extra = extras.value.find(item => item.id === id)
-  if (extra && isRequiredExtra(extra)) return
+  if (extra && isTriggerExtra(extra)) return
   const extraIds = selectedExtras.value.includes(id)
     ? selectedExtras.value.filter((extraId) => extraId !== id)
     : [...selectedExtras.value, id]
   tripStore.updateActiveDraft({ extras: extraIds })
-  void refreshQuote(extraIds)
+  void refreshQuote()
 }
 const handleExtraTap = (extra: PublicVehicleExtra) => {
-  if (isRequiredExtra(extra)) return
+  if (isTriggerExtra(extra)) return
   toggleExtra(extra.id)
 }
 const goNext = async () => {
-  await refreshQuote()
-  if (!tripStore.selectedFareQuote) {
+  if (!await refreshQuote() || !tripStore.selectedFareQuote) {
     uni.showToast({ title: '報價暫時無法取得', icon: 'none' })
     return
   }
