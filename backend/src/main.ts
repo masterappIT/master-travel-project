@@ -6837,6 +6837,9 @@ class AdminController {
   ) {
     requireRole(req, ["SUPER_ADMIN", "OPERATOR"]);
     if (!body.plateType || !body.vehicleCategory || !body.vehicleColor) throw new HttpException("Valid vehicle fields are required", HttpStatus.BAD_REQUEST);
+    const vehicleCategory = String(body.vehicleCategory).trim();
+    if (!await prisma.vehicleCategory.findFirst({ where: { name: vehicleCategory, enabled: true }, select: { id: true } }))
+      throw new HttpException("Vehicle category is not available", HttpStatus.BAD_REQUEST);
     const normalized = normalizeVehiclePlateData({ ...body, vehicleOwnership: body.vehicleOwnership || "香港" });
     const assignedDriver = body.driverId
       ? await prisma.driver.findUnique({
@@ -6872,6 +6875,9 @@ class AdminController {
   async updateAdminVehicle(@Req() req: RequestLike, @Param("id") id: string, @Body() body: Partial<Prisma.DriverVehicleCreateInput> & { removeVehiclePhoto?: string }, @UploadedFile() vehiclePhoto?: Express.Multer.File) {
     requireRole(req, ["SUPER_ADMIN", "OPERATOR"]);
     if (!body.plateType || !body.vehicleCategory || !body.vehicleColor) throw new HttpException("Valid vehicle fields are required", HttpStatus.BAD_REQUEST);
+    const vehicleCategory = String(body.vehicleCategory).trim();
+    if (!await prisma.vehicleCategory.findFirst({ where: { name: vehicleCategory, enabled: true }, select: { id: true } }))
+      throw new HttpException("Vehicle category is not available", HttpStatus.BAD_REQUEST);
     const normalized = normalizeVehiclePlateData({ ...body, vehicleOwnership: body.vehicleOwnership || "香港" });
     const result = await prisma.driverVehicle.updateMany({ where: { id }, data: {
       plateType: normalized.plateType, hkPlate: normalized.hkPlate || null, macauPlate: normalized.macauPlate || null,
@@ -7024,6 +7030,9 @@ class AdminController {
     requireReviewedDriver(driver);
     if (!body.plateType || !body.vehicleCategory || !body.vehicleColor)
       throw new HttpException("Valid vehicle fields are required", HttpStatus.BAD_REQUEST);
+    const vehicleCategory = String(body.vehicleCategory).trim();
+    if (!await prisma.vehicleCategory.findFirst({ where: { name: vehicleCategory, enabled: true }, select: { id: true } }))
+      throw new HttpException("Vehicle category is not available", HttpStatus.BAD_REQUEST);
     const normalized = normalizeVehiclePlateData({ ...body, vehicleOwnership: body.vehicleOwnership || "香港" });
     const data = {
       plateType: normalized.plateType,
