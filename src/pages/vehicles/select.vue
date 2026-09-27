@@ -38,7 +38,7 @@ import { onShow } from '@dcloudio/uni-app'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { useTripStore } from '../../stores/trip'
 import { openCachedPage, closeCachedPage } from '../../utils/navigation'
-import { createFareQuote, listPublicVehicles, planDrivingRoute, type FareQuote, type PublicVehicleCatalog } from '../../services/api'
+import { createFareQuote, listPublicVehicles, planDrivingRoute, redeemPromotionCode, type FareQuote, type PublicVehicleCatalog } from '../../services/api'
 import { useCurrency } from '../../composables/useCurrency'
 import TripEditSheet from '../../components/home/TripEditSheet.vue'
 import VehicleCard from '../../components/vehicles/VehicleCard.vue'
@@ -77,6 +77,17 @@ const routeRegion = (value: string | undefined, fallback: string) => {
 let quoteRequestId = 0
 const loadQuotes = async () => {
   const requestId = ++quoteRequestId
+  const selectedCode = tripStore.activeDraft.couponCode?.trim().toUpperCase()
+  if (selectedCode) {
+    try {
+      await redeemPromotionCode(selectedCode)
+    } catch (error) {
+      if (requestId !== quoteRequestId) return
+      tripStore.setCouponCode()
+      uni.showToast({ title: error instanceof Error ? `${error.message}，已自動移除` : '優惠已失效，已自動移除', icon: 'none' })
+    }
+  }
+  if (requestId !== quoteRequestId) return
   quoteError.value = ''
   const distanceMeters = tripStore.activeDraft.distanceMeters
   const vehicles = catalog.value.data.filter(vehicle => vehicle.categoryId)

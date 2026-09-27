@@ -160,6 +160,20 @@ const displayedPromotionAmount = computed(() => {
 const loadPromotions = async () => {
   try {
     promotions.value = await listPublicPromotions()
+    const selectedCode = tripStore.activeDraft.couponCode?.trim().toUpperCase()
+    if (selectedCode && !promotions.value.some(item => item.couponCode?.toUpperCase() === selectedCode)) {
+      tripStore.setCouponCode()
+      promoApplied.value = false
+      showPromoToast('優惠已失效，已自動移除')
+    } else if (selectedCode) {
+      try {
+        await redeemPromotionCode(selectedCode)
+      } catch (error) {
+        tripStore.setCouponCode()
+        promoApplied.value = false
+        showPromoToast(error instanceof Error ? `${error.message}，已自動移除` : '優惠已失效，已自動移除')
+      }
+    }
   } catch (error) {
     uni.showToast({ title: error instanceof Error ? error.message : '優惠資料暫時無法載入', icon: 'none' })
   }

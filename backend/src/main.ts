@@ -10632,8 +10632,13 @@ class PublicPromotionsController {
   }
 
   @Get()
-  async list() {
+  async list(@Req() req: RequestLike) {
+    const session = await clientSessionFrom(req).catch(() => null);
     const now = new Date();
+    await prisma.promotionUsage.updateMany({
+      where: { status: "RESERVED", quote: { expiresAt: { lte: now } } },
+      data: { status: "RELEASED", releasedAt: now },
+    });
     const promotions = await prisma.promotion.findMany({
       where: {
         enabled: true,
@@ -10644,8 +10649,25 @@ class PublicPromotionsController {
       },
       orderBy: [{ priority: "asc" }, { createdAt: "desc" }],
     });
+    const couponPromotions = promotions.filter((promotion) => promotion.kind === "COUPON");
+    const usageCounts = new Map(await Promise.all(couponPromotions.map(async (promotion) => [
+      promotion.id,
+      await prisma.promotionUsage.count({ where: { promotionId: promotion.id, status: "RESERVED" } }),
+    ] as const)));
+    const customerCounts = session
+      ? new Map(await Promise.all(couponPromotions.map(async (promotion) => [
+        promotion.id,
+        await prisma.promotionUsage.count({ where: { promotionId: promotion.id, userId: session.sub, status: { in: ["RESERVED", "USED"] } } }),
+      ] as const)))
+      : new Map<string, number>();
+    const availablePromotions = promotions.filter((promotion) =>
+      promotion.kind !== "COUPON" || (
+        (promotion.usageLimit === null || promotion.usageCount + (usageCounts.get(promotion.id) || 0) < promotion.usageLimit) &&
+        (promotion.perCustomerLimit === null || (session !== null && (customerCounts.get(promotion.id) || 0) < promotion.perCustomerLimit))
+      ),
+    );
     return {
-      data: promotions.map((promotion) => this.publicPromotion(promotion)),
+      data: availablePromotions.map((promotion) => this.publicPromotion(promotion)),
     };
   }
 

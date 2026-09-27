@@ -604,7 +604,7 @@ export type PublicPromotion = {
 
 export async function listPublicPromotions(): Promise<PublicPromotion[]> {
   try {
-    const response = await requestWithTimeout({ url: `${API_BASE_URL}/promotions?_=${Date.now()}`, timeout: REQUEST_TIMEOUT_MS })
+    const response = await requestWithTimeout({ url: `${API_BASE_URL}/promotions?_=${Date.now()}`, timeout: REQUEST_TIMEOUT_MS, header: authHeaders() })
     if (response.statusCode >= 400) throw apiError(response, '優惠資料暫時無法載入', false)
     return (response.data as { data: PublicPromotion[] }).data
   } catch (error) {
@@ -615,7 +615,7 @@ export async function listPublicPromotions(): Promise<PublicPromotion[]> {
 
 export async function redeemPromotionCode(couponCode: string): Promise<{ promotion: PublicPromotion; message: string }> {
   const response = await uni.request({ url: `${API_BASE_URL}/promotions/redeem`, method: 'POST', header: authHeaders(), data: { couponCode } })
-  if (response.statusCode >= 400) throw new Error((response.data as { message?: string })?.message || '優惠代碼兌換失敗')
+  if (response.statusCode >= 400) throw apiError(response, '優惠代碼兌換失敗', false)
   const data = response.data as { data: PublicPromotion; message: string }
   return { promotion: data.data, message: data.message }
 }

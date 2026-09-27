@@ -24,6 +24,7 @@
 </template>
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 // #ifdef H5
 import { useH5ResponsiveCanvas } from '../../composables/useH5ResponsiveCanvas'
 // #endif
@@ -51,11 +52,27 @@ const loadFailed = ref(false)
 const redeeming = ref(false)
 const claimingId = ref('')
 const previousPath = getCachedPagePreviousPath('/pages/coupons/coupons')
+let promotionRequestId = 0
 const loadPromotions = async () => {
+  const requestId = ++promotionRequestId
   loading.value = true
   loadFailed.value = false
   try {
-    promotions.value = await listPublicPromotions()
+    const available = await listPublicPromotions()
+    if (requestId !== promotionRequestId) return
+    promotions.value = available
+    const selectedCode = tripStore.activeDraft.couponCode?.trim().toUpperCase()
+    if (selectedCode && !promotions.value.some(item => item.couponCode?.toUpperCase() === selectedCode)) {
+      tripStore.setCouponCode()
+      message.value = '優惠已失效，已自動移除'
+    } else if (selectedCode) {
+      try {
+        await redeemPromotionCode(selectedCode)
+      } catch (error) {
+        tripStore.setCouponCode()
+        message.value = error instanceof Error ? `${error.message}，已自動移除` : '優惠已失效，已自動移除'
+      }
+    }
   } catch (error) {
     promotions.value = []
     loadFailed.value = true
@@ -100,6 +117,9 @@ const claimPromotion = (promotion: PublicPromotion) => {
 const openPromotion = (promotion: PublicPromotion) => openCachedPage(`/pages/coupons/detail?id=${encodeURIComponent(promotion.id)}`)
 onMounted(() => {
   void loadPromotions()
+})
+onShow(() => {
+  if (!loading.value) void loadPromotions()
 })
 const goBack = () => closeCachedPage(previousPath || '/pages/trips/trips')
 </script>
