@@ -601,6 +601,14 @@ export type PublicPromotion = {
   destinationRegion: string | null
   bidirectional?: boolean
   couponCode: string | null
+  maximumDiscount: number | null
+  originCity: string | null
+  destinationCity: string | null
+  weekdays: number[] | null
+  timeStart: string | null
+  timeEnd: string | null
+  membershipLevel: string | null
+  remainingUses: number | null
 }
 
 export async function listPublicPromotions(): Promise<PublicPromotion[]> {

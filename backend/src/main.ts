@@ -10616,7 +10616,10 @@ class ClientMembershipController {
 
 @Controller("promotions")
 class PublicPromotionsController {
-  private publicPromotion(promotion: Prisma.PromotionGetPayload<object>) {
+  private publicPromotion(
+    promotion: Prisma.PromotionGetPayload<object>,
+    remainingUses: number | null = null,
+  ) {
     return {
       id: promotion.id,
       name: promotion.name,
@@ -10628,10 +10631,18 @@ class PublicPromotionsController {
       startsAt: promotion.startsAt,
       endsAt: promotion.endsAt,
       minimumSpend: promotion.minimumSpend,
+      maximumDiscount: promotion.maximumDiscount,
       originRegion: promotion.originRegion,
+      originCity: promotion.originCity,
       destinationRegion: promotion.destinationRegion,
+      destinationCity: promotion.destinationCity,
       bidirectional: promotion.bidirectional,
+      weekdays: promotion.weekdays,
+      timeStart: promotion.timeStart,
+      timeEnd: promotion.timeEnd,
+      membershipLevel: promotion.membershipLevel,
       couponCode: promotion.kind === "COUPON" ? promotion.couponCode : null,
+      remainingUses: promotion.kind === "COUPON" ? remainingUses : null,
     };
   }
 
@@ -10671,7 +10682,12 @@ class PublicPromotionsController {
       ),
     );
     return {
-      data: availablePromotions.map((promotion) => this.publicPromotion(promotion)),
+      data: availablePromotions.map((promotion) => this.publicPromotion(
+        promotion,
+        promotion.kind === "COUPON" && promotion.perCustomerLimit !== null && session
+          ? Math.max(0, promotion.perCustomerLimit - (customerCounts.get(promotion.id) || 0))
+          : null,
+      )),
     };
   }
 
@@ -10723,7 +10739,14 @@ class PublicPromotionsController {
         throw new HttpException("優惠代碼已達使用上限", HttpStatus.CONFLICT);
     }
     return {
-      data: this.publicPromotion(promotion),
+      data: this.publicPromotion(
+        promotion,
+        promotion.perCustomerLimit !== null && session
+          ? Math.max(0, promotion.perCustomerLimit - await prisma.promotionUsage.count({
+              where: { promotionId: promotion.id, userId: session.sub, status: { in: ["RESERVED", "USED"] } },
+            }))
+          : null,
+      ),
       message: "優惠代碼有效，可於預約行程時使用",
     };
   }
