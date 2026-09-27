@@ -100,6 +100,7 @@ const loadQuotes = async () => {
     destinationCity: tripStore.activeDraft.route.destinationCity,
     scheduledAt: tripStore.departureTime,
     couponCode: tripStore.activeDraft.couponCode,
+    reservePromotion: false,
     displayCurrency: currency.value
   })))
   if (requestId !== quoteRequestId) return

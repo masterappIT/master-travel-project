@@ -111,8 +111,12 @@ export const PromotionsPage = {
                   </div>
                 </label>
                 <label class="form-group">
-                  <span class="label-text">使用次數上限</span>
+                  <span class="label-text">優惠碼總使用次數</span>
                   <input v-model="promotionForm.usageLimit" type="number" min="1" step="1" placeholder="不限次數（選填）" />
+                </label>
+                <label class="form-group">
+                  <span class="label-text">每個客戶可用次數</span>
+                  <input v-model="promotionForm.perCustomerLimit" type="number" min="1" step="1" placeholder="不限次數（選填）" />
                 </label>
               </template>
 
@@ -315,8 +319,9 @@ export const PromotionsPage = {
               <div class="condition-cell">
                 <div><span>最低門檻:</span> <strong>{{ item.minimumSpend > 0 ? (item.currency + item.minimumSpend) : '無門檻' }}</strong></div>
                 <div class="muted-info">
-                  <span v-if="item.usageLimit">使用數: {{item.usageCount || 0}} / {{item.usageLimit}} 次</span>
-                  <span v-else>使用數: {{item.usageCount || 0}} 次 (不限次)</span>
+                  <span v-if="item.usageLimit">總使用: {{item.usageCount || 0}} / {{item.usageLimit}} 次</span>
+                  <span v-else>總使用: {{item.usageCount || 0}} 次 (不限次)</span>
+                  <span v-if="item.perCustomerLimit">每客: {{item.perCustomerLimit}} 次</span>
                 </div>
                 <div class="route-tag">{{ formatRouteText(item) }}</div>
               </div>

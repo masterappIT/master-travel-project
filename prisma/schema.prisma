@@ -988,6 +988,7 @@ model FareQuote {
   currency        String
   subtotal        Float
   total           Float
+  preview         Boolean                   @default(false)
   durationSeconds Float?
   expiresAt       DateTime?
   createdAt       DateTime                  @default(now())
@@ -1088,6 +1089,7 @@ model Promotion {
   enabled           Boolean               @default(true)
   couponCode        String?               @unique
   usageLimit        Int?
+  perCustomerLimit  Int?
   usageCount        Int                   @default(0)
   membershipLevel   String?
   originRegion      String?
@@ -1109,6 +1111,7 @@ model PromotionUsage {
   id          String               @id @default(cuid())
   promotionId String
   quoteId     String
+  userId      String?
   status      PromotionUsageStatus @default(RESERVED)
   createdAt   DateTime             @default(now())
   usedAt      DateTime?
@@ -1118,6 +1121,7 @@ model PromotionUsage {
 
   @@unique([promotionId, quoteId])
   @@index([promotionId, status])
+  @@index([promotionId, userId, status])
 }
 
 enum PromotionUsageStatus {

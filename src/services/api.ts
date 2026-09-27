@@ -460,6 +460,7 @@ export type FareQuote = {
   currency: string
   subtotal: number
   total: number
+  preview: boolean
   createdAt: string
   expiresAt: string | null
   pricing: { categoryId: string; categoryName: string; tabLabel: string; minimumFare: number; currency: string; tiers: Array<{ id: string; fromKm: number; toKm: number | null; pricePerKm: number; order: number }> } | null
@@ -468,8 +469,8 @@ export type FareQuote = {
   lines: Array<{ type: string; sourceId: string | null; label: string; quantity: number; unitAmount: number; totalAmount: number; currency: string; order: number }>
 }
 
-export async function createFareQuote(input: { categoryId: string; vehicleId: string; distanceMeters: number; durationSeconds: number; extraIds?: string[]; displayCurrency?: 'RMB' | 'HKD'; couponCode?: string; originRegion?: string; originCity?: string; destinationRegion?: string; destinationCity?: string; scheduledAt?: string }): Promise<FareQuote> {
-  const response = await uni.request({ url: `${API_BASE_URL}/quotes`, method: 'POST', data: input, timeout: REQUEST_TIMEOUT_MS })
+export async function createFareQuote(input: { categoryId: string; vehicleId: string; distanceMeters: number; durationSeconds: number; extraIds?: string[]; displayCurrency?: 'RMB' | 'HKD'; couponCode?: string; originRegion?: string; originCity?: string; destinationRegion?: string; destinationCity?: string; scheduledAt?: string; reservePromotion?: boolean; previousQuoteId?: string }): Promise<FareQuote> {
+  const response = await uni.request({ url: `${API_BASE_URL}/quotes`, method: 'POST', data: input, header: authHeaders(), timeout: REQUEST_TIMEOUT_MS })
     .catch(error => { throw networkError(error, '無法連接伺服器，報價取得失敗') })
   if (response.statusCode >= 400) throw apiError(response, '報價暫時無法取得')
   return response.data as FareQuote
@@ -613,7 +614,7 @@ export async function listPublicPromotions(): Promise<PublicPromotion[]> {
 }
 
 export async function redeemPromotionCode(couponCode: string): Promise<{ promotion: PublicPromotion; message: string }> {
-  const response = await uni.request({ url: `${API_BASE_URL}/promotions/redeem`, method: 'POST', data: { couponCode } })
+  const response = await uni.request({ url: `${API_BASE_URL}/promotions/redeem`, method: 'POST', header: authHeaders(), data: { couponCode } })
   if (response.statusCode >= 400) throw new Error((response.data as { message?: string })?.message || '優惠代碼兌換失敗')
   const data = response.data as { data: PublicPromotion; message: string }
   return { promotion: data.data, message: data.message }

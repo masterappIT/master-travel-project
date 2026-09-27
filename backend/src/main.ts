@@ -364,6 +364,8 @@ interface CreateQuoteRequest {
   currency?: unknown;
   couponCode?: unknown;
   userId?: unknown;
+  reservePromotion?: unknown;
+  previousQuoteId?: unknown;
   membershipLevel?: unknown;
   originRegion?: unknown;
   originCity?: unknown;
@@ -391,6 +393,7 @@ interface PromotionInput {
   enabled?: unknown;
   couponCode?: unknown;
   usageLimit?: unknown;
+  perCustomerLimit?: unknown;
   membershipLevel?: unknown;
   originRegion?: unknown;
   originCity?: unknown;
@@ -2398,6 +2401,7 @@ type PersistedQuote = {
   currency: string;
   subtotal: number;
   total: number;
+  preview?: boolean;
   expiresAt: Date | null;
   createdAt: Date;
   pricing: {
@@ -2474,6 +2478,7 @@ function quoteResponse(quote: PersistedQuote) {
     currency: quote.currency,
     subtotal: quote.subtotal,
     total: quote.total,
+    preview: quote.preview,
     createdAt: asIsoDate(quote.createdAt),
     expiresAt: asIsoDate(quote.expiresAt),
     pricing: quote.pricing && {
@@ -7902,6 +7907,12 @@ class AdminController {
       body.usageLimit === undefined
         ? null
         : Number(body.usageLimit);
+    const perCustomerLimit =
+      body.perCustomerLimit === "" ||
+      body.perCustomerLimit === null ||
+      body.perCustomerLimit === undefined
+        ? null
+        : Number(body.perCustomerLimit);
     const priority = Number(body.priority ?? 0);
     const couponCode =
       typeof body.couponCode === "string" && body.couponCode.trim()
@@ -7934,6 +7945,8 @@ class AdminController {
         (!Number.isFinite(maximumDiscount) || maximumDiscount <= 0)) ||
       (usageLimit !== null &&
         (!Number.isInteger(usageLimit) || usageLimit <= 0)) ||
+      (kind === "COUPON" && perCustomerLimit !== null &&
+        (!Number.isInteger(perCustomerLimit) || perCustomerLimit <= 0)) ||
       (startsAt && Number.isNaN(startsAt.valueOf())) ||
       (endsAt && Number.isNaN(endsAt.valueOf())) ||
       (startsAt && endsAt && startsAt >= endsAt) ||
@@ -7964,6 +7977,7 @@ class AdminController {
       enabled: body.enabled !== false,
       couponCode: kind === "COUPON" ? couponCode : null,
       usageLimit,
+      perCustomerLimit: kind === "COUPON" ? perCustomerLimit : null,
       membershipLevel: kind === "MEMBER" ? membershipLevel : null,
       originRegion,
       originCity,
@@ -10636,7 +10650,8 @@ class PublicPromotionsController {
   }
 
   @Post("redeem")
-  async redeem(@Body() body: { couponCode?: unknown }) {
+  async redeem(@Req() req: RequestLike, @Body() body: { couponCode?: unknown }) {
+    const session = await clientSessionFrom(req).catch(() => null);
     const couponCode =
       typeof body.couponCode === "string"
         ? body.couponCode.trim().toUpperCase()
@@ -10644,6 +10659,10 @@ class PublicPromotionsController {
     if (!couponCode)
       throw new HttpException("請輸入優惠代碼", HttpStatus.BAD_REQUEST);
     const now = new Date();
+    await prisma.promotionUsage.updateMany({
+      where: { status: "RESERVED", quote: { expiresAt: { lte: now } } },
+      data: { status: "RELEASED", releasedAt: now },
+    });
     const promotion = await prisma.promotion.findFirst({
       where: {
         enabled: true,
@@ -10657,6 +10676,19 @@ class PublicPromotionsController {
     });
     if (!promotion)
       throw new HttpException("優惠代碼無效或已過期", HttpStatus.NOT_FOUND);
+    if (promotion.perCustomerLimit !== null) {
+      if (!session)
+        throw new UnauthorizedException("此優惠碼需要登入後使用");
+      const customerUsage = await prisma.promotionUsage.count({
+        where: {
+          promotionId: promotion.id,
+          userId: session.sub,
+          status: { in: ["RESERVED", "USED"] },
+        },
+      });
+      if (customerUsage >= promotion.perCustomerLimit)
+        throw new HttpException("已達每位客戶使用上限", HttpStatus.CONFLICT);
+    }
     if (promotion.usageLimit !== null) {
       const reserved = await prisma.promotionUsage.count({
         where: { promotionId: promotion.id, status: "RESERVED" },
@@ -10737,7 +10769,7 @@ class PublicVehiclesController {
 @Controller("quotes")
 class PublicQuotesController {
   @Post()
-  async create(@Body() body: CreateQuoteRequest) {
+  async create(@Req() req: RequestLike, @Body() body: CreateQuoteRequest) {
     const categoryId =
       typeof body.categoryId === "string" ? body.categoryId.trim() : "";
     const vehicleId =
@@ -10756,6 +10788,11 @@ class PublicQuotesController {
     }
     const distanceKm = distanceMeters / 1000;
     const durationSeconds = Number(body.durationSeconds);
+    const authenticatedSession = await clientSessionFrom(req).catch(() => null);
+    const userId = authenticatedSession?.sub || null;
+    const reservePromotion = body.reservePromotion !== false;
+    const isPreview = body.reservePromotion === false;
+    const previousQuoteId = typeof body.previousQuoteId === "string" ? body.previousQuoteId.trim() : "";
     if (!Number.isFinite(durationSeconds) || durationSeconds < 0)
       throw new HttpException(
         "A valid route duration is required",
@@ -10962,6 +10999,9 @@ class PublicQuotesController {
         typeof body.couponCode === "string"
           ? body.couponCode.trim().toUpperCase()
           : "";
+      if (couponCode && reservePromotion) {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`promotion:${couponCode}`}))`;
+      }
       let membershipLevel =
         typeof body.membershipLevel === "string"
           ? body.membershipLevel.trim()
@@ -10987,6 +11027,12 @@ class PublicQuotesController {
         where: { status: "RESERVED", quote: { expiresAt: { lte: now } } },
         data: { status: "RELEASED", releasedAt: now },
       });
+      if (previousQuoteId && userId) {
+        await tx.promotionUsage.updateMany({
+          where: { quoteId: previousQuoteId, userId, status: "RESERVED" },
+          data: { status: "RELEASED", releasedAt: now },
+        });
+      }
       const reservedCounts = new Map(
         await Promise.all(
           promotions
@@ -11002,11 +11048,24 @@ class PublicQuotesController {
             ),
         ),
       );
+      const customerCounts = new Map(
+        userId
+          ? await Promise.all(
+              promotions
+                .filter((promotion) => promotion.kind === "COUPON" && promotion.perCustomerLimit !== null)
+                .map(async (promotion) => [promotion.id, await tx.promotionUsage.count({
+                  where: { promotionId: promotion.id, userId, status: { in: ["RESERVED", "USED"] } },
+                })] as const),
+            )
+          : [],
+      );
       const eligiblePromotions = promotions.filter((promotion) => {
         if (
           promotion.kind === "COUPON" &&
           (!couponCode ||
             promotion.couponCode !== couponCode ||
+            (promotion.perCustomerLimit !== null &&
+              (!userId || (customerCounts.get(promotion.id) || 0) >= promotion.perCustomerLimit)) ||
             (promotion.usageLimit !== null &&
               promotion.usageCount + (reservedCounts.get(promotion.id) || 0) >=
                 promotion.usageLimit))
@@ -11199,13 +11258,15 @@ class PublicQuotesController {
                 })),
             ]
           : lines;
-      const reservedPromotions = [
-        applied?.promotion,
-        applied?.secondaryPromotion,
-      ].filter(
-        (promotion): promotion is NonNullable<typeof applied>["promotion"] =>
-          Boolean(promotion && promotion.kind === "COUPON"),
-      );
+      const reservedPromotions = reservePromotion
+        ? [
+            applied?.promotion,
+            applied?.secondaryPromotion,
+          ].filter(
+            (promotion): promotion is NonNullable<typeof applied>["promotion"] =>
+              Boolean(promotion && promotion.kind === "COUPON"),
+          )
+        : [];
       const total = roundMoney(subtotal - (applied?.discount || 0));
       return tx.fareQuote.create({
         data: {
@@ -11214,6 +11275,7 @@ class PublicQuotesController {
           currency: currencyLabels[currency],
           subtotal,
           total,
+          preview: isPreview,
           expiresAt: quoteExpiryDate(),
           pricing: {
             create: {
@@ -11267,6 +11329,7 @@ class PublicQuotesController {
           promotionUsages: {
             create: reservedPromotions.map((promotion) => ({
               promotionId: promotion.id,
+              userId,
             })),
           },
         },
@@ -11307,6 +11370,8 @@ class PublicQuotesController {
       });
       if (!quote)
         throw new HttpException("Quote not found", HttpStatus.NOT_FOUND);
+      if (quote.preview)
+        throw new HttpException("請先確認車型及優惠以建立正式報價", HttpStatus.CONFLICT);
       if (quote.expiresAt && quote.expiresAt <= now)
         throw new HttpException("Quote has expired", HttpStatus.GONE);
       for (const usage of quote.promotionUsages.filter(
@@ -12412,12 +12477,19 @@ class PaymentsController {
           include: {
             pricing: true,
             vehicle: true,
-            promotionUsages: true,
+            promotionUsages: { include: { promotion: true } },
             lines: { orderBy: { order: "asc" } },
           },
         });
         if (!quote)
           throw new HttpException("Quote not found", HttpStatus.NOT_FOUND);
+        if (quote.preview)
+          throw new HttpException("請先確認車型及優惠以建立正式報價", HttpStatus.CONFLICT);
+        if (quote.promotionUsages.some((usage) =>
+          usage.status !== "RESERVED" ||
+          (usage.promotion.perCustomerLimit !== null && usage.userId !== userTarget.id)
+        ))
+          throw new HttpException("優惠預留已失效或不屬於此客戶，請重新取得報價", HttpStatus.CONFLICT);
         if (quote.expiresAt && quote.expiresAt.getTime() <= Date.now()) {
           throw new HttpException("Quote has expired", HttpStatus.GONE);
         }

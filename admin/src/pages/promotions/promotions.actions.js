@@ -7,10 +7,10 @@ export function createPromotionsActions({ api, promotionForm, promotionSaving, p
     container?.querySelector('input:not([readonly])')?.focus({ preventScroll: true })
   }
   function resetPromotion(kind = 'CAMPAIGN') {
-    return openPromotionFormAndFocus({ id: '', name: '', kind, discountType: 'PERCENTAGE', stackingMode: 'NONE', discountValue: 10, currency: pricingCurrency.value === 'HKD' ? 'HKD$' : 'RMB¥', minimumSpend: 0, maximumDiscount: '', priority: 0, startsAt: '', endsAt: '', enabled: true, couponCode: '', usageLimit: '', membershipLevel: '', originRegion: '', originCity: '', destinationRegion: '', destinationCity: '', weekdays: [], timeStart: '', timeEnd: '' })
+    return openPromotionFormAndFocus({ id: '', name: '', kind, discountType: 'PERCENTAGE', stackingMode: 'NONE', discountValue: 10, currency: pricingCurrency.value === 'HKD' ? 'HKD$' : 'RMB¥', minimumSpend: 0, maximumDiscount: '', priority: 0, startsAt: '', endsAt: '', enabled: true, couponCode: '', usageLimit: '', perCustomerLimit: '', membershipLevel: '', originRegion: '', originCity: '', destinationRegion: '', destinationCity: '', weekdays: [], timeStart: '', timeEnd: '' })
   }
   function editPromotion(item) {
-    return openPromotionFormAndFocus({ ...item, stackingMode: item.stackingMode || 'NONE', startsAt: dateTimeInput(item.startsAt), endsAt: dateTimeInput(item.endsAt), maximumDiscount: item.maximumDiscount ?? '', usageLimit: item.usageLimit ?? '', weekdays: item.weekdays || [] })
+    return openPromotionFormAndFocus({ ...item, stackingMode: item.stackingMode || 'NONE', startsAt: dateTimeInput(item.startsAt), endsAt: dateTimeInput(item.endsAt), maximumDiscount: item.maximumDiscount ?? '', usageLimit: item.usageLimit ?? '', perCustomerLimit: item.perCustomerLimit ?? '', weekdays: item.weekdays || [] })
   }
   async function savePromotion() {
     if (promotionSaving.value || !promotionForm.value) return
@@ -28,7 +28,7 @@ export function createPromotionsActions({ api, promotionForm, promotionSaving, p
     finally { promotionDeletingId.value = '' }
   }
   function duplicatePromotion(item) {
-    const copy = JSON.parse(JSON.stringify(item)); copy.id = ''; copy.name = `[複製] ${copy.name}`; copy.startsAt = dateTimeInput(copy.startsAt); copy.endsAt = dateTimeInput(copy.endsAt); copy.maximumDiscount = copy.maximumDiscount ?? ''; copy.usageLimit = copy.usageLimit ?? ''; copy.weekdays = copy.weekdays || []
+    const copy = JSON.parse(JSON.stringify(item)); copy.id = ''; copy.name = `[複製] ${copy.name}`; copy.startsAt = dateTimeInput(copy.startsAt); copy.endsAt = dateTimeInput(copy.endsAt); copy.maximumDiscount = copy.maximumDiscount ?? ''; copy.usageLimit = copy.usageLimit ?? ''; copy.perCustomerLimit = copy.perCustomerLimit ?? ''; copy.weekdays = copy.weekdays || []
     if (copy.kind === 'COUPON') copy.couponCode = generateRandomCouponCodeStr()
     return openPromotionFormAndFocus(copy)
   }

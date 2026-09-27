@@ -300,9 +300,14 @@ const validateConfirmation = async () => {
         return
       }
       const previousQuote = tripStore.selectedFareQuote
+      const requestedCouponCode = tripStore.activeDraft.couponCode
       await restoreQuote()
       await nextTick()
       if (!tripStore.selectedFareQuote) throw new Error('報價暫時無法取得，請稍後重試。')
+      if (requestedCouponCode && !tripStore.selectedFareQuote.appliedPromotion) {
+        tripStore.setCouponCode()
+        throw new Error('優惠已失效，請重新選擇優惠。')
+      }
       if (previousQuote && previousQuote.total !== tripStore.selectedFareQuote.total) {
         uni.showToast({ title: '價格已更新，請確認新報價', icon: 'none' })
       }

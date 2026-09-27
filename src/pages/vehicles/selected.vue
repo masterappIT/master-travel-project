@@ -334,10 +334,11 @@ const goNext = async () => {
     uni.showToast({ title: '請重新選擇車型', icon: 'none' })
     return
   }
-  const previewPromotion = tripStore.selectedFareQuote?.appliedPromotion
+  const requestedCouponCode = tripStore.activeDraft.couponCode
+  const couponId = requestedCouponCode ? cashCoupon.value?.id : undefined
   if (!await refreshQuote(true) || !tripStore.selectedFareQuote ||
-      (tripStore.activeDraft.couponCode && previewPromotion && !tripStore.selectedFareQuote.appliedPromotion)) {
-    uni.showToast({ title: '報價或優惠暫時無法取得', icon: 'none' })
+      (requestedCouponCode && (!couponId || !tripStore.selectedFareQuote.lines.some(line => line.type === 'DISCOUNT' && line.sourceId === couponId)))) {
+    uni.showToast({ title: requestedCouponCode ? '優惠已失效，請重新選擇優惠' : '報價暫時無法取得', icon: 'none' })
     return
   }
   openCachedPage('/pages/vehicles/confirm')
