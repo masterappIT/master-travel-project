@@ -40,7 +40,7 @@ import { onShow } from '@dcloudio/uni-app'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { useTripStore } from '../../stores/trip'
 import { closeCachedPage, openCachedPage } from '../../utils/navigation'
-import { createFareQuote, listPublicPromotions, listPublicVehicles, planDrivingRoute, type PublicPromotion, type PublicVehicleCategory, type PublicVehicleExtra } from '../../services/api'
+import { createFareQuote, listPublicPromotions, listPublicVehicles, planDrivingRoute, redeemPromotionCode, type FareQuote, type PublicPromotion, type PublicVehicleCategory, type PublicVehicleExtra } from '../../services/api'
 import { useCurrency, normalizeCurrency, formatCurrencyAmount } from '../../composables/useCurrency'
 import TripEditSheet from '../../components/home/TripEditSheet.vue'
 import VehicleCard from '../../components/vehicles/VehicleCard.vue'
@@ -122,8 +122,8 @@ const saveTripChanges = async (
     uni.showToast({ title: error instanceof Error ? error.message : '路線規劃失敗，請稍後再試', icon: 'none' })
   }
 }
-const promoApplied = ref(false)
 const promotions = ref<PublicPromotion[]>([])
+const combinationPreview = ref<{ promotion: PublicPromotion; quote: FareQuote } | null>(null)
 const extras = ref<PublicVehicleExtra[]>([])
 const severeWeatherEnabled = ref(false)
 const selectedExtras = computed(() => tripStore.activeDraft.extras)
@@ -133,50 +133,75 @@ const cashCoupon = computed(() => {
   return promotions.value.find(promotion =>
     promotion.kind === 'COUPON' &&
     promotion.couponCode &&
-    (!couponCode || promotion.couponCode.toUpperCase() === couponCode)
+    promotion.couponCode.toUpperCase() === couponCode
   )
 })
-const appliedCouponDiscount = computed(() => {
-  const couponId = cashCoupon.value?.id
-  if (!couponId) return 0
-  return tripStore.selectedFareQuote?.lines
-    .filter(line => line.type === 'DISCOUNT' && line.sourceId === couponId)
-    .reduce((sum, line) => sum + Math.abs(Math.min(0, line.totalAmount)), 0) || 0
-})
-const hasAppliedCombination = computed(() => {
-  const quote = tripStore.selectedFareQuote
-  const couponId = cashCoupon.value?.id
+const hasCombinationForQuote = (quote: FareQuote | null | undefined, couponId?: string) => {
   if (!quote || !couponId) return false
   const discountLines = quote.lines.filter(line => line.type === 'DISCOUNT' && line.totalAmount < 0)
   return discountLines.some(line => line.sourceId === couponId) && discountLines.some(line => line.sourceId !== couponId)
-})
+}
+const hasAppliedCombination = computed(() => hasCombinationForQuote(tripStore.selectedFareQuote, cashCoupon.value?.id))
+const promoApplied = computed(() => hasAppliedCombination.value)
 const promoLoading = ref(false)
+const combinationDiscount = (quote: FareQuote | null | undefined) => quote?.lines
+  .filter(line => line.type === 'DISCOUNT' && line.totalAmount < 0)
+  .reduce((sum, line) => sum + Math.abs(line.totalAmount), 0) || 0
 const promoCopy = computed(() => {
-  const amount = displayedPromotionAmount.value > 0
-    ? `（優惠碼減免 ${formatCouponAmount(displayedPromotionAmount.value, tripStore.selectedFareQuote?.currency)}）`
+  const quote = promoApplied.value ? tripStore.selectedFareQuote : combinationPreview.value?.quote
+  const amount = combinationDiscount(quote)
+  const formatted = amount > 0
+    ? `（最高優惠 ${formatCouponAmount(amount, quote?.currency)}）`
     : ''
-  return promoApplied.value ? `已使用優惠${amount}` : `可使用組合優惠${amount}`
+  return promoApplied.value ? `已使用優惠${formatted}` : `可使用組合優惠${formatted}`
 })
-const showPromoCard = computed(() => Boolean(cashCoupon.value && (
-  promoApplied.value ||
-  hasAppliedCombination.value ||
-  !tripStore.activeDraft.couponCode
-)))
-const displayedPromotionAmount = computed(() => appliedCouponDiscount.value)
+const showPromoCard = computed(() => promoApplied.value || Boolean(combinationPreview.value && hasCombinationForQuote(combinationPreview.value.quote, combinationPreview.value.promotion.id)))
+let previewRequestId = 0
+const quoteContext = () => JSON.stringify({ vehicleId: vehicle.value?.id, categoryId: vehicle.value?.categoryId, draft: tripStore.activeDraft, currency: currency.value })
+const loadCombinationPreview = async () => {
+  const requestId = ++previewRequestId
+  const context = quoteContext()
+  const activeQuoteRequest = quoteRequestId
+  combinationPreview.value = null
+  if (tripStore.activeDraft.couponCode || !vehicle.value || !tripStore.activeDraft.distanceMeters || !promotions.value.length) return
+  const couponPromotions = promotions.value.filter(item => item.kind === 'COUPON' && item.couponCode)
+  const previews = await Promise.allSettled(couponPromotions.map(async promotion => ({
+    promotion,
+    quote: await createFareQuote({
+      categoryId: vehicle.value!.categoryId!,
+      vehicleId: vehicle.value!.id,
+      distanceMeters: tripStore.activeDraft.distanceMeters!,
+      durationSeconds: (tripStore.activeDraft.durationHours || 0) * 3600,
+      originRegion: tripStore.activeDraft.route.originRegion || routeRegion(tripStore.activeDraft.route.origin, ''),
+      originCity: tripStore.activeDraft.route.originCity,
+      destinationRegion: tripStore.activeDraft.route.destinationRegion || routeRegion(tripStore.activeDraft.route.destination, ''),
+      destinationCity: tripStore.activeDraft.route.destinationCity,
+      scheduledAt: tripStore.departureTime,
+      couponCode: promotion.couponCode || undefined,
+      reservePromotion: false,
+      extraIds: [...selectedExtras.value],
+      displayCurrency: currency.value
+    })
+  })))
+  const best = previews
+    .filter((result): result is PromiseFulfilledResult<{ promotion: PublicPromotion; quote: FareQuote }> => result.status === 'fulfilled')
+    .filter(result => hasCombinationForQuote(result.value.quote, result.value.promotion.id))
+    .sort((a, b) => combinationDiscount(b.value.quote) - combinationDiscount(a.value.quote))[0]
+  if (requestId !== previewRequestId || activeQuoteRequest !== quoteRequestId || context !== quoteContext()) return
+  combinationPreview.value = best?.value || null
+}
 const loadPromotions = async () => {
   try {
     promotions.value = await listPublicPromotions()
     const selectedCode = tripStore.activeDraft.couponCode?.trim().toUpperCase()
     if (selectedCode && !promotions.value.some(item => item.couponCode?.toUpperCase() === selectedCode)) {
       tripStore.setCouponCode()
-      promoApplied.value = false
       showPromoToast('優惠已失效，已自動移除')
     } else if (selectedCode) {
       try {
         await redeemPromotionCode(selectedCode)
       } catch (error) {
         tripStore.setCouponCode()
-        promoApplied.value = false
         showPromoToast(error instanceof Error ? `${error.message}，已自動移除` : '優惠已失效，已自動移除')
       }
     }
@@ -263,12 +288,12 @@ const refreshQuote = async (reservePromotion = false): Promise<boolean> => {
       selectedIds.join(',') !== selectedExtras.value.join(',')) return false
     if (tripStore.activeDraft.couponCode && !quote.appliedPromotion) {
       tripStore.setCouponCode()
-      promoApplied.value = false
       tripStore.setFareQuote(quote)
       showPromoToast('優惠已失效，已取消使用')
       return true
     }
     tripStore.setFareQuote(quote)
+    if (!tripStore.activeDraft.couponCode) await loadCombinationPreview()
     return true
   } catch (error) {
     if (requestId === quoteRequestId) uni.showToast({ title: error instanceof Error ? error.message : '報價暫時無法取得', icon: 'none' })
@@ -304,11 +329,7 @@ onShow(async () => {
   await loadPromotions()
   await loadExtras()
   await refreshQuote()
-  const applied = Boolean(tripStore.activeDraft.couponCode)
-  if (promoApplied.value !== applied) {
-    promoApplied.value = applied
-    await refreshQuote()
-  }
+  await loadCombinationPreview()
 })
 const goBack = () => closeCachedPage('/pages/vehicles/select')
 const showPromoToast = (title: string) => {
@@ -320,29 +341,26 @@ const togglePromo = async () => {
   try {
     if (promoApplied.value) {
       tripStore.setCouponCode()
-      promoApplied.value = false
       await refreshQuote()
+      combinationPreview.value = null
       showPromoToast('已取消優惠')
       return
     }
-    const couponCode = cashCoupon.value?.couponCode
+    const couponCode = combinationPreview.value?.promotion.couponCode
     if (!couponCode) {
-      uni.showToast({ title: '目前沒有可使用的現金券', icon: 'none' })
+      uni.showToast({ title: '目前沒有可使用的組合優惠', icon: 'none' })
       return
     }
     tripStore.setCouponCode(couponCode)
     if (!await refreshQuote() || !tripStore.selectedFareQuote) return
     const couponId = cashCoupon.value?.id
-    const applied = Boolean(couponId && tripStore.selectedFareQuote.lines.some(line =>
-      line.type === 'DISCOUNT' && line.sourceId === couponId && line.totalAmount < 0
-    ))
+    const applied = Boolean(couponId && hasCombinationForQuote(tripStore.selectedFareQuote, couponId))
     if (!applied) {
       tripStore.setCouponCode()
       await refreshQuote()
       uni.showToast({ title: '目前沒有可使用的組合優惠', icon: 'none' })
       return
     }
-    promoApplied.value = true
     showPromoToast('優惠已使用，已扣減車資')
   } finally {
     promoLoading.value = false

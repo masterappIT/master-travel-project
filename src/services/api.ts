@@ -599,6 +599,7 @@ export type PublicPromotion = {
   minimumSpend: number
   originRegion: string | null
   destinationRegion: string | null
+  bidirectional?: boolean
   couponCode: string | null
 }
 

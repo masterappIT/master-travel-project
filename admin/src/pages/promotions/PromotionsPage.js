@@ -79,7 +79,7 @@ export const PromotionsPage = {
           <div class="form-section">
             <div class="section-title">基本設定</div>
             <div class="form-grid">
-              <label class="form-group col-span-2">
+              <label class="form-group">
                 <span class="label-text">優惠名稱 <span class="required">*</span></span>
                 <input v-model="promotionForm.name" placeholder="例如：春季出行88折優惠" required />
               </label>
@@ -93,14 +93,14 @@ export const PromotionsPage = {
                 </AdminSelect>
               </label>
 
-              <label class="form-group switch-group">
+              <div class="form-group switch-group">
                 <span class="label-text">啟用狀態</span>
                 <div class="toggle-wrapper">
-                  <AdminCheckbox id="promo-enabled-toggle" v-model="promotionForm.enabled" type="checkbox" class="toggle-checkbox" />
+                  <AdminCheckbox id="promo-enabled-toggle" v-model="promotionForm.enabled" type="checkbox" class="toggle-checkbox" aria-label="啟用優惠" />
                   <label for="promo-enabled-toggle" class="toggle-label"></label>
                   <span class="toggle-text">{{ promotionForm.enabled ? '已啟用' : '已停用' }}</span>
                 </div>
-              </label>
+              </div>
 
               <template v-if="promotionForm.kind === 'COUPON'">
                 <label class="form-group col-span-2">
@@ -223,6 +223,14 @@ export const PromotionsPage = {
                 <span class="label-text">目的城市</span>
                 <input v-model.trim="promotionForm.destinationCity" placeholder="指定城市（例如：廣州市）" />
               </label>
+              <div class="form-group switch-group route-direction-toggle">
+                <span class="label-text">雙向適用</span>
+                <div class="toggle-wrapper">
+                  <AdminCheckbox id="promo-bidirectional-toggle" v-model="promotionForm.bidirectional" type="checkbox" class="toggle-checkbox" aria-label="雙向適用" />
+                  <label for="promo-bidirectional-toggle" class="toggle-label"></label>
+                  <span class="toggle-text">{{ promotionForm.bidirectional ? '出發地與目的地可互換' : '僅限設定方向' }}</span>
+                </div>
+              </div>
             </div>
           </div>
 

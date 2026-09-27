@@ -61,6 +61,7 @@ import { buildDriverOrderUrl } from "./order-url";
 import { inviteShareHtml } from "./order-invite-share";
 import { publicDriverOrderChannelFilter } from "./driver-order-channel";
 import { billableExtraSelections, withinImmediateWindow } from "./quote-extras";
+import { promotionMatchesRoute } from "./promotion-route";
 
 try {
   loadEnvFile("../.env");
@@ -400,6 +401,7 @@ interface PromotionInput {
   originCity?: unknown;
   destinationRegion?: unknown;
   destinationCity?: unknown;
+  bidirectional?: unknown;
   weekdays?: unknown;
   timeStart?: unknown;
   timeEnd?: unknown;
@@ -939,6 +941,7 @@ const promotionMatchesContext = (
     originCity: string | null;
     destinationRegion: string | null;
     destinationCity: string | null;
+    bidirectional: boolean;
     weekdays: unknown;
     timeStart: string | null;
     timeEnd: string | null;
@@ -951,20 +954,7 @@ const promotionMatchesContext = (
     scheduledAt: Date;
   },
 ) => {
-  if (promotion.originRegion && promotion.originRegion !== context.originRegion)
-    return false;
-  if (promotion.originCity && promotion.originCity !== context.originCity)
-    return false;
-  if (
-    promotion.destinationRegion &&
-    promotion.destinationRegion !== context.destinationRegion
-  )
-    return false;
-  if (
-    promotion.destinationCity &&
-    promotion.destinationCity !== context.destinationCity
-  )
-    return false;
+  if (!promotionMatchesRoute(promotion, context)) return false;
   const weekdays = normalizeWeekdays(promotion.weekdays);
   if (weekdays.length && !weekdays.includes(context.scheduledAt.getDay() || 7))
     return false;
@@ -7927,6 +7917,7 @@ class AdminController {
     const originCity = normalizeRuleText(body.originCity) || null;
     const destinationRegion = normalizeRuleText(body.destinationRegion) || null;
     const destinationCity = normalizeRuleText(body.destinationCity) || null;
+    const bidirectional = body.bidirectional === true;
     const weekdays = normalizeWeekdays(body.weekdays);
     const timeStart = normalizeRuleText(body.timeStart) || null;
     const timeEnd = normalizeRuleText(body.timeEnd) || null;
@@ -7984,6 +7975,7 @@ class AdminController {
       originCity,
       destinationRegion,
       destinationCity,
+      bidirectional,
       weekdays: weekdays.length ? weekdays : Prisma.JsonNull,
       timeStart,
       timeEnd,
@@ -7992,6 +7984,7 @@ class AdminController {
       const existing = await prisma.promotion.findUnique({ where: { id } });
       if (!existing)
         throw new HttpException("Promotion not found", HttpStatus.NOT_FOUND);
+      if (body.bidirectional === undefined) data.bidirectional = existing.bidirectional;
       return prisma.promotion.update({ where: { id }, data });
     }
     return prisma.promotion.create({ data });
@@ -10628,6 +10621,7 @@ class PublicPromotionsController {
       minimumSpend: promotion.minimumSpend,
       originRegion: promotion.originRegion,
       destinationRegion: promotion.destinationRegion,
+      bidirectional: promotion.bidirectional,
       couponCode: promotion.kind === "COUPON" ? promotion.couponCode : null,
     };
   }

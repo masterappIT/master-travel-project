@@ -1096,6 +1096,7 @@ model Promotion {
   originCity        String?
   destinationRegion String?
   destinationCity   String?
+  bidirectional     Boolean               @default(false)
   weekdays          Json?
   timeStart         String?
   timeEnd           String?

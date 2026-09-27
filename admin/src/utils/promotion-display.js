@@ -42,7 +42,7 @@ export function createPromotionDisplay({ promotionForm, promotionsPageState, sev
     const origin = [item.originRegion, item.originCity].filter(Boolean).join(' ') || '不限地點'
     const destination = [item.destinationRegion, item.destinationCity].filter(Boolean).join(' ') || '不限地點'
     if (origin === '不限地點' && destination === '不限地點') return '不限路線'
-    return `${origin} → ${destination}`
+    return `${origin} ${item.bidirectional ? '⇄' : '→'} ${destination}`
   }
   const formatTimeRangeText = item => !item.timeStart && !item.timeEnd ? '' : `${item.timeStart || '00:00'} ~ ${item.timeEnd || '24:00'}`
   const triggerLabel = item => ({ NONE: '一般', IMMEDIATE: '即時訂單', NIGHT: '深夜加班費', WEATHER: '惡劣天氣' }[item.triggerType || (item.requiredForImmediate ? 'IMMEDIATE' : 'NONE')] || '一般')
