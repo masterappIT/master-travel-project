@@ -13,7 +13,7 @@
 
     <view class="vehicle-tag">{{ selectedCategoryName }}</view>
     <view v-if="vehicle" class="selected-vehicle-card"><VehicleCard :vehicle="vehicle" :quote="tripStore.selectedFareQuote" selectable :selected="true" /></view>
-    <view v-if="showPromoCard" class="promo-card"><text class="promo-copy">{{ `${promoApplied ? '已使用優惠' : '可使用組合優惠'}“現金券${displayedPromotionAmount > 0 ? formatCouponAmount(displayedPromotionAmount, tripStore.selectedFareQuote?.currency) : ''}”` }}</text><view class="promo-action" :class="{ 'used-action': promoApplied }" @tap="togglePromo"><text>{{ promoApplied ? '已使用' : '立即使用' }}</text></view></view>
+    <view v-if="showPromoCard" class="promo-card"><text class="promo-copy">{{ promoCopy }}</text><view class="promo-action" :class="{ 'used-action': promoApplied }" @tap="togglePromo"><text>{{ promoLoading ? '載入中' : promoApplied ? '取消使用' : '立即使用' }}</text></view></view>
 
     <scroll-view v-if="visibleExtras.length" class="extras" :class="{ 'without-promo': !showPromoCard }" scroll-y :show-scrollbar="false">
       <view class="extras-title"><image src="/static/vehicles/extra-cart.svg" mode="aspectFit" /><text>額外選擇</text></view>
@@ -47,7 +47,7 @@ import VehicleCard from '../../components/vehicles/VehicleCard.vue'
 import type { AddressSelection } from '../../components/home/AddressPicker.vue'
 const { responsiveStyle } = useResponsiveCanvas()
 const tripStore = useTripStore()
-const { currency, exchangeRate } = useCurrency()
+const { currency } = useCurrency()
 const editSheetOpen = ref(false)
 const vehicle = computed(() => tripStore.chosenVehicle)
 const categories = ref<PublicVehicleCategory[]>([])
@@ -136,27 +136,33 @@ const cashCoupon = computed(() => {
     (!couponCode || promotion.couponCode.toUpperCase() === couponCode)
   )
 })
-const hasCombinablePromotion = computed(() => promotions.value.some(promotion =>
-  promotion.kind !== 'COUPON' &&
-  (promotion.stackingMode === 'ALL' || promotion.stackingMode === 'PERCENTAGE_AND_VOUCHER')
-))
-const showPromoCard = computed(() => Boolean(cashCoupon.value && (promoApplied.value || hasCombinablePromotion.value)))
-const couponDiscountAmount = computed(() => {
-  const promotion = cashCoupon.value
-  if (!promotion || promotion.discountType !== 'FIXED_AMOUNT') return 0
-  const sourceCurrency = normalizeCurrency(promotion.currency) || 'RMB'
-  if (currency.value === sourceCurrency) return promotion.discountValue
-  return sourceCurrency === 'RMB' ? promotion.discountValue / exchangeRate.value : promotion.discountValue * exchangeRate.value
+const appliedCouponDiscount = computed(() => {
+  const couponId = cashCoupon.value?.id
+  if (!couponId) return 0
+  return tripStore.selectedFareQuote?.lines
+    .filter(line => line.type === 'DISCOUNT' && line.sourceId === couponId)
+    .reduce((sum, line) => sum + Math.abs(Math.min(0, line.totalAmount)), 0) || 0
 })
-const displayedPromotionAmount = computed(() => {
-  if (promoApplied.value && cashCoupon.value) {
-    const appliedCouponDiscount = tripStore.selectedFareQuote?.lines
-      .filter(line => line.type === 'DISCOUNT' && line.sourceId === cashCoupon.value?.id)
-      .reduce((sum, line) => sum + Math.abs(Math.min(0, line.totalAmount)), 0)
-    if (appliedCouponDiscount !== undefined && appliedCouponDiscount > 0) return appliedCouponDiscount
-  }
-  return couponDiscountAmount.value
+const hasAppliedCombination = computed(() => {
+  const quote = tripStore.selectedFareQuote
+  const couponId = cashCoupon.value?.id
+  if (!quote || !couponId) return false
+  const discountLines = quote.lines.filter(line => line.type === 'DISCOUNT' && line.totalAmount < 0)
+  return discountLines.some(line => line.sourceId === couponId) && discountLines.some(line => line.sourceId !== couponId)
 })
+const promoLoading = ref(false)
+const promoCopy = computed(() => {
+  const amount = displayedPromotionAmount.value > 0
+    ? `（優惠碼減免 ${formatCouponAmount(displayedPromotionAmount.value, tripStore.selectedFareQuote?.currency)}）`
+    : ''
+  return promoApplied.value ? `已使用優惠${amount}` : `可使用組合優惠${amount}`
+})
+const showPromoCard = computed(() => Boolean(cashCoupon.value && (
+  promoApplied.value ||
+  hasAppliedCombination.value ||
+  !tripStore.activeDraft.couponCode
+)))
+const displayedPromotionAmount = computed(() => appliedCouponDiscount.value)
 const loadPromotions = async () => {
   try {
     promotions.value = await listPublicPromotions()
@@ -308,27 +314,39 @@ const goBack = () => closeCachedPage('/pages/vehicles/select')
 const showPromoToast = (title: string) => {
   uni.showToast({ title, icon: 'none', duration: 2000 })
 }
-const togglePromo = () => {
-  if (promoApplied.value) {
-    tripStore.setCouponCode()
-    promoApplied.value = false
-    void refreshQuote()
-    showPromoToast('已取消優惠')
-    return
+const togglePromo = async () => {
+  if (promoLoading.value) return
+  promoLoading.value = true
+  try {
+    if (promoApplied.value) {
+      tripStore.setCouponCode()
+      promoApplied.value = false
+      await refreshQuote()
+      showPromoToast('已取消優惠')
+      return
+    }
+    const couponCode = cashCoupon.value?.couponCode
+    if (!couponCode) {
+      uni.showToast({ title: '目前沒有可使用的現金券', icon: 'none' })
+      return
+    }
+    tripStore.setCouponCode(couponCode)
+    if (!await refreshQuote() || !tripStore.selectedFareQuote) return
+    const couponId = cashCoupon.value?.id
+    const applied = Boolean(couponId && tripStore.selectedFareQuote.lines.some(line =>
+      line.type === 'DISCOUNT' && line.sourceId === couponId && line.totalAmount < 0
+    ))
+    if (!applied) {
+      tripStore.setCouponCode()
+      await refreshQuote()
+      uni.showToast({ title: '目前沒有可使用的組合優惠', icon: 'none' })
+      return
+    }
+    promoApplied.value = true
+    showPromoToast('優惠已使用，已扣減車資')
+  } finally {
+    promoLoading.value = false
   }
-  if (couponDiscountAmount.value <= 0) {
-    uni.showToast({ title: '目前沒有可使用的組合優惠', icon: 'none' })
-    return
-  }
-  const couponCode = cashCoupon.value?.couponCode
-  if (!couponCode) {
-    uni.showToast({ title: '目前沒有可使用的現金券', icon: 'none' })
-    return
-  }
-  tripStore.setCouponCode(couponCode)
-  promoApplied.value = true
-  void refreshQuote()
-  showPromoToast('優惠已使用，已扣減車資')
 }
 const toggleExtra = (id: string) => {
   const extra = extras.value.find(item => item.id === id)

@@ -304,7 +304,10 @@ const validateConfirmation = async () => {
       await restoreQuote()
       await nextTick()
       if (!tripStore.selectedFareQuote) throw new Error('報價暫時無法取得，請稍後重試。')
-      if (requestedCouponCode && !tripStore.selectedFareQuote.appliedPromotion) {
+      const appliedCoupon = requestedCouponCode && tripStore.selectedFareQuote.lines.some(line =>
+        line.type === 'DISCOUNT' && line.sourceId && line.totalAmount < 0
+      )
+      if (requestedCouponCode && !appliedCoupon) {
         tripStore.setCouponCode()
         throw new Error('優惠已失效，請重新選擇優惠。')
       }
