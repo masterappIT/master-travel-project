@@ -56,6 +56,7 @@ import {
   type AdminTripDetail,
   type TripDriverSummary,
 } from "./trip-payload";
+import { matchesSearchCity } from "./location-search";
 import { buildDriverOrderUrl } from "./order-url";
 import { inviteShareHtml } from "./order-invite-share";
 import { publicDriverOrderChannelFilter } from "./driver-order-channel";
@@ -11908,10 +11909,10 @@ class LocationController {
       extensions: "base",
     });
     const region = req.query?.region;
+    const requestedCity = region === "大陸" ? req.query?.city?.trim() : undefined;
     if (region === "香港") params.set("city", "香港");
     else if (region === "澳門") params.set("city", "澳門");
-    else if (region === "大陸" && req.query?.city?.trim())
-      params.set("city", req.query.city.trim());
+    else if (requestedCity) params.set("city", requestedCity);
     const data = await this.requestAmap<{
       pois?: Array<{
         id?: string;
@@ -11926,7 +11927,7 @@ class LocationController {
     const pois = data.pois || [];
     const mainlandPois = pois.filter((poi) => {
       const area = `${poi.pname || ""}${poi.cityname || ""}`;
-      return area.includes("广东") || area.includes("廣東");
+      return (area.includes("广东") || area.includes("廣東")) && matchesSearchCity(poi.cityname, requestedCity);
     });
     const supportedPois = pois.filter((poi) => {
       const area = `${poi.pname || ""}${poi.cityname || ""}`;
@@ -12008,6 +12009,7 @@ class LocationController {
           ? "澳門"
           : "大陸";
       if (region && resultRegion !== region) return [];
+      if (region === "大陸" && !matchesSearchCity(city, requestedCity)) return [];
       const address = item.formatted_address || keyword;
       return [
         {

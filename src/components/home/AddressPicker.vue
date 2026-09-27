@@ -10,7 +10,7 @@
     </view>
     <scroll-view class="address-scroll" scroll-y :show-scrollbar="false">
       <view class="current-card"><text class="current-title">當前定位城市：{{ regionData.currentCity }}</text><view class="current-place" @tap="$emit('use-current')"><image src="/static/home/address/current.svg" mode="aspectFit" /><view><text class="place-name">{{ formatVisibleAddress(regionData.currentName) }}</text><text class="place-address">{{ formatVisibleAddress(regionData.currentAddress) }}</text></view></view></view>
-      <view class="recommend-list"><view class="recommend-content"><view class="recommend-title"><image src="/static/home/address/recommend.svg" mode="aspectFit" /><text>{{ searchResults === null ? '推薦地點' : '搜尋結果' }}</text></view><view v-for="place in filteredPlaces" :key="place.id || place.name" class="place-row" @tap="selectPlace(place)"><image src="/static/home/address/place.svg" mode="aspectFit" /><view><text class="place-name">{{ formatVisibleAddress(place.name) }}</text><text class="place-address">{{ formatVisibleAddress(place.displayAddress || place.address) }}</text></view></view><text v-if="searchResults?.length === 0" class="empty-result">找不到相關地點</text></view></view>
+      <view class="recommend-list"><view class="recommend-content"><view class="recommend-title"><image src="/static/home/address/recommend.svg" mode="aspectFit" /><text>{{ searchResults === null ? '推薦地點' : '搜尋結果' }}</text></view><view v-for="place in filteredPlaces" :key="place.id || place.name" class="place-row" @tap="selectPlace(place)"><image src="/static/home/address/place.svg" mode="aspectFit" /><view><text class="place-name">{{ formatVisibleAddress(place.name) }}</text><text class="place-address">{{ formatVisibleAddress(place.displayAddress || place.address) }}</text></view></view><text v-if="searchResults?.length === 0" class="empty-result">{{ selectedCityLabel || selectedRegion ? `${selectedCityLabel || selectedRegion}找不到相關地點` : '找不到相關地點' }}</text></view></view>
     </scroll-view>
     <view v-if="regionMenuOpen" class="region-menu" @tap.stop>
       <view class="region-menu-panel">
@@ -20,7 +20,7 @@
   </view>
 </template>
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { listMainlandCities, listRecommendedAddresses, searchPlaces, type PlaceSearchResult } from '../../services/api'
 const props = defineProps<{ selecting: 'origin' | 'destination'; locationLabel: string; detailedAddress: string; initialSelection?: AddressSelection | null; canUseCurrent?: boolean }>()
 type Region = '大陸' | '香港' | '澳門'
@@ -50,6 +50,12 @@ const regionMenuOpen = ref(false)
 const keyword = ref('')
 const searching = ref(false)
 const searchResults = ref<PlaceSearchResult[] | null>(null)
+const searchRequestId = ref(0)
+watch(keyword, () => {
+  searchRequestId.value++
+  searching.value = false
+  searchResults.value = null
+}, { flush: 'sync' })
 const recommendedPlaces = ref<Array<Place & { region: Region }>>(fallbackRecommendedPlaces)
 const mainlandCities = ref<string[]>([])
 const displayCityName = (city: string) => city.replace(/市$/, '') || city
@@ -95,17 +101,22 @@ const runSearch = async () => {
   hideKeyboard()
   const value = keyword.value.trim()
   if (!value || searching.value) return
+  const requestId = ++searchRequestId.value
+  const requestRegion = selectedRegion.value || undefined
+  const requestCity = selectedCity.value || undefined
   searching.value = true
   searchResults.value = null
   try {
-    const results = await searchPlaces(value, selectedRegion.value || undefined, selectedCity.value || undefined)
+    const results = await searchPlaces(value, requestRegion, requestCity)
+    if (requestId !== searchRequestId.value) return
     searchResults.value = results.filter(place => validCoordinate(place.latitude, place.longitude))
   } catch (error) {
+    if (requestId !== searchRequestId.value) return
     searchResults.value = []
     const message = error instanceof Error ? error.message : '位置搜索失敗，請稍後再試'
     uni.showToast({ title: message, icon: 'none' })
   } finally {
-    searching.value = false
+    if (requestId === searchRequestId.value) searching.value = false
   }
 }
 onMounted(async () => {
@@ -164,6 +175,8 @@ const selectPlace = async (place: Place) => {
 }
 const handleRegionTriggerTap = () => {
   if (selectedRegion.value) {
+    searchRequestId.value++
+    searching.value = false
     selectedRegion.value = null
     selectedCity.value = null
     keyword.value = ''
@@ -174,6 +187,7 @@ const handleRegionTriggerTap = () => {
   regionMenuOpen.value = !regionMenuOpen.value
 }
 const selectRegion = (value: string) => {
+  searchRequestId.value++
   if (regions.includes(value as Region)) {
     selectedRegion.value = value as Region
     selectedCity.value = null
