@@ -1,6 +1,6 @@
 <template>
   <view class="vehicle-card" @tap="selectable && emit('select')">
-    <view v-if="vehicle.brand" class="vehicle-name"><text class="brand">{{ vehicle.brand }}</text><text> {{ vehicle.model }}</text><text class="series">{{ vehicle.series }}</text></view>
+    <view v-if="vehicle" class="vehicle-name"><text class="brand">{{ vehicle.brand || '車型' }}</text><text> {{ vehicle.model }}</text><text class="series">{{ vehicle.series }}</text></view>
     <image v-if="vehicle.logo && !logoLoadFailed" class="radio" :src="vehicle.logo" mode="aspectFit" @error="logoLoadFailed = true" />
     <view class="vehicle-image-frame">
       <image class="vehicle-image" :class="`vehicle-${vehicle.id}`" :src="vehicle.image" mode="scaleToFill" />

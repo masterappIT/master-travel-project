@@ -23,7 +23,7 @@
       </view>
       <view class="notice"><image src="/static/vehicles/confirm-notice.svg" mode="aspectFit" /><text>訂單成功支付後，若取消或修改訂單規則。</text></view>
     </view>
-    <view class="selected-card"><VehicleCard :vehicle="vehicle" :quote="selectedFareQuote" :selected="true" selectable /></view>
+    <view v-if="vehicle" class="selected-card"><VehicleCard :vehicle="vehicle" :quote="selectedFareQuote" :selected="true" selectable /></view>
     <view class="quick-links"><text class="edit-trip" @tap="editSheetOpen = true">修改行程</text><text @tap="rideForOtherOpen = true">幫人叫車</text><text>聯繫客服</text></view>
     <view v-if="namePromptOpen" class="passenger-mask" @tap.self="resolveNamePrompt(null)">
       <view class="passenger-dialog" @tap.stop>
@@ -108,7 +108,7 @@ import { onShow } from '@dcloudio/uni-app'
 import { isIosApp } from '../../platform'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { useTripStore } from '../../stores/trip'
-import { createFareQuote, planDrivingRoute, getSettings, getWalletMe, payTrip, createPendingTrip, getClientProfile, updateClientProfile, listCommonPassengers, type AppSettings, type TripPassenger, type CommonPassenger, type TripAddress } from '../../services/api'
+import { createFareQuote, listPublicVehicles, planDrivingRoute, getSettings, getWalletMe, payTrip, createPendingTrip, getClientProfile, updateClientProfile, listCommonPassengers, type AppSettings, type TripPassenger, type CommonPassenger, type TripAddress } from '../../services/api'
 import type { Coordinate } from '../../services/api'
 import type { AddressSelection } from '../../components/home/AddressPicker.vue'
 import { cachedPagePath, closeCachedPage, openCachedPage } from '../../utils/navigation'
@@ -244,6 +244,18 @@ const confirmMapVisible = computed(() => {
 const confirmLoading = ref(true)
 const confirmError = ref('')
 let confirmationTask: Promise<void> | null = null
+const validateSelectedVehicle = async () => {
+  const chosen = tripStore.chosenVehicle
+  if (!chosen) return false
+  const catalog = await listPublicVehicles()
+  const current = catalog.data.find(item => item.id === chosen.id)
+  if (!current || !current.categoryId) {
+    tripStore.clearChosenVehicle()
+    return false
+  }
+  tripStore.setChosenVehicle({ ...current, selectable: chosen.selectable })
+  return true
+}
 const requiredDataReady = () => {
   const route = tripStore.activeDraft.route
   return Boolean(tripStore.chosenVehicle && route.origin && route.destination &&
@@ -266,6 +278,8 @@ const restoreQuote = async () => {
     scheduledAt: tripStore.departureTime,
     couponCode: tripStore.activeDraft.couponCode,
     extraIds: tripStore.activeDraft.extras,
+    reservePromotion: true,
+    previousQuoteId: tripStore.selectedFareQuote?.id,
     displayCurrency: currency.value
   })
   tripStore.setFareQuote(quote)
@@ -281,9 +295,17 @@ const validateConfirmation = async () => {
       return
     }
     try {
-      if (!tripStore.selectedFareQuote) await restoreQuote()
+      if (!await validateSelectedVehicle()) {
+        confirmError.value = '所選車型已失效，請重新選擇。'
+        return
+      }
+      const previousQuote = tripStore.selectedFareQuote
+      await restoreQuote()
       await nextTick()
       if (!tripStore.selectedFareQuote) throw new Error('報價暫時無法取得，請稍後重試。')
+      if (previousQuote && previousQuote.total !== tripStore.selectedFareQuote.total) {
+        uni.showToast({ title: '價格已更新，請確認新報價', icon: 'none' })
+      }
       void updateConfirmMap()
     } catch (error) {
       confirmError.value = error instanceof Error ? error.message : '確認資料載入失敗，請稍後重試。'
@@ -298,24 +320,16 @@ const validateConfirmation = async () => {
   }
 }
 
-const vehicle = computed(() => tripStore.chosenVehicle || {
-  id: 'premium-vellfire',
-  brand: 'Toyota',
-  model: 'Vellfire',
-  series: '20系',
-  seats: 7,
-  image: '/static/vehicles/vellfire.png',
-  selectable: true
-})
+const vehicle = computed(() => tripStore.chosenVehicle)
 const selectedFareQuote = computed(() => tripStore.selectedFareQuote)
 const fareLines = computed(() => selectedFareQuote.value?.lines || [])
 const total = computed(() => selectedFareQuote.value?.total ?? 0)
-const vehicleLabel = computed(() => `${selectedFareQuote.value?.pricing?.categoryName || '高級跨境商務車'}（${selectedFareQuote.value?.vehicle?.seats || vehicle.value.seats}座）`)
+const vehicleLabel = computed(() => `${selectedFareQuote.value?.pricing?.categoryName || '未分類'}（${selectedFareQuote.value?.vehicle?.seats || vehicle.value?.seats || 0}座）`)
 const vehicleAmount = computed(() => fareLines.value
   .filter(line => line.type === 'DISTANCE_TIER')
   .reduce((sum, line) => sum + line.totalAmount, 0))
 const detailLines = computed(() => selectedFareQuote.value
-  ? [{ type: 'VEHICLE', sourceId: selectedFareQuote.value.vehicle?.id || vehicle.value.id, label: vehicleLabel.value, totalAmount: vehicleAmount.value, order: 0 }, ...fareLines.value.filter(line => line.type !== 'DISTANCE_TIER').map(line => ({ ...line, label: line.label }))]
+  ? [{ type: 'VEHICLE', sourceId: selectedFareQuote.value.vehicle?.id || vehicle.value?.id, label: vehicleLabel.value, totalAmount: vehicleAmount.value, order: 0 }, ...fareLines.value.filter(line => line.type !== 'DISTANCE_TIER').map(line => ({ ...line, label: line.label }))]
   : [])
 const summaryLines = computed(() => {
   const lines = fareLines.value
@@ -461,6 +475,7 @@ const openCoupons = () => openCachedPage('/pages/coupons/coupons?from=/pages/veh
 const payNow = async () => {
   if (!await ensurePassenger()) return
   try {
+    if (!await validateSelectedVehicle()) throw new Error('所選車型已失效，請重新選擇。')
     if (!requiredDataReady()) throw new Error('行程或車型資料已失效，請重新選擇。')
     await restoreQuote()
   } catch (error) {

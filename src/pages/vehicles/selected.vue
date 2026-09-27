@@ -11,14 +11,15 @@
       <view class="tabs"><view v-for="tab in tabs" :key="tab.label" :class="['tab',{active:tab.active}]"><text>{{ tab.label }}</text><image v-if="tab.active" src="/static/vehicles/tab-line.svg" mode="scaleToFill" /></view></view>
     </view>
 
-    <view class="vehicle-tag">高級跨境商務車</view>
-    <view class="selected-vehicle-card"><VehicleCard :vehicle="vehicle" :quote="tripStore.selectedFareQuote" selectable :selected="true" /></view>
+    <view class="vehicle-tag">{{ selectedCategoryName }}</view>
+    <view v-if="vehicle" class="selected-vehicle-card"><VehicleCard :vehicle="vehicle" :quote="tripStore.selectedFareQuote" selectable :selected="true" /></view>
     <view v-if="showPromoCard" class="promo-card"><text class="promo-copy">{{ `${promoApplied ? '已使用優惠' : '可使用組合優惠'}“現金券${displayedPromotionAmount > 0 ? formatCouponAmount(displayedPromotionAmount, tripStore.selectedFareQuote?.currency) : ''}”` }}</text><view class="promo-action" :class="{ 'used-action': promoApplied }" @tap="togglePromo"><text>{{ promoApplied ? '已使用' : '立即使用' }}</text></view></view>
 
     <scroll-view v-if="visibleExtras.length" class="extras" :class="{ 'without-promo': !showPromoCard }" scroll-y :show-scrollbar="false">
       <view class="extras-title"><image src="/static/vehicles/extra-cart.svg" mode="aspectFit" /><text>額外選擇</text></view>
       <view v-for="extra in visibleExtras" :key="extra.id" class="extra-row" :aria-disabled="isRequiredExtra(extra) ? 'true' : 'false'" @tap="handleExtraTap(extra)"><image :src="(isTriggerExtra(extra) ? quoteExtraIds.has(extra.id) : selectedExtras.includes(extra.id)) ? '/static/vehicles/extra-selected.svg' : '/static/vehicles/extra-radio.svg'" mode="aspectFit" /><text>{{ extra.label }}</text><text class="extra-price">{{ formatExtraPrice(extra.price, extra.currency) }}</text></view>
     </scroll-view>
+    <view v-if="!vehicle" class="selected-vehicle-card" @tap="goBack">請重新選擇車型</view>
     <view class="next-button" @tap="goNext">下一步</view>
     <TripEditSheet
       v-if="editSheetOpen"
@@ -39,17 +40,22 @@ import { onShow } from '@dcloudio/uni-app'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { useTripStore } from '../../stores/trip'
 import { closeCachedPage, openCachedPage } from '../../utils/navigation'
-import { createFareQuote, listPublicPromotions, listPublicVehicles, planDrivingRoute, type PublicPromotion, type PublicVehicleExtra } from '../../services/api'
+import { createFareQuote, listPublicPromotions, listPublicVehicles, planDrivingRoute, type PublicPromotion, type PublicVehicleCategory, type PublicVehicleExtra } from '../../services/api'
 import { useCurrency, normalizeCurrency, formatCurrencyAmount } from '../../composables/useCurrency'
 import TripEditSheet from '../../components/home/TripEditSheet.vue'
 import VehicleCard from '../../components/vehicles/VehicleCard.vue'
-import type { Vehicle } from '../../types/vehicle'
 import type { AddressSelection } from '../../components/home/AddressPicker.vue'
 const { responsiveStyle } = useResponsiveCanvas()
 const tripStore = useTripStore()
 const { currency, exchangeRate } = useCurrency()
 const editSheetOpen = ref(false)
-const vehicle = computed<Vehicle>(() => tripStore.chosenVehicle || { id: 'premium-alphard', brand: 'Toyota', model: 'Alphard', series: '30系', seats: 6, image: '/static/vehicles/alphard.png', selectable: true })
+const vehicle = computed(() => tripStore.chosenVehicle)
+const categories = ref<PublicVehicleCategory[]>([])
+const selectedCategory = computed(() => {
+  const categoryId = vehicle.value?.categoryId || tripStore.selectedFareQuote?.pricing?.categoryId
+  return categories.value.find(category => category.id === categoryId)
+})
+const selectedCategoryName = computed(() => selectedCategory.value?.name || tripStore.selectedFareQuote?.pricing?.categoryName || '未分類')
 const originLabel = computed(() => cityName(tripStore.activeTrip?.origin, '香港'))
 const destinationLabel = computed(() => cityName(tripStore.activeTrip?.destination, '深圳'))
 const cityName = (value: string | undefined, fallback: string) => {
@@ -58,7 +64,7 @@ const cityName = (value: string | undefined, fallback: string) => {
   if (text.includes('深圳') || text.includes('廣東')) return '深圳'
   return text.split(/[·，,\s]/)[0] || fallback
 }
-const tabs = [{ label: '全部', active: false }, { label: '普通MPV', active: false }, { label: '高級MPV', active: true }, { label: '普通轎車', active: false }, { label: '頂級轎車', active: false }]
+const tabs = computed(() => [{ label: '全部', active: false }, ...categories.value.map(category => ({ label: category.tabLabel, active: category.id === selectedCategory.value?.id }))])
 const bookingTime = computed(() => {
   if (!tripStore.departureTime) return 'March 15 2024 14:00'
   const date = new Date(tripStore.departureTime)
@@ -206,7 +212,7 @@ const routeRegion = (value: string | undefined, fallback: string) => {
 let quoteRequestId = 0
 const formatExtraPrice = (amount: number, extraCurrency: string) => formatCurrencyAmount(amount, normalizeCurrency(extraCurrency) || 'RMB', 0)
 const formatCouponAmount = (amount: number, couponCurrency?: string) => formatCurrencyAmount(amount, normalizeCurrency(couponCurrency) || currency.value, 0)
-const refreshQuote = async (): Promise<boolean> => {
+const refreshQuote = async (reservePromotion = false): Promise<boolean> => {
   if (extras.value.length) syncManualExtras()
   const chosenVehicle = tripStore.chosenVehicle
   const categoryId = chosenVehicle?.categoryId || tripStore.selectedFareQuote?.pricing?.categoryId
@@ -228,6 +234,8 @@ const refreshQuote = async (): Promise<boolean> => {
       destinationCity: tripStore.activeDraft.route.destinationCity,
       scheduledAt: departureTime,
       couponCode: tripStore.activeDraft.couponCode,
+      reservePromotion,
+      previousQuoteId: tripStore.selectedFareQuote?.id,
       extraIds: selectedIds,
       displayCurrency: currency.value
     })
@@ -251,8 +259,15 @@ const loadExtras = async () => {
   try {
     const catalog = await listPublicVehicles()
     const currentVehicle = tripStore.chosenVehicle
+    categories.value = [...catalog.categories].sort((a, b) => a.order - b.order)
     const refreshedVehicle = currentVehicle && catalog.data.find(item => item.id === currentVehicle.id)
-    if (refreshedVehicle) tripStore.setChosenVehicle({ ...refreshedVehicle, selectable: currentVehicle.selectable, modelChoice: Boolean(refreshedVehicle.modelChoiceLabel) })
+    if (refreshedVehicle) {
+      tripStore.setChosenVehicle({ ...refreshedVehicle, selectable: currentVehicle.selectable, modelChoice: Boolean(refreshedVehicle.modelChoiceLabel) })
+    } else if (currentVehicle) {
+      tripStore.clearChosenVehicle()
+      uni.showToast({ title: '所選車型已失效，請重新選擇', icon: 'none' })
+      return
+    }
     extras.value = [...catalog.extras].sort((a, b) => a.order - b.order)
     severeWeatherEnabled.value = catalog.severeWeatherEnabled
     syncManualExtras()
@@ -315,8 +330,14 @@ const handleExtraTap = (extra: PublicVehicleExtra) => {
   toggleExtra(extra.id)
 }
 const goNext = async () => {
-  if (!await refreshQuote() || !tripStore.selectedFareQuote) {
-    uni.showToast({ title: '報價暫時無法取得', icon: 'none' })
+  if (!tripStore.chosenVehicle) {
+    uni.showToast({ title: '請重新選擇車型', icon: 'none' })
+    return
+  }
+  const previewPromotion = tripStore.selectedFareQuote?.appliedPromotion
+  if (!await refreshQuote(true) || !tripStore.selectedFareQuote ||
+      (tripStore.activeDraft.couponCode && previewPromotion && !tripStore.selectedFareQuote.appliedPromotion)) {
+    uni.showToast({ title: '報價或優惠暫時無法取得', icon: 'none' })
     return
   }
   openCachedPage('/pages/vehicles/confirm')

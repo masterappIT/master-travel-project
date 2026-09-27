@@ -37,6 +37,13 @@ export const useTripStore = defineStore('trip', () => {
     activeDraft.value.estimatedFare = fareQuotes.value[vehicle.id]?.total
   }
 
+  function clearChosenVehicle() {
+    chosenVehicle.value = null
+    activeDraft.value.chosenVehicleId = undefined
+    activeDraft.value.estimatedFare = undefined
+    fareQuotes.value = {}
+  }
+
   function setRoute(origin: string, destination: string, location?: Omit<TripDraft['route'], 'origin' | 'destination' | 'stops'>) {
     const route = activeDraft.value.route
     const originChanged = route.origin !== origin
@@ -163,6 +170,7 @@ export const useTripStore = defineStore('trip', () => {
     setRoutePoints,
     setDepartureTime,
     setCouponCode,
+    clearChosenVehicle,
     setChosenVehicle,
     setFareQuotes,
     setFareQuote,
