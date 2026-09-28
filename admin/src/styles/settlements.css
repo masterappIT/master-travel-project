@@ -38,6 +38,14 @@
 @media (max-width: 650px) { .settlement-currency-method-grid { grid-template-columns: 1fr; } }
 .settlement-payment-group { display: grid; gap: 12px; }
 .settlement-payment-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; border-top: 1px solid var(--color-border); }
+.settlement-currency-fixed { color: var(--color-muted); font-size: 13px; }
+.settlement-currency-switch { display: inline-flex; align-items: center; gap: 9px; border: 0; padding: 0; color: var(--color-muted); background: transparent; font: inherit; cursor: pointer; }
+.settlement-currency-switch:disabled { cursor: not-allowed; opacity: .6; }
+.settlement-currency-switch-track { position: relative; display: inline-flex; width: 38px; height: 22px; align-items: center; padding: 3px; border-radius: 999px; background: #c7d1df; transition: background .16s ease; }
+.settlement-currency-switch[aria-checked="true"] .settlement-currency-switch-track { background: var(--color-primary); }
+.settlement-currency-switch-thumb { width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(19, 40, 67, .25); transition: transform .16s ease; }
+.settlement-currency-switch[aria-checked="true"] .settlement-currency-switch-thumb { transform: translateX(16px); }
+.settlement-currency-switch-label { min-width: 42px; text-align: left; font-size: 13px; font-weight: 700; }
 .settlement-method-actions { display: flex; align-items: center; gap: 12px; }
 @media (max-width: 650px) { .settlement-section-tabs { width: 100%; } .settlement-section-tabs button { flex: 1; padding: 8px; } .settlement-payment-grid { grid-template-columns: 1fr; } .settlement-settings-heading { flex-wrap: wrap; } }
 

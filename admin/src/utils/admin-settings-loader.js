@@ -1,6 +1,8 @@
-export function applyAdminSettings(settings, { exchangeRate, pricingCurrency, severeWeatherEnabled, adminLogo, paymentSettings }) {
+export function applyAdminSettings(settings, { exchangeRate, pricingCurrency, settlementCurrency, paymentCurrencies, severeWeatherEnabled, adminLogo, paymentSettings }) {
   exchangeRate.value = Number(settings.exchangeRate) || 0.92
   pricingCurrency.value = settings.pricingCurrency === 'HKD' ? 'HKD' : 'RMB'
+  settlementCurrency.value = 'RMB'
+  paymentCurrencies.value = Array.isArray(settings.paymentCurrencies) ? settings.paymentCurrencies.filter(currency => ['RMB', 'HKD'].includes(currency)) : ['RMB', 'HKD']
   severeWeatherEnabled.value = Boolean(settings.severeWeatherEnabled)
   adminLogo.value = settings.adminLogo || ''
   paymentSettings.value = {

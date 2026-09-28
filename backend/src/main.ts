@@ -725,6 +725,8 @@ const appSettingsDefaults = {
   currency: "HKD",
   pricingCurrency: "RMB",
   walletCurrency: "RMB",
+  settlementCurrency: "RMB",
+  paymentCurrencies: ["RMB", "HKD"],
   exchangeRate: 0.92,
   adminLogo: null as string | null,
   severeWeatherEnabled: false,
@@ -1478,12 +1480,16 @@ async function ensurePricingDefaults() {
     }
   });
 }
-function appSettingsResponse(settings: typeof appSettingsDefaults) {
+function appSettingsResponse(settings: Omit<typeof appSettingsDefaults, "paymentCurrencies"> & { paymentCurrencies: Prisma.JsonValue }) {
   return {
     language: settings.language,
     region: settings.region,
     currency: settings.currency,
     pricingCurrency: settings.pricingCurrency,
+    settlementCurrency: settings.settlementCurrency,
+    paymentCurrencies: Array.isArray(settings.paymentCurrencies)
+      ? settings.paymentCurrencies
+      : appSettingsDefaults.paymentCurrencies,
     walletCurrency: settings.walletCurrency,
     exchangeRate:
       normalizeExchangeRate(settings.exchangeRate) ??
@@ -11483,6 +11489,8 @@ class SettingsController {
       region?: string;
       currency?: string;
       pricingCurrency?: string;
+      settlementCurrency?: string;
+      paymentCurrencies?: unknown;
       exchangeRate?: number;
       adminLogo?: string | null;
       severeWeatherEnabled?: boolean;
@@ -11505,6 +11513,13 @@ class SettingsController {
     const settings = await prisma.appSetting.findUniqueOrThrow({
       where: { id: appSettingsDefaults.id },
     });
+    if (body.settlementCurrency !== undefined && body.settlementCurrency !== "RMB")
+      throw new HttpException("Settlement currency must be RMB", HttpStatus.BAD_REQUEST);
+    if (body.paymentCurrencies !== undefined &&
+      (!Array.isArray(body.paymentCurrencies) || !body.paymentCurrencies.length ||
+        body.paymentCurrencies.some((currency) => !["RMB", "HKD"].includes(currency)) ||
+        new Set(body.paymentCurrencies).size !== body.paymentCurrencies.length))
+      throw new HttpException("Payment currencies are invalid", HttpStatus.BAD_REQUEST);
     const pricingCurrency =
       body.pricingCurrency && ["HKD", "RMB"].includes(body.pricingCurrency)
         ? body.pricingCurrency
@@ -11530,6 +11545,10 @@ class SettingsController {
           ? body.currency
           : settings.currency,
       pricingCurrency,
+      settlementCurrency: "RMB",
+      paymentCurrencies: body.paymentCurrencies === undefined
+        ? (Array.isArray(settings.paymentCurrencies) ? settings.paymentCurrencies : appSettingsDefaults.paymentCurrencies)
+        : body.paymentCurrencies as string[],
       exchangeRate:
         body.exchangeRate !== undefined
           ? (normalizeExchangeRate(body.exchangeRate) ?? settings.exchangeRate)

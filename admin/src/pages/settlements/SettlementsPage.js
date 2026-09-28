@@ -78,6 +78,13 @@ export const SettlementsPage = {
       document.body.style.overflow = previousBodyOverflow
     })
 
+    const togglePaymentCurrency = currency => {
+      if (currency === 'RMB') return
+      paymentCurrencies.value = paymentCurrencies.value.includes(currency)
+        ? paymentCurrencies.value.filter(item => item !== currency)
+        : [...paymentCurrencies.value, currency]
+    }
+
     return {
       ...context,
       detailDrawer,
@@ -88,7 +95,8 @@ export const SettlementsPage = {
       closeSettlementDetail,
       handleDetailKeydown,
       formatTripStatus,
-      formatPaymentStatus
+      formatPaymentStatus,
+      togglePaymentCurrency
     }
   },
   template: String.raw`<section v-if="view==='settlements'" class="settlements-page">
@@ -139,9 +147,10 @@ export const SettlementsPage = {
   </template>
   <template v-else>
     <div class="panel settlement-settings-panel">
-      <div class="settlement-settings-heading"><div><h2>結算與付款幣別</h2><p class="muted">統一結算基準與乘客實際付款幣別分開記錄，支付方式按幣別配置。</p></div><span class="settlement-settings-badge">UI 規劃</span></div>
-      <div class="settlement-settings-grid"><article><span>統一結算幣別</span><strong>人民幣（RMB）・規劃值</strong><small>用於訂單基準、司機結算及報表換算；目前未套用。</small></article><article><span>可收款幣別</span><strong>RMB ／ HKD・規劃值</strong><small>港幣可作實際收款幣別，不再僅供預覽；每筆付款需保存原幣金額及換算匯率。</small></article></div>
-      <div class="settlement-settings-notice">人民幣與港幣的付款／提現方式尚未逐幣別設定；現有交易、匯率及結算功能均維持不變。</div>
+      <div class="settlement-settings-heading"><div><h2>結算與付款幣別</h2><p class="muted">定價貨幣只控制報價；結算固定使用人民幣，乘客可選啟用的實際付款幣別。</p></div><span class="settlement-settings-badge">可儲存設定</span></div>
+      <div class="settlement-settings-grid"><article><span>目前定價貨幣（只讀）</span><strong>{{pricingCurrency === 'HKD' ? '港幣（HKD）' : '人民幣（RMB）'}}</strong><small>車資及報價的計價基準。</small></article><article><span>結算貨幣</span><strong>{{settlementCurrency}}（固定）</strong><small>目前系統統一以人民幣結算。</small></article><article><span>付款幣別</span><strong>{{paymentCurrencies.join(' ／ ')}}</strong><small>人民幣固定啟用；港幣可由下方設定。</small></article></div>
+      <div class="settlement-settings-notice">儲存後只更新貨幣設定，不會換算既有金額，也不會自動更改歷史交易資料。</div>
+      <div class="settlement-settings-subsection"><div class="settlement-settings-heading"><div><h2>實際付款幣別</h2><p class="muted">選擇乘客付款時可使用的幣別。</p></div></div><div class="settlement-payment-row"><span>人民幣（RMB）</span><span class="settlement-currency-fixed">固定啟用</span></div><div class="settlement-payment-row"><span id="settlement-hkd-currency">港幣（HKD）</span><button type="button" class="settlement-currency-switch" role="switch" :aria-checked="paymentCurrencies.includes('HKD')" aria-labelledby="settlement-hkd-currency" :disabled="!canWrite" @click="togglePaymentCurrency('HKD')"><span class="settlement-currency-switch-track" aria-hidden="true"><span class="settlement-currency-switch-thumb"></span></span><span class="settlement-currency-switch-label">{{paymentCurrencies.includes('HKD') ? '已啟用' : '已停用'}}</span></button></div><div class="settlement-method-actions"><button type="button" class="primary" :disabled="!canWrite" @click="savePaymentSettings">儲存付款幣別設定</button><span v-if="paymentSettingsSaved" class="success-hint">設定已儲存</span></div></div>
       <div class="settlement-settings-subsection"><div class="settlement-settings-heading"><div><h2>乘客付款方式</h2><p class="muted">按付款幣別分開呈現可用方式；本次只調整 UI，不修改現有付款 API 與儲存邏輯。</p></div><span class="settlement-settings-badge">UI 規劃</span></div><div class="settlement-currency-method-grid"><article><div class="settlement-currency-card-heading"><h3>人民幣（RMB）</h3><span>付款幣別</span></div><div class="settlement-method-list"><span>車費錢包</span><span>微信支付</span><span>支付寶</span><span>銀行卡</span></div></article><article><div class="settlement-currency-card-heading"><h3>港幣（HKD）</h3><span>付款幣別</span></div><div class="settlement-method-list"><span>港幣錢包</span><span>FPS 轉數快</span><span>銀行卡</span></div></article></div><div class="settlement-payment-group"><h3>現有付款設定（不分幣別）</h3><p class="muted">以下開關保留原有功能，不代表上述幣別配置已生效。</p><div v-for="method in [{ key: 'fareBalancePayEnabled', label: '車費餘額' }, { key: 'cashBalancePayEnabled', label: '現金餘額' }, { key: 'wechatPayEnabled', label: '微信支付' }, { key: 'alipayPayEnabled', label: '支付寶' }, { key: 'bankCardPayEnabled', label: '銀行卡' }]" :key="method.key" class="settlement-payment-row"><span :id="'settlement-' + method.key">{{method.label}}</span><label class="switch"><AdminCheckbox v-model="paymentSettings[method.key]" :disabled="!canWrite" :aria-labelledby="'settlement-' + method.key"/><span class="slider" aria-hidden="true"></span></label></div></div><div class="settlement-method-actions"><button type="button" class="primary" :disabled="!canWrite" @click="savePaymentSettings">儲存付款設定</button><span v-if="paymentSettingsSaved" class="success-hint">設定已儲存</span></div></div>
       <div class="settlement-settings-subsection"><div class="settlement-settings-heading"><div><h2>司機提現方式</h2><p class="muted">依實際收款幣別分開呈現可用提現方式；目前只整合畫面，不接入新的設定資料。</p></div><span class="settlement-settings-badge">UI 規劃</span></div><div class="settlement-currency-method-grid"><article><div class="settlement-currency-card-heading"><h3>人民幣（RMB）</h3><span>收款幣別</span></div><div class="settlement-method-list"><span>微信支付</span><span>支付寶</span><span>銀行卡</span></div></article><article><div class="settlement-currency-card-heading"><h3>港幣（HKD）</h3><span>收款幣別</span></div><div class="settlement-method-list"><span>FPS 轉數快</span><span>銀行卡</span></div></article></div><small class="muted">司機個人的提現方式與帳戶資料仍沿用目前結算功能。</small></div>
     </div>

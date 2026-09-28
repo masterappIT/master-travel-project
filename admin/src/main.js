@@ -80,7 +80,7 @@ const vehiclesPageState = createVehiclesPageState()
 const vehicleTab = vehiclesPageState.tab
 const extraSortId = vehiclesPageState.extraSortId
 let loadRequestId = 0
-const { exchangeRate, pricingCurrency, severeWeatherEnabled, adminLogo, paymentSettings } = createAdminSettingsState()
+const { exchangeRate, pricingCurrency, settlementCurrency, paymentCurrencies, severeWeatherEnabled, adminLogo, paymentSettings } = createAdminSettingsState()
 const { users, selectedUser, walletTransactions, topUpWithdrawalHistory, trips, charterOrders, addresses, mainlandCities, addressSearchKeyword, addressSearchResults, addressSearching, categories, vehicles, extras, distancePricing, routeMinimumFares, routeMinimumFareForm, membershipPlans, membershipOrders, promotions, promotionForm, promotionSaving, promotionDeletingId, promotionTogglingId, mileageRules, mileageRewards, mileageAccounts, mileageRewardForm, mileageLedger, mileageSelectedAccount, mileageSaving, invitationSettings, invitationWalletCurrency, invitationSummary, invitationRecords, invitationSaving } = createAdminResourceState()
 const { administrators, auditLogs, notifications, notificationTemplates, notificationUsers, notificationDrivers, personnel, entryItems, drivers, selectedDriver, expenseItems } = createAdminAuxiliaryState()
 const allVehicles = ref([])
@@ -129,7 +129,7 @@ const resourceLoader = createAdminResourceLoader({
   displayError,
   applySettings: applyAdminSettings,
   loadSettings: settingsLoader.load,
-  settings: { exchangeRate, pricingCurrency, severeWeatherEnabled, adminLogo, paymentSettings },
+  settings: { exchangeRate, pricingCurrency, settlementCurrency, paymentCurrencies, severeWeatherEnabled, adminLogo, paymentSettings },
   resourceLoaders: {
     coreUsers: () => import('./utils/admin-resource-loader.js').then(({ loadCoreUsers }) => loadCoreUsers({ usersApi, users, state: usersPageState })),
     drivers: () => import('./utils/admin-resource-loader.js').then(({ loadDriversResources }) => loadDriversResources({ driversApi, vehicleCategories, drivers, allVehicles, state: driversPageState })),
@@ -186,7 +186,7 @@ const adminSessionActions = createAdminSessionActions({ api, token, username, pa
 const { apiLogin, logout, saveExchangeRate, uploadAdminLogo, removeAdminLogo } = adminSessionActions
 const notificationsActions = createNotificationsActions({ api, notificationForm, notificationRecipientSearch, notificationTemplates, load, error, displayError })
 const { resetNotification, createTemplate, clearNotificationRecipients, toggleNotificationRecipient, notificationRecipientChecked, saveNotification } = notificationsActions
-const paymentsActions = createPaymentsActions({ api, paymentSettings, paymentSettingsSaved, driverRaceSaving, error, displayError })
+const paymentsActions = createPaymentsActions({ api, paymentSettings, paymentCurrencies, paymentSettingsSaved, driverRaceSaving, error, displayError })
 const { savePaymentSettings } = paymentsActions
 const { updateCharterStatus, editCharter, saveCharter } = createCharterActions({ api, charterForm, load, error, displayError, dateTimeInput })
 const { edit: editUser, reset: resetUser, select: selectUser, save: saveUser, updateStatus: updateUserStatus, remove: removeUser, openWalletAdjustment, saveWalletAdjustment } = usersActions
@@ -761,7 +761,10 @@ const App = { setup() {
      settlementStatusFilter,
      settlementPage,
      settlementMethods,
+     pricingCurrency,
      paymentSettings,
+     settlementCurrency,
+     paymentCurrencies,
      paymentSettingsSaved,
      savePaymentSettings,
      eligibleSettlements,
