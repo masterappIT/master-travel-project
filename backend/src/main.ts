@@ -3853,6 +3853,63 @@ class ClientAuthController {
     return clientAuthResponse(loggedInUser);
   }
 
+  @Post("wechat/phone")
+  async wechatPhone(@Body() body: { loginCode?: string; phoneCode?: string; invitationCode?: string }) {
+    const loginCode = body.loginCode?.trim();
+    const phoneCode = body.phoneCode?.trim();
+    const appId = process.env.WECHAT_MINIPROGRAM_APP_ID;
+    const appSecret = process.env.WECHAT_MINIPROGRAM_APP_SECRET;
+    if (!loginCode || !phoneCode || !appId || !appSecret)
+      throw new HttpException("Valid WeChat phone authorization is required", HttpStatus.BAD_REQUEST);
+    const sessionResponse = await fetch(`https://api.weixin.qq.com/sns/jscode2session?${new URLSearchParams({ appid: appId, secret: appSecret, js_code: loginCode, grant_type: "authorization_code" })}`);
+    const session = await sessionResponse.json() as { openid?: string; unionid?: string; errcode?: number; errmsg?: string };
+    if (!sessionResponse.ok || session.errcode || !session.openid)
+      throw new UnauthorizedException(session.errmsg || "WeChat authorization failed");
+    const tokenResponse = await fetch(`https://api.weixin.qq.com/cgi-bin/token?${new URLSearchParams({ grant_type: "client_credential", appid: appId, secret: appSecret })}`);
+    const token = await tokenResponse.json() as { access_token?: string; errcode?: number; errmsg?: string };
+    if (!tokenResponse.ok || token.errcode || !token.access_token)
+      throw new UnauthorizedException(token.errmsg || "WeChat access token failed");
+    const phoneResponse = await fetch(`https://api.weixin.qq.com/wxa/business/getuserphonenumber?access_token=${encodeURIComponent(token.access_token)}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ code: phoneCode }) });
+    const phoneResult = await phoneResponse.json() as { phone_info?: { phoneNumber?: string; purePhoneNumber?: string; countryCode?: string }; errcode?: number; errmsg?: string };
+    const phoneInfo = phoneResult.phone_info;
+    if (!phoneResponse.ok || phoneResult.errcode || !phoneInfo?.purePhoneNumber)
+      throw new UnauthorizedException(phoneResult.errmsg || "WeChat phone authorization failed");
+    const countryCode = phoneInfo.countryCode ? `+${phoneInfo.countryCode.replace(/^\+/, "")}` : "+86";
+    const phoneNumber = phoneInfo.purePhoneNumber;
+    const providerId = session.unionid ? `unionid:${session.unionid}` : `openid:${session.openid}`;
+    const identity = await prisma.authIdentity.findUnique({ where: { provider_providerId: { provider: "wechat", providerId } }, include: { user: true } });
+    const existingPhone = await prisma.user.findUnique({ where: { countryCode_phoneNumber: { countryCode, phoneNumber } } });
+    if (identity && existingPhone && identity.user.id !== existingPhone.id)
+      throw new HttpException("WeChat account and phone number belong to different users", HttpStatus.CONFLICT);
+    const user = identity?.user || existingPhone || await prisma.user.create({ data: { id: await generateUserId(), countryCode, phoneNumber, name: "WeChat User", lastLoginAt: new Date() } });
+    if (user.countryCode !== countryCode || user.phoneNumber !== phoneNumber) {
+      await prisma.user.update({ where: { id: user.id }, data: { countryCode, phoneNumber } });
+    }
+    if (!identity) await prisma.authIdentity.create({ data: { provider: "wechat", providerId, userId: user.id } });
+    const loggedInUser = await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
+    return clientAuthResponse(loggedInUser);
+  }
+
+  @Post("wechat")
+  async wechat(@Body() body: { code?: string; platform?: string }) {
+    const code = body.code?.trim();
+    if (!code || code.length > 512 || (body.platform || "mp-weixin") !== "mp-weixin")
+      throw new HttpException("Valid WeChat authorization code is required", HttpStatus.BAD_REQUEST);
+    const appId = process.env.WECHAT_MINIPROGRAM_APP_ID;
+    const appSecret = process.env.WECHAT_MINIPROGRAM_APP_SECRET;
+    if (!appId || !appSecret) throw new HttpException("WeChat login is not configured", HttpStatus.SERVICE_UNAVAILABLE);
+    const query = new URLSearchParams({ appid: appId, secret: appSecret, js_code: code, grant_type: "authorization_code" });
+    const response = await fetch(`https://api.weixin.qq.com/sns/jscode2session?${query}`);
+    const result = await response.json() as { openid?: string; unionid?: string; errcode?: number; errmsg?: string };
+    if (!response.ok || result.errcode || !result.openid) throw new UnauthorizedException(result.errmsg || "WeChat authorization failed");
+    const providerId = result.unionid ? `unionid:${result.unionid}` : `openid:${result.openid}`;
+    const identity = await prisma.authIdentity.findUnique({ where: { provider_providerId: { provider: "wechat", providerId } }, include: { user: true } });
+    const user = identity
+      ? await prisma.user.update({ where: { id: identity.user.id }, data: { lastLoginAt: new Date() } })
+      : await prisma.user.create({ data: { id: await generateUserId(), countryCode: "+852", phoneNumber: `wx${randomBytes(12).toString("hex")}`, name: "WeChat User", lastLoginAt: new Date(), authIdentities: { create: { provider: "wechat", providerId } } } });
+    return clientAuthResponse(user);
+  }
+
   @Post("third-party")
   async thirdParty(
     @Body() body: { provider?: string; providerToken?: string },

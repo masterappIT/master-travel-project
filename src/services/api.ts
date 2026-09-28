@@ -130,6 +130,26 @@ export async function verifyPhoneVerificationCode(challengeId: string, code = ''
   return response.data as AuthResult
 }
 
+export async function authenticateWechat(code: string): Promise<AuthResult> {
+  const response = await uni.request({
+    url: `${API_BASE_URL}/auth/wechat`,
+    method: 'POST',
+    data: { code, platform: 'mp-weixin' }
+  })
+  if (response.statusCode >= 400) throw apiError(response, '微信登入失敗')
+  return response.data as AuthResult
+}
+
+export async function authenticateWechatPhone(loginCode: string, phoneCode: string, invitationCode = ''): Promise<AuthResult> {
+  const response = await uni.request({
+    url: `${API_BASE_URL}/auth/wechat/phone`,
+    method: 'POST',
+    data: { loginCode, phoneCode, invitationCode: invitationCode || undefined }
+  })
+  if (response.statusCode >= 400) throw apiError(response, '微信手機號碼授權失敗')
+  return response.data as AuthResult
+}
+
 export async function authenticateThirdParty(provider: 'wechat' | 'apple', providerToken: string): Promise<AuthResult> {
   const response = await uni.request({
     url: `${API_BASE_URL}/auth/third-party`,

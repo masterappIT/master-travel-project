@@ -38,7 +38,13 @@
       <text class="third-party-label">第三方登入</text>
       <!-- #ifdef MP-WEIXIN -->
       <view class="third-party-options third-party-options-single">
-        <image class="wechat-icon" src="/static/login/apple.svg" mode="scaleToFill" @tap="handleThirdPartyLogin('wechat')" />
+        <button
+          class="wechat-phone-button"
+          open-type="getPhoneNumber"
+          :disabled="loginSubmitting || !agreed"
+          aria-label="微信登入並授權手機號碼"
+          @getphonenumber="handleWechatPhoneNumber"
+        ><image class="wechat-icon" src="/static/login/apple.svg" mode="scaleToFill" /></button>
       </view>
       <!-- #endif -->
       <!-- #ifdef H5 -->
@@ -60,6 +66,9 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
+// #ifdef MP-WEIXIN
+import { authenticateWechat, authenticateWechatPhone } from '../../services/api'
+// #endif
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { authenticateThirdParty, requestPhoneVerificationCode, verifyPhoneVerificationCode } from '../../services/api'
 import { setAuthenticated, isAuthenticated } from '../../utils/auth'
@@ -124,7 +133,55 @@ const handleLogin = async () => {
   }
 }
 
+// #ifdef MP-WEIXIN
+const handleWechatPhoneNumber = async (event: { detail?: { code?: string; errMsg?: string } }) => {
+  if (loginSubmitting.value) return
+  if (!agreed.value) {
+    uni.showToast({ title: '請先同意私隱協議及使用條款', icon: 'none' })
+    return
+  }
+  const phoneCode = event.detail?.code?.trim()
+  if (!phoneCode) {
+    uni.showToast({ title: event.detail?.errMsg || '請授權微信手機號碼', icon: 'none' })
+    return
+  }
+  try {
+    loginSubmitting.value = true
+    const loginResult = await new Promise<UniApp.LoginRes>((resolve, reject) => {
+      uni.login({ provider: 'weixin', success: resolve, fail: reject })
+    })
+    if (!loginResult.code) throw new Error('微信授權碼無效')
+    const result = await authenticateWechatPhone(loginResult.code, phoneCode, invitationCode.value)
+    setAuthenticated(result.token, result.user, result.expiresAt)
+    goHome()
+  } catch (error) {
+    uni.showToast({ title: error instanceof Error ? error.message : '微信手機號碼授權失敗', icon: 'none' })
+  } finally {
+    loginSubmitting.value = false
+  }
+}
+// #endif
+
 const handleThirdPartyLogin = async (provider: 'wechat' | 'apple') => {
+  if (provider === 'wechat') {
+    // #ifdef MP-WEIXIN
+    try {
+      const loginResult = await new Promise<UniApp.LoginRes>((resolve, reject) => {
+        uni.login({ provider: 'weixin', success: resolve, fail: reject })
+      })
+      if (!loginResult.code) throw new Error('微信授權碼無效')
+      const result = await authenticateWechat(loginResult.code)
+      setAuthenticated(result.token, result.user, result.expiresAt)
+      goHome()
+    } catch (error) {
+      uni.showToast({ title: error instanceof Error ? error.message : '微信登入失敗', icon: 'none' })
+    }
+    // #endif
+    // #ifndef MP-WEIXIN
+    uni.showToast({ title: '微信登入目前只支援小程序', icon: 'none' })
+    // #endif
+    return
+  }
   try {
     const providerToken = `${provider}-dev-account`
     const result = await authenticateThirdParty(provider, providerToken)
@@ -331,6 +388,34 @@ const handleThirdPartyLogin = async (provider: 'wechat' | 'apple') => {
 .agreement-link {
   color: var(--login-link);
   font-weight: 600;
+}
+
+.wechat-phone-button {
+  margin: 0;
+  padding: 0;
+  border: none;
+  outline: none;
+  width: 45px;
+  height: 45px;
+  border-radius: 50%;
+  background: transparent;
+  line-height: 45px;
+}
+
+.wechat-phone-button::after {
+  border: none;
+}
+
+.wechat-phone-button[disabled] {
+  opacity: 0.45;
+}
+
+.wechat-phone-button .wechat-icon {
+  position: static;
+  display: block;
+  width: 40px;
+  height: 40px;
+  margin: 2.5px;
 }
 
 .login-button {
