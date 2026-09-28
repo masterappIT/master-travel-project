@@ -10,7 +10,7 @@ class DriverCurrencyPreference extends ValueNotifier<String> {
 
   static String _readStoredCurrency() {
     final stored = readBrowserValue(_storageKey);
-    return stored == 'CNY' ? 'CNY' : 'HKD';
+    return stored == 'HKD' ? 'HKD' : 'CNY';
   }
 
   @override

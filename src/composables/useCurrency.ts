@@ -22,7 +22,7 @@ const normalizedStoredRate = normalizeExchangeRate(storedRate)
 const exchangeRate = ref(normalizedStoredRate || 0.92)
 if (storedRate !== undefined && normalizedStoredRate === null) uni.removeStorageSync('exchange-rate')
 if (normalizedStoredRate !== null && normalizedStoredRate !== Number(storedRate)) uni.setStorageSync('exchange-rate', normalizedStoredRate)
-const currency = ref<Currency>(storedCurrency || 'HKD')
+const currency = ref<Currency>(storedCurrency || 'RMB')
 let loaded = false
 
 export function useCurrency() {
