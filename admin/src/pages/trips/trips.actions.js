@@ -25,6 +25,9 @@ export function createTripsActions({ api, tripsApi, addressesApi, tripForm, sele
     tripForm.value = { id: '', userId: users.value[0]?.id || '', origin: '', destination: '', originLatitude: '', originLongitude: '', destinationLatitude: '', destinationLongitude: '', originCity: '', destinationCity: '', distanceMeters: 0, categoryId: '', vehicleId: '', extraIds: [], region: 'GUANGDONG', scheduledAt: dateTimeInput(new Date(Date.now() + 3600000).toISOString()), status: 'PENDING' }
     tripQuote.value = null
     tripBookingStep.value = 'details'
+    tripPaymentMethod.value = 'sandbox'
+    tripUseFareBalance.value = false
+    tripUseCashBalance.value = false
     clearTripLocationSearch()
   }
   async function searchTripLocation(target) {
@@ -77,10 +80,17 @@ export function createTripsActions({ api, tripsApi, addressesApi, tripForm, sele
       tripForm.value.distanceMeters = Number(route.distance) || 0; error.value = ''
     } catch (err) { error.value = displayError(err) }
   }
+  async function createPendingTrip() {
+    if (!tripQuote.value || !tripForm.value) return
+    try {
+      const result = await api('/payments/trip-pending', { method: 'POST', body: JSON.stringify({ userId: tripForm.value.userId, quoteId: tripQuote.value.id, origin: tripForm.value.origin, destination: tripForm.value.destination, originLatitude: Number(tripForm.value.originLatitude) || undefined, originLongitude: Number(tripForm.value.originLongitude) || undefined, destinationLatitude: Number(tripForm.value.destinationLatitude) || undefined, destinationLongitude: Number(tripForm.value.destinationLongitude) || undefined, scheduledAt: tripForm.value.scheduledAt }) })
+      tripForm.value = null; tripQuote.value = null; tripBookingStep.value = 'details'; await load(); selectedTrip.value = trips.value.find(trip => trip.id === result?.tripId) || null
+    } catch (err) { error.value = displayError(err) }
+  }
   async function completeTripBooking() {
     if (!tripQuote.value || !tripForm.value) return
     try {
-      const result = await api('/payments/trip-pay', { method: 'POST', body: JSON.stringify({ userId: tripForm.value.userId, quoteId: tripQuote.value.id, useFareBalance: tripUseFareBalance.value, useCashBalance: tripUseCashBalance.value, externalPaymentMethod: tripPaymentMethod.value === 'sandbox' ? 'sandbox' : tripPaymentMethod.value, origin: tripForm.value.origin, destination: tripForm.value.destination, scheduledAt: tripForm.value.scheduledAt }) })
+      const result = await api('/payments/trip-pay', { method: 'POST', body: JSON.stringify({ userId: tripForm.value.userId, quoteId: tripQuote.value.id, manualPaymentConfirmed: true, useFareBalance: tripUseFareBalance.value, useCashBalance: tripUseCashBalance.value, externalPaymentMethod: tripPaymentMethod.value, origin: tripForm.value.origin, destination: tripForm.value.destination, originLatitude: Number(tripForm.value.originLatitude) || undefined, originLongitude: Number(tripForm.value.originLongitude) || undefined, destinationLatitude: Number(tripForm.value.destinationLatitude) || undefined, destinationLongitude: Number(tripForm.value.destinationLongitude) || undefined, scheduledAt: tripForm.value.scheduledAt }) })
       tripForm.value = null; tripQuote.value = null; tripBookingStep.value = 'details'; await load(); selectedTrip.value = trips.value.find(trip => trip.id === result?.tripId) || null
     } catch (err) { error.value = displayError(err) }
   }
@@ -129,5 +139,5 @@ export function createTripsActions({ api, tripsApi, addressesApi, tripForm, sele
     }
   }
   async function revokeOrderUrl(item) { if (!await requestConfirmation({ title: '撤銷訂單 URL', message: '確定要撤銷此訂單 URL？', confirmLabel: '撤銷', danger: true })) return; try { await tripsApi.revokeOrderUrl(item.tripId, item.id); notify('訂單 URL 已撤銷'); await load() } catch (err) { error.value = displayError(err); notify(error.value, 'error') } }
-  return { editTrip, resetTrip, clearTripLocationSearch, searchTripLocation, selectTripLocation, handleTripRegionChange, showTrip, closeTrip, retryTrip: tripDetail.retry, updateTripStatus, settleTrip, unsettleTrip, prepareTripQuote, calculateTripRoute, completeTripBooking, saveTrip, openDispatch, saveDispatch, openOrderUrlForm, openOrderUrlExpiryForm, createOrderUrl, closeCreatedOrderUrl, copyOrderUrl, copyExistingOrderUrl, revokeOrderUrl }
+  return { editTrip, resetTrip, clearTripLocationSearch, searchTripLocation, selectTripLocation, handleTripRegionChange, showTrip, closeTrip, retryTrip: tripDetail.retry, updateTripStatus, settleTrip, unsettleTrip, prepareTripQuote, calculateTripRoute, createPendingTrip, completeTripBooking, saveTrip, openDispatch, saveDispatch, openOrderUrlForm, openOrderUrlExpiryForm, createOrderUrl, closeCreatedOrderUrl, copyOrderUrl, copyExistingOrderUrl, revokeOrderUrl }
 }

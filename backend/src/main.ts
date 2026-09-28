@@ -12250,6 +12250,7 @@ class PaymentsController {
     @Body()
     body: {
       quoteId?: string;
+      userId?: string;
       origin?: string;
       destination?: string;
       originAddress?: {
@@ -12291,7 +12292,19 @@ class PaymentsController {
     if (!quoteId)
       throw new HttpException("quoteId is required", HttpStatus.BAD_REQUEST);
 
-    const session = await clientSessionFrom(req);
+    let session: ClientSession;
+    try {
+      session = await clientSessionFrom(req);
+    } catch {
+      const adminSession = requireRole(req, ["SUPER_ADMIN", "OPERATOR"]);
+      if (!body.userId)
+        throw new HttpException("userId is required for administrator orders", HttpStatus.BAD_REQUEST);
+      session = { sub: body.userId.trim(), exp: adminSession.exp, jti: adminSession.jti };
+    }
+    if (body.userId && body.userId.trim() !== session.sub) {
+      const adminSession = requireRole(req, ["SUPER_ADMIN", "OPERATOR"]);
+      session = { sub: body.userId.trim(), exp: adminSession.exp, jti: adminSession.jti };
+    }
     const quote = await prisma.fareQuote.findUnique({
       where: { id: quoteId },
       include: { pricing: true },
@@ -12415,6 +12428,7 @@ class PaymentsController {
       useFareBalance?: boolean;
       useCashBalance?: boolean;
       externalPaymentMethod?: string;
+      manualPaymentConfirmed?: boolean;
       origin?: string;
       destination?: string;
       originAddress?: {
@@ -12485,6 +12499,12 @@ class PaymentsController {
       } catch {
         throw new ForbiddenException("Cannot pay for another user");
       }
+    }
+    const manualPaymentConfirmed = body.manualPaymentConfirmed === true;
+    if (manualPaymentConfirmed) {
+      requireRole(req, ["SUPER_ADMIN", "OPERATOR"]);
+      if (!body.externalPaymentMethod?.trim())
+        throw new HttpException("externalPaymentMethod is required", HttpStatus.BAD_REQUEST);
     }
     const userTarget = await prisma.user.findUnique({
       where: { id: session.sub },
@@ -12630,7 +12650,7 @@ class PaymentsController {
           totalAmount - fareApplied - cashApplied,
         );
 
-        if (externalPaid > 0) {
+        if (externalPaid > 0 && !manualPaymentConfirmed) {
           throw new HttpException(
             {
               code: "EXTERNAL_PAYMENT_REQUIRED",
@@ -12641,6 +12661,10 @@ class PaymentsController {
             HttpStatus.PAYMENT_REQUIRED,
           );
         }
+        const recordedExternalPaid = manualPaymentConfirmed ? externalPaid : 0;
+        const recordedExternalMethod = manualPaymentConfirmed
+          ? body.externalPaymentMethod!.trim()
+          : null;
 
         let currentFare = user.fareBalance;
         let currentCash = user.cashBalance;
@@ -12770,8 +12794,8 @@ class PaymentsController {
                 ...passengerData,
                 fareBalancePaid: farePaid,
                 cashBalancePaid: cashPaid,
-                externalPaid: 0,
-                externalPaymentMethod: null,
+                externalPaid: recordedExternalPaid,
+                externalPaymentMethod: recordedExternalMethod,
               },
             })
           : await tx.trip.create({
@@ -12797,8 +12821,8 @@ class PaymentsController {
                 ...passengerData,
                 fareBalancePaid: farePaid,
                 cashBalancePaid: cashPaid,
-                externalPaid: 0,
-                externalPaymentMethod: null,
+                externalPaid: recordedExternalPaid,
+                externalPaymentMethod: recordedExternalMethod,
               },
             });
         const payment = await tx.payment.create({
@@ -12810,8 +12834,8 @@ class PaymentsController {
             currency: quote.currency,
             fareAmount: farePaid,
             cashAmount: cashPaid,
-            externalAmount: 0,
-            externalPaymentMethod: null,
+            externalAmount: recordedExternalPaid,
+            externalPaymentMethod: recordedExternalMethod,
             externalReference: null,
           },
         });
