@@ -73,7 +73,7 @@
     "@vue/runtime-dom": "3.4.21",
     "@vue/shared": "3.4.21",
     "miniprogram-ci": "^1.9.6",
-    "pinia": "^2.3.0",
+    "pinia": "2.1.7",
     "vue": "3.4.21",
     "vue-i18n": "^9.1.9"
   },
