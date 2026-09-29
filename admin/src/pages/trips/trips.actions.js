@@ -1,11 +1,15 @@
 import { createTripDetailController } from './trip-detail.controller.js'
 
-export function createTripsActions({ api, tripsApi, addressesApi, tripForm, selectedTrip, tripDetailLoading, tripDetailError, tripDetailId, tripQuote, tripBookingStep, tripPaymentMethod, tripUseFareBalance, tripUseCashBalance, tripLocationKeyword, tripLocationResults, tripLocationSearching, tripLocationTarget, dispatchForm, orderUrlForm, createdOrderUrl, users, trips, error, load, loadUserOptions, loadDriverOptions, displayError, canWrite, requestConfirmation, notify, tripCatalog, dateTimeInput }) {
+export function createTripsActions({ api, tripsApi, addressesApi, tripForm, selectedTrip, tripDetailLoading, tripDetailError, tripDetailId, tripQuote, tripVehicleCategoryId, tripBookingStep, tripPaymentMethod, tripPaymentAmount, tripUseFareBalance, tripUseCashBalance, tripLocationKeyword, tripOriginKeyword, tripDestinationKeyword, tripLocationResults, tripLocationSearching, tripLocationTarget, dispatchForm, orderUrlForm, createdOrderUrl, users, trips, error, load, loadUserOptions, loadDriverOptions, displayError, canWrite, requestConfirmation, notify, tripCatalog, dateTimeInput }) {
   const tripDetail = createTripDetailController({ tripsApi, selectedTrip, loading: tripDetailLoading, error: tripDetailError, selectedId: tripDetailId, displayError })
+  let locationSearchGeneration = 0
   async function settleTrip(item, method) { if (!canWrite.value || !item?.id || !method?.trim()) return; try { await tripsApi.settle(item.id, method.trim()); await load(); selectedTrip.value = trips.value.find(trip => trip.id === item.id) || null } catch (err) { error.value = displayError(err) } }
   async function unsettleTrip(item) { if (!canWrite.value || !item?.id) return; try { await tripsApi.unsettle(item.id); await load(); selectedTrip.value = trips.value.find(trip => trip.id === item.id) || null } catch (err) { error.value = displayError(err) } }
   function clearTripLocationSearch() {
+    locationSearchGeneration += 1
     tripLocationKeyword.value = ''
+    tripOriginKeyword.value = ''
+    tripDestinationKeyword.value = ''
     tripLocationResults.value = []
     tripLocationTarget.value = 'origin'
   }
@@ -15,41 +19,73 @@ export function createTripsActions({ api, tripsApi, addressesApi, tripForm, sele
       const detail = await tripsApi.get(item.id)
       await loadUserOptions(detail.userId)
       selectedTrip.value = null
-      tripForm.value = { ...detail, scheduledAt: dateTimeInput(detail.scheduledAt) }
+      tripForm.value = { ...detail, originDisplay: detail.originDisplay || detail.origin, destinationDisplay: detail.destinationDisplay || detail.destination, originRegion: detail.originRegion || (detail.region === 'HK' ? '香港' : detail.region === 'MACAU' ? '澳門' : '大陸'), destinationRegion: detail.destinationRegion || (detail.region === 'HK' ? '香港' : detail.region === 'MACAU' ? '澳門' : '大陸'), scheduledAt: dateTimeInput(detail.scheduledAt) }
       clearTripLocationSearch()
     } catch (err) { error.value = displayError(err) }
   }
   async function resetTrip() {
     await loadUserOptions()
     selectedTrip.value = null
-    tripForm.value = { id: '', userId: users.value[0]?.id || '', origin: '', destination: '', originLatitude: '', originLongitude: '', destinationLatitude: '', destinationLongitude: '', originCity: '', destinationCity: '', distanceMeters: 0, categoryId: '', vehicleId: '', extraIds: [], region: 'GUANGDONG', scheduledAt: dateTimeInput(new Date(Date.now() + 3600000).toISOString()), status: 'PENDING' }
+    tripForm.value = { id: '', userId: users.value[0]?.id || '', origin: '', destination: '', originDisplay: '', destinationDisplay: '', originLatitude: '', originLongitude: '', destinationLatitude: '', destinationLongitude: '', originCity: '', destinationCity: '', originRegion: '香港', destinationRegion: '大陸', distanceMeters: 0, categoryId: '', vehicleId: '', extraIds: [], region: 'GUANGDONG', scheduledAt: dateTimeInput(new Date(Date.now() + 3600000).toISOString()), status: 'PENDING' }
+    tripVehicleCategoryId.value = ''
     tripQuote.value = null
+    tripPaymentAmount.value = ''
+    tripVehicleCategoryId.value = ''
     tripBookingStep.value = 'details'
-    tripPaymentMethod.value = 'sandbox'
-    tripUseFareBalance.value = false
-    tripUseCashBalance.value = false
     clearTripLocationSearch()
   }
   async function searchTripLocation(target) {
-    const keyword = tripLocationKeyword.value.trim()
+    const keyword = (target === 'destination' ? tripDestinationKeyword.value : tripOriginKeyword.value).trim()
+    tripLocationTarget.value = target
+    const region = target === 'origin' ? (tripForm.value.originRegion || '香港') : (tripForm.value.destinationRegion || '大陸')
+    tripLocationKeyword.value = target === 'destination' ? tripDestinationKeyword.value : tripOriginKeyword.value
     if (!keyword || tripLocationSearching.value || !tripForm.value) return
-    tripLocationTarget.value = target; tripLocationSearching.value = true; error.value = ''
+    const searchGeneration = locationSearchGeneration
+    tripLocationSearching.value = true; error.value = ''
     try {
-      const region = tripForm.value.region === 'HK' ? '香港' : tripForm.value.region === 'MACAU' ? '澳門' : '大陸'
       const result = await addressesApi.search(keyword, region)
+      if (searchGeneration !== locationSearchGeneration) return
       tripLocationResults.value = result.data || []
+      if (!tripLocationResults.value.length) error.value = `找不到${region}的地址，請確認地區後重新搜尋`
     } catch (err) { tripLocationResults.value = []; error.value = displayError(err) } finally { tripLocationSearching.value = false }
   }
   function selectTripLocation(item) {
     if (!tripForm.value) return
     const target = tripLocationTarget.value
+    const region = target === 'origin' ? (tripForm.value.originRegion || '香港') : (tripForm.value.destinationRegion || '大陸')
+    if (item.region && item.region !== region) { error.value = `此地址不屬於${region}，請重新搜尋${region}地址`; return }
     tripForm.value[target] = item.displayAddress || item.address || item.name
+    tripForm.value[`${target}Display`] = item.name || item.displayAddress || item.address || ''
     tripForm.value[`${target}Latitude`] = item.latitude ?? item.lat ?? ''
     tripForm.value[`${target}Longitude`] = item.longitude ?? item.lng ?? ''
     tripForm.value[`${target}City`] = item.city || item.district || ''
+    tripForm.value[`${target}District`] = item.district || ''
+    tripForm.value[`${target}Region`] = item.region || region
+    if (target === 'destination') tripDestinationKeyword.value = ''
+    else tripOriginKeyword.value = ''
     tripLocationKeyword.value = ''; tripLocationResults.value = []
   }
-  function handleTripRegionChange() { clearTripLocationSearch() }
+  function handleTripRegionChange(target) {
+    if (!tripForm.value) return
+    if (target === 'origin') {
+      tripOriginKeyword.value = ''
+      tripForm.value.origin = ''
+      tripForm.value.originDisplay = ''
+      tripForm.value.originLatitude = ''
+      tripForm.value.originLongitude = ''
+      tripForm.value.originCity = ''
+    } else {
+      tripDestinationKeyword.value = ''
+      tripForm.value.destination = ''
+      tripForm.value.destinationDisplay = ''
+      tripForm.value.destinationLatitude = ''
+      tripForm.value.destinationLongitude = ''
+      tripForm.value.destinationCity = ''
+    }
+    tripLocationTarget.value = target || 'origin'
+    tripLocationKeyword.value = ''
+    tripLocationResults.value = []
+  }
   async function showTrip(item) {
     tripForm.value = null
     await tripDetail.open(item)
@@ -66,10 +102,11 @@ export function createTripsActions({ api, tripsApi, addressesApi, tripForm, sele
   async function prepareTripQuote() {
     if (!tripForm.value || tripForm.value.id) return
     const vehicle = tripCatalog.value.data.find(item => item.id === tripForm.value.vehicleId)
-    const categoryId = tripForm.value.categoryId || vehicle?.categoryId
+    const categoryId = tripVehicleCategoryId.value || tripForm.value.categoryId || vehicle?.categoryId
     if (!categoryId || !tripForm.value.distanceMeters) { error.value = '請先搜尋並選擇完整路線，再選擇車型'; return }
     try {
-      tripQuote.value = await api('/quotes', { method: 'POST', body: JSON.stringify({ categoryId, vehicleId: tripForm.value.vehicleId, distanceMeters: Number(tripForm.value.distanceMeters), durationSeconds: Number(tripForm.value.durationSeconds || 0), extraIds: tripForm.value.extraIds || [], displayCurrency: 'RMB', userId: tripForm.value.userId, originRegion: tripForm.value.region === 'HK' ? '香港' : tripForm.value.region === 'MACAU' ? '澳門' : '大陸', destinationRegion: tripForm.value.region === 'HK' ? '香港' : tripForm.value.region === 'MACAU' ? '澳門' : '大陸', originCity: tripForm.value.originCity || '', destinationCity: tripForm.value.destinationCity || '', scheduledAt: tripForm.value.scheduledAt }) })
+      tripQuote.value = await api('/quotes', { method: 'POST', body: JSON.stringify({ categoryId, vehicleId: tripForm.value.vehicleId, distanceMeters: Number(tripForm.value.distanceMeters), durationSeconds: Number(tripForm.value.durationSeconds || 0), extraIds: tripForm.value.extraIds || [], displayCurrency: 'RMB', userId: tripForm.value.userId, originRegion: tripForm.value.originRegion || '香港', destinationRegion: tripForm.value.destinationRegion || '大陸', originCity: tripForm.value.originCity || '', destinationCity: tripForm.value.destinationCity || '', scheduledAt: tripForm.value.scheduledAt }) })
+      tripPaymentAmount.value = String(tripQuote.value.total ?? tripQuote.value.totalAmount ?? '')
       tripBookingStep.value = 'payment'; error.value = ''
     } catch (err) { error.value = displayError(err) }
   }
@@ -83,14 +120,21 @@ export function createTripsActions({ api, tripsApi, addressesApi, tripForm, sele
   async function createPendingTrip() {
     if (!tripQuote.value || !tripForm.value) return
     try {
-      const result = await api('/payments/trip-pending', { method: 'POST', body: JSON.stringify({ userId: tripForm.value.userId, quoteId: tripQuote.value.id, origin: tripForm.value.origin, destination: tripForm.value.destination, originLatitude: Number(tripForm.value.originLatitude) || undefined, originLongitude: Number(tripForm.value.originLongitude) || undefined, destinationLatitude: Number(tripForm.value.destinationLatitude) || undefined, destinationLongitude: Number(tripForm.value.destinationLongitude) || undefined, scheduledAt: tripForm.value.scheduledAt }) })
+      const result = await api('/payments/trip-pending', { method: 'POST', body: JSON.stringify({ userId: tripForm.value.userId, quoteId: tripQuote.value.id, origin: tripForm.value.originDisplay || tripForm.value.origin, destination: tripForm.value.destinationDisplay || tripForm.value.destination, originAddress: { region: tripForm.value.originRegion, city: tripForm.value.originCity, district: tripForm.value.originDistrict || '', place: tripForm.value.originDisplay, detail: tripForm.value.origin, latitude: Number(tripForm.value.originLatitude), longitude: Number(tripForm.value.originLongitude) }, destinationAddress: { region: tripForm.value.destinationRegion, city: tripForm.value.destinationCity, district: tripForm.value.destinationDistrict || '', place: tripForm.value.destinationDisplay, detail: tripForm.value.destination, latitude: Number(tripForm.value.destinationLatitude), longitude: Number(tripForm.value.destinationLongitude) }, originLatitude: tripForm.value.originLatitude, originLongitude: tripForm.value.originLongitude, destinationLatitude: tripForm.value.destinationLatitude, destinationLongitude: tripForm.value.destinationLongitude, scheduledAt: tripForm.value.scheduledAt }) })
       tripForm.value = null; tripQuote.value = null; tripBookingStep.value = 'details'; await load(); selectedTrip.value = trips.value.find(trip => trip.id === result?.tripId) || null
     } catch (err) { error.value = displayError(err) }
   }
   async function completeTripBooking() {
     if (!tripQuote.value || !tripForm.value) return
+    const quotedAmount = Number(tripQuote.value.total ?? tripQuote.value.totalAmount)
+    const rawPaymentAmount = String(tripPaymentAmount.value ?? '').trim()
+    const paymentAmount = Number(rawPaymentAmount)
+    if (!rawPaymentAmount || !Number.isFinite(paymentAmount) || paymentAmount < 0 || paymentAmount > quotedAmount) {
+      error.value = `付款金額必須介於 0 至 ${quotedAmount.toFixed(2)} 之間`
+      return
+    }
     try {
-      const result = await api('/payments/trip-pay', { method: 'POST', body: JSON.stringify({ userId: tripForm.value.userId, quoteId: tripQuote.value.id, manualPaymentConfirmed: true, useFareBalance: tripUseFareBalance.value, useCashBalance: tripUseCashBalance.value, externalPaymentMethod: tripPaymentMethod.value, origin: tripForm.value.origin, destination: tripForm.value.destination, originLatitude: Number(tripForm.value.originLatitude) || undefined, originLongitude: Number(tripForm.value.originLongitude) || undefined, destinationLatitude: Number(tripForm.value.destinationLatitude) || undefined, destinationLongitude: Number(tripForm.value.destinationLongitude) || undefined, scheduledAt: tripForm.value.scheduledAt }) })
+      const result = await api('/payments/trip-pay', { method: 'POST', body: JSON.stringify({ userId: tripForm.value.userId, quoteId: tripQuote.value.id, useFareBalance: false, useCashBalance: false, manualPaymentConfirmed: true, externalAmount: paymentAmount, externalPaymentMethod: tripPaymentMethod.value === 'sandbox' ? 'sandbox' : tripPaymentMethod.value, origin: tripForm.value.originDisplay || tripForm.value.origin, destination: tripForm.value.destinationDisplay || tripForm.value.destination, originAddress: { region: tripForm.value.originRegion, city: tripForm.value.originCity, district: tripForm.value.originDistrict || '', place: tripForm.value.originDisplay, detail: tripForm.value.origin, latitude: Number(tripForm.value.originLatitude), longitude: Number(tripForm.value.originLongitude) }, destinationAddress: { region: tripForm.value.destinationRegion, city: tripForm.value.destinationCity, district: tripForm.value.destinationDistrict || '', place: tripForm.value.destinationDisplay, detail: tripForm.value.destination, latitude: Number(tripForm.value.destinationLatitude), longitude: Number(tripForm.value.destinationLongitude) }, scheduledAt: tripForm.value.scheduledAt }) })
       tripForm.value = null; tripQuote.value = null; tripBookingStep.value = 'details'; await load(); selectedTrip.value = trips.value.find(trip => trip.id === result?.tripId) || null
     } catch (err) { error.value = displayError(err) }
   }

@@ -23,7 +23,8 @@ export const AdminSelect = {
     modelValue: { default: undefined },
     value: { default: undefined },
     modelModifiers: { type: Object, default: () => ({}) },
-    customMobile: { type: Boolean, default: false }
+    customMobile: { type: Boolean, default: false },
+    custom: { type: Boolean, default: false }
   },
   emits: ['update:modelValue', 'change'],
   setup(props, { slots, emit }) {
@@ -79,7 +80,7 @@ export const AdminSelect = {
   },
   render() {
     const children = this.$slots.default?.() || []
-    if (!this.customMobile || !this.mobile) {
+    if (!this.custom && (!this.customMobile || !this.mobile)) {
       return withDirectives(h('select', {
         ...this.$attrs,
         class: ['admin-select', this.$attrs.class],

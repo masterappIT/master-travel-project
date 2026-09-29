@@ -11,6 +11,8 @@ export const primaryNavigation = Object.freeze([
   { id: 'membership', label: 'membership' },
   { id: 'promotions', label: 'promotions' },
   { id: 'payments', label: 'paymentSettings' },
+  { id: 'finance', label: '財務管理中心' },
+  { id: 'login-settings', label: 'loginSettings' },
   { id: 'notifications', label: 'notifications' },
   { id: 'administrators', label: 'administrators', superAdminOnly: true },
   { id: 'auditLogs', label: 'auditLogs', superAdminOnly: true }

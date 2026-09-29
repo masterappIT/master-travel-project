@@ -1,18 +1,23 @@
 @import './tokens.css';
 
 .trip-detail-panel {
+  box-sizing: border-box;
+  width: min(780px, 100vw);
   position: fixed;
   z-index: 60;
   top: 0;
   right: 0;
   bottom: 0;
-  width: min(780px, calc(100vw - 48px));
   padding-bottom: 22px;
   overflow-x: hidden;
   overflow-y: auto;
   border-radius: 22px 0 0 22px;
   box-shadow: 0 0 0 100vmax rgba(18, 36, 59, .38), -18px 0 48px rgba(18, 36, 59, .2);
   animation: trip-workspace-enter .2s ease-out;
+}
+
+.trip-booking-drawer {
+  background: linear-gradient(145deg, #fff, #eef6ff);
 }
 .trip-detail-panel .admin-toolbar { position: sticky; z-index: 2; top: 0; padding: 20px 24px 12px; border-bottom: 1px solid #e8eef6; background: rgba(255,255,255,.96); backdrop-filter: blur(12px); }
 .trip-detail-panel .admin-toolbar h2 { margin: 5px 0 4px; font-size: 20px; }
@@ -59,7 +64,25 @@
 .trip-orders-panel { overflow: hidden; }
 .trip-orders-panel .admin-toolbar { align-items: flex-start; gap: 28px; padding: 26px 28px 20px; border-bottom: 1px solid #e8eef6; }
 .trip-orders-panel .admin-toolbar h2 { margin: 5px 0 0; font-size: 22px; letter-spacing: -.02em; }
-.trip-orders-panel .toolbar-actions { display: grid; grid-template-columns: minmax(240px, 1.6fr) minmax(150px, .8fr) minmax(300px, 1.2fr) auto; flex: 1; justify-content: end; gap: 10px; max-width: 1100px; }
+.trip-orders-panel .toolbar-actions { display: grid; grid-template-columns: minmax(220px, 1.5fr) minmax(150px, .8fr) minmax(300px, 1.2fr) auto; align-items: stretch; gap: 10px; flex: 1; max-width: 1100px; }
+.trip-orders-panel .toolbar-actions > input,
+.trip-orders-panel .toolbar-actions > .admin-custom-select,
+.trip-orders-panel .trip-date-filter,
+.trip-orders-panel .toolbar-actions > button { min-width: 0; height: 44px; }
+.trip-orders-panel .toolbar-actions > input { box-sizing: border-box; width: 100%; border: 1px solid #ccd8e7; border-radius: 11px; padding: 10px 13px; color: #29425f; background: #f8fafd; }
+.trip-orders-panel .toolbar-actions > input:focus { outline: none; border-color: #4a8df0; background: #fff; box-shadow: 0 0 0 3px rgba(74,141,240,.13); }
+.trip-orders-panel .toolbar-actions > .admin-custom-select .admin-select-trigger { height: 44px; min-height: 44px; border-color: #ccd8e7; border-radius: 11px; color: #29425f; background: #f8fafd; }
+.trip-orders-panel .toolbar-actions > .admin-custom-select .admin-select-trigger:hover:not(:disabled),
+.trip-orders-panel .toolbar-actions > .admin-custom-select .admin-select-trigger[aria-expanded='true'] { border-color: #4a8df0; background: #fff; }
+.trip-orders-panel .trip-date-filter { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); overflow: visible; border: 1px solid #ccd8e7; border-radius: 11px; background: #f8fafd; }
+.trip-orders-panel .trip-date-filter .admin-custom-select { min-width: 0; }
+.trip-orders-panel .trip-date-filter .admin-select-trigger { height: 42px; min-height: 42px; border: 0; border-radius: 0; padding-inline: 12px; color: #29425f; background: transparent; }
+.trip-orders-panel .trip-date-filter .admin-custom-select + .admin-custom-select { border-left: 1px solid #dbe3ef; }
+.trip-orders-panel .trip-date-filter .admin-select-trigger:hover:not(:disabled),
+.trip-orders-panel .trip-date-filter .admin-select-trigger[aria-expanded='true'] { background: #fff; }
+.trip-orders-panel .toolbar-actions > button.secondary { width: auto; min-width: 116px; border: 1px solid #cbd9e9; border-radius: 11px; color: #425974; background: #eef3f8; box-shadow: none; font-weight: 750; }
+.trip-orders-panel .toolbar-actions > button.secondary:hover { border-color: #9bbbe6; color: #1769e0; background: #eaf3ff; }
+
 .trip-date-filter { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; height: 44px; min-width: 0; overflow: hidden; border: 1px solid #ccd8e7; border-radius: 11px; background: #f8fafd; }
 .trip-date-filter select { border: 0 !important; border-radius: 0 !important; background: transparent !important; }
 .trip-date-filter select + select { border-left: 1px solid #dbe3ef !important; }
@@ -111,7 +134,20 @@
 .trip-form-heading-copy small { color: #71849d; font-size: 12px; font-weight: 500; }
 .trip-form-mode-note { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; margin: -2px 0 2px; padding: 9px 12px; border: 1px solid #cfe0f6; border-radius: 9px; color: #4b6685; background: #f3f8ff; font-size: 12px; font-weight: 700; }
 .trip-form-mode-dot { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; background: #1769e0; box-shadow: 0 0 0 4px rgba(23,105,224,.12); }
-.trip-edit-form { width: min(600px, calc(100vw - 48px)); background: linear-gradient(145deg, #fff, #f7f9fc); }
+.trip-edit-form { background: linear-gradient(145deg, #fff, #f7f9fc); }
+.trip-edit-form .trip-location-pair {
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+.trip-edit-form .trip-location-connector { display: none; }
+.trip-edit-form .trip-location-section { width: 100%; box-sizing: border-box; }
+.trip-edit-form .trip-location-section-heading {
+  grid-template-columns: auto minmax(0, 1fr) 108px;
+}
+.trip-edit-form .trip-location-section-heading > div { min-width: 0; }
+.trip-edit-form .trip-location-section-heading strong,
+.trip-edit-form .trip-location-section-heading small { white-space: normal; }
 .trip-edit-form .trip-form-mode-note { border-color: #dce3ed; color: #596d85; background: #f5f7fa; }
 .trip-edit-form .trip-form-mode-dot { background: #71849d; box-shadow: 0 0 0 4px rgba(113,132,157,.14); }
 .trip-edit-form > select:first-of-type,
@@ -120,7 +156,7 @@
 .trip-edit-form > select:last-of-type { grid-column: 1 / -1; }
 .trip-edit-form .location-field { grid-column: 1 / -1; }
 .trip-edit-form .trip-form-actions { margin-top: 4px; }
-.trip-create-form { width: min(760px, calc(100vw - 48px)); }
+.trip-create-form { }
 .trip-create-form .trip-form-heading { padding-bottom: 20px; border-bottom: 2px solid #cfe0f6; }
 .trip-create-form .trip-route-actions { margin-top: 4px; padding-top: 20px; border-top: 2px solid #cfe0f6; }
 .trip-create-form .trip-form-mode-note { margin-bottom: 4px; }
@@ -128,29 +164,23 @@
 .trip-detail-panel .trip-detail-grid { padding-top: 20px; }
 .trip-detail-panel .trip-detail-card { box-shadow: 0 5px 14px rgba(39,72,111,.04); }
 .trip-detail-panel .trip-status-actions { margin-top: 2px; padding-bottom: 8px; }
-.trip-booking-form {
-  position: fixed;
-  z-index: 60;
-  top: 0;
-  right: 0;
-  bottom: 0;
+.trip-booking-form-content {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: none;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  animation: none;
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
   align-content: start;
   align-items: stretch;
   gap: 14px;
-  width: min(720px, calc(100vw - 48px));
   margin: 0;
   padding: 26px;
-  overflow-x: hidden;
-  overflow-y: auto;
-  border: 0;
-  border-radius: 22px 0 0 22px;
-  background: linear-gradient(145deg, #fff, #eef6ff);
-  box-shadow: 0 0 0 100vmax rgba(18, 36, 59, .38), -18px 0 48px rgba(18, 36, 59, .2);
-  animation: trip-workspace-enter .2s ease-out;
 }
-.trip-booking-form::before { display: none; }
 .trip-form-heading {
   grid-column: 1 / -1;
   display: flex;
@@ -178,40 +208,51 @@
 }
 
 .trip-create-form > .trip-user-field { grid-column: span 6; }
-.trip-create-form > .trip-region-field { grid-column: span 6; }
-.trip-create-form > .trip-origin-field { grid-column: span 8; }
-.trip-create-form > .trip-destination-field { grid-column: span 8; }
-.trip-create-form > .trip-scheduled-field { grid-column: span 4; }
+.trip-create-form > .trip-location-pair { grid-column: 1 / -1; }
+.trip-location-pair { display: grid; grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1fr); align-items: stretch; gap: 10px; }
+.trip-location-section { display: grid; gap: 10px; padding: 14px; border: 1px solid #cfe0f6; border-radius: 14px; background: rgba(255,255,255,.72); }
+.trip-location-section-heading { display: grid; grid-template-columns: auto minmax(0, 1fr) 108px; gap: 10px; align-items: center; }
+.trip-location-section-heading > div { display: grid; gap: 2px; }
+.trip-location-section-heading strong { color: #12243b; font-size: 14px; }
+.trip-location-section-heading small { color: #71849d; font-size: 11px; }
+.trip-location-section-heading select { width: 108px; height: 36px; min-height: 36px; padding: 0 8px; font-size: 12px; }
+.trip-location-marker { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; color: #fff; font-size: 12px; font-weight: 800; }
+.trip-location-marker-origin { background: #1769e0; }
+.trip-location-marker-destination { background: #dc6b36; }
+.trip-location-connector { position: relative; width: 2px; margin: 28px auto; background: #b7cae1; }
+.trip-location-connector::after { content: ''; position: absolute; left: 50%; bottom: 0; width: 8px; height: 8px; border-right: 2px solid #b7cae1; border-bottom: 2px solid #b7cae1; transform: translate(-50%, 1px) rotate(45deg); }
+.trip-create-form > .trip-scheduled-field { grid-column: 1 / -1; }
+.trip-edit-form > .trip-location-pair { grid-column: 1 / -1; }
 .trip-edit-form > .trip-user-field,
 .trip-edit-form > .trip-region-field,
 .trip-edit-form > .trip-origin-field,
 .trip-edit-form > .trip-destination-field,
 .trip-edit-form > .trip-scheduled-field { grid-column: 1 / -1; }
-.trip-booking-form input,
-.trip-booking-form select,
-.trip-booking-form button {
+.trip-booking-form-content input,
+.trip-booking-form-content select,
+.trip-booking-form-content button {
   box-sizing: border-box;
   width: 100%;
   height: 44px;
   min-height: 44px;
   line-height: 1.2;
 }
-.trip-booking-form input,
-.trip-booking-form select {
+.trip-booking-form-content input,
+.trip-booking-form-content select {
   padding: 0 12px;
   border: 1px solid #cbd9e9;
   border-radius: 10px;
   color: #29425f;
   background: #fff;
 }
-.trip-booking-form input[type="checkbox"] {
+.trip-booking-form-content input[type="checkbox"] {
   width: 20px;
   height: 20px;
   min-height: 20px;
   padding: 0;
 }
-.trip-booking-form input:focus, .trip-booking-form select:focus { outline: none; border-color: #4a8df0; box-shadow: 0 0 0 3px rgba(74,141,240,.13); }
-.trip-booking-form .trip-form-actions {
+.trip-booking-form-content input:focus, .trip-booking-form-content select:focus { outline: none; border-color: #4a8df0; box-shadow: 0 0 0 3px rgba(74,141,240,.13); }
+.trip-booking-drawer .trip-form-actions {
   position: sticky;
   bottom: -26px;
   z-index: 3;
@@ -219,12 +260,12 @@
   padding: 16px 26px 26px;
   background: linear-gradient(180deg, rgba(238,246,255,0), #eef6ff 24%);
 }
-.trip-booking-form .trip-cancel-action-wrap {
+.trip-booking-drawer .trip-cancel-action-wrap {
   display: inline-flex;
   visibility: visible;
   opacity: 1;
 }
-.trip-booking-form .trip-cancel-action {
+.trip-booking-drawer .trip-cancel-action {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -330,7 +371,7 @@
 }
 
 @media (max-width:900px) {
-  .trip-detail-panel { width: min(680px, calc(100vw - 24px)); padding-bottom: 16px; border-radius: 18px 0 0 18px; }
+  .trip-detail-panel { border-radius: 0; }
   .trip-detail-panel .admin-toolbar { align-items: flex-start; gap: 12px; padding: 18px 18px 12px; }
   .trip-detail-panel .admin-toolbar > button { align-self: flex-start; min-width: 96px; min-height: 44px; }
   .trip-detail-panel .admin-toolbar h2 { max-width: 100%; overflow-wrap: anywhere; font-size: 20px; }
@@ -387,7 +428,9 @@
   .trip-orders-panel .trip-col-actions .row-actions button { width: 100%; min-width: 0; }
   .trip-orders-panel .pagination-controls { flex-wrap: wrap; justify-content: center; padding: 14px 16px 16px; }
   .trip-orders-panel .pagination-controls span { width: 100%; margin: 0; text-align: center; }
-  .trip-booking-form { width: 100%; grid-template-columns: 1fr 1fr; margin: 0; padding: max(18px, env(safe-area-inset-top)) 14px max(18px, env(safe-area-inset-bottom)); gap: 10px; border-radius: 0; }
+  .trip-detail-panel { padding-bottom: 16px; }
+  .trip-booking-drawer { border-radius: 0; }
+  .trip-booking-form-content { grid-template-columns: 1fr 1fr; margin: 0; padding: max(18px, env(safe-area-inset-top)) 14px max(18px, env(safe-area-inset-bottom)); gap: 10px; }
   .trip-form-heading-copy small { max-width: 210px; line-height: 1.4; }
   .trip-form-mode-note { margin-top: 0; }
   .trip-edit-form .trip-form-heading { border-bottom-color: #dce3ed; }
