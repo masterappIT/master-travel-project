@@ -12,14 +12,14 @@ const staged = args.includes('--staged')
 const base = args.includes('--base') ? args[args.indexOf('--base') + 1] : process.env.SCOPE_BASE
 let files
 if (staged) {
-  const output = execFileSync('git', ['diff', '--name-only', '--cached'], { encoding: 'utf8' }).trim()
+  const output = execFileSync('git', ['-c', 'core.quotepath=false', 'diff', '--name-only', '--cached'], { encoding: 'utf8' }).trim()
   files = output ? output.split('\n').filter(Boolean) : []
 } else if (base) {
-  const output = execFileSync('git', ['diff', '--name-only', base, 'HEAD'], { encoding: 'utf8' }).trim()
+  const output = execFileSync('git', ['-c', 'core.quotepath=false', 'diff', '--name-only', base, 'HEAD'], { encoding: 'utf8' }).trim()
   files = output ? output.split('\n').filter(Boolean) : []
 } else {
-  const tracked = execFileSync('git', ['diff', '--name-only', 'HEAD'], { encoding: 'utf8' }).trim()
-  const untracked = execFileSync('git', ['ls-files', '--others', '--exclude-standard'], { encoding: 'utf8' }).trim()
+  const tracked = execFileSync('git', ['-c', 'core.quotepath=false', 'diff', '--name-only', 'HEAD'], { encoding: 'utf8' }).trim()
+  const untracked = execFileSync('git', ['-c', 'core.quotepath=false', 'ls-files', '--others', '--exclude-standard'], { encoding: 'utf8' }).trim()
   files = [...new Set([...tracked.split('\n'), ...untracked.split('\n')].filter(Boolean))]
 }
 

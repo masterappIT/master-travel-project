@@ -1,0 +1,4 @@
+@import './tokens.css';
+
+.promotion-admin .toggle-checkbox { position: absolute; width: 1px; height: 1px; min-width: 1px; min-height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+.promotion-admin .promo-modal-form .toggle-checkbox { width: 1px; min-width: 1px; height: 1px; min-height: 1px; }

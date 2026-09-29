@@ -13,7 +13,11 @@
 @import './styles/trips.css';
 @import './styles/settlements.css';
 @import './styles/addresses.css';
+@import './styles/notifications.css';
+@import './styles/promotions.css';
 @import './styles/payments.css';
+@import './styles/finance.css';
+@import './styles/login-settings.css';
 @import './styles/administrators.css';
 @import './styles/audit-logs.css';
 @import './styles/membership.css';

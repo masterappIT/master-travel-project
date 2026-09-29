@@ -53,6 +53,10 @@ jobs:
         run: npm --prefix backend ci
       - if: matrix.area == 'admin'
         run: npm --prefix admin ci
+      - if: matrix.area == 'admin'
+        run: npm --prefix admin test
+      - if: matrix.area == 'admin'
+        run: npm run check:admin-style-boundaries
       - if: matrix.area == 'brand'
         run: npm --prefix brand ci
       - if: matrix.area == 'driver'
