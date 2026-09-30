@@ -1,5 +1,5 @@
 ALTER TABLE "AppSetting"
-  ADD COLUMN "wechatMiniProgramEnabled" BOOLEAN NOT NULL DEFAULT false,
-  ADD COLUMN "wechatMiniProgramAppId" TEXT,
-  ADD COLUMN "wechatMiniProgramAppSecret" TEXT,
-  ADD COLUMN "wechatMiniProgramPhoneCapability" BOOLEAN NOT NULL DEFAULT false;
+  ADD COLUMN IF NOT EXISTS "wechatMiniProgramEnabled" BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS "wechatMiniProgramAppId" TEXT,
+  ADD COLUMN IF NOT EXISTS "wechatMiniProgramAppSecret" TEXT,
+  ADD COLUMN IF NOT EXISTS "wechatMiniProgramPhoneCapability" BOOLEAN NOT NULL DEFAULT false;
