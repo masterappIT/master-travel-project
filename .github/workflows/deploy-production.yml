@@ -49,6 +49,8 @@ jobs:
         env:
           VITE_API_BASE_URL: ${{ vars.PRODUCTION_API_URL }}
           VITE_API_URL: /api
+          VITE_PASSENGER_PREVIEW_URL: ${{ vars.PRODUCTION_PASSENGER_URL }}
+          VITE_DRIVER_PREVIEW_URL: ${{ vars.PRODUCTION_DRIVER_URL }}
         run: |
           set -euo pipefail
           npm ci
