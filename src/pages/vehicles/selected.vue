@@ -176,7 +176,6 @@ const loadCombinationPreview = async () => {
       originCity: tripStore.activeDraft.route.originCity,
       destinationRegion: tripStore.activeDraft.route.destinationRegion || routeRegion(tripStore.activeDraft.route.destination, ''),
       destinationCity: tripStore.activeDraft.route.destinationCity,
-      scheduledAt: tripStore.departureTime,
       couponCode: promotion.couponCode || undefined,
       reservePromotion: false,
       extraIds: [...selectedExtras.value],

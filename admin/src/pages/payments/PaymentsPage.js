@@ -3,99 +3,13 @@ import { inject } from 'vue'
 export const PaymentsPage = {
   name: 'PaymentsPage',
   setup() { return inject('adminPaymentsContext') },
-  template: String.raw`<section v-if="view==='payments'" class="payment-settings-admin panel">
-  <div class="payment-settings-header">
-    <span class="eyebrow">PAYMENT GATEWAYS & WALLET</span>
-    <h2>{{t('paymentSettings')}}</h2>
-    <p class="section-desc">{{t('paymentSettingsDesc')}}</p>
-  </div>
-
-  <div class="payment-grid">
-    <div class="payment-group-card">
-      <div class="payment-group-header">
-        <h3>{{t('walletPaymentGroup')}}</h3>
-        <span class="badge-internal">{{t('internalBadge')}}</span>
-      </div>
-      <div class="payment-item-row">
-        <div class="payment-item-info">
-          <strong>{{t('fareBalancePay')}}</strong>
-          <span>{{t('fareBalancePayHint')}}</span>
-        </div>
-        <label class="switch">
-          <AdminCheckbox type="checkbox" v-model="paymentSettings.fareBalancePayEnabled" :disabled="!canWrite"/>
-          <span class="slider"></span>
-        </label>
-      </div>
-      <div class="payment-item-row">
-        <div class="payment-item-info">
-          <strong>{{t('cashBalancePay')}}</strong>
-          <span>{{t('cashBalancePayHint')}}</span>
-        </div>
-        <label class="switch">
-          <AdminCheckbox type="checkbox" v-model="paymentSettings.cashBalancePayEnabled" :disabled="!canWrite"/>
-          <span class="slider"></span>
-        </label>
-      </div>
-    </div>
-
-    <div class="payment-group-card">
-      <div class="payment-group-header">
-        <h3>{{t('externalPaymentGroup')}}</h3>
-        <span class="badge-external">{{t('externalBadge')}}</span>
-      </div>
-      <div class="payment-item-row">
-        <div class="payment-item-info">
-          <strong>{{t('wechatPay')}}</strong>
-          <span>{{t('wechatPayHint')}}</span>
-        </div>
-        <label class="switch">
-          <AdminCheckbox type="checkbox" v-model="paymentSettings.wechatPayEnabled" :disabled="!canWrite"/>
-          <span class="slider"></span>
-        </label>
-      </div>
-      <div class="payment-item-row">
-        <div class="payment-item-info">
-          <strong>{{t('alipayPay')}}</strong>
-          <span>{{t('alipayPayHint')}}</span>
-        </div>
-        <label class="switch">
-          <AdminCheckbox type="checkbox" v-model="paymentSettings.alipayPayEnabled" :disabled="!canWrite"/>
-          <span class="slider"></span>
-        </label>
-      </div>
-      <div class="payment-item-row">
-        <div class="payment-item-info">
-          <strong>{{t('bankCardPay')}}</strong>
-          <span>{{t('bankCardPayHint')}}</span>
-        </div>
-        <label class="switch">
-          <AdminCheckbox type="checkbox" v-model="paymentSettings.bankCardPayEnabled" :disabled="!canWrite"/>
-          <span class="slider"></span>
-        </label>
-      </div>
-    </div>
-
-    <div class="payment-group-card">
-      <div class="payment-group-header">
-        <h3>{{t('envModeGroup')}}</h3>
-        <span class="badge-env">{{ paymentSettings.sandboxMode ? t('sandboxBadge') : t('productionBadge') }}</span>
-      </div>
-      <div class="payment-item-row">
-        <div class="payment-item-info">
-          <strong>{{t('sandboxMode')}}</strong>
-          <span>{{t('sandboxModeHint')}}</span>
-        </div>
-        <label class="switch">
-          <AdminCheckbox type="checkbox" v-model="paymentSettings.sandboxMode" :disabled="!canWrite"/>
-          <span class="slider"></span>
-        </label>
-      </div>
-    </div>
-  </div>
-
-  <div class="payment-save-bar">
-    <button type="button" class="primary" :disabled="!canWrite" @click="savePaymentSettings">{{t('savePaymentSettings')}}</button>
-    <span v-if="paymentSettingsSaved" class="success-hint"> {{t('paymentSavedSuccess')}}</span>
-  </div>
+  template: String.raw`<section v-if="view==='payments'" class="payment-center">
+  <header class="payment-hero"><div><span class="payment-kicker">PAYMENT SETTINGS</span><h1>支付設定</h1><p>管理支付提供商、地區貨幣、付款能力與連線狀態。</p></div><button class="payment-button primary" type="button" :disabled="!canWrite" @click="openPaymentEditor()">新增支付配置</button></header>
+  <div class="payment-notice"><strong>管理端配置模式</strong><span>配置目前只保存在管理端畫面，尚未連接第三方支付 API、資料庫或真實交易。</span></div>
+  <section class="payment-toolbar"><label class="payment-search">搜尋支付配置<input v-model="paymentConfigFilter.search" placeholder="配置名稱、提供商或支付方式" /></label><label>地區<select v-model="paymentConfigFilter.region"><option value="all">全部地區</option><option>中國內地</option><option>香港</option></select></label><label>貨幣<select v-model="paymentConfigFilter.currency"><option value="all">全部貨幣</option><option>RMB</option><option>HKD</option></select></label><label>狀態<select v-model="paymentConfigFilter.status"><option value="all">全部狀態</option><option value="enabled">已啟用</option><option value="disabled">已停用</option><option value="draft">草稿</option></select></label></section>
+  <section class="payment-overview"><div><span class="payment-label">配置概覽</span><h2>支付渠道</h2></div><div class="payment-stat-list"><span><b>{{visiblePaymentConfigs().length}}</b> 個配置</span><span><b>{{visiblePaymentConfigs().filter(item => item.status === 'enabled').length}}</b> 個已啟用</span><span><b>{{visiblePaymentConfigs().filter(item => item.connection === 'success').length}}</b> 個連線正常</span></div></section>
+  <section class="payment-grid"><article v-for="config in visiblePaymentConfigs()" :key="config.id" class="payment-card"><header><div><span class="payment-label">{{config.provider}}</span><h2>{{config.name || '未命名配置'}}</h2></div><span class="payment-status" :class="config.status">{{config.status === 'enabled' ? '已啟用' : config.status === 'disabled' ? '已停用' : '草稿'}}</span></header><div class="payment-card-meta"><span>{{config.region}}</span><b>{{config.currency}}</b><span>{{config.environment === 'production' ? 'Production' : 'Sandbox'}}</span></div><div class="payment-capabilities"><span v-if="config.capabilities.trip">行程付款</span><span v-if="config.capabilities.wallet">錢包充值</span><span v-if="config.capabilities.refund">退款</span><span v-if="config.capabilities.partialRefund">部分退款</span></div><div class="payment-connection" :class="{success: config.connection === 'success'}"><span></span>{{config.connection === 'success' ? '連線測試成功' : '尚未測試'}}</div><footer><button type="button" @click="openPaymentEditor(config)">編輯</button><button type="button" @click="duplicatePaymentConfig(config)">複製</button><button type="button" @click="togglePaymentConfig(config)">{{config.status === 'enabled' ? '停用' : '啟用'}}</button></footer></article><div v-if="!visiblePaymentConfigs().length" class="payment-empty">沒有符合條件的支付配置</div></section>
+  <div v-if="paymentSettingsSaved" class="payment-saved">✓ 配置草稿已保存</div>
+  <div v-if="paymentEditorOpen" class="payment-modal" @click.self="closePaymentEditor"><section class="payment-editor"><header><div><span class="payment-kicker">PAYMENT CONFIG</span><h2>{{selectedPaymentConfig.id.startsWith('config-') ? '新增支付配置' : '編輯支付配置'}}</h2></div><button class="payment-close" type="button" aria-label="關閉" @click="closePaymentEditor">×</button></header><nav class="payment-steps"><button v-for="(step, index) in ['基本資料','地區與貨幣','付款能力','API 與商戶','密鑰與回調','測試與啟用']" :key="step" type="button" :class="{active: paymentEditorStep === index + 1}" @click="paymentEditorStep = index + 1"><b>{{index + 1}}</b><span>{{step}}</span></button></nav><div class="payment-editor-body"><div v-if="paymentEditorStep === 1" class="payment-form"><label>配置名稱 *<input v-model="selectedPaymentConfig.name" placeholder="例如：香港聚合支付" /></label><label>支付提供商 *<select v-model="selectedPaymentConfig.provider"><option>微信支付</option><option>支付寶</option><option>聚合支付 A</option><option>銀行卡收單</option></select></label><label>支付方式 *<input v-model="selectedPaymentConfig.method" placeholder="例如：信用卡、微信" /></label><label>前端顯示名稱<input v-model="selectedPaymentConfig.name" /></label><label class="wide">說明<textarea v-model="selectedPaymentConfig.description" rows="3"></textarea></label></div><div v-else-if="paymentEditorStep === 2" class="payment-form"><label>適用地區 *<select v-model="selectedPaymentConfig.region"><option>中國內地</option><option>香港</option></select></label><label>結算貨幣 *<select v-model="selectedPaymentConfig.currency"><option>RMB</option><option>HKD</option></select></label><label>最低支付金額<input v-model="selectedPaymentConfig.minAmount" type="number" /></label><label>最高支付金額<input v-model="selectedPaymentConfig.maxAmount" type="number" /></label></div><div v-else-if="paymentEditorStep === 3" class="payment-form payment-checks"><label><input v-model="selectedPaymentConfig.capabilities.trip" type="checkbox" /> 行程付款</label><label><input v-model="selectedPaymentConfig.capabilities.wallet" type="checkbox" /> 錢包充值</label><label><input v-model="selectedPaymentConfig.capabilities.refund" type="checkbox" /> 退款</label><label><input v-model="selectedPaymentConfig.capabilities.partialRefund" type="checkbox" /> 部分退款</label></div><div v-else-if="paymentEditorStep === 4" class="payment-form"><label>使用環境 *<select v-model="selectedPaymentConfig.environment"><option value="sandbox">Sandbox</option><option value="production">Production</option></select></label><label>API Base URL<input v-model="selectedPaymentConfig.api.baseUrl" placeholder="https://api.example.com" /></label><label>建立訂單 URL<input v-model="selectedPaymentConfig.api.createUrl" /></label><label>退款 URL<input v-model="selectedPaymentConfig.api.refundUrl" /></label><label>商戶 ID<input v-model="selectedPaymentConfig.merchant.merchantId" /></label><label>App ID<input v-model="selectedPaymentConfig.merchant.appId" /></label></div><div v-else-if="paymentEditorStep === 5" class="payment-form"><label>API Key<input v-model="selectedPaymentConfig.secrets.apiKey" type="password" /></label><label>API Secret<input v-model="selectedPaymentConfig.secrets.apiSecret" type="password" /></label><label>私鑰<input v-model="selectedPaymentConfig.secrets.privateKey" type="password" /></label><label>回調密鑰<input v-model="selectedPaymentConfig.secrets.callbackSecret" type="password" /></label><label class="wide">支付成功回調 URL<input v-model="selectedPaymentConfig.callbacks.paymentUrl" /></label><label class="wide">退款回調 URL<input v-model="selectedPaymentConfig.callbacks.refundUrl" /></label></div><div v-else class="payment-test"><div><span>基本資料</span><b>待檢查</b></div><div><span>地區與貨幣</span><b>待檢查</b></div><div><span>API 與商戶資料</span><b>{{selectedPaymentConfig.api.baseUrl ? '已填寫' : '待填寫'}}</b></div><div><span>連線測試</span><b :class="{success: paymentTestResult === 'success'}">{{paymentTestResult === 'success' ? '測試成功（模擬）' : '尚未測試'}}</b></div><button class="payment-button" type="button" @click="testPaymentConfig">測試連線（模擬）</button></div></div><footer class="payment-editor-footer"><button class="payment-button" type="button" @click="closePaymentEditor">取消</button><div><button v-if="paymentEditorStep > 1" class="payment-button" type="button" @click="paymentEditorStep--">上一步</button><button v-if="paymentEditorStep < 6" class="payment-button primary" type="button" @click="paymentEditorStep++">下一步</button><button v-else class="payment-button primary" type="button" :disabled="!canWrite" @click="savePaymentConfigDraft">保存草稿</button></div></footer></section></div>
 </section>`
 }

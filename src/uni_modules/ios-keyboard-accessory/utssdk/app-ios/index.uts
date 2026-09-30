@@ -1,0 +1,30 @@
+import { UIApplication, UIView } from 'UIKit'
+
+export function disableInputAssistantToolbar(): void {
+  scheduleScan(0)
+  scheduleScan(250)
+  scheduleScan(750)
+  scheduleScan(1500)
+}
+
+function scheduleScan(delay: number): void {
+  setTimeout(() => {
+    scanApplicationWindows()
+  }, delay)
+}
+
+function scanApplicationWindows(): void {
+  const windows = UIApplication.sharedApplication.windows
+  for (const window of windows) {
+    clearInputAssistantItems(window.rootViewController?.view)
+  }
+}
+
+function clearInputAssistantItems(view: UIView | null): void {
+  if (view == null) return
+  view.inputAssistantItem.leadingBarButtonGroups = []
+  view.inputAssistantItem.trailingBarButtonGroups = []
+  for (const child of view.subviews) {
+    clearInputAssistantItems(child)
+  }
+}

@@ -12,6 +12,9 @@
         },
         {
             "customPlaygroundType" : "device",
+            "iOSProjectStandardBaseHistory" : {
+                "current" : "Pandora_simulator_debug_5.26.app"
+            },
             "playground" : "standard",
             "type" : "uni-app:app-ios_simulator"
         }

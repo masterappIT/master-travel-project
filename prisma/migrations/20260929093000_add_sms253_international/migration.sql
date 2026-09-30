@@ -1,0 +1,15 @@
+ALTER TABLE "AppSetting"
+  ADD COLUMN "sms253InternationalEnabled" BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN "sms253InternationalEndpoint" TEXT,
+  ADD COLUMN "sms253InternationalSendUrl" TEXT,
+  ADD COLUMN "sms253InternationalVariableUrl" TEXT,
+  ADD COLUMN "sms253InternationalBalanceUrl" TEXT,
+  ADD COLUMN "sms253InternationalReportUrl" TEXT,
+  ADD COLUMN "sms253InternationalAccount" TEXT,
+  ADD COLUMN "sms253InternationalPassword" TEXT,
+  ADD COLUMN "sms253InternationalTemplate" TEXT,
+  ADD COLUMN "sms253InternationalVariableTemplate" TEXT,
+  ADD COLUMN "sms253InternationalVariableParams" TEXT,
+  ADD COLUMN "sms253InternationalReport" BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN "sms253InternationalVariableReport" BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN "sms253InternationalTestPhone" TEXT;

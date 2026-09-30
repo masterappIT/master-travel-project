@@ -1,0 +1,10 @@
+{
+  "id": "ios-keyboard-accessory",
+  "displayName": "iOS Keyboard Accessory",
+  "version": "1.0.0",
+  "main": "utssdk/app-ios/index.uts",
+  "description": "Removes the iOS input assistant toolbar from App-Plus text inputs.",
+  "uni_modules": {
+    "platforms": ["app-ios"]
+  }
+}
