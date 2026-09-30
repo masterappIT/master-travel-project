@@ -6,6 +6,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../app/route_names.dart';
 import '../core/api/driver_api_client.dart';
 import '../core/navigation/driver_navigation.dart';
+import '../core/platform/apple_sign_in.dart';
 
 import 'package:driver_web/core/tokens/driver_tokens.dart';
 
@@ -22,14 +23,102 @@ class _LoginPageState extends State<LoginPage> {
   final _api = DriverApiClient.instance;
   String _countryCode = '+852';
   String? _challengeId;
+  String? _pendingProvider;
+  String? _pendingProviderToken;
   bool _isRegistration = false;
   String? _error;
   bool _loading = false;
-
+  bool _phoneEnabled = true;
+  bool _wechatEnabled = false;
+  bool _appleEnabled = false;
+  final bool _isAdminPreview = Uri.base.queryParameters['adminPreview'] == '1';
   @override
   void initState() {
     super.initState();
     _phoneController.addListener(_clearChallenge);
+    _loadLoginMethods();
+  }
+
+  Future<void> _loadLoginMethods() async {
+    try {
+      final preview = Uri.base.queryParameters['preview'];
+      final previewToken = Uri.base.queryParameters['previewToken'];
+      final methods = await _api.listLoginMethods(
+        preview: preview,
+        previewToken: previewToken,
+      );
+      if (!mounted) return;
+      setState(() {
+        _phoneEnabled = methods.any((method) => method['provider'] == 'phone');
+        _wechatEnabled =
+            methods.any((method) => method['provider'] == 'wechat');
+        _appleEnabled = methods.any((method) => method['provider'] == 'apple');
+      });
+    } on Object {
+      if (!mounted) return;
+      if (_isAdminPreview) {
+        setState(() {
+          _phoneEnabled = false;
+          _wechatEnabled = false;
+          _appleEnabled = false;
+        });
+      }
+      // Keep the existing phone-first UI available outside admin preview if settings cannot be read.
+    }
+  }
+
+  Future<void> _handleThirdPartyLogin(String provider) async {
+    if (_isAdminPreview) {
+      showDriverNotice(context, 'LIVE PREVIEW 僅供預覽，不能登入或前往其他頁面');
+      return;
+    }
+    setState(() {
+      _loading = true;
+      _error = null;
+      _pendingProvider = provider;
+    });
+    try {
+      if (provider == 'wechat') {
+        throw DriverApiException(503, '微信網站 OAuth 尚未配置');
+      }
+      final config = await _api.appleConfig();
+      final providerToken = await signInWithApple(
+        clientId: config['clientId'] as String,
+        redirectUri: config['redirectUri'] as String,
+      );
+      if (providerToken == null || providerToken.isEmpty) {
+        throw DriverApiException(400, 'Apple 授權未完成');
+      }
+      _pendingProviderToken = providerToken;
+      await _api.thirdPartyLogin(
+          provider: provider, providerToken: providerToken);
+      if (!mounted) return;
+      DriverNavigation.replace(
+        context,
+        _api.isApproved ? DriverRouteNames.home : DriverRouteNames.reviewStatus,
+      );
+    } on DriverApiException catch (error) {
+      if (!mounted) return;
+      if (error.statusCode == 409) {
+        setState(() => _error = '請輸入已註冊的司機手機號碼，以完成第三方帳戶綁定');
+      } else {
+        setState(() {
+          _error = error.message;
+          _pendingProvider = null;
+          _pendingProviderToken = null;
+        });
+      }
+    } on Object {
+      if (mounted) {
+        setState(() {
+          _error = '第三方登入暫時無法使用，請稍後再試';
+          _pendingProvider = null;
+          _pendingProviderToken = null;
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   void _clearChallenge() {
@@ -49,6 +138,10 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> _requestCode() async {
+    if (_isAdminPreview) {
+      showDriverNotice(context, 'LIVE PREVIEW 僅供預覽，不能登入或前往其他頁面');
+      return;
+    }
     final phone = _phoneController.text.replaceAll(RegExp(r'[\s-]'), '');
     final expectedLength = _countryCode == '+86' ? 11 : 8;
     if (!RegExp(r'^\d+$').hasMatch(phone) || phone.length != expectedLength) {
@@ -66,7 +159,7 @@ class _LoginPageState extends State<LoginPage> {
         result = await _api.requestPhoneCode(
             countryCode: _countryCode, phoneNumber: phone);
       } on DriverApiException catch (error) {
-        if (error.statusCode != 404) rethrow;
+        if (error.statusCode != 404 || _pendingProvider != null) rethrow;
         result = await _api.requestRegistrationCode(
             countryCode: _countryCode, phoneNumber: phone);
         isRegistration = true;
@@ -89,6 +182,10 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> _verify() async {
+    if (_isAdminPreview) {
+      showDriverNotice(context, 'LIVE PREVIEW 僅供預覽，不能登入或前往其他頁面');
+      return;
+    }
     final code = _codeController.text.trim();
     if (_challengeId == null) {
       setState(() => _error = '請先獲取驗證碼');
@@ -103,7 +200,21 @@ class _LoginPageState extends State<LoginPage> {
       _error = null;
     });
     try {
-      if (_isRegistration) {
+      if (_pendingProvider != null && _pendingProviderToken != null) {
+        await _api.bindThirdParty(
+          provider: _pendingProvider!,
+          providerToken: _pendingProviderToken!,
+          challengeId: _challengeId!,
+          code: code,
+        );
+        if (!mounted) return;
+        DriverNavigation.replace(
+          context,
+          _api.isApproved
+              ? DriverRouteNames.home
+              : DriverRouteNames.reviewStatus,
+        );
+      } else if (_isRegistration) {
         await _api.verifyRegistrationCode(
             challengeId: _challengeId!, code: code);
         if (!mounted) return;
@@ -169,15 +280,25 @@ class _LoginPageState extends State<LoginPage> {
                                 _phoneController.clear();
                               }),
                           onRequestCode: _requestCode,
-                          loading: _loading),
+                          loading: _loading,
+                          enabled: _phoneEnabled),
+                      if (!_phoneEnabled && (_wechatEnabled || _appleEnabled))
+                        const Padding(
+                          padding: EdgeInsets.only(top: DriverSpacing.md),
+                          child: Text('請選擇其他登入方式', textAlign: TextAlign.center),
+                        ),
                       if (_error != null) ...[
                         const SizedBox(height: DriverSpacing.sm),
                         Text(_error!,
                             style: const TextStyle(color: Colors.red),
                             textAlign: TextAlign.center),
                       ],
-                      const SizedBox(height: DriverSpacing.xl),
-                      _ActionCard(onLogin: _verify, loading: _loading),
+                      const SizedBox(height: 24),
+                      _ActionCard(
+                          onLogin: _verify,
+                          loading: _loading,
+                          wechatEnabled: _wechatEnabled,
+                          appleEnabled: _appleEnabled),
                     ],
                   ),
                 ),
@@ -268,118 +389,130 @@ class _VerificationCard extends StatelessWidget {
       required this.countryCode,
       required this.onCountryCodeChanged,
       required this.onRequestCode,
-      required this.loading});
+      required this.loading,
+      required this.enabled});
   final TextEditingController phoneController;
   final TextEditingController codeController;
   final String countryCode;
   final ValueChanged<String> onCountryCodeChanged;
   final VoidCallback onRequestCode;
   final bool loading;
+  final bool enabled;
 
   @override
-  Widget build(BuildContext context) => _Card(
-        children: [
-          const _FieldLabel('手機號碼'),
-          const SizedBox(height: DriverSpacing.sm),
-          Container(
-            height: 50,
-            padding: const EdgeInsets.symmetric(horizontal: DriverSpacing.lg),
-            decoration: _fieldDecoration(),
-            child: Row(children: [
-              InkWell(
-                onTap: loading
-                    ? null
-                    : () async {
-                        final selected = await showModalBottomSheet<String>(
-                          context: context,
-                          builder: (context) => SafeArea(
-                            child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  for (final entry in const {
-                                    '+852': '香港',
-                                    '+853': '澳門',
-                                    '+86': '中國內地'
-                                  }.entries)
-                                    ListTile(
-                                      title:
-                                          Text('${entry.value} ${entry.key}'),
-                                      onTap: () =>
-                                          Navigator.pop(context, entry.key),
-                                    ),
-                                ]),
-                          ),
-                        );
-                        if (selected != null) onCountryCodeChanged(selected);
-                      },
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  Text(countryCode,
-                      style: const TextStyle(
-                          fontSize: 15,
-                          color: DriverColors.text,
-                          fontWeight: FontWeight.w500)),
-                  const SizedBox(width: DriverSpacing.xs),
-                  const Text('▼',
-                      style: TextStyle(
-                          fontSize: 10, color: DriverColors.mutedText)),
-                ]),
-              ),
-              const SizedBox(width: DriverSpacing.md),
-              Container(width: 1, height: 20, color: const Color(0xffd1d1d9)),
-              const SizedBox(width: DriverSpacing.sm),
-              Expanded(
-                  child: TextField(
-                      controller: phoneController,
-                      keyboardType: TextInputType.phone,
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                      decoration: const InputDecoration(
-                          border: InputBorder.none, hintText: '請輸入手機號碼'))),
-            ]),
-          ),
-          const SizedBox(height: DriverSpacing.lg),
-          const _FieldLabel('驗證碼'),
-          const SizedBox(height: DriverSpacing.sm),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final codeField = SizedBox(
-                  height: 50,
-                  child: TextField(
-                      controller: codeController,
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [
-                        FilteringTextInputFormatter.digitsOnly,
-                        LengthLimitingTextInputFormatter(5),
-                      ],
-                      decoration: _inputDecoration('請輸入 5 位數驗證碼')));
-              final compact = constraints.maxWidth < 350;
-              final button = _PrimaryButton(
-                  label: loading ? '處理中' : '獲取驗證碼',
-                  fontSize: DriverTypography.body,
-                  fullWidth: compact,
-                  onPressed: loading ? null : onRequestCode);
-              return compact
-                  ? Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                          codeField,
-                          const SizedBox(height: DriverSpacing.md),
-                          button
-                        ])
-                  : Row(children: [
-                      Expanded(child: codeField),
-                      const SizedBox(width: DriverSpacing.md),
-                      button
-                    ]);
-            },
-          ),
-        ],
-      );
+  Widget build(BuildContext context) => enabled
+      ? _Card(
+          children: [
+            const _FieldLabel('手機號碼'),
+            const SizedBox(height: DriverSpacing.sm),
+            Container(
+              height: 50,
+              padding: const EdgeInsets.symmetric(horizontal: DriverSpacing.lg),
+              decoration: _fieldDecoration(),
+              child: Row(children: [
+                InkWell(
+                  onTap: loading
+                      ? null
+                      : () async {
+                          final selected = await showModalBottomSheet<String>(
+                            context: context,
+                            builder: (context) => SafeArea(
+                              child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    for (final entry in const {
+                                      '+852': '香港',
+                                      '+853': '澳門',
+                                      '+86': '中國內地'
+                                    }.entries)
+                                      ListTile(
+                                        title:
+                                            Text('${entry.value} ${entry.key}'),
+                                        onTap: () =>
+                                            Navigator.pop(context, entry.key),
+                                      ),
+                                  ]),
+                            ),
+                          );
+                          if (selected != null) onCountryCodeChanged(selected);
+                        },
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Text(countryCode,
+                        style: const TextStyle(
+                            fontSize: 15,
+                            color: DriverColors.text,
+                            fontWeight: FontWeight.w500)),
+                    const SizedBox(width: DriverSpacing.xs),
+                    const Text('▼',
+                        style: TextStyle(
+                            fontSize: 10, color: DriverColors.mutedText)),
+                  ]),
+                ),
+                const SizedBox(width: DriverSpacing.md),
+                Container(width: 1, height: 20, color: const Color(0xffd1d1d9)),
+                const SizedBox(width: DriverSpacing.sm),
+                Expanded(
+                    child: TextField(
+                        controller: phoneController,
+                        keyboardType: TextInputType.phone,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly
+                        ],
+                        decoration: const InputDecoration(
+                            border: InputBorder.none, hintText: '請輸入手機號碼'))),
+              ]),
+            ),
+            const SizedBox(height: DriverSpacing.lg),
+            const _FieldLabel('驗證碼'),
+            const SizedBox(height: DriverSpacing.sm),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final codeField = SizedBox(
+                    height: 50,
+                    child: TextField(
+                        controller: codeController,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                          LengthLimitingTextInputFormatter(5),
+                        ],
+                        decoration: _inputDecoration('請輸入 5 位數驗證碼')));
+                final compact = constraints.maxWidth < 350;
+                final button = _PrimaryButton(
+                    label: loading ? '處理中' : '獲取驗證碼',
+                    fontSize: DriverTypography.body,
+                    fullWidth: compact,
+                    onPressed: loading ? null : onRequestCode);
+                return compact
+                    ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                            codeField,
+                            const SizedBox(height: DriverSpacing.md),
+                            button
+                          ])
+                    : Row(children: [
+                        Expanded(child: codeField),
+                        const SizedBox(width: DriverSpacing.md),
+                        button
+                      ]);
+              },
+            ),
+          ],
+        )
+      : const SizedBox.shrink();
 }
 
 class _ActionCard extends StatelessWidget {
-  const _ActionCard({required this.onLogin, required this.loading});
+  const _ActionCard(
+      {required this.onLogin,
+      required this.loading,
+      required this.wechatEnabled,
+      required this.appleEnabled});
   final VoidCallback onLogin;
   final bool loading;
+  final bool wechatEnabled;
+  final bool appleEnabled;
 
   @override
   Widget build(BuildContext context) => _Card(
@@ -408,35 +541,42 @@ class _ActionCard extends StatelessWidget {
               style: TextStyle(
                   fontSize: DriverTypography.label,
                   color: DriverColors.secondaryText)),
-          const SizedBox(height: DriverSpacing.lg),
-          Row(children: [
-            const Expanded(child: Divider(color: DriverColors.border)),
-            const Padding(
-                padding: EdgeInsets.symmetric(horizontal: DriverSpacing.md),
-                child: Text('或',
-                    style: TextStyle(
-                        fontSize: DriverTypography.label,
-                        color: DriverColors.secondaryText))),
-            const Expanded(child: Divider(color: DriverColors.border)),
-          ]),
-          const SizedBox(height: DriverSpacing.lg),
-          Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-            _SocialLogo(
-                asset: 'assets/login-wechat.svg',
-                width: 45,
-                height: 45,
-                semanticLabel: '微信登入',
-                onPressed: () =>
-                    showDriverNotice(context, '此登入方式尚未開放，請使用手機驗證碼登入')),
-            const SizedBox(width: DriverSpacing.xl),
-            _SocialLogo(
-                asset: 'assets/login-apple.svg',
-                width: 40,
-                height: 40,
-                semanticLabel: '以 Apple 登入',
-                onPressed: () =>
-                    showDriverNotice(context, '此登入方式尚未開放，請使用手機驗證碼登入')),
-          ]),
+          if (wechatEnabled || appleEnabled) ...[
+            const SizedBox(height: DriverSpacing.lg),
+            Row(children: [
+              const Expanded(child: Divider(color: DriverColors.border)),
+              const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: DriverSpacing.md),
+                  child: Text('或',
+                      style: TextStyle(
+                          fontSize: DriverTypography.label,
+                          color: DriverColors.secondaryText))),
+              const Expanded(child: Divider(color: DriverColors.border)),
+            ]),
+            const SizedBox(height: DriverSpacing.lg),
+            Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              if (wechatEnabled)
+                _SocialLogo(
+                    asset: 'assets/login-wechat.svg',
+                    width: 45,
+                    height: 45,
+                    semanticLabel: '微信登入',
+                    onPressed: () =>
+                        (context.findAncestorStateOfType<_LoginPageState>()!)
+                            ._handleThirdPartyLogin('wechat')),
+              if (wechatEnabled && appleEnabled)
+                const SizedBox(width: DriverSpacing.xl),
+              if (appleEnabled)
+                _SocialLogo(
+                    asset: 'assets/login-apple.svg',
+                    width: 40,
+                    height: 40,
+                    semanticLabel: '以 Apple 登入',
+                    onPressed: () =>
+                        (context.findAncestorStateOfType<_LoginPageState>()!)
+                            ._handleThirdPartyLogin('apple')),
+            ]),
+          ],
         ],
       );
 }

@@ -110,21 +110,40 @@ export type AuthResult = {
   }
 }
 
-export async function requestPhoneVerificationCode(countryCode: string, phoneNumber: string): Promise<PhoneAuthChallenge> {
+export type LoginMethod = {
+  provider: 'phone' | 'wechat' | 'apple'
+  displayName: string
+  logoUrl?: string | null
+  description?: string | null
+  sortOrder: number
+}
+
+export async function listLoginMethods(client: 'passenger' | 'driver' = 'passenger', platform?: 'miniProgram' | 'web' | 'android' | 'ios', preview = false, previewToken = '', loginMode?: 'smsOnly' | 'wechatOnly' | 'wechatAndSms'): Promise<LoginMethod[]> {
+  const platformQuery = platform ? `&platform=${platform}` : ''
+  const loginModeQuery = platform === 'miniProgram' && loginMode ? `&loginMode=${encodeURIComponent(loginMode)}` : ''
+  const previewQuery = preview ? `&preview=1&previewToken=${encodeURIComponent(previewToken)}` : ''
+  const response = await uni.request({
+    url: `${API_BASE_URL}/auth/login-methods?client=${client}${platformQuery}${loginModeQuery}${previewQuery}`
+  })
+  if (response.statusCode >= 400) throw apiError(response, '無法載入登入方式')
+  return ((response.data as { data?: LoginMethod[] }).data || []).sort((a, b) => a.sortOrder - b.sortOrder)
+}
+
+export async function requestPhoneVerificationCode(countryCode: string, phoneNumber: string, platform?: 'web' | 'miniProgram'): Promise<PhoneAuthChallenge> {
   const response = await uni.request({
     url: `${API_BASE_URL}/auth/phone/request`,
     method: 'POST',
-    data: { countryCode, phoneNumber }
+    data: { countryCode, phoneNumber, platform }
   })
   if (response.statusCode >= 400) throw apiError(response, '驗證碼發送失敗')
   return response.data as PhoneAuthChallenge
 }
 
-export async function verifyPhoneVerificationCode(challengeId: string, code = '', invitationCode = ''): Promise<AuthResult> {
+export async function verifyPhoneVerificationCode(challengeId: string, code = '', invitationCode = '', platform?: 'web' | 'miniProgram'): Promise<AuthResult> {
   const response = await uni.request({
     url: `${API_BASE_URL}/auth/phone/verify`,
     method: 'POST',
-    data: { challengeId, code, invitationCode: invitationCode || undefined }
+    data: { challengeId, code, invitationCode: invitationCode || undefined, platform }
   })
   if (response.statusCode >= 400) throw apiError(response, '驗證碼錯誤或已過期', false)
   return response.data as AuthResult
@@ -132,7 +151,7 @@ export async function verifyPhoneVerificationCode(challengeId: string, code = ''
 
 export async function authenticateWechat(code: string): Promise<AuthResult> {
   const response = await uni.request({
-    url: `${API_BASE_URL}/auth/wechat`,
+    url: `${API_BASE_URL}/auth/wechat/login`,
     method: 'POST',
     data: { code, platform: 'mp-weixin' }
   })

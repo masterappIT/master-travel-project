@@ -41,6 +41,7 @@ import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { goHome } from '../../utils/navigation'
 import { setAuthenticated } from '../../utils/auth'
 import { requestPhoneVerificationCode, verifyPhoneVerificationCode } from '../../services/api'
+import { isAdminPreview, adminPreviewLoginHash } from '../../utils/adminPreview'
 
 const { responsiveStyle } = useResponsiveCanvas()
 const phone = ref('')
@@ -48,7 +49,10 @@ const countryCode = ref('')
 const phoneNumber = ref('')
 const challengeId = ref('')
 const invitationCode = ref('')
+const platform = ref<'web' | 'miniProgram'>('web')
+const isPreview = ref(false)
 const codes = ref(['', '', '', '', ''])
+
 const focusedIndex = ref(0)
 const submitting = ref(false)
 const resending = ref(false)
@@ -74,6 +78,12 @@ onLoad((options) => {
   if (options?.phoneNumber) phoneNumber.value = decodeURIComponent(options.phoneNumber)
   if (options?.challengeId) challengeId.value = options.challengeId
   if (options?.invite) invitationCode.value = options.invite.trim().toUpperCase()
+  if (options?.platform === 'miniProgram') platform.value = 'miniProgram'
+  if (isAdminPreview(options)) {
+    isPreview.value = true
+    uni.reLaunch({ url: adminPreviewLoginHash().slice(1), animationType: 'none', animationDuration: 0 })
+    return
+  }
   startResendCountdown()
 })
 
@@ -99,7 +109,7 @@ const handleResend = async () => {
   if (resendCountdown.value > 0 || resending.value || !countryCode.value || !phoneNumber.value) return
   resending.value = true
   try {
-    const challenge = await requestPhoneVerificationCode(countryCode.value, phoneNumber.value)
+    const challenge = await requestPhoneVerificationCode(countryCode.value, phoneNumber.value, platform.value)
     challengeId.value = challenge.challengeId
     codes.value = ['', '', '', '', '']
     focusedIndex.value = 0
@@ -112,6 +122,10 @@ const handleResend = async () => {
 }
 
 const handleBack = () => {
+  if (isPreview.value) {
+    uni.showToast({ title: 'LIVE PREVIEW 已鎖定登入頁', icon: 'none' })
+    return
+  }
   if (getCurrentPages().length > 1) {
     uni.navigateBack({ delta: 1, animationType: 'none', animationDuration: 0 })
     return
@@ -120,6 +134,10 @@ const handleBack = () => {
 }
 
 const handleSubmit = async () => {
+  if (isPreview.value) {
+    uni.showToast({ title: 'LIVE PREVIEW 僅供查看', icon: 'none' })
+    return
+  }
   if (submitting.value) return
   const code = codes.value.join('')
   if (!/^\d{5}$/.test(code)) {
@@ -132,7 +150,7 @@ const handleSubmit = async () => {
   }
   submitting.value = true
   try {
-    const result = await verifyPhoneVerificationCode(challengeId.value, code, invitationCode.value)
+    const result = await verifyPhoneVerificationCode(challengeId.value, code, invitationCode.value, platform.value)
     setAuthenticated(result.token, result.user, result.expiresAt)
     goHome()
   } catch (error) {

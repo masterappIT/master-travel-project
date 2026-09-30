@@ -6,14 +6,14 @@ import postcss from 'postcss'
 const root = path.resolve(import.meta.dirname, '..')
 const stylesDir = path.join(root, 'admin/src/styles')
 const moduleScopes = {
-  'finance.css': '.finance-page',
+  'finance.css': '.finance-center',
   'login-settings.css': '.login-settings-admin',
   'notifications.css': '.notifications-page',
   'administrators.css': '.administrator-management',
   'membership.css': '.membership-management',
   'audit-logs.css': '.audit-log-page',
   'vehicle-pricing.css': ['.vehicle-admin', '.route-pricing-admin'],
-  'payments.css': '.payment-settings-admin',
+  'payments.css': '.payment-center',
   'promotions.css': '.promotion-admin'
 }
 const sharedStyles = new Set(['tokens.css', 'components.css', 'layout.css', 'tables.css', 'overlays.css', 'forms.css', 'states.css'])

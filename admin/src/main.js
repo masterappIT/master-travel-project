@@ -9,7 +9,7 @@ import { AdminCheckbox } from './components/AdminCheckbox.js'
 import { DriverReviewActions } from './components/DriverReviewActions.js'
 import { VehiclePhotoViewer } from './components/VehiclePhotoViewer.js'
 import { LazyVehiclePhotoViewer } from './components/LazyVehiclePhotoViewer.js'
-import { sortByOrder, formatOrderNumber, displayMainlandCity, apiMainlandCity, displayPlaceName } from './utils/formatters.js'
+import { sortByOrder, formatOrderNumber, displayMainlandCity, apiMainlandCity, displayPlaceName, formatTripAddress } from './utils/formatters.js'
 import { promotionKindLabel, promotionDiscountLabel } from './utils/promotions.js'
 import { dateTimeInput, formatTripAmount, paymentMethodLabel, formatBenefits } from './utils/display-formatters.js'
 import { createOperationsStorage } from './utils/operations-storage.js'
@@ -44,6 +44,8 @@ const MembershipPage = defineAsyncComponent(() => import('./pages/membership/Mem
 const RoutePricingPage = defineAsyncComponent(() => import('./pages/route-pricing/RoutePricingPage.js').then(module => module.RoutePricingPage))
 const VehiclesPage = defineAsyncComponent(() => import('./pages/vehicles/VehiclesPage.js').then(module => module.VehiclesPage))
 const PaymentsPage = defineAsyncComponent(() => import('./pages/payments/PaymentsPage.js').then(module => module.PaymentsPage))
+const FinancePage = defineAsyncComponent(() => import('./pages/finance/FinancePage.js').then(module => module.FinancePage))
+const LoginSettingsPage = defineAsyncComponent(() => import('./pages/login-settings/LoginSettingsPage.js').then(module => module.LoginSettingsPage))
 const AuditLogsPage = defineAsyncComponent(() => import('./pages/audit-logs/AuditLogsPage.js').then(module => module.AuditLogsPage))
 const AdministratorsPage = defineAsyncComponent(() => import('./pages/administrators/AdministratorsPage.js').then(module => module.AdministratorsPage))
 const NotificationsPage = defineAsyncComponent(() => import('./pages/notifications/NotificationsPage.js').then(module => module.NotificationsPage))
@@ -61,6 +63,7 @@ import { createVehiclesPageState } from './pages/vehicles/vehicles.state.js'
 import { createVehiclesActions } from './pages/vehicles/vehicles.actions.js'
 import { createPaymentsPageState } from './pages/payments/payments.state.js'
 import { createPaymentsActions } from './pages/payments/payments.actions.js'
+import { createFinancePageState } from './pages/finance/finance.state.js'
 import { createAdministratorsActions } from './pages/administrators/administrators.actions.js'
 import { createNotificationsPageState } from './pages/notifications/notifications.state.js'
 import { createNotificationsActions } from './pages/notifications/notifications.actions.js'
@@ -85,11 +88,11 @@ const { users, selectedUser, walletTransactions, topUpWithdrawalHistory, trips, 
 const { administrators, auditLogs, notifications, notificationTemplates, notificationUsers, notificationDrivers, personnel, entryItems, drivers, selectedDriver, expenseItems } = createAdminAuxiliaryState()
 const allVehicles = ref([])
 const eligibleVehicleDrivers = computed(() => drivers.value.filter(isEligibleVehicleDriver))
-const { orderUrls, createdOrderUrl, tripCatalog, tripQuote, vehicleCategories, tripBookingStep, tripPaymentMethod, tripUseFareBalance, tripUseCashBalance, tripLocationKeyword, tripLocationResults, tripLocationSearching, tripLocationTarget } = createAdminInteractionState()
+const { orderUrls, createdOrderUrl, tripCatalog, tripVehicleCategoryId, tripQuote, vehicleCategories, tripBookingStep, tripPaymentMethod, tripPaymentAmount, tripUseFareBalance, tripUseCashBalance, tripLocationKeyword, tripOriginKeyword, tripDestinationKeyword, tripLocationResults, tripLocationSearching, tripLocationTarget } = createAdminInteractionState()
 const { toasts, confirmDialog, dismissToast, notify, requestConfirmation, resolveConfirmation } = createFeedbackController()
 const paymentsPageState = createPaymentsPageState()
-const paymentSettingsSaved = paymentsPageState.saved
-const driverRaceSaving = paymentsPageState.raceSaving
+const financePageState = createFinancePageState()
+const { saved: paymentSettingsSaved, raceSaving: driverRaceSaving, configs: paymentConfigs, selectedConfig: selectedPaymentConfig, editorOpen: paymentEditorOpen, editorStep: paymentEditorStep, filter: paymentConfigFilter, testResult: paymentTestResult, openEditor: openPaymentEditor, visibleConfigs: visiblePaymentConfigs } = paymentsPageState
 const notificationPageState = createNotificationsPageState(notificationUsers, notificationDrivers)
 const notificationRecipientSearch = notificationPageState.recipientSearch
 let notificationOptionRequest = 0
@@ -186,8 +189,8 @@ const adminSessionActions = createAdminSessionActions({ api, token, username, pa
 const { apiLogin, logout, saveExchangeRate, uploadAdminLogo, removeAdminLogo } = adminSessionActions
 const notificationsActions = createNotificationsActions({ api, notificationForm, notificationRecipientSearch, notificationTemplates, load, error, displayError })
 const { resetNotification, createTemplate, clearNotificationRecipients, toggleNotificationRecipient, notificationRecipientChecked, saveNotification } = notificationsActions
-const paymentsActions = createPaymentsActions({ api, paymentSettings, paymentCurrencies, paymentSettingsSaved, driverRaceSaving, error, displayError })
-const { savePaymentSettings } = paymentsActions
+const paymentsActions = createPaymentsActions({ api, paymentSettings, paymentCurrencies, paymentSettingsSaved, driverRaceSaving, error, displayError, configs: paymentConfigs, selectedConfig: selectedPaymentConfig, editorOpen: paymentEditorOpen, editorStep: paymentEditorStep, testResult: paymentTestResult })
+const { savePaymentSettings, closePaymentEditor, savePaymentConfigDraft, duplicatePaymentConfig, togglePaymentConfig, testPaymentConfig } = paymentsActions
 const { updateCharterStatus, editCharter, saveCharter } = createCharterActions({ api, charterForm, load, error, displayError, dateTimeInput })
 const { edit: editUser, reset: resetUser, select: selectUser, save: saveUser, updateStatus: updateUserStatus, remove: removeUser, openWalletAdjustment, saveWalletAdjustment } = usersActions
 const loadUserOptions = async selectedId => {
@@ -198,7 +201,7 @@ const loadDriverOptions = async selectedId => {
   const options = await loadAllOptions(query => driversApi.options(query))
   drivers.value = retainSelectedOptions(drivers.value, options, [selectedId])
 }
-const tripsActions = createTripsActions({ api, tripsApi, addressesApi, tripForm, selectedTrip, tripDetailLoading, tripDetailError, tripDetailId, tripQuote, tripBookingStep, tripPaymentMethod, tripUseFareBalance, tripUseCashBalance, tripLocationKeyword, tripLocationResults, tripLocationSearching, tripLocationTarget, dispatchForm, orderUrlForm, createdOrderUrl, users, trips, error, load, loadUserOptions, loadDriverOptions, displayError, canWrite, requestConfirmation, notify, tripCatalog, dateTimeInput })
+const tripsActions = createTripsActions({ api, tripsApi, addressesApi, tripForm, selectedTrip, tripDetailLoading, tripDetailError, tripDetailId, tripQuote, tripVehicleCategoryId, tripBookingStep, tripPaymentMethod, tripPaymentAmount, tripUseFareBalance, tripUseCashBalance, tripLocationKeyword, tripOriginKeyword, tripDestinationKeyword, tripLocationResults, tripLocationSearching, tripLocationTarget, dispatchForm, orderUrlForm, createdOrderUrl, users, trips, error, load, loadUserOptions, loadDriverOptions, displayError, canWrite, requestConfirmation, notify, tripCatalog, dateTimeInput })
 const { editTrip, resetTrip, clearTripLocationSearch, searchTripLocation, selectTripLocation, handleTripRegionChange, showTrip, closeTrip, retryTrip, updateTripStatus, settleTrip, unsettleTrip, prepareTripQuote, calculateTripRoute, createPendingTrip, completeTripBooking, saveTrip, openDispatch, saveDispatch, openOrderUrlForm, openOrderUrlExpiryForm, createOrderUrl, closeCreatedOrderUrl, copyOrderUrl, copyExistingOrderUrl, revokeOrderUrl } = tripsActions
 const membershipActions = createMembershipActions({ api, membershipForm, membershipPlans, load, error, displayError, requestConfirmation, notify, t })
 const { editMembership, resetMembership, saveMembership, removeMembership, confirmMembershipOrder } = membershipActions
@@ -283,7 +286,9 @@ const App = { setup() {
     notifications: 'NotificationsPage',
     administrators: 'AdministratorsPage',
     auditLogs: 'AuditLogsPage',
-    payments: 'PaymentsPage'
+    finance: 'FinancePage',
+    payments: 'PaymentsPage',
+    'login-settings': 'LoginSettingsPage'
   })[view.value] || 'DashboardPage')
   createOverlayController({ confirmDialog, createdOrderUrl, orderUrlForm, dispatchForm, tripForm, selectedTrip, selectedUser, closeCreatedOrderUrl, closeTrip })
   onMounted(() => {
@@ -295,7 +300,7 @@ const App = { setup() {
     vehicleTab.value = tab
     return navigate('vehicles')
   }
-  const appContext = { token, locale, view, vehicleTab, mobileNavOpen, navigate, userNavigation, setVehicleView, visiblePrimaryNavigation, visibleOperationsNavigation, title, dashboard, exchangeRate, severeWeatherEnabled, adminLogo, users, selectedUser, walletTransactions, topUpWithdrawalHistory, trips, charterOrders, addresses, mainlandCities, mainlandCityForm, addressRegionFilter, addressCityFilter, totalCount: totalAddressCount, enabledCount: enabledAddressCount, mainlandCount: mainlandAddressCount, filteredAddresses, addressSearchKeyword, addressSearchResults, addressSearching, categories, vehicles, extras, extraSortId, distancePricing, pricingCurrency, routeMinimumFares, routeMinimumFareForm, membershipPlans, promotions, promotionForm, membershipForm, addressForm, categoryForm, vehicleForm, extraForm, userForm, userPage, userPageSize, userPageCount, pagedUsers, filteredUsers, userSearchQuery, userStatusFilter, goToUserPage, walletAdjustment, tripForm, selectedTrip, tripCatalog, tripQuote, dispatchForm, orderUrlForm, orderUrls, createdOrderUrl, dispatchSearch, dispatchPage, dispatchPageSize, dispatchPageCount, dispatchFilteredTrips, pagedDispatchTrips, goToDispatchPage, tripBookingStep, tripPaymentMethod, tripUseFareBalance, tripUseCashBalance, selectedDriver, settlementForm, driverTrips, driverTripsLoading, driverTripsError, driverTripsPage, driverTripsTotal, driverTripsPageCount, loadDriverTrips, tripLocationKeyword, tripLocationResults, tripLocationSearching, tripLocationTarget, tripSearchQuery, tripStatusFilter, tripDateFilter, tripPage, tripPageSize, tripPageCount, pagedTrips, goToTripPage, tripDateYear, tripDateMonth, tripDateDay, tripDateYears, tripDateDays, clearTripDateFilter, filteredTrips, charterForm, currentAdministrator, administrators, auditLogs, administratorForm, notifications, notificationTemplates, notificationForm, notificationTemplateForm, personnel, personnelForm, personnelFilter, drivers, vehicleCategories, driverForm, driverFilter, driverTypeFilter, driverSearch, driverFiltersActive, resetDriverFilters, filteredDrivers, filteredPersonnel, entryItems, entryForm, entryFilter, filteredEntryItems, expenseItems, expenseForm, expenseFilter, filteredExpenses, incomeRows, incomeTotal, expenseTotal, canWrite, isSuperAdministrator, loading, error, username, password, timeOptions, apiLogin, logout, load, resetAdministrator, editAdministrator, saveAdministrator, disableAdministrator, saveExchangeRate, uploadAdminLogo, removeAdminLogo, t, toggleLocale, translateRegion, translateStatus, formatDate, formatOrderNumber, formatTripAmount, paymentMethodLabel, displayMainlandCity, updateCharterStatus, editUser, resetUser, selectUser, saveUser, updateUserStatus, openWalletAdjustment, editTrip, resetTrip, searchTripLocation, selectTripLocation, handleTripRegionChange, calculateTripRoute, prepareTripQuote, createPendingTrip, completeTripBooking, showTrip, closeTrip, updateTripStatus, saveWalletAdjustment, saveTrip, saveCharter, openDispatch, saveDispatch, openOrderUrlForm, createOrderUrl, copyOrderUrl, closeCreatedOrderUrl, revokeOrderUrl, editAddress, resetAddress, searchAddressPlaces, selectAddressSearchResult, handleAddressRegionChange, handleAddressCityChange, saveAddress, removeAddress, resetMainlandCity, editMainlandCity, saveMainlandCity, removeMainlandCity, editCategory, editCatalogVehicle, resetCategory, saveCategory, toggleCategory, saveVehicle, toggleVehicle, removeCategory, removeVehicle, resetVehicle, editExtra, resetExtra, triggerLabel, triggerSummary, isTriggerActive, toggleSevereWeather, showOnlyExtra, addPricingTier, removePricingTier, syncPreviousTier, syncNextTier, saveDistancePricing, switchPricingCurrency, resetRouteMinimumFare, editRouteMinimumFare, saveRouteMinimumFare, removeRouteMinimumFare, editMembership, resetMembership, saveMembership, removeMembership, formatBenefits, resetPromotion, editPromotion, savePromotion, removePromotion, promotionKindLabel, promotionDiscountLabel, promotionDiscountHint, promotionStackingHint, promotionFilterTab, promotionSearchQuery, filteredPromotions, duplicatePromotion, togglePromotionEnabled, generateRandomCouponCode, toggleWeekday, isWeekdaySelected, setWeekdaysPreset, formatWeekdaysText, formatRouteText, formatTimeRangeText, resetNotification, saveNotification, resetDriver, editDriver, uploadDriverPhotos, removeDriverPhoto, saveDriver, removeDriver, openDriverDetail, closeDriverDetail, resetSettlement, saveSettlement, previewDriver, resetPersonnel, editPersonnel, savePersonnel, removePersonnel, resetEntryItem, editEntryItem, saveEntryItem, removeEntryItem, resetExpense, editExpense, saveExpense, removeExpense, paymentSettings, paymentSettingsSaved, driverRaceSaving, savePaymentSettings, promotionSaving, promotionDeletingId, promotionTogglingId, toasts, dismissToast, confirmDialog, resolveConfirmation }
+  const appContext = { token, locale, view, vehicleTab, mobileNavOpen, navigate, userNavigation, setVehicleView, visiblePrimaryNavigation, visibleOperationsNavigation, title, dashboard, exchangeRate, severeWeatherEnabled, adminLogo, users, selectedUser, walletTransactions, topUpWithdrawalHistory, trips, charterOrders, addresses, mainlandCities, mainlandCityForm, addressRegionFilter, addressCityFilter, totalCount: totalAddressCount, enabledCount: enabledAddressCount, mainlandCount: mainlandAddressCount, filteredAddresses, addressSearchKeyword, addressSearchResults, addressSearching, categories, vehicles, extras, extraSortId, distancePricing, pricingCurrency, routeMinimumFares, routeMinimumFareForm, membershipPlans, promotions, promotionForm, membershipForm, addressForm, categoryForm, vehicleForm, extraForm, userForm, userPage, userPageSize, userPageCount, pagedUsers, filteredUsers, userSearchQuery, userStatusFilter, goToUserPage, walletAdjustment, tripForm, selectedTrip, tripCatalog, tripQuote, dispatchForm, orderUrlForm, orderUrls, createdOrderUrl, dispatchSearch, dispatchPage, dispatchPageSize, dispatchPageCount, dispatchFilteredTrips, pagedDispatchTrips, goToDispatchPage, tripBookingStep, tripPaymentMethod, tripPaymentAmount, tripUseFareBalance, tripUseCashBalance, selectedDriver, settlementForm, driverTrips, driverTripsLoading, driverTripsError, driverTripsPage, driverTripsTotal, driverTripsPageCount, loadDriverTrips, tripLocationKeyword, tripLocationResults, tripLocationSearching, tripLocationTarget, tripSearchQuery, tripStatusFilter, tripDateFilter, tripPage, tripPageSize, tripPageCount, pagedTrips, goToTripPage, tripDateYear, tripDateMonth, tripDateDay, tripDateYears, tripDateDays, clearTripDateFilter, filteredTrips, charterForm, currentAdministrator, administrators, auditLogs, administratorForm, notifications, notificationTemplates, notificationForm, notificationTemplateForm, personnel, personnelForm, personnelFilter, drivers, vehicleCategories, driverForm, driverFilter, driverTypeFilter, driverSearch, driverFiltersActive, resetDriverFilters, filteredDrivers, filteredPersonnel, entryItems, entryForm, entryFilter, filteredEntryItems, expenseItems, expenseForm, expenseFilter, filteredExpenses, incomeRows, incomeTotal, expenseTotal, canWrite, isSuperAdministrator, loading, error, username, password, timeOptions, apiLogin, logout, load, resetAdministrator, editAdministrator, saveAdministrator, disableAdministrator, saveExchangeRate, uploadAdminLogo, removeAdminLogo, t, toggleLocale, translateRegion, translateStatus, formatDate, formatOrderNumber, formatTripAddress, formatTripAmount, paymentMethodLabel, displayMainlandCity, updateCharterStatus, editUser, resetUser, selectUser, saveUser, updateUserStatus, openWalletAdjustment, editTrip, resetTrip, searchTripLocation, selectTripLocation, handleTripRegionChange, calculateTripRoute, prepareTripQuote, completeTripBooking, showTrip, closeTrip, updateTripStatus, saveWalletAdjustment, saveTrip, saveCharter, openDispatch, saveDispatch, openOrderUrlForm, createOrderUrl, copyOrderUrl, closeCreatedOrderUrl, revokeOrderUrl, editAddress, resetAddress, searchAddressPlaces, selectAddressSearchResult, handleAddressRegionChange, handleAddressCityChange, saveAddress, removeAddress, resetMainlandCity, editMainlandCity, saveMainlandCity, removeMainlandCity, editCategory, editCatalogVehicle, resetCategory, saveCategory, toggleCategory, saveVehicle, toggleVehicle, removeCategory, removeVehicle, resetVehicle, editExtra, resetExtra, triggerLabel, triggerSummary, isTriggerActive, toggleSevereWeather, showOnlyExtra, addPricingTier, removePricingTier, syncPreviousTier, syncNextTier, saveDistancePricing, switchPricingCurrency, resetRouteMinimumFare, editRouteMinimumFare, saveRouteMinimumFare, removeRouteMinimumFare, editMembership, resetMembership, saveMembership, removeMembership, formatBenefits, resetPromotion, editPromotion, savePromotion, removePromotion, promotionKindLabel, promotionDiscountLabel, promotionDiscountHint, promotionStackingHint, promotionFilterTab, promotionSearchQuery, filteredPromotions, duplicatePromotion, togglePromotionEnabled, generateRandomCouponCode, toggleWeekday, isWeekdaySelected, setWeekdaysPreset, formatWeekdaysText, formatRouteText, formatTimeRangeText, resetNotification, saveNotification, resetDriver, editDriver, uploadDriverPhotos, removeDriverPhoto, saveDriver, removeDriver, openDriverDetail, closeDriverDetail, resetSettlement, saveSettlement, previewDriver, resetPersonnel, editPersonnel, savePersonnel, removePersonnel, resetEntryItem, editEntryItem, saveEntryItem, removeEntryItem, resetExpense, editExpense, saveExpense, removeExpense, paymentSettings, paymentSettingsSaved, driverRaceSaving, savePaymentSettings, promotionSaving, promotionDeletingId, promotionTogglingId, toasts, dismissToast, confirmDialog, resolveConfirmation }
    // Domain contexts are provided independently; the legacy aggregate context is no longer exposed.
    provide('adminPaymentsContext', {
      view,
@@ -303,8 +308,33 @@ const App = { setup() {
      canWrite,
      paymentSettings,
      paymentSettingsSaved,
+     paymentConfigs,
+     selectedPaymentConfig,
+     paymentEditorOpen,
+     paymentEditorStep,
+     paymentConfigFilter,
+     paymentTestResult,
+     visiblePaymentConfigs,
+     openPaymentEditor,
+     closePaymentEditor,
+     savePaymentConfigDraft,
+     duplicatePaymentConfig,
+     togglePaymentConfig,
+     testPaymentConfig,
      savePaymentSettings
    })
+   provide('adminFinanceContext', {
+     view,
+     navigate,
+     ...financePageState
+   })
+   provide('adminLoginSettingsContext', {
+    view,
+    t,
+    canWrite,
+    api
+  })
+
    provide('adminNotificationsContext', {
      view,
      t,
@@ -349,6 +379,7 @@ const App = { setup() {
      view,
      t,
      canWrite,
+     pricingCurrency,
      promotions,
      promotionSection: promotionsPageState.section,
      promotionForm,
@@ -678,6 +709,7 @@ const App = { setup() {
      canWrite,
      formatDate,
      formatOrderNumber,
+     formatTripAddress,
      formatTripAmount,
      paymentMethodLabel,
      translateRegion,
@@ -690,6 +722,8 @@ const App = { setup() {
      tripSummary: tripsPageState.summary,
      users,
      tripForm,
+     tripCatalog,
+     tripVehicleCategoryId,
      selectedTrip,
      tripDetailLoading,
      tripDetailError,
@@ -709,10 +743,13 @@ const App = { setup() {
      tripDateDays,
      filteredTrips,
      tripLocationKeyword,
+     tripOriginKeyword,
+     tripDestinationKeyword,
      tripLocationResults,
      tripLocationSearching,
      tripLocationTarget,
      tripPaymentMethod,
+     tripPaymentAmount,
      tripUseFareBalance,
      tripUseCashBalance,
      resetTrip,
@@ -725,9 +762,11 @@ const App = { setup() {
      settleTrip,
      unsettleTrip,
      selectTripLocation,
+     searchTripLocation,
      handleTripRegionChange,
      calculateTripRoute,
      prepareTripQuote,
+     createPendingTrip,
      completeTripBooking,
      goToTripPage,
      dispatchForm,
@@ -873,6 +912,8 @@ const App = { setup() {
   <button type="button" :class="{active:view==='membership'}" @click="navigate('membership')">{{t('membership')}}</button>
   <button type="button" :class="{active:view==='promotions'}" @click="navigate('promotions')">優惠設定</button>
   <button type="button" :class="{active:view==='payments'}" @click="navigate('payments')">{{t('paymentSettings')}}</button>
+  <button type="button" :class="{active:view==='finance'}" @click="navigate('finance')">財務管理中心</button>
+  <button type="button" :class="{active:view==='login-settings'}" @click="navigate('login-settings')">{{t('loginSettings')}}</button>
   <button type="button" :class="{active:view==='notifications'}" @click="navigate('notifications')">消息推送</button>
   <button type="button" v-if="isSuperAdministrator" :class="{active:view==='administrators'}" @click="navigate('administrators')">{{t('administrators')}}</button>
   <button type="button" v-if="isSuperAdministrator" :class="{active:view==='auditLogs'}" @click="navigate('auditLogs')">{{t('auditLogs')}}</button>
@@ -904,6 +945,8 @@ registerAdminComponents(app, {
   VehiclesPage,
   OperationsPage,
   PaymentsPage,
+  FinancePage,
+  LoginSettingsPage,
   AuditLogsPage,
   AdministratorsPage,
   NotificationsPage,

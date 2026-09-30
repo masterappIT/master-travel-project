@@ -93,6 +93,71 @@ class DriverApiClient {
         if (_token != null) 'Authorization': 'Bearer $_token',
       };
 
+  Future<List<Map<String, dynamic>>> listLoginMethods({
+    String? preview,
+    String? previewToken,
+  }) async {
+    final query = <String, String>{
+      if (preview != null && preview.isNotEmpty) 'preview': preview,
+      if (previewToken != null && previewToken.isNotEmpty)
+        'previewToken': previewToken,
+    };
+    final uri = Uri.parse('$baseUrl/driver/auth/login-methods')
+        .replace(queryParameters: query.isEmpty ? null : query);
+    final response = await _client.get(uri, headers: _headers);
+    final decoded = _decode(response);
+    return ((decoded['data'] as List<dynamic>?) ?? [])
+        .whereType<Map<String, dynamic>>()
+        .toList();
+  }
+
+  Future<Map<String, dynamic>> appleConfig() async => _decode(await _client.get(
+        Uri.parse('$baseUrl/driver/auth/third-party/apple-config'),
+        headers: _headers,
+      ));
+
+  Future<DriverSession> thirdPartyLogin({
+    required String provider,
+    required String providerToken,
+  }) async {
+    final session = DriverSession.fromJson(_decode(await _client.post(
+      Uri.parse('$baseUrl/driver/auth/third-party'),
+      headers: _headers,
+      body: jsonEncode({
+        'provider': provider,
+        'providerToken': providerToken,
+      }),
+    )));
+    _token = session.token;
+    _currentDriver = session.driver;
+    writeBrowserValue(_tokenStorageKey, _token!);
+    sessionRevision.value++;
+    return session;
+  }
+
+  Future<DriverSession> bindThirdParty({
+    required String provider,
+    required String providerToken,
+    required String challengeId,
+    required String code,
+  }) async {
+    final session = DriverSession.fromJson(_decode(await _client.post(
+      Uri.parse('$baseUrl/driver/auth/third-party/bind'),
+      headers: _headers,
+      body: jsonEncode({
+        'provider': provider,
+        'providerToken': providerToken,
+        'challengeId': challengeId,
+        'code': code,
+      }),
+    )));
+    _token = session.token;
+    _currentDriver = session.driver;
+    writeBrowserValue(_tokenStorageKey, _token!);
+    sessionRevision.value++;
+    return session;
+  }
+
   Future<Map<String, dynamic>> requestRegistrationCode(
           {required String countryCode, required String phoneNumber}) async =>
       _decode(await _client.post(

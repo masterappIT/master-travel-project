@@ -17,18 +17,22 @@ Future<void> main() async {
   final fragmentUri = Uri.tryParse(Uri.base.fragment);
   final directToken = Uri.base.queryParameters['token'];
   final fragmentToken = fragmentUri?.queryParameters['token'];
-  final isOrderInvite = Uri.base.path.endsWith('/order-invite') ||
-      Uri.base.path.endsWith('/order-invite-app') ||
-      Uri.base.path.endsWith('/order-invite-preview') ||
-      fragmentUri?.path == DriverRouteNames.orderInvite;
+  final isAdminPreview = Uri.base.queryParameters['adminPreview'] == '1';
+  final isOrderInvite = !isAdminPreview &&
+      (Uri.base.path.endsWith('/order-invite') ||
+          Uri.base.path.endsWith('/order-invite-app') ||
+          Uri.base.path.endsWith('/order-invite-preview') ||
+          fragmentUri?.path == DriverRouteNames.orderInvite);
   runApp(DriverApp(
-    initialRoute: isOrderInvite
-        ? DriverRouteNames.orderInvite
-        : api.token == null
-            ? DriverRouteNames.login
-            : api.isApproved
-                ? DriverRouteNames.home
-                : DriverRouteNames.reviewStatus,
+    initialRoute: isAdminPreview
+        ? DriverRouteNames.login
+        : isOrderInvite
+            ? DriverRouteNames.orderInvite
+            : api.token == null
+                ? DriverRouteNames.login
+                : api.isApproved
+                    ? DriverRouteNames.home
+                    : DriverRouteNames.reviewStatus,
     orderInviteToken: isOrderInvite ? directToken ?? fragmentToken : null,
   ));
 }
@@ -80,9 +84,10 @@ class DriverApp extends StatelessWidget {
           navigatorKey: navigatorKey,
           scaffoldMessengerKey: scaffoldMessengerKey,
           title: 'MasterApp｜司機端',
-          onGenerateTitle: (context) => initialRoute == DriverRouteNames.orderInvite
-              ? 'MasterApp｜司機端 ｜邀請接單'
-              : 'MasterApp｜司機端',
+          onGenerateTitle: (context) =>
+              initialRoute == DriverRouteNames.orderInvite
+                  ? 'MasterApp｜司機端 ｜邀請接單'
+                  : 'MasterApp｜司機端',
           debugShowCheckedModeBanner: false,
           locale: language == DriverLanguagePreference.english
               ? const Locale('en')

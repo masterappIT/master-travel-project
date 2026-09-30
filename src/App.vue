@@ -14,6 +14,7 @@
 
 <script>
 import { redirectEmbeddedLaunch, swipeBack } from './utils/navigation'
+import { isAdminPreview, adminPreviewLoginHash } from './utils/adminPreview'
 import { startNotificationRealtime, stopNotificationRealtime } from './utils/notificationRealtime'
 
 import { useCurrency } from './composables/useCurrency'
@@ -41,9 +42,19 @@ export default {
       this.swipeStartX = 999
       swipeBack()
     },
+    enforceAdminPreviewRoute() {
+      // #ifdef H5
+      if (typeof window === 'undefined') return
+      const active = isAdminPreview()
+      const hash = window.location.hash || ''
+      if (!active || hash.includes('/pages/login/login')) return
+      window.location.hash = adminPreviewLoginHash()
+      // #endif
+    },
   },
   onLaunch(options) {
     console.log('App Launch')
+    this.enforceAdminPreviewRoute()
     redirectEmbeddedLaunch(options?.path, options?.query)
     startNotificationRealtime()
   },
@@ -69,6 +80,7 @@ export default {
   },
   onShow(options) {
     console.log('App Show')
+    this.enforceAdminPreviewRoute()
     redirectEmbeddedLaunch(options?.path, options?.query)
     startNotificationRealtime()
   },

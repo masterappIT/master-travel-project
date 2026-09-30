@@ -16,6 +16,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Req,
   Res,
   UnauthorizedException,
@@ -32,9 +33,12 @@ import {
   createDecipheriv,
   createHash,
   createHmac,
+  createPrivateKey,
   randomBytes,
   scryptSync,
   timingSafeEqual,
+  verify as verifySignature,
+  X509Certificate,
 } from "node:crypto";
 import { loadEnvFile } from "node:process";
 import sharp from "sharp";
@@ -739,6 +743,51 @@ const appSettingsDefaults = {
   alipayPayEnabled: true,
   bankCardPayEnabled: true,
   sandboxMode: false,
+  wechatMiniProgramEnabled: false,
+  wechatMiniProgramLoginMode: "wechatOnly" as WechatMiniProgramLoginMode,
+  wechatMiniProgramAppId: null as string | null,
+  wechatMiniProgramAppSecret: null as string | null,
+  wechatMiniProgramPhoneCapability: false,
+  appleIosEnabled: false,
+  appleIosTeamId: null as string | null,
+  appleIosKeyId: null as string | null,
+  appleIosClientId: null as string | null,
+  appleIosPrivateKey: null as string | null,
+  appleIosBundleId: null as string | null,
+  appleWebEnabled: false,
+  appleWebTeamId: null as string | null,
+  appleWebKeyId: null as string | null,
+  appleWebClientId: null as string | null,
+  appleWebRedirectUri: null as string | null,
+  appleWebPrivateKey: null as string | null,
+  sms253Enabled: false,
+  sms253Endpoint: "https://smssh1.253.com",
+  sms253SendUrl: null as string | null,
+  sms253VariableUrl: null as string | null,
+  sms253BalanceUrl: null as string | null,
+  sms253ReportUrl: null as string | null,
+  sms253Account: null as string | null,
+  sms253Password: null as string | null,
+  sms253Template: "【253云通讯】您的验证码是{code}。如非本人操作，请忽略。",
+  sms253VariableTemplate: null as string | null,
+  sms253VariableParams: null as string | null,
+  sms253Report: false,
+  sms253VariableReport: false,
+  sms253TestPhone: null as string | null,
+  sms253InternationalEnabled: false,
+  sms253InternationalEndpoint: null as string | null,
+  sms253InternationalSendUrl: null as string | null,
+  sms253InternationalVariableUrl: null as string | null,
+  sms253InternationalBalanceUrl: null as string | null,
+  sms253InternationalReportUrl: null as string | null,
+  sms253InternationalAccount: null as string | null,
+  sms253InternationalPassword: null as string | null,
+  sms253InternationalTemplate: null as string | null,
+  sms253InternationalVariableTemplate: null as string | null,
+  sms253InternationalVariableParams: null as string | null,
+  sms253InternationalReport: false,
+  sms253InternationalVariableReport: false,
+  sms253InternationalTestPhone: null as string | null,
   mileageSpendPerKm: 10,
   mileageValidityMonths: 12,
   invitationEnabled: true,
@@ -1125,6 +1174,188 @@ const PHONE_CODE_TTL_MS = 5 * 60 * 1000;
 const PHONE_CODE_MAX_ATTEMPTS = 5;
 const PHONE_CODE_REQUEST_WINDOW_MS = 15 * 60 * 1000;
 const PHONE_CODE_MAX_REQUESTS = 3;
+
+type Sms253Config = {
+  endpoint: string;
+  sendUrl?: string;
+  variableUrl?: string;
+  balanceUrl?: string;
+  reportUrl?: string;
+  account: string;
+  password: string;
+  template: string;
+  variableTemplate: string;
+  variableParams: string;
+  report: boolean;
+  variableReport: boolean;
+};
+
+let sms253RuntimeSettings: {
+  enabled: boolean;
+  endpoint: string;
+  sendUrl?: string;
+  variableUrl?: string;
+  balanceUrl?: string;
+  reportUrl?: string;
+  account: string;
+  password: string;
+  template: string;
+  report: boolean;
+  variableTemplate: string;
+  variableParams: string;
+  variableReport: boolean;
+  testPhone?: string;
+  international?: Sms253Config & { enabled: boolean; testPhone?: string };
+} | null = null;
+
+function sms253Url(endpoint: string, path: string): string {
+  const base = endpoint.replace(/\/$/, "");
+  return base.toLowerCase().endsWith(path) ? base : `${base}${path}`;
+}
+
+function sms253Config(): Sms253Config | null {
+  const settings = sms253RuntimeSettings;
+  const enabled = settings?.enabled ?? process.env.SMS_253_ENABLED?.toLowerCase() === "true";
+  const account = settings?.account || process.env.SMS_253_ACCOUNT?.trim();
+  const password = settings?.password || process.env.SMS_253_PASSWORD?.trim();
+  if (!enabled || !account || !password) return null;
+  const endpoint = settings?.endpoint || process.env.SMS_253_ENDPOINT || "https://smssh1.253.com";
+  return {
+    endpoint: endpoint.replace(/\/msg\/(?:send|variable|balance)\/json\/?$/i, ""),
+    sendUrl: settings?.sendUrl || process.env.SMS_253_SEND_URL,
+    variableUrl: settings?.variableUrl || process.env.SMS_253_VARIABLE_URL,
+    balanceUrl: settings?.balanceUrl || process.env.SMS_253_BALANCE_URL,
+    reportUrl: settings?.reportUrl || process.env.SMS_253_REPORT_URL,
+    account,
+    password,
+    template: settings?.template || process.env.SMS_253_TEMPLATE || "【253云通讯】您的验证码是{code}。如非本人操作，请忽略。",
+    variableTemplate: settings?.variableTemplate || process.env.SMS_253_VARIABLE_TEMPLATE || "",
+    variableParams: settings?.variableParams || process.env.SMS_253_VARIABLE_PARAMS || "",
+    report: settings?.report ?? false,
+    variableReport: settings?.variableReport ?? false,
+  };
+}
+
+function sms253InternationalConfig(): (Sms253Config & { enabled: boolean; testPhone?: string }) | null {
+  const settings = sms253RuntimeSettings?.international;
+  if (!settings?.enabled || !settings.account || !settings.password) return null;
+  return settings;
+}
+
+async function requestSms253WithConfig(config: Sms253Config, path: string, body: Record<string, string>): Promise<Record<string, unknown>> {
+  const endpoint = path === "/msg/send/json" ? config.sendUrl : path === "/msg/variable/json" ? config.variableUrl : path === "/msg/balance/json" ? config.balanceUrl : config.reportUrl;
+  const response = await fetch(endpoint || sms253Url(config.endpoint, path), {
+    method: "POST",
+    headers: { "content-type": "application/json; charset=UTF-8" },
+    body: JSON.stringify({ account: config.account, password: config.password, ...body }),
+    signal: AbortSignal.timeout(10000),
+  });
+  const result = await response.json().catch(() => ({})) as Record<string, unknown>;
+  if (!response.ok) throw new HttpException(`短信服务 HTTP ${response.status}`, HttpStatus.BAD_GATEWAY);
+  return result;
+}
+
+async function requestSms253(path: string, body: Record<string, string>): Promise<Record<string, unknown>> {
+  const config = sms253Config();
+  if (!config) throw new HttpException("短信服务尚未配置", HttpStatus.SERVICE_UNAVAILABLE);
+  return requestSms253WithConfig(config, path, body);
+}
+
+async function recordSms253Message(data: {
+  phone?: string;
+  mode: string;
+  message?: string;
+  params?: string;
+  report?: boolean;
+  result?: Record<string, unknown>;
+  status: string;
+  error?: string;
+}) {
+  try {
+    await prisma.sms253Message.create({ data: {
+      phone: data.phone,
+      mode: data.mode,
+      message: data.message,
+      params: data.params,
+      report: data.report ?? false,
+      status: data.status,
+      providerCode: data.result?.code == null ? undefined : String(data.result.code),
+      providerError: data.error || (data.result?.errorMsg == null ? undefined : String(data.result.errorMsg)),
+      providerData: data.result ? JSON.parse(JSON.stringify(data.result)) : undefined,
+    } });
+  } catch (error) {
+    console.error('Failed to persist SMS 253 message record', error);
+  }
+}
+
+async function sendSms253(phone: string, code: string): Promise<void> {
+  const config = sms253Config();
+  if (!config) return;
+  const message = config.template.replace("{code}", code);
+  try {
+    const result = await requestSms253("/msg/send/json", { phone, msg: message, report: String(config.report) });
+    await recordSms253Message({ phone, mode: "ordinary", message, report: config.report, result, status: result.code === "0" ? "sent" : "rejected" });
+    if (result.code !== "0") throw new HttpException(String(result.errorMsg || "短信发送失败"), HttpStatus.BAD_GATEWAY);
+  } catch (error) {
+    await recordSms253Message({ phone, mode: "ordinary", message, report: config.report, status: "failed", error: error instanceof Error ? error.message : String(error) });
+    throw error;
+  }
+}
+
+async function querySms253Balance(): Promise<Record<string, unknown>> {
+  return requestSms253("/msg/balance/json", {});
+}
+
+async function sendSms253Variable(message: string, params: string, report = false, phone?: string): Promise<Record<string, unknown>> {
+  try {
+    const result = await requestSms253("/msg/variable/json", { msg: message, params, report: String(report) });
+    await recordSms253Message({ phone, mode: "variable", message, params, report, result, status: result.code === "0" ? "sent" : "rejected" });
+    if (result.code !== "0") throw new HttpException(String(result.errorMsg || "变量短信发送失败"), HttpStatus.BAD_GATEWAY);
+    return result;
+  } catch (error) {
+    await recordSms253Message({ phone, mode: "variable", message, params, report, status: "failed", error: error instanceof Error ? error.message : String(error) });
+    throw error;
+  }
+}
+
+async function loadSms253Settings(): Promise<void> {
+  const settings = await prisma.appSetting.findUnique({ where: { id: appSettingsDefaults.id } });
+  sms253RuntimeSettings = settings?.sms253Account && settings.sms253Password
+    ? {
+        enabled: settings.sms253Enabled,
+        endpoint: settings.sms253Endpoint,
+        sendUrl: settings.sms253SendUrl || undefined,
+        variableUrl: settings.sms253VariableUrl || undefined,
+        balanceUrl: settings.sms253BalanceUrl || undefined,
+        reportUrl: settings.sms253ReportUrl || undefined,
+        account: settings.sms253Account,
+        password: decryptWechatSecret(settings.sms253Password),
+        template: settings.sms253Template,
+        report: settings.sms253Report,
+        variableTemplate: settings.sms253VariableTemplate || "",
+        variableParams: settings.sms253VariableParams || "",
+        variableReport: settings.sms253VariableReport,
+        testPhone: settings.sms253TestPhone || undefined,
+        international: settings.sms253InternationalAccount && settings.sms253InternationalPassword ? {
+          enabled: settings.sms253InternationalEnabled,
+          endpoint: settings.sms253InternationalEndpoint || "",
+          sendUrl: settings.sms253InternationalSendUrl || undefined,
+          variableUrl: settings.sms253InternationalVariableUrl || undefined,
+          balanceUrl: settings.sms253InternationalBalanceUrl || undefined,
+          reportUrl: settings.sms253InternationalReportUrl || undefined,
+          account: settings.sms253InternationalAccount,
+          password: decryptWechatSecret(settings.sms253InternationalPassword),
+          template: settings.sms253InternationalTemplate || "",
+          variableTemplate: settings.sms253InternationalVariableTemplate || "",
+          variableParams: settings.sms253InternationalVariableParams || "",
+          report: settings.sms253InternationalReport,
+          variableReport: settings.sms253InternationalVariableReport,
+          testPhone: settings.sms253InternationalTestPhone || undefined,
+        } : undefined,
+      }
+    : null;
+}
+
 const trips: Trip[] = [
   {
     id: "trip_demo_001",
@@ -1480,7 +1711,98 @@ async function ensurePricingDefaults() {
     }
   });
 }
-function appSettingsResponse(settings: Omit<typeof appSettingsDefaults, "paymentCurrencies"> & { paymentCurrencies: Prisma.JsonValue }) {
+const loginMethodDefaults = [
+  { provider: "phone", displayName: "手機號碼登入", description: "使用手機號碼及驗證碼登入", sortOrder: 1 },
+  { provider: "wechat", displayName: "微信登入", description: "使用微信授權登入", sortOrder: 2 },
+  { provider: "apple", displayName: "Apple 登入", description: "使用 Apple 授權登入", sortOrder: 3 },
+] as const;
+
+async function ensureLoginMethodSettings() {
+  await Promise.all(loginMethodDefaults.map((item) => prisma.loginMethodSetting.upsert({
+    where: { provider: item.provider },
+    create: { ...item },
+    update: {},
+  })));
+  return prisma.loginMethodSetting.findMany({ orderBy: [{ sortOrder: "asc" }, { provider: "asc" }] });
+}
+
+async function requireLoginMethodEnabled(provider: string, client: "passenger" | "driver") {
+  const method = await prisma.loginMethodSetting.findUnique({ where: { provider } });
+  if (!method || (client === "passenger" ? !method.passengerEnabled : !method.driverEnabled)) {
+    throw new HttpException("此登入方式目前未開放", HttpStatus.SERVICE_UNAVAILABLE);
+  }
+}
+
+function loginPreviewSecret() {
+  return process.env.ADMIN_PREVIEW_SECRET || process.env.JWT_SECRET || process.env.SESSION_SECRET || "development-preview-secret";
+}
+
+function createLoginPreviewToken() {
+  const payload = Buffer.from(JSON.stringify({ exp: Date.now() + 10 * 60 * 1000 })).toString("base64url");
+  return `${payload}.${createHmac("sha256", loginPreviewSecret()).update(payload).digest("base64url")}`;
+}
+
+function isValidLoginPreviewToken(token?: string) {
+  if (!token) return false;
+  const [payload, signature] = token.split(".");
+  if (!payload || !signature) return false;
+  const expected = createHmac("sha256", loginPreviewSecret()).update(payload).digest("base64url");
+  const actualBuffer = Buffer.from(signature);
+  const expectedBuffer = Buffer.from(expected);
+  if (actualBuffer.length !== expectedBuffer.length || !timingSafeEqual(actualBuffer, expectedBuffer)) return false;
+  try { return Number(JSON.parse(Buffer.from(payload, "base64url").toString("utf8")).exp) > Date.now(); } catch { return false; }
+}
+
+async function ensureLoginMethodDrafts() {
+  const published = await ensureLoginMethodSettings();
+  const settings = await prisma.appSetting.findUniqueOrThrow({ where: { id: appSettingsDefaults.id } });
+  const loginMode = isWechatMiniProgramLoginMode(settings.wechatMiniProgramLoginMode) ? settings.wechatMiniProgramLoginMode : "wechatOnly";
+  await Promise.all(published.map((item) => prisma.loginMethodSettingDraft.upsert({
+    where: { provider: item.provider },
+    create: { provider: item.provider, enabled: item.passengerEnabled || item.driverEnabled, passengerEnabled: item.passengerEnabled, driverEnabled: item.driverEnabled, displayName: item.displayName, logoUrl: item.logoUrl, description: item.description, sortOrder: item.sortOrder, miniProgramLoginMode: loginMode },
+    update: {},
+  })));
+  return prisma.loginMethodSettingDraft.findMany({ orderBy: [{ sortOrder: "asc" }, { provider: "asc" }] });
+}
+
+async function publishLoginMethodDrafts() {
+  const drafts = await ensureLoginMethodDrafts();
+  const loginMode = drafts.find((method) => isWechatMiniProgramLoginMode(method.miniProgramLoginMode))?.miniProgramLoginMode || "wechatOnly";
+  await prisma.$transaction([
+    ...drafts.map((method) => prisma.loginMethodSetting.update({ where: { provider: method.provider }, data: {
+      enabled: method.passengerEnabled || method.driverEnabled, passengerEnabled: method.passengerEnabled, driverEnabled: method.driverEnabled,
+      displayName: method.displayName, logoUrl: method.logoUrl, description: method.description, sortOrder: method.sortOrder,
+    } })),
+    prisma.appSetting.update({ where: { id: appSettingsDefaults.id }, data: { wechatMiniProgramLoginMode: loginMode } }),
+  ]);
+  return ensureLoginMethodSettings();
+}
+
+function publicLoginMethod(method: {
+  provider: string;
+  enabled: boolean;
+  passengerEnabled: boolean;
+  driverEnabled: boolean;
+  displayName: string;
+  logoUrl: string | null;
+  description: string | null;
+  sortOrder: number;
+  miniProgramLoginMode?: string;
+}) {
+  return {
+    provider: method.provider,
+    enabled: Boolean(method.passengerEnabled || method.driverEnabled),
+    passengerEnabled: method.passengerEnabled,
+    driverEnabled: method.driverEnabled,
+    displayName: method.displayName,
+    logoUrl: method.logoUrl,
+    description: method.description,
+    sortOrder: method.sortOrder,
+    miniProgramLoginMode: method.miniProgramLoginMode,
+  };
+}
+
+function appSettingsResponse(settings: Omit<typeof appSettingsDefaults, "paymentCurrencies" | "wechatMiniProgramLoginMode"> & { paymentCurrencies: Prisma.JsonValue; wechatMiniProgramLoginMode?: string }) {
   return {
     language: settings.language,
     region: settings.region,
@@ -1505,6 +1827,63 @@ function appSettingsResponse(settings: Omit<typeof appSettingsDefaults, "payment
     alipayPayEnabled: settings.alipayPayEnabled ?? true,
     bankCardPayEnabled: settings.bankCardPayEnabled ?? true,
     sandboxMode: settings.sandboxMode ?? false,
+    wechatMiniProgram: {
+      enabled: settings.wechatMiniProgramEnabled ?? false,
+      loginMode: settings.wechatMiniProgramLoginMode && WECHAT_MINI_PROGRAM_LOGIN_MODES.includes(settings.wechatMiniProgramLoginMode as WechatMiniProgramLoginMode) ? settings.wechatMiniProgramLoginMode : "wechatOnly",
+      appId: settings.wechatMiniProgramAppId ?? "",
+      appSecretConfigured: Boolean(settings.wechatMiniProgramAppSecret),
+      phoneCapability: settings.wechatMiniProgramPhoneCapability ?? false,
+    },
+    appleLogin: {
+      ios: {
+        enabled: settings.appleIosEnabled ?? false,
+        teamId: settings.appleIosTeamId ?? "",
+        keyId: settings.appleIosKeyId ?? "",
+        clientId: settings.appleIosClientId ?? "",
+        privateKeyConfigured: Boolean(settings.appleIosPrivateKey),
+        bundleId: settings.appleIosBundleId ?? "",
+      },
+      web: {
+        enabled: settings.appleWebEnabled ?? false,
+        teamId: settings.appleWebTeamId ?? "",
+        keyId: settings.appleWebKeyId ?? "",
+        clientId: settings.appleWebClientId ?? "",
+        redirectUri: settings.appleWebRedirectUri ?? "",
+        privateKeyConfigured: Boolean(settings.appleWebPrivateKey),
+      },
+    },
+    sms253: {
+      enabled: settings.sms253Enabled ?? false,
+      endpoint: settings.sms253Endpoint ?? appSettingsDefaults.sms253Endpoint,
+      sendUrl: settings.sms253SendUrl ?? "",
+      variableUrl: settings.sms253VariableUrl ?? "",
+      balanceUrl: settings.sms253BalanceUrl ?? "",
+      reportUrl: settings.sms253ReportUrl ?? "",
+      account: settings.sms253Account ?? "",
+      passwordConfigured: Boolean(settings.sms253Password),
+      template: settings.sms253Template ?? appSettingsDefaults.sms253Template,
+      variableTemplate: settings.sms253VariableTemplate ?? "",
+      variableParams: settings.sms253VariableParams ?? "",
+      report: settings.sms253Report ?? false,
+      variableReport: settings.sms253VariableReport ?? false,
+      testPhone: settings.sms253TestPhone ?? "",
+      international: {
+        enabled: settings.sms253InternationalEnabled ?? false,
+        endpoint: settings.sms253InternationalEndpoint ?? "",
+        sendUrl: settings.sms253InternationalSendUrl ?? "",
+        variableUrl: settings.sms253InternationalVariableUrl ?? "",
+        balanceUrl: settings.sms253InternationalBalanceUrl ?? "",
+        reportUrl: settings.sms253InternationalReportUrl ?? "",
+        account: settings.sms253InternationalAccount ?? "",
+        passwordConfigured: Boolean(settings.sms253InternationalPassword),
+        template: settings.sms253InternationalTemplate ?? "",
+        variableTemplate: settings.sms253InternationalVariableTemplate ?? "",
+        variableParams: settings.sms253InternationalVariableParams ?? "",
+        report: settings.sms253InternationalReport ?? false,
+        variableReport: settings.sms253InternationalVariableReport ?? false,
+        testPhone: settings.sms253InternationalTestPhone ?? "",
+      },
+    },
     mileageSpendPerKm: settings.mileageSpendPerKm ?? 10,
     mileageValidityMonths: settings.mileageValidityMonths ?? 12,
     invitationEnabled: settings.invitationEnabled ?? true,
@@ -1950,6 +2329,107 @@ function orderUrlTokenEncryptionKey() {
   if (!secret) throw new Error("ORDER_URL_ENCRYPTION_SECRET must be configured");
   return createHash("sha256").update(secret).digest();
 }
+function wechatSettingsEncryptionKey() {
+  const secret = process.env.ORDER_URL_ENCRYPTION_SECRET || process.env.ADMIN_SESSION_SECRET;
+  if (!secret) throw new HttpException("Server encryption secret is not configured", HttpStatus.SERVICE_UNAVAILABLE);
+  return createHash("sha256").update(secret).digest();
+}
+function encryptWechatSecret(value: string) {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", wechatSettingsEncryptionKey(), iv);
+  const encrypted = Buffer.concat([cipher.update(value, "utf8"), cipher.final()]);
+  return [iv, cipher.getAuthTag(), encrypted].map((part) => part.toString("base64url")).join(".");
+}
+function decryptWechatSecret(value: string) {
+  const [iv, authTag, encrypted] = value.split(".").map((part) => Buffer.from(part, "base64url"));
+  if (!iv || !authTag || !encrypted) throw new Error("Invalid encrypted WeChat secret");
+  const decipher = createDecipheriv("aes-256-gcm", wechatSettingsEncryptionKey(), iv);
+  decipher.setAuthTag(authTag);
+  return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString("utf8");
+}
+
+const WECHAT_MINI_PROGRAM_LOGIN_MODES = ["wechatOnly", "wechatAndSms", "smsOnly"] as const;
+type WechatMiniProgramLoginMode = (typeof WECHAT_MINI_PROGRAM_LOGIN_MODES)[number];
+
+function isWechatMiniProgramLoginMode(value: unknown): value is WechatMiniProgramLoginMode {
+  return typeof value === "string" && WECHAT_MINI_PROGRAM_LOGIN_MODES.includes(value as WechatMiniProgramLoginMode);
+}
+
+async function wechatMiniProgramCredentials() {
+  const settings = await prisma.appSetting.findUnique({ where: { id: appSettingsDefaults.id } });
+  const appId = settings?.wechatMiniProgramAppId || process.env.WECHAT_MINIPROGRAM_APP_ID;
+  const encryptedSecret = settings?.wechatMiniProgramAppSecret;
+  const appSecret = encryptedSecret ? decryptWechatSecret(encryptedSecret) : process.env.WECHAT_MINIPROGRAM_APP_SECRET;
+  return {
+    enabled: settings?.wechatMiniProgramEnabled ?? false,
+    loginMode: isWechatMiniProgramLoginMode(settings?.wechatMiniProgramLoginMode) ? settings.wechatMiniProgramLoginMode : "wechatOnly",
+    phoneCapability: settings?.wechatMiniProgramPhoneCapability ?? false,
+    appId,
+    appSecret,
+  };
+}
+
+async function fetchWechat(input: string, init?: RequestInit) {
+  return fetch(input, { ...init, signal: AbortSignal.timeout(8000) });
+}
+
+type AppleIdentityClaims = { sub: string; email?: string; iss: string; aud: string | string[]; exp: number; iat?: number };
+type AppleKey = { kid: string; alg: string; x5c?: string[] };
+let appleKeysCache: { expiresAt: number; keys: AppleKey[] } | null = null;
+
+function decodeJwtPart(value: string): Record<string, unknown> {
+  return JSON.parse(Buffer.from(value, "base64url").toString("utf8")) as Record<string, unknown>;
+}
+
+async function applePublicKeys(): Promise<AppleKey[]> {
+  if (appleKeysCache && appleKeysCache.expiresAt > Date.now()) return appleKeysCache.keys;
+  const response = await fetch("https://appleid.apple.com/auth/keys", { signal: AbortSignal.timeout(8000) });
+  if (!response.ok) throw new HttpException("Apple 公開金鑰取得失敗", HttpStatus.BAD_GATEWAY);
+  const payload = await response.json() as { keys?: AppleKey[] };
+  if (!Array.isArray(payload.keys) || payload.keys.length === 0)
+    throw new HttpException("Apple 公開金鑰無效", HttpStatus.BAD_GATEWAY);
+  appleKeysCache = { keys: payload.keys, expiresAt: Date.now() + 6 * 60 * 60 * 1000 };
+  return payload.keys;
+}
+
+async function verifyAppleIdentityToken(token: string): Promise<AppleIdentityClaims> {
+  const parts = token.split(".");
+  if (parts.length !== 3) throw new UnauthorizedException("Invalid Apple identity token");
+  let header: Record<string, unknown>;
+  let claims: Record<string, unknown>;
+  try {
+    header = decodeJwtPart(parts[0]);
+    claims = decodeJwtPart(parts[1]);
+  } catch {
+    throw new UnauthorizedException("Invalid Apple identity token");
+  }
+  if (header.alg !== "RS256" || typeof header.kid !== "string")
+    throw new UnauthorizedException("Unsupported Apple identity token");
+  const settings = await prisma.appSetting.findUnique({ where: { id: appSettingsDefaults.id } });
+  const configuredAudiences = [
+    settings?.appleIosEnabled && settings.appleIosBundleId ? settings.appleIosBundleId : null,
+    settings?.appleWebEnabled && settings.appleWebClientId ? settings.appleWebClientId : null,
+  ].filter((value): value is string => Boolean(value));
+  if (!configuredAudiences.length)
+    throw new HttpException("Apple login is not configured", HttpStatus.SERVICE_UNAVAILABLE);
+  const issuer = claims.iss;
+  const subject = claims.sub;
+  const expiration = claims.exp;
+  const audience = claims.aud;
+  if (issuer !== "https://appleid.apple.com" || typeof subject !== "string" || !subject || typeof expiration !== "number" || expiration <= Math.floor(Date.now() / 1000))
+    throw new UnauthorizedException("Invalid Apple identity claims");
+  const tokenAudiences = Array.isArray(audience) ? audience : [audience];
+  if (!tokenAudiences.some((value) => typeof value === "string" && configuredAudiences.includes(value)))
+    throw new UnauthorizedException("Apple identity token audience mismatch");
+  const key = (await applePublicKeys()).find((item) => item.kid === header.kid && item.alg === "RS256" && item.x5c?.[0]);
+  if (!key?.x5c?.[0]) throw new UnauthorizedException("Apple signing key is unavailable");
+  const certificate = new X509Certificate(Buffer.from(key.x5c[0], "base64"));
+  const valid = verifySignature("RSA-SHA256", Buffer.from(`${parts[0]}.${parts[1]}`), certificate.publicKey, Buffer.from(parts[2], "base64url"));
+  if (!valid) throw new UnauthorizedException("Invalid Apple identity token signature");
+  return { sub: subject, email: typeof claims.email === "string" ? claims.email : undefined, iss: issuer, aud: audience as string | string[], exp: expiration, iat: typeof claims.iat === "number" ? claims.iat : undefined };
+}
+
+
 function encryptOrderUrlToken(token: string) {
   const iv = randomBytes(12);
   const cipher = createCipheriv("aes-256-gcm", orderUrlTokenEncryptionKey(), iv);
@@ -3692,10 +4172,33 @@ async function masterBoxRequest<T>(
 
 @Controller("auth")
 class ClientAuthController {
+  @Get("login-methods")
+  async publicLoginMethods(@Query("client") client?: string, @Query("platform") platform?: string, @Query("preview") preview?: string, @Query("previewToken") previewToken?: string, @Query("loginMode") loginMode?: string) {
+    if (preview === "1" && !isValidLoginPreviewToken(previewToken)) throw new UnauthorizedException("預覽已失效，請重新載入");
+    if (platform !== undefined && platform !== "web" && platform !== "miniProgram") throw new BadRequestException("登入平台無效");
+    if (platform === "miniProgram" && client !== "passenger") throw new BadRequestException("小程序只支援乘客端");
+    if (loginMode !== undefined && !isWechatMiniProgramLoginMode(loginMode)) throw new BadRequestException("小程序登入模式無效");
+    const methods = preview === "1" ? await ensureLoginMethodDrafts() : await ensureLoginMethodSettings();
+    const miniProgramMode = platform === "miniProgram" && client === "passenger"
+      ? (preview === "1" && loginMode ? loginMode : (await wechatMiniProgramCredentials()).loginMode)
+      : null;
+    const visibleMethods = methods.filter((item) => {
+      if ((client === "passenger" ? !item.passengerEnabled : !item.driverEnabled)) return false;
+      if (miniProgramMode === "wechatOnly") return item.provider === "wechat";
+      if (miniProgramMode === "wechatAndSms") return item.provider === "wechat" || item.provider === "phone";
+      if (miniProgramMode === "smsOnly") return item.provider === "phone";
+      return true;
+    });
+    return { data: visibleMethods.map(publicLoginMethod) };
+  }
+
   @Post("phone/request")
   async requestPhoneCode(
-    @Body() body: { countryCode?: string; phoneNumber?: string },
+    @Body() body: { countryCode?: string; phoneNumber?: string; platform?: string },
   ) {
+    if (body.platform !== undefined && body.platform !== "web" && body.platform !== "miniProgram") throw new BadRequestException("登入平台無效");
+    if (body.platform === "miniProgram" && (await wechatMiniProgramCredentials()).loginMode === "wechatOnly") throw new ForbiddenException("短信登入未在小程序中啟用");
+    await requireLoginMethodEnabled("phone", "passenger");
     const identity = parsePhoneIdentity(body);
     const requestKey = `${identity.countryCode}:${identity.phoneNumber}`;
     const now = Date.now();
@@ -3722,7 +4225,15 @@ class ClientAuthController {
         windowStartedAt: now,
       });
     else if (shouldRateLimit && requestState) requestState.count += 1;
-    const code = "00000";
+    await loadSms253Settings();
+    const code = process.env.NODE_ENV === "production"
+      ? String(Math.floor(10000 + Math.random() * 90000))
+      : "00000";
+    try {
+      await sendSms253(`${identity.countryCode}${identity.phoneNumber}`, code);
+    } catch (error) {
+      if (process.env.NODE_ENV === "production") throw error;
+    }
     const challengeId = randomBytes(18).toString("hex");
     const exp = now + PHONE_CODE_TTL_MS;
     phoneChallenges.set(challengeId, { ...identity, code, exp, attempts: 0 });
@@ -3753,7 +4264,10 @@ class ClientAuthController {
   }
 
   @Post("phone/verify")
-  async verifyPhoneCode(@Body() body: { challengeId?: string; code?: string; invitationCode?: string }) {
+  async verifyPhoneCode(@Body() body: { challengeId?: string; code?: string; invitationCode?: string; platform?: string }) {
+    if (body.platform !== undefined && body.platform !== "web" && body.platform !== "miniProgram") throw new BadRequestException("登入平台無效");
+    if (body.platform === "miniProgram" && (await wechatMiniProgramCredentials()).loginMode === "wechatOnly") throw new ForbiddenException("短信登入未在小程序中啟用");
+    await requireLoginMethodEnabled("phone", "passenger");
     const challengeId = body.challengeId?.trim() || "";
     const memoryChallenge = phoneChallenges.get(challengeId);
     const storedChallenge = await prisma.verificationCode.findUnique({
@@ -3787,6 +4301,9 @@ class ClientAuthController {
       attempts: storedChallenge.attempts,
     };
     const submittedCode = body.code?.trim() || "";
+    if (!/^\d{5}$/.test(submittedCode)) {
+      throw new UnauthorizedException("Invalid verification code");
+    }
     if (
       createHash("sha256").update(submittedCode).digest("hex") !==
       storedChallenge.codeHash
@@ -3863,23 +4380,50 @@ class ClientAuthController {
     return clientAuthResponse(loggedInUser);
   }
 
-  @Post("wechat/phone")
-  async wechatPhone(@Body() body: { loginCode?: string; phoneCode?: string; invitationCode?: string }) {
+  @Post("wechat/login")
+  async wechatLogin(@Body() body: { loginCode?: string }) {
+    await requireLoginMethodEnabled("wechat", "passenger");
     const loginCode = body.loginCode?.trim();
-    const phoneCode = body.phoneCode?.trim();
-    const appId = process.env.WECHAT_MINIPROGRAM_APP_ID;
-    const appSecret = process.env.WECHAT_MINIPROGRAM_APP_SECRET;
-    if (!loginCode || !phoneCode || !appId || !appSecret)
-      throw new HttpException("Valid WeChat phone authorization is required", HttpStatus.BAD_REQUEST);
-    const sessionResponse = await fetch(`https://api.weixin.qq.com/sns/jscode2session?${new URLSearchParams({ appid: appId, secret: appSecret, js_code: loginCode, grant_type: "authorization_code" })}`);
+    const { enabled, loginMode, appId, appSecret } = await wechatMiniProgramCredentials();
+    if (!enabled)
+      throw new HttpException("WeChat login is not enabled", HttpStatus.SERVICE_UNAVAILABLE);
+    if (!loginCode || !appId || !appSecret)
+      throw new HttpException("Valid WeChat login is required", HttpStatus.BAD_REQUEST);
+    const sessionResponse = await fetchWechat(`https://api.weixin.qq.com/sns/jscode2session?${new URLSearchParams({ appid: appId, secret: appSecret, js_code: loginCode, grant_type: "authorization_code" })}`);
     const session = await sessionResponse.json() as { openid?: string; unionid?: string; errcode?: number; errmsg?: string };
     if (!sessionResponse.ok || session.errcode || !session.openid)
       throw new UnauthorizedException(session.errmsg || "WeChat authorization failed");
-    const tokenResponse = await fetch(`https://api.weixin.qq.com/cgi-bin/token?${new URLSearchParams({ grant_type: "client_credential", appid: appId, secret: appSecret })}`);
+    const providerId = session.unionid ? `unionid:${session.unionid}` : `openid:${session.openid}`;
+    const identity = await prisma.authIdentity.findUnique({ where: { provider_providerId: { provider: "wechat", providerId } }, include: { user: true } });
+    if (!identity) return { needsPhone: true };
+    const existingUser = identity.user;
+    const loggedInUser = await prisma.user.update({ where: { id: existingUser.id }, data: { lastLoginAt: new Date() } });
+    return clientAuthResponse(loggedInUser);
+  }
+
+  @Post("wechat/phone")
+  async wechatPhone(@Body() body: { loginCode?: string; phoneCode?: string; avatarUrl?: string; invitationCode?: string }) {
+    await requireLoginMethodEnabled("wechat", "passenger");
+    const loginCode = body.loginCode?.trim();
+    const phoneCode = body.phoneCode?.trim();
+    const { enabled, loginMode, phoneCapability, appId, appSecret } = await wechatMiniProgramCredentials();
+    if (!enabled)
+      throw new HttpException("WeChat login is not enabled", HttpStatus.SERVICE_UNAVAILABLE);
+    if (loginMode === "smsOnly")
+      throw new HttpException("WeChat login is not enabled for this mini program mode", HttpStatus.SERVICE_UNAVAILABLE);
+    if (!phoneCapability)
+      throw new HttpException("WeChat phone authorization is not enabled", HttpStatus.SERVICE_UNAVAILABLE);
+    if (!loginCode || !phoneCode || !appId || !appSecret)
+      throw new HttpException("Valid WeChat phone authorization is required", HttpStatus.BAD_REQUEST);
+    const sessionResponse = await fetchWechat(`https://api.weixin.qq.com/sns/jscode2session?${new URLSearchParams({ appid: appId, secret: appSecret, js_code: loginCode, grant_type: "authorization_code" })}`);
+    const session = await sessionResponse.json() as { openid?: string; unionid?: string; errcode?: number; errmsg?: string };
+    if (!sessionResponse.ok || session.errcode || !session.openid)
+      throw new UnauthorizedException(session.errmsg || "WeChat authorization failed");
+    const tokenResponse = await fetchWechat(`https://api.weixin.qq.com/cgi-bin/token?${new URLSearchParams({ grant_type: "client_credential", appid: appId, secret: appSecret })}`);
     const token = await tokenResponse.json() as { access_token?: string; errcode?: number; errmsg?: string };
     if (!tokenResponse.ok || token.errcode || !token.access_token)
       throw new UnauthorizedException(token.errmsg || "WeChat access token failed");
-    const phoneResponse = await fetch(`https://api.weixin.qq.com/wxa/business/getuserphonenumber?access_token=${encodeURIComponent(token.access_token)}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ code: phoneCode }) });
+    const phoneResponse = await fetchWechat(`https://api.weixin.qq.com/wxa/business/getuserphonenumber?access_token=${encodeURIComponent(token.access_token)}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ code: phoneCode }) });
     const phoneResult = await phoneResponse.json() as { phone_info?: { phoneNumber?: string; purePhoneNumber?: string; countryCode?: string }; errcode?: number; errmsg?: string };
     const phoneInfo = phoneResult.phone_info;
     if (!phoneResponse.ok || phoneResult.errcode || !phoneInfo?.purePhoneNumber)
@@ -3892,32 +4436,32 @@ class ClientAuthController {
     if (identity && existingPhone && identity.user.id !== existingPhone.id)
       throw new HttpException("WeChat account and phone number belong to different users", HttpStatus.CONFLICT);
     const user = identity?.user || existingPhone || await prisma.user.create({ data: { id: await generateUserId(), countryCode, phoneNumber, name: "WeChat User", lastLoginAt: new Date() } });
+    let wechatAvatar: { data: Uint8Array; mimeType: string } | null = null;
+    const submittedAvatarUrl = body.avatarUrl?.trim() || "";
+    if (!user.avatarData && submittedAvatarUrl) {
+      try {
+        const avatarUrl = new URL(submittedAvatarUrl);
+        const allowedHosts = ["wx.qlogo.cn", "thirdwx.qlogo.cn", "mmbiz.qpic.cn"];
+        if (avatarUrl.protocol === "https:" && allowedHosts.some((host) => avatarUrl.hostname === host || avatarUrl.hostname.endsWith(`.${host}`))) {
+          const avatarResponse = await fetch(avatarUrl, { signal: AbortSignal.timeout(5000) });
+          const contentType = avatarResponse.headers.get("content-type")?.split(";", 1)[0] || "";
+          const avatarBytes = new Uint8Array(await avatarResponse.arrayBuffer());
+          if (avatarResponse.ok && contentType.startsWith("image/") && avatarBytes.byteLength > 0 && avatarBytes.byteLength <= 5 * 1024 * 1024)
+            wechatAvatar = { data: new Uint8Array(Buffer.from(avatarBytes)), mimeType: contentType };
+        }
+      } catch {
+        // 頭像授權或下載失敗不影響微信手機登入。
+      }
+    }
     if (user.countryCode !== countryCode || user.phoneNumber !== phoneNumber) {
       await prisma.user.update({ where: { id: user.id }, data: { countryCode, phoneNumber } });
+    }
+    if (wechatAvatar) {
+      await prisma.user.update({ where: { id: user.id }, data: { avatarUrl: null, avatarData: Buffer.from(wechatAvatar.data), avatarMimeType: wechatAvatar.mimeType } });
     }
     if (!identity) await prisma.authIdentity.create({ data: { provider: "wechat", providerId, userId: user.id } });
     const loggedInUser = await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
     return clientAuthResponse(loggedInUser);
-  }
-
-  @Post("wechat")
-  async wechat(@Body() body: { code?: string; platform?: string }) {
-    const code = body.code?.trim();
-    if (!code || code.length > 512 || (body.platform || "mp-weixin") !== "mp-weixin")
-      throw new HttpException("Valid WeChat authorization code is required", HttpStatus.BAD_REQUEST);
-    const appId = process.env.WECHAT_MINIPROGRAM_APP_ID;
-    const appSecret = process.env.WECHAT_MINIPROGRAM_APP_SECRET;
-    if (!appId || !appSecret) throw new HttpException("WeChat login is not configured", HttpStatus.SERVICE_UNAVAILABLE);
-    const query = new URLSearchParams({ appid: appId, secret: appSecret, js_code: code, grant_type: "authorization_code" });
-    const response = await fetch(`https://api.weixin.qq.com/sns/jscode2session?${query}`);
-    const result = await response.json() as { openid?: string; unionid?: string; errcode?: number; errmsg?: string };
-    if (!response.ok || result.errcode || !result.openid) throw new UnauthorizedException(result.errmsg || "WeChat authorization failed");
-    const providerId = result.unionid ? `unionid:${result.unionid}` : `openid:${result.openid}`;
-    const identity = await prisma.authIdentity.findUnique({ where: { provider_providerId: { provider: "wechat", providerId } }, include: { user: true } });
-    const user = identity
-      ? await prisma.user.update({ where: { id: identity.user.id }, data: { lastLoginAt: new Date() } })
-      : await prisma.user.create({ data: { id: await generateUserId(), countryCode: "+852", phoneNumber: `wx${randomBytes(12).toString("hex")}`, name: "WeChat User", lastLoginAt: new Date(), authIdentities: { create: { provider: "wechat", providerId } } } });
-    return clientAuthResponse(user);
   }
 
   @Post("third-party")
@@ -3925,6 +4469,12 @@ class ClientAuthController {
     @Body() body: { provider?: string; providerToken?: string },
   ) {
     const provider = body.provider?.trim().toLowerCase();
+    if (provider !== "wechat" && provider !== "apple")
+      throw new HttpException(
+        "Unsupported third-party provider",
+        HttpStatus.BAD_REQUEST,
+      );
+    await requireLoginMethodEnabled(provider, "passenger");
     const providerToken = body.providerToken?.trim();
     if (provider !== "wechat" && provider !== "apple")
       throw new HttpException(
@@ -3936,6 +4486,26 @@ class ClientAuthController {
         "Third-party provider token is required",
         HttpStatus.BAD_REQUEST,
       );
+    if (provider === "apple") {
+      const claims = await verifyAppleIdentityToken(providerToken);
+      const providerId = `sub:${claims.sub}`;
+      const identity = await prisma.authIdentity.findUnique({
+        where: { provider_providerId: { provider, providerId } },
+        include: { user: true },
+      });
+      if (identity) {
+        const loggedInUser = await prisma.user.update({ where: { id: identity.user.id }, data: { lastLoginAt: new Date() } });
+        return clientAuthResponse(loggedInUser);
+      }
+      const phoneNumber = `${Date.now()}${randomBytes(2).toString("hex")}`.replace(/\D/g, "").slice(-15);
+      const user = await prisma.user.create({
+        data: {
+          id: await generateUserId(), countryCode: "+852", phoneNumber, name: "Apple User", lastLoginAt: new Date(),
+          authIdentities: { create: { provider, providerId } },
+        },
+      });
+      return clientAuthResponse(user);
+    }
     if (process.env.NODE_ENV === "production")
       throw new HttpException(
         "Third-party provider verification is not configured",
@@ -3988,10 +4558,25 @@ class ClientAuthController {
 
 @Controller("driver/auth")
 class DriverAuthController {
+  @Get("login-methods")
+  async publicLoginMethods(
+    @Query("preview") preview?: string,
+    @Query("previewToken") previewToken?: string,
+  ) {
+    if (preview === "1" && !isValidLoginPreviewToken(previewToken)) {
+      throw new UnauthorizedException("預覽已失效，請重新載入");
+    }
+    const methods = preview === "1"
+      ? await ensureLoginMethodDrafts()
+      : await ensureLoginMethodSettings();
+    return { data: methods.filter((item) => item.driverEnabled).map(publicLoginMethod) };
+  }
+
   @Post("register/phone/request")
   async requestRegistrationCode(
     @Body() body: { countryCode?: string; phoneNumber?: string },
   ) {
+    await requireLoginMethodEnabled("phone", "driver");
     const identity = parsePhoneIdentity(body);
     const existing = await prisma.driver.findFirst({
       where: {
@@ -4016,7 +4601,11 @@ class DriverAuthController {
         "Driver phone number is already registered",
         HttpStatus.CONFLICT,
       );
-    const code = "00000";
+    await loadSms253Settings();
+    const code = process.env.NODE_ENV === "production"
+      ? String(Math.floor(10000 + Math.random() * 90000))
+      : "00000";
+    await sendSms253(`${identity.countryCode}${identity.phoneNumber}`, code);
     const challengeId = randomBytes(18).toString("hex");
     const expiresAt = new Date(Date.now() + PHONE_CODE_TTL_MS);
     await prisma.driverOtpChallenge.create({
@@ -4042,6 +4631,7 @@ class DriverAuthController {
   async verifyRegistrationCode(
     @Body() body: { challengeId?: string; code?: string },
   ) {
+    await requireLoginMethodEnabled("phone", "driver");
     const challenge = await prisma.driverOtpChallenge.findUnique({
       where: { id: body.challengeId?.trim() || "" },
     });
@@ -4258,6 +4848,7 @@ class DriverAuthController {
   async requestPhoneCode(
     @Body() body: { countryCode?: string; phoneNumber?: string },
   ) {
+    await requireLoginMethodEnabled("phone", "driver");
     const identity = parsePhoneIdentity(body);
     const matchingDrivers = await prisma.driver.findMany({
       where: {
@@ -4285,7 +4876,11 @@ class DriverAuthController {
     const driver = matchingDrivers[0];
     if (!driver)
       throw new HttpException("Driver not found", HttpStatus.NOT_FOUND);
-    const code = "00000";
+    await loadSms253Settings();
+    const code = process.env.NODE_ENV === "production"
+      ? String(Math.floor(10000 + Math.random() * 90000))
+      : "00000";
+    await sendSms253(`${identity.countryCode}${identity.phoneNumber}`, code);
     const challengeId = randomBytes(18).toString("hex");
     const expiresAt = new Date(Date.now() + PHONE_CODE_TTL_MS);
     await prisma.driverOtpChallenge.create({
@@ -4316,6 +4911,7 @@ class DriverAuthController {
       developmentCode?: string;
     },
   ) {
+    await requireLoginMethodEnabled("phone", "driver");
     const challenge = await prisma.driverOtpChallenge.findUnique({
       where: { id: body.challengeId?.trim() || "" },
       include: { driver: true },
@@ -4332,11 +4928,36 @@ class DriverAuthController {
       throw new UnauthorizedException("Invalid verification code");
     if (!verifyPassword(code, challenge.codeHash))
       throw new UnauthorizedException("Invalid verification code");
-    await prisma.driverOtpChallenge.update({
-      where: { id: challenge.id },
+    const consumed = await prisma.driverOtpChallenge.updateMany({
+      where: { id: challenge.id, consumedAt: null, expiresAt: { gt: new Date() } },
       data: { consumedAt: new Date() },
     });
+    if (consumed.count !== 1)
+      throw new UnauthorizedException("Verification code expired");
     return driverAuthResponse(challenge.driver);
+  }
+
+  @Get("third-party/apple-config")
+  async appleConfig() {
+    await requireLoginMethodEnabled("apple", "driver");
+    const settings = await prisma.appSetting.findUnique({
+      where: { id: appSettingsDefaults.id },
+      select: {
+        appleWebEnabled: true,
+        appleWebClientId: true,
+        appleWebRedirectUri: true,
+      },
+    });
+    if (!settings?.appleWebEnabled ||
+        settings.appleWebClientId == null ||
+        settings.appleWebRedirectUri == null ||
+        settings.appleWebClientId!.trim() === "" ||
+        settings.appleWebRedirectUri!.trim() === "")
+      throw new HttpException("Apple web login is not configured", HttpStatus.SERVICE_UNAVAILABLE);
+    return {
+      clientId: settings.appleWebClientId,
+      redirectUri: settings.appleWebRedirectUri,
+    };
   }
 
   @Post("third-party")
@@ -4349,17 +4970,75 @@ class DriverAuthController {
         "Unsupported third-party provider",
         HttpStatus.BAD_REQUEST,
       );
-    if (!body.providerToken?.trim())
+    await requireLoginMethodEnabled(provider, "driver");
+    const providerToken = body.providerToken?.trim();
+    if (!providerToken)
       throw new HttpException(
         "Third-party provider token is required",
         HttpStatus.BAD_REQUEST,
       );
-    throw new HttpException(
-      "Third-party provider verification is not configured",
-      HttpStatus.SERVICE_UNAVAILABLE,
-    );
+    let providerId: string;
+    if (provider === "apple") {
+      const claims = await verifyAppleIdentityToken(providerToken);
+      providerId = `sub:${claims.sub}`;
+    } else {
+      throw new HttpException(
+        "WeChat website OAuth is not configured",
+        HttpStatus.SERVICE_UNAVAILABLE,
+      );
+    }
+    const identity = await prisma.driverAuthIdentity.findUnique({
+      where: { provider_providerId: { provider, providerId } },
+      include: { driver: true },
+    });
+    if (!identity)
+      throw new HttpException(
+        "此第三方帳戶尚未綁定司機，請先完成手機驗證綁定",
+        HttpStatus.CONFLICT,
+      );
+    return driverAuthResponse(identity.driver);
   }
 
+  @Post("third-party/bind")
+  async bindThirdParty(
+    @Body() body: {
+      provider?: string;
+      providerToken?: string;
+      challengeId?: string;
+      code?: string;
+    },
+  ) {
+    const provider = body.provider?.trim().toLowerCase();
+    if (provider !== "wechat" && provider !== "apple")
+      throw new HttpException("Unsupported third-party provider", HttpStatus.BAD_REQUEST);
+    await requireLoginMethodEnabled(provider, "driver");
+    const providerToken = body.providerToken?.trim();
+    if (!providerToken || !body.challengeId?.trim() || !body.code?.trim())
+      throw new HttpException("Third-party token and phone verification are required", HttpStatus.BAD_REQUEST);
+    const providerId = provider === "apple"
+      ? `sub:${(await verifyAppleIdentityToken(providerToken)).sub}`
+      : (() => { throw new HttpException("WeChat website OAuth is not configured", HttpStatus.SERVICE_UNAVAILABLE); })();
+    const challenge = await prisma.driverOtpChallenge.findUnique({
+      where: { id: body.challengeId.trim() },
+      include: { driver: true },
+    });
+    if (!challenge?.driver || challenge.consumedAt || challenge.expiresAt.getTime() <= Date.now() || !verifyPassword(body.code.trim(), challenge.codeHash))
+      throw new UnauthorizedException("Invalid phone verification");
+    const existing = await prisma.driverAuthIdentity.findUnique({
+      where: { provider_providerId: { provider, providerId } },
+    });
+    if (existing && existing.driverId !== challenge.driver.id)
+      throw new HttpException("Third-party account is already bound", HttpStatus.CONFLICT);
+    await prisma.$transaction(async (tx) => {
+      const consumed = await tx.driverOtpChallenge.updateMany({
+        where: { id: challenge.id, consumedAt: null, expiresAt: { gt: new Date() } },
+        data: { consumedAt: new Date() },
+      });
+      if (consumed.count !== 1) throw new UnauthorizedException("Verification code expired");
+      if (!existing) await tx.driverAuthIdentity.create({ data: { provider, providerId, driverId: challenge.driver!.id } });
+    });
+    return driverAuthResponse(challenge.driver);
+  }
   @Get("me/wechat-qr-code")
   async wechatQrCode(@Req() req: RequestLike, @Res() response: Response) {
     const session = await driverSessionFrom(req);
@@ -5932,7 +6611,11 @@ class DriverOrderInviteController {
     });
     if (existing)
       throw new HttpException("REGISTERED_DRIVER", HttpStatus.CONFLICT);
-    const code = "00000";
+    await loadSms253Settings();
+    const code = process.env.NODE_ENV === "production"
+      ? String(Math.floor(10000 + Math.random() * 90000))
+      : "00000";
+    await sendSms253(`${identity.countryCode}${identity.phoneNumber}`, code);
     const challengeId = randomBytes(18).toString("hex");
     const expiresAt = new Date(Date.now() + PHONE_CODE_TTL_MS);
     await prisma.driverOtpChallenge.create({
@@ -11541,6 +12224,229 @@ class RecommendedAddressesController {
 }
 @Controller("settings")
 class SettingsController {
+  @Get("apple/status") async appleStatus(@Req() req: RequestLike) {
+    requireRole(req, ["SUPER_ADMIN"]);
+    const settings = await prisma.appSetting.findUniqueOrThrow({ where: { id: appSettingsDefaults.id } });
+    const platforms = [
+      {
+        name: "Apple iOS",
+        enabled: Boolean(settings.appleIosEnabled),
+        teamId: settings.appleIosTeamId,
+        keyId: settings.appleIosKeyId,
+        clientId: settings.appleIosClientId,
+        privateKey: settings.appleIosPrivateKey,
+        audience: settings.appleIosBundleId,
+      },
+      {
+        name: "Apple Web／Android",
+        enabled: Boolean(settings.appleWebEnabled),
+        teamId: settings.appleWebTeamId,
+        keyId: settings.appleWebKeyId,
+        clientId: settings.appleWebClientId,
+        privateKey: settings.appleWebPrivateKey,
+        audience: settings.appleWebClientId,
+        redirectUri: settings.appleWebRedirectUri,
+      },
+    ];
+    const enabledPlatforms = platforms.filter((platform) => platform.enabled);
+    if (!enabledPlatforms.length) return { status: "not_configured", message: "Apple 登入未啟用" };
+    const missing = enabledPlatforms.find((platform) => !platform.teamId || !platform.keyId || !platform.clientId || !platform.privateKey || !platform.audience || (platform.name.includes("Web") && !platform.redirectUri));
+    if (missing) return { status: "not_configured", message: `${missing.name} 配置不完整` };
+    const invalidRedirect = enabledPlatforms.find((platform) => platform.redirectUri && !/^https?:\/\//i.test(platform.redirectUri));
+    if (invalidRedirect) return { status: "error", message: `${invalidRedirect.name} Redirect URI 格式無效` };
+    try {
+      for (const platform of enabledPlatforms) {
+        const privateKey = decryptWechatSecret(platform.privateKey!);
+        createPrivateKey({ key: privateKey, format: "pem", type: "pkcs8" });
+      }
+      await applePublicKeys();
+      return { status: "ok", message: "Apple 配置及公開金鑰連線正常", checkedAt: new Date().toISOString() };
+    } catch (cause) {
+      return { status: "error", message: cause instanceof HttpException ? cause.message : "Apple 配置或接口檢查失敗" };
+    }
+  }
+  @Get("wechat/status") async wechatStatus() {
+    const settings = await prisma.appSetting.findUniqueOrThrow({ where: { id: appSettingsDefaults.id } });
+    const appId = settings.wechatMiniProgramAppId || process.env.WECHAT_MINIPROGRAM_APP_ID;
+    const encryptedSecret = settings.wechatMiniProgramAppSecret;
+    const appSecret = encryptedSecret ? decryptWechatSecret(encryptedSecret) : process.env.WECHAT_MINIPROGRAM_APP_SECRET;
+    if (!settings.wechatMiniProgramEnabled) return { status: "disabled", message: "微信登入未啟用" };
+    if (!appId || !appSecret) return { status: "not_configured", message: "AppID 或 AppSecret 尚未配置" };
+    try {
+      const response = await fetch(`https://api.weixin.qq.com/cgi-bin/token?${new URLSearchParams({ grant_type: "client_credential", appid: appId, secret: appSecret })}`, { signal: AbortSignal.timeout(8000) });
+      const result = await response.json() as { access_token?: string; errcode?: number; errmsg?: string };
+      if (!response.ok || result.errcode || !result.access_token) return { status: "error", message: result.errmsg || "微信接口連線失敗" };
+      return { status: "ok", message: "微信接口連線正常", checkedAt: new Date().toISOString() };
+    } catch {
+      return { status: "error", message: "無法連線微信接口" };
+    }
+  }
+  @Get("wechat/secret") async wechatSecret(@Req() req: RequestLike) {
+    requireRole(req, ["SUPER_ADMIN"]);
+    const settings = await prisma.appSetting.findUniqueOrThrow({ where: { id: appSettingsDefaults.id } });
+    const encryptedSecret = settings.wechatMiniProgramAppSecret;
+    const appSecret = encryptedSecret ? decryptWechatSecret(encryptedSecret) : process.env.WECHAT_MINIPROGRAM_APP_SECRET;
+    if (!appSecret) throw new HttpException("WeChat AppSecret is not configured", HttpStatus.NOT_FOUND);
+    return { appSecret };
+  }
+
+  async testSms253(@Req() req: RequestLike, @Body() body: { phone?: string; variable?: boolean; message?: string; params?: string }) {
+    requireRole(req, ["SUPER_ADMIN"]);
+    await loadSms253Settings();
+    const config = sms253Config();
+    if (!config) throw new HttpException("短信服务尚未配置", HttpStatus.SERVICE_UNAVAILABLE);
+    const phone = body.phone?.trim() || sms253RuntimeSettings?.testPhone;
+    if (!phone) throw new HttpException("请提供测试手机号", HttpStatus.BAD_REQUEST);
+    if (body.variable) {
+      const message = body.message?.trim() || config.variableTemplate;
+      const params = body.params?.trim() || config.variableParams;
+      if (!message || !params) throw new HttpException("变量短信模板和参数不能为空", HttpStatus.BAD_REQUEST);
+      return { mode: "variable", result: await sendSms253Variable(message, params, config.variableReport, phone) };
+    }
+    const message = (body.message?.trim() || config.template).replace("{code}", "000000");
+    const result = await requestSms253("/msg/send/json", { phone, msg: message, report: String(config.report) });
+    if (result.code !== "0") throw new HttpException(String(result.errorMsg || "短信发送失败"), HttpStatus.BAD_GATEWAY);
+    return { mode: "ordinary", result };
+  }
+  @Post("sms253/report")
+  @Post("sms253/international/report")
+  async sms253Report(@Body() body: Record<string, unknown>) {
+    const payload = body || {};
+    const messageId = payload.messageId ?? payload.msgid ?? payload.id;
+    const phone = payload.phone ?? payload.mobile;
+    const providerCode = payload.code ?? payload.result;
+    const status = payload.status ?? payload.state;
+    await prisma.sms253Report.create({ data: {
+      messageId: messageId == null ? undefined : String(messageId),
+      phone: phone == null ? undefined : String(phone),
+      providerCode: providerCode == null ? undefined : String(providerCode),
+      status: status == null ? undefined : String(status),
+      rawPayload: JSON.parse(JSON.stringify(payload)),
+    } });
+    if (messageId != null) {
+      await prisma.sms253Message.updateMany({ where: { id: String(messageId) }, data: { status: String(status || "reported") } });
+    }
+    return { received: true };
+  }
+  @Get("sms253/messages")
+  async sms253Messages(@Req() req: RequestLike) {
+    requireRole(req, ["SUPER_ADMIN"]);
+    const data = await prisma.sms253Message.findMany({ orderBy: { createdAt: "desc" }, take: 100 });
+    return { data };
+  }
+  @Get("sms253/reports")
+  async sms253Reports(@Req() req: RequestLike) {
+    requireRole(req, ["SUPER_ADMIN"]);
+    const data = await prisma.sms253Report.findMany({ orderBy: { receivedAt: "desc" }, take: 100 });
+    return { data };
+  }
+  @Get("sms253/international/status")
+  async sms253InternationalStatus(@Req() req: RequestLike) {
+    requireRole(req, ["SUPER_ADMIN"]);
+    await loadSms253Settings();
+    const config = sms253InternationalConfig();
+    if (!config) return { status: "not_configured", message: "國際短信服務未啟用或帳號密碼尚未配置" };
+    try {
+      const result = await requestSms253WithConfig(config, "/msg/balance/json", {});
+      if (result.code !== "0") return { status: "error", message: String(result.errorMsg || "253 國際接口驗證失敗") };
+      return { status: "ok", message: "253 國際短信接口連線正常", checkedAt: new Date().toISOString() };
+    } catch { return { status: "error", message: "無法連線 253 國際短信接口" }; }
+  }
+  @Get("sms253/international/balance")
+  async sms253InternationalBalance(@Req() req: RequestLike) {
+    requireRole(req, ["SUPER_ADMIN"]);
+    await loadSms253Settings();
+    const config = sms253InternationalConfig();
+    if (!config) throw new HttpException("國際短信服務尚未配置", HttpStatus.SERVICE_UNAVAILABLE);
+    return requestSms253WithConfig(config, "/msg/balance/json", {});
+  }
+  @Post("sms253/international/test")
+  async testSms253International(@Req() req: RequestLike, @Body() body: { phone?: string; variable?: boolean; message?: string; params?: string }) {
+    requireRole(req, ["SUPER_ADMIN"]);
+    await loadSms253Settings();
+    const config = sms253InternationalConfig();
+    if (!config) throw new HttpException("國際短信服務尚未配置", HttpStatus.SERVICE_UNAVAILABLE);
+    const phone = body.phone?.trim() || config.testPhone;
+    if (!phone) throw new HttpException("請提供國際測試手機號碼", HttpStatus.BAD_REQUEST);
+    if (body.variable) {
+      const message = body.message?.trim() || config.variableTemplate;
+      const params = body.params?.trim() || config.variableParams;
+      if (!message || !params) throw new HttpException("國際變量短信模板和參數不能为空", HttpStatus.BAD_REQUEST);
+      const result = await requestSms253WithConfig(config, "/msg/variable/json", { msg: message, params, report: String(config.variableReport) });
+      await recordSms253Message({ phone, mode: "variable", message, params, report: config.variableReport, result, status: result.code === "0" ? "sent" : "rejected" });
+      if (result.code !== "0") throw new HttpException(String(result.errorMsg || "國際變量短信發送失敗"), HttpStatus.BAD_GATEWAY);
+      return { mode: "variable", result };
+    }
+    const message = (body.message?.trim() || config.template).replace("{code}", "000000");
+    const result = await requestSms253WithConfig(config, "/msg/send/json", { phone, msg: message, report: String(config.report) });
+    await recordSms253Message({ phone, mode: "ordinary", message, report: config.report, result, status: result.code === "0" ? "sent" : "rejected" });
+    if (result.code !== "0") throw new HttpException(String(result.errorMsg || "國際短信發送失敗"), HttpStatus.BAD_GATEWAY);
+    return { mode: "ordinary", result };
+  }
+  @Get("sms253/status")
+  async sms253Status(@Req() req: RequestLike) {
+    requireRole(req, ["SUPER_ADMIN"]);
+    await loadSms253Settings();
+    if (!sms253Config()) return { status: "not_configured", message: "短信服務未啟用或 Account／Password 尚未配置" };
+    try {
+      const result = await querySms253Balance();
+      if (result.code !== "0") return { status: "error", message: String(result.errorMsg || "253 短信接口驗證失敗") };
+      return { status: "ok", message: "253 短信接口連線正常", checkedAt: new Date().toISOString() };
+    } catch {
+      return { status: "error", message: "無法連線 253 短信接口" };
+    }
+  }
+  @Get("sms253/balance")
+  async sms253Balance(@Req() req: RequestLike) {
+    requireRole(req, ["SUPER_ADMIN"]);
+    await loadSms253Settings();
+    return querySms253Balance();
+  }
+
+  @Get("login-methods/preview-token")
+  async loginMethodsPreviewToken(@Req() req: RequestLike) {
+    requireRole(req, ["SUPER_ADMIN", "OPERATOR"]);
+    return { token: createLoginPreviewToken() };
+  }
+  @Get("login-methods")
+  async loginMethods(@Req() req: RequestLike) {
+    requireRole(req, ["SUPER_ADMIN", "OPERATOR"]);
+    const settings = await prisma.appSetting.findUniqueOrThrow({ where: { id: appSettingsDefaults.id } });
+    const drafts = await ensureLoginMethodDrafts();
+    return { data: drafts.map(publicLoginMethod), miniProgram: { loginMode: drafts[0]?.miniProgramLoginMode || (isWechatMiniProgramLoginMode(settings.wechatMiniProgramLoginMode) ? settings.wechatMiniProgramLoginMode : "wechatOnly") } };
+  }
+  @Post("login-methods")
+  async updateLoginMethods(@Req() req: RequestLike, @Body() body: { methods?: Array<{ provider?: string; passengerEnabled?: boolean; driverEnabled?: boolean; displayName?: string; logoUrl?: string | null; description?: string; sortOrder?: number }>; miniProgram?: { loginMode?: WechatMiniProgramLoginMode } }) {
+    requireRole(req, ["SUPER_ADMIN"]);
+    const allowed = new Set<string>(loginMethodDefaults.map((item) => item.provider));
+    if (!Array.isArray(body.methods)) throw new BadRequestException("登入方式配置無效");
+    if (body.miniProgram?.loginMode !== undefined && !isWechatMiniProgramLoginMode(body.miniProgram.loginMode)) throw new BadRequestException("小程序登入模式無效");
+    for (const method of body.methods) {
+      const provider = method.provider?.trim();
+      if (!provider || !allowed.has(provider)) throw new BadRequestException("不支援的登入方式");
+      if (method.logoUrl !== undefined && method.logoUrl !== null) validateAdminLogo(method.logoUrl);
+      const displayName = method.displayName?.trim();
+      if (displayName !== undefined && (!displayName || displayName.length > 80)) throw new BadRequestException("登入方式名稱無效");
+      await prisma.loginMethodSettingDraft.update({ where: { provider }, data: {
+        enabled: Boolean(method.passengerEnabled || method.driverEnabled), passengerEnabled: method.passengerEnabled, driverEnabled: method.driverEnabled,
+        displayName, logoUrl: method.logoUrl === undefined ? undefined : method.logoUrl,
+        description: method.description?.trim(), sortOrder: method.sortOrder === undefined ? undefined : Math.max(0, Math.trunc(method.sortOrder)),
+        miniProgramLoginMode: body.miniProgram?.loginMode,
+      } });
+    }
+    if (body.miniProgram?.loginMode !== undefined && !body.methods.length) {
+      await prisma.loginMethodSettingDraft.updateMany({ data: { miniProgramLoginMode: body.miniProgram.loginMode } });
+    }
+    const settings = await prisma.appSetting.findUniqueOrThrow({ where: { id: appSettingsDefaults.id } });
+    const drafts = await ensureLoginMethodDrafts();
+    return { data: drafts.map(publicLoginMethod), miniProgram: { loginMode: drafts[0]?.miniProgramLoginMode || (isWechatMiniProgramLoginMode(settings.wechatMiniProgramLoginMode) ? settings.wechatMiniProgramLoginMode : "wechatOnly") } };
+  }
+  @Post("login-methods/publish")
+  async publishLoginMethods(@Req() req: RequestLike) {
+    requireRole(req, ["SUPER_ADMIN"]);
+    return { data: (await publishLoginMethodDrafts()).map(publicLoginMethod) };
+  }
+
   @Get() async get() {
     return appSettingsResponse(
       await prisma.appSetting.findUniqueOrThrow({
@@ -11570,6 +12476,8 @@ class SettingsController {
       alipayPayEnabled?: boolean;
       bankCardPayEnabled?: boolean;
       sandboxMode?: boolean;
+      wechatMiniProgram?: { enabled?: boolean; loginMode?: "wechatOnly" | "wechatAndSms" | "smsOnly"; appId?: string; appSecret?: string; phoneCapability?: boolean };
+      appleLogin?: { ios?: { enabled?: boolean; teamId?: string; keyId?: string; clientId?: string; privateKey?: string; bundleId?: string }; web?: { enabled?: boolean; teamId?: string; keyId?: string; clientId?: string; redirectUri?: string; privateKey?: string } };      sms253?: { enabled?: boolean; endpoint?: string; sendUrl?: string; variableUrl?: string; balanceUrl?: string; reportUrl?: string; account?: string; password?: string; template?: string; report?: boolean; variableReport?: boolean; variableTemplate?: string; variableParams?: string; testPhone?: string; international?: { enabled?: boolean; endpoint?: string; sendUrl?: string; variableUrl?: string; balanceUrl?: string; reportUrl?: string; account?: string; password?: string; template?: string; report?: boolean; variableReport?: boolean; variableTemplate?: string; variableParams?: string; testPhone?: string } };
     },
   ) {
     const session = requireRole(req, ["SUPER_ADMIN", "OPERATOR"]);
@@ -11604,6 +12512,29 @@ class SettingsController {
         "Driver payout percentage must be between 0 and 100",
         HttpStatus.BAD_REQUEST,
       );
+    const wechat = body.wechatMiniProgram;
+    if (wechat?.loginMode !== undefined && !isWechatMiniProgramLoginMode(wechat.loginMode)) throw new HttpException("WeChat Mini Program login mode is invalid", HttpStatus.BAD_REQUEST);
+    const apple = body.appleLogin;
+    const sms = body.sms253;
+    if (wechat && session.role !== "SUPER_ADMIN") throw new ForbiddenException("Only super administrators may update WeChat settings");
+    if (apple && session.role !== "SUPER_ADMIN") throw new ForbiddenException("Only super administrators may update Apple settings");
+    if (sms && session.role !== "SUPER_ADMIN") throw new ForbiddenException("Only super administrators may update SMS settings");
+    if (sms?.international?.endpoint !== undefined && sms.international.endpoint.trim() && !/^https?:\/\//i.test(sms.international.endpoint.trim())) throw new HttpException("International SMS endpoint is invalid", HttpStatus.BAD_REQUEST);
+    const validateSmsUrl = (value: unknown, label: string) => {
+      if (value !== undefined && value !== null && String(value).trim() && !/^https?:\/\//i.test(String(value).trim())) throw new HttpException(`${label} is invalid`, HttpStatus.BAD_REQUEST);
+    };
+    validateSmsUrl(sms?.sendUrl, "SMS send URL");
+    validateSmsUrl(sms?.variableUrl, "SMS variable URL");
+    validateSmsUrl(sms?.balanceUrl, "SMS balance URL");
+    validateSmsUrl(sms?.reportUrl, "SMS report URL");
+    validateSmsUrl(sms?.international?.sendUrl, "International SMS send URL");
+    validateSmsUrl(sms?.international?.variableUrl, "International SMS variable URL");
+    validateSmsUrl(sms?.international?.balanceUrl, "International SMS balance URL");
+    validateSmsUrl(sms?.international?.reportUrl, "International SMS report URL");
+    if (sms?.template !== undefined && (!sms.template.trim() || sms.template.length > 500)) throw new HttpException("SMS template is invalid", HttpStatus.BAD_REQUEST);
+    if (sms?.international?.template !== undefined && (!sms.international.template.trim() || sms.international.template.length > 500)) throw new HttpException("International SMS template is invalid", HttpStatus.BAD_REQUEST);
+    if (sms?.variableTemplate !== undefined && sms.variableTemplate.length > 500) throw new HttpException("SMS variable template is invalid", HttpStatus.BAD_REQUEST);
+    if (sms?.international?.variableTemplate !== undefined && sms.international.variableTemplate.length > 500) throw new HttpException("International SMS variable template is invalid", HttpStatus.BAD_REQUEST);
     const data = {
       language: body.language || settings.language,
       region: body.region || settings.region,
@@ -11641,6 +12572,51 @@ class SettingsController {
       bankCardPayEnabled:
         body.bankCardPayEnabled ?? settings.bankCardPayEnabled,
       sandboxMode: body.sandboxMode ?? settings.sandboxMode,
+      wechatMiniProgramEnabled: wechat?.enabled ?? settings.wechatMiniProgramEnabled,
+      wechatMiniProgramLoginMode: wechat?.loginMode ?? settings.wechatMiniProgramLoginMode,
+      wechatMiniProgramAppId: wechat?.appId === undefined ? settings.wechatMiniProgramAppId : wechat.appId.trim() || null,
+      wechatMiniProgramAppSecret: wechat?.appSecret?.trim() ? encryptWechatSecret(wechat.appSecret.trim()) : settings.wechatMiniProgramAppSecret,
+      wechatMiniProgramPhoneCapability: wechat?.phoneCapability ?? settings.wechatMiniProgramPhoneCapability,
+      appleIosEnabled: apple?.ios?.enabled ?? settings.appleIosEnabled,
+      appleIosTeamId: apple?.ios?.teamId === undefined ? settings.appleIosTeamId : apple.ios.teamId.trim() || null,
+      appleIosKeyId: apple?.ios?.keyId === undefined ? settings.appleIosKeyId : apple.ios.keyId.trim() || null,
+      appleIosClientId: apple?.ios?.clientId === undefined ? settings.appleIosClientId : apple.ios.clientId.trim() || null,
+      appleIosPrivateKey: apple?.ios?.privateKey?.trim() ? encryptWechatSecret(apple.ios.privateKey.trim()) : settings.appleIosPrivateKey,
+      appleIosBundleId: apple?.ios?.bundleId === undefined ? settings.appleIosBundleId : apple.ios.bundleId.trim() || null,
+      appleWebEnabled: apple?.web?.enabled ?? settings.appleWebEnabled,
+      appleWebTeamId: apple?.web?.teamId === undefined ? settings.appleWebTeamId : apple.web.teamId.trim() || null,
+      appleWebKeyId: apple?.web?.keyId === undefined ? settings.appleWebKeyId : apple.web.keyId.trim() || null,
+      appleWebClientId: apple?.web?.clientId === undefined ? settings.appleWebClientId : apple.web.clientId.trim() || null,
+      appleWebRedirectUri: apple?.web?.redirectUri === undefined ? settings.appleWebRedirectUri : apple.web.redirectUri.trim() || null,
+      appleWebPrivateKey: apple?.web?.privateKey?.trim() ? encryptWechatSecret(apple.web.privateKey.trim()) : settings.appleWebPrivateKey,
+      sms253Enabled: sms?.enabled ?? settings.sms253Enabled,
+      sms253Endpoint: sms?.endpoint === undefined ? settings.sms253Endpoint : sms.endpoint.trim().replace(/\/$/, ""),
+      sms253SendUrl: sms?.sendUrl === undefined ? settings.sms253SendUrl : sms.sendUrl.trim() || null,
+      sms253VariableUrl: sms?.variableUrl === undefined ? settings.sms253VariableUrl : sms.variableUrl.trim() || null,
+      sms253BalanceUrl: sms?.balanceUrl === undefined ? settings.sms253BalanceUrl : sms.balanceUrl.trim() || null,
+      sms253ReportUrl: sms?.reportUrl === undefined ? settings.sms253ReportUrl : sms.reportUrl.trim() || null,
+      sms253Account: sms?.account === undefined ? settings.sms253Account : sms.account.trim() || null,
+      sms253Password: sms?.password?.trim() ? encryptWechatSecret(sms.password.trim()) : settings.sms253Password,
+      sms253Template: sms?.template === undefined ? settings.sms253Template : sms.template.trim(),
+      sms253VariableTemplate: sms?.variableTemplate === undefined ? settings.sms253VariableTemplate : sms.variableTemplate.trim() || null,
+      sms253VariableParams: sms?.variableParams === undefined ? settings.sms253VariableParams : sms.variableParams.trim() || null,
+      sms253Report: sms?.report ?? settings.sms253Report,
+      sms253VariableReport: sms?.variableReport ?? settings.sms253VariableReport,
+      sms253TestPhone: sms?.testPhone === undefined ? settings.sms253TestPhone : sms.testPhone.trim() || null,
+      sms253InternationalEnabled: sms?.international?.enabled ?? settings.sms253InternationalEnabled,
+      sms253InternationalEndpoint: sms?.international?.endpoint === undefined ? settings.sms253InternationalEndpoint : sms.international.endpoint.trim() || null,
+      sms253InternationalSendUrl: sms?.international?.sendUrl === undefined ? settings.sms253InternationalSendUrl : sms.international.sendUrl.trim() || null,
+      sms253InternationalVariableUrl: sms?.international?.variableUrl === undefined ? settings.sms253InternationalVariableUrl : sms.international.variableUrl.trim() || null,
+      sms253InternationalBalanceUrl: sms?.international?.balanceUrl === undefined ? settings.sms253InternationalBalanceUrl : sms.international.balanceUrl.trim() || null,
+      sms253InternationalReportUrl: sms?.international?.reportUrl === undefined ? settings.sms253InternationalReportUrl : sms.international.reportUrl.trim() || null,
+      sms253InternationalAccount: sms?.international?.account === undefined ? settings.sms253InternationalAccount : sms.international.account.trim() || null,
+      sms253InternationalPassword: sms?.international?.password?.trim() ? encryptWechatSecret(sms.international.password.trim()) : settings.sms253InternationalPassword,
+      sms253InternationalTemplate: sms?.international?.template === undefined ? settings.sms253InternationalTemplate : sms.international.template.trim() || null,
+      sms253InternationalVariableTemplate: sms?.international?.variableTemplate === undefined ? settings.sms253InternationalVariableTemplate : sms.international.variableTemplate.trim() || null,
+      sms253InternationalVariableParams: sms?.international?.variableParams === undefined ? settings.sms253InternationalVariableParams : sms.international.variableParams.trim() || null,
+      sms253InternationalReport: sms?.international?.report ?? settings.sms253InternationalReport,
+      sms253InternationalVariableReport: sms?.international?.variableReport ?? settings.sms253InternationalVariableReport,
+      sms253InternationalTestPhone: sms?.international?.testPhone === undefined ? settings.sms253InternationalTestPhone : sms.international.testPhone.trim() || null,
     };
     const updated = await prisma.$transaction(async (tx) => {
       const result = await tx.appSetting.update({
@@ -12317,7 +13293,6 @@ class PaymentsController {
     @Body()
     body: {
       quoteId?: string;
-      userId?: string;
       origin?: string;
       destination?: string;
       originAddress?: {
@@ -12353,6 +13328,7 @@ class PaymentsController {
         documentType?: string;
         passportCountry?: string | null;
       };
+      userId?: string;
     },
   ) {
     const quoteId = typeof body.quoteId === "string" ? body.quoteId.trim() : "";
@@ -12365,13 +13341,17 @@ class PaymentsController {
     } catch {
       const adminSession = requireRole(req, ["SUPER_ADMIN", "OPERATOR"]);
       if (!body.userId)
-        throw new HttpException("userId is required for administrator orders", HttpStatus.BAD_REQUEST);
+        throw new HttpException("userId is required for administrator payments", HttpStatus.BAD_REQUEST);
       session = { sub: body.userId.trim(), exp: adminSession.exp, jti: adminSession.jti };
     }
-    if (body.userId && body.userId.trim() !== session.sub) {
+    const targetUserId = body.userId?.trim();
+    if (targetUserId && targetUserId !== session.sub) {
       const adminSession = requireRole(req, ["SUPER_ADMIN", "OPERATOR"]);
-      session = { sub: body.userId.trim(), exp: adminSession.exp, jti: adminSession.jti };
+      session = { sub: targetUserId, exp: adminSession.exp, jti: adminSession.jti };
     }
+    const targetUser = await prisma.user.findUnique({ where: { id: session.sub }, select: { id: true } });
+    if (!targetUser)
+      throw new HttpException("User not found", HttpStatus.NOT_FOUND);
     const quote = await prisma.fareQuote.findUnique({
       where: { id: quoteId },
       include: { pricing: true },
@@ -12495,6 +13475,7 @@ class PaymentsController {
       useFareBalance?: boolean;
       useCashBalance?: boolean;
       externalPaymentMethod?: string;
+      externalAmount?: number;
       manualPaymentConfirmed?: boolean;
       origin?: string;
       destination?: string;
@@ -12540,10 +13521,12 @@ class PaymentsController {
       where: { id: appSettingsDefaults.id },
     });
     let session: ClientSession;
+    let isAdministratorPayment = false;
     try {
       session = await clientSessionFrom(req);
     } catch {
       const adminSession = requireRole(req, ["SUPER_ADMIN", "OPERATOR"]);
+      isAdministratorPayment = true;
       if (!body.userId)
         throw new HttpException(
           "userId is required for administrator payments",
@@ -12566,12 +13549,6 @@ class PaymentsController {
       } catch {
         throw new ForbiddenException("Cannot pay for another user");
       }
-    }
-    const manualPaymentConfirmed = body.manualPaymentConfirmed === true;
-    if (manualPaymentConfirmed) {
-      requireRole(req, ["SUPER_ADMIN", "OPERATOR"]);
-      if (!body.externalPaymentMethod?.trim())
-        throw new HttpException("externalPaymentMethod is required", HttpStatus.BAD_REQUEST);
     }
     const userTarget = await prisma.user.findUnique({
       where: { id: session.sub },
@@ -12713,9 +13690,24 @@ class PaymentsController {
             ),
           );
         }
-        const externalPaid = roundMoney(
-          totalAmount - fareApplied - cashApplied,
+        const externalAmount = roundMoney(
+          Number.isFinite(Number(body.externalAmount))
+            ? Number(body.externalAmount)
+            : totalAmount - fareApplied - cashApplied,
         );
+        const manualPaymentConfirmed = isAdministratorPayment && body.manualPaymentConfirmed === true;
+        const externalPaid = manualPaymentConfirmed
+          ? externalAmount
+          : roundMoney(totalAmount - fareApplied - cashApplied);
+
+        if (manualPaymentConfirmed && (!body.externalPaymentMethod?.trim() || externalPaid < 0 || externalPaid > roundMoney(totalAmount - fareApplied - cashApplied))) {
+          throw new HttpException(
+            "Valid external payment amount and method are required",
+            HttpStatus.BAD_REQUEST,
+          );
+        }
+
+        const chargedTotal = roundMoney(fareApplied + cashApplied + externalPaid);
 
         if (externalPaid > 0 && !manualPaymentConfirmed) {
           throw new HttpException(
@@ -12728,10 +13720,6 @@ class PaymentsController {
             HttpStatus.PAYMENT_REQUIRED,
           );
         }
-        const recordedExternalPaid = manualPaymentConfirmed ? externalPaid : 0;
-        const recordedExternalMethod = manualPaymentConfirmed
-          ? body.externalPaymentMethod!.trim()
-          : null;
 
         let currentFare = user.fareBalance;
         let currentCash = user.cashBalance;
@@ -12861,8 +13849,8 @@ class PaymentsController {
                 ...passengerData,
                 fareBalancePaid: farePaid,
                 cashBalancePaid: cashPaid,
-                externalPaid: recordedExternalPaid,
-                externalPaymentMethod: recordedExternalMethod,
+                externalPaid: manualPaymentConfirmed ? externalPaid : 0,
+                externalPaymentMethod: manualPaymentConfirmed ? body.externalPaymentMethod!.trim() : null,
               },
             })
           : await tx.trip.create({
@@ -12888,8 +13876,8 @@ class PaymentsController {
                 ...passengerData,
                 fareBalancePaid: farePaid,
                 cashBalancePaid: cashPaid,
-                externalPaid: recordedExternalPaid,
-                externalPaymentMethod: recordedExternalMethod,
+                externalPaid: manualPaymentConfirmed ? externalPaid : 0,
+                externalPaymentMethod: manualPaymentConfirmed ? body.externalPaymentMethod!.trim() : null,
               },
             });
         const payment = await tx.payment.create({
@@ -12897,12 +13885,12 @@ class PaymentsController {
             tripId: trip.id,
             quoteId: quote.id,
             userId: user.id,
-            total: totalAmount,
+            total: chargedTotal,
             currency: quote.currency,
             fareAmount: farePaid,
             cashAmount: cashPaid,
-            externalAmount: recordedExternalPaid,
-            externalPaymentMethod: recordedExternalMethod,
+            externalAmount: manualPaymentConfirmed ? externalPaid : 0,
+            externalPaymentMethod: manualPaymentConfirmed ? body.externalPaymentMethod!.trim() : null,
             externalReference: null,
           },
         });
@@ -12926,13 +13914,13 @@ class PaymentsController {
           ok: true,
           tripId: trip.id,
           quoteId: quote.id,
-          total: totalAmount,
+          total: chargedTotal,
           currency: quote.currency,
           paidSummary: {
             fareBalance: farePaid,
             cashBalance: cashPaid,
-            external: 0,
-            externalMethod: null,
+            external: manualPaymentConfirmed ? externalPaid : 0,
+            externalMethod: manualPaymentConfirmed ? body.externalPaymentMethod!.trim() : null,
           },
           user: {
             id: user.id,
@@ -13540,7 +14528,11 @@ class ClientOrdersController {
         "Phone number is already connected",
         HttpStatus.CONFLICT,
       );
-    const code = "00000";
+    await loadSms253Settings();
+    const code = process.env.NODE_ENV === "production"
+      ? String(Math.floor(10000 + Math.random() * 90000))
+      : "00000";
+    await sendSms253(`${identity.countryCode}${identity.phoneNumber}`, code);
     const challengeId = randomBytes(18).toString("hex");
     const exp = Date.now() + PHONE_CODE_TTL_MS;
     clientPhoneChangeChallenges.set(challengeId, {
@@ -14081,6 +15073,10 @@ async function bootstrap() {
           "http://127.0.0.1:5173",
           "http://localhost:5174",
           "http://127.0.0.1:5174",
+          "http://localhost:5175",
+          "http://127.0.0.1:5175",
+          "http://localhost:5176",
+          "http://127.0.0.1:5176",
           "http://localhost:5181",
           "http://127.0.0.1:5181",
           "http://localhost:8080",

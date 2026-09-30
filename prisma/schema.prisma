@@ -623,6 +623,51 @@ model AppSetting {
   alipayPayEnabled                Boolean  @default(true)
   bankCardPayEnabled              Boolean  @default(true)
   sandboxMode                     Boolean  @default(false)
+  wechatMiniProgramEnabled        Boolean  @default(false)
+  wechatMiniProgramLoginMode      String   @default("wechatOnly")
+  wechatMiniProgramAppId          String?
+  wechatMiniProgramAppSecret      String?  @db.Text
+  wechatMiniProgramPhoneCapability Boolean  @default(false)
+  appleIosEnabled                 Boolean  @default(false)
+  appleIosTeamId                 String?
+  appleIosKeyId                  String?
+  appleIosClientId               String?
+  appleIosPrivateKey             String?  @db.Text
+  appleIosBundleId               String?
+  appleWebEnabled                Boolean  @default(false)
+  appleWebTeamId                 String?
+  appleWebKeyId                  String?
+  appleWebClientId               String?
+  appleWebRedirectUri            String?
+  appleWebPrivateKey             String?  @db.Text
+  sms253Enabled                   Boolean  @default(false)
+  sms253Endpoint                  String   @default("https://smssh1.253.com")
+  sms253SendUrl                   String?
+  sms253VariableUrl               String?
+  sms253BalanceUrl                String?
+  sms253ReportUrl                 String?
+  sms253Account                   String?
+  sms253Password                  String?  @db.Text
+  sms253Template                  String   @default("【253云通讯】您的验证码是{code}。如非本人操作，请忽略。")
+  sms253VariableTemplate          String?
+  sms253VariableParams            String?
+  sms253Report                    Boolean  @default(false)
+  sms253VariableReport            Boolean  @default(false)
+  sms253TestPhone                 String?
+  sms253InternationalEnabled      Boolean  @default(false)
+  sms253InternationalEndpoint     String?
+  sms253InternationalSendUrl      String?
+  sms253InternationalVariableUrl  String?
+  sms253InternationalBalanceUrl   String?
+  sms253InternationalReportUrl    String?
+  sms253InternationalAccount      String?
+  sms253InternationalPassword     String?  @db.Text
+  sms253InternationalTemplate     String?
+  sms253InternationalVariableTemplate String?
+  sms253InternationalVariableParams String?
+  sms253InternationalReport       Boolean  @default(false)
+  sms253InternationalVariableReport Boolean @default(false)
+  sms253InternationalTestPhone    String?
   mileageSpendPerKm               Float    @default(10)
   mileageValidityMonths           Int      @default(12)
   invitationEnabled               Boolean  @default(true)
@@ -631,6 +676,75 @@ model AppSetting {
   invitationQualificationDays     Int      @default(30)
   invitationMileageValidityMonths Int      @default(12)
   updatedAt                       DateTime @updatedAt
+}
+
+model LoginMethodSetting {
+  id              String   @id @default(cuid())
+  provider        String   @unique
+  enabled         Boolean  @default(false)
+  passengerEnabled Boolean @default(false)
+  driverEnabled   Boolean  @default(false)
+  displayName     String
+  logoUrl         String?  @db.Text
+  description     String   @default("")
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([enabled, sortOrder])
+  @@index([passengerEnabled, sortOrder])
+  @@index([driverEnabled, sortOrder])
+}
+
+model LoginMethodSettingDraft {
+  id              String   @id @default(cuid())
+  provider        String   @unique
+  enabled         Boolean  @default(false)
+  passengerEnabled Boolean  @default(false)
+  driverEnabled   Boolean  @default(false)
+  displayName     String
+  logoUrl         String?  @db.Text
+  description     String   @default("")
+  sortOrder       Int      @default(0)
+  miniProgramLoginMode String @default("wechatOnly")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([sortOrder])
+}
+
+model Sms253Message {
+  id            String   @id @default(cuid())
+  phone         String?
+  mode          String
+  message       String?  @db.Text
+  params        String?  @db.Text
+  report        Boolean  @default(false)
+  status        String
+  providerCode  String?
+  providerError String?  @db.Text
+  providerData  Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([createdAt])
+  @@index([phone, createdAt])
+  @@index([status, createdAt])
+}
+
+
+model Sms253Report {
+  id           String   @id @default(cuid())
+  messageId    String?
+  phone        String?
+  providerCode String?
+  status       String?
+  rawPayload   Json
+  receivedAt   DateTime @default(now())
+
+  @@index([receivedAt])
+  @@index([phone, receivedAt])
+  @@index([messageId])
 }
 
 model RecommendedAddress {
