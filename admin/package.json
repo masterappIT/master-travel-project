@@ -10,6 +10,8 @@
     "check:style-boundaries": "node ../scripts/check-admin-style-boundaries.mjs",
     "preview": "vite preview --host 127.0.0.1 --port 5174 --strictPort"
   },
-  "dependencies": { "vite": "^5.2.8", "vue": "^3.4.21" },
-  "devDependencies": {}
+  "dependencies": {
+    "vite": "^8.3.1",
+    "vue": "^3.4.21"
+  }
 }
