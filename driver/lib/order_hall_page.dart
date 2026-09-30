@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'app/route_names.dart';
@@ -251,36 +253,41 @@ class _OrderHallPageState extends State<OrderHallPage>
                     child: Text(_error!),
                   ))
                 else if (_selectedTab == 0)
-                  ..._available.map((trip) {
-                    final item = Map<String, dynamic>.from(trip as Map);
-                    final pendingAssignment =
-                        item['executionPhase'] == 'DRIVER_PENDING_ACCEPTANCE';
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: DriverSpacing.md),
-                      child: _OrderCard(
-                        passenger: formatPassengerName(
-                          item,
-                          fallback: driverText('乘客', '乘客', 'Passenger'),
+                  if (_available.isEmpty)
+                    _EmptyAvailableOrders(isOnline: online)
+                  else
+                    ..._available.map((trip) {
+                      final item = Map<String, dynamic>.from(trip as Map);
+                      final pendingAssignment =
+                          item['executionPhase'] == 'DRIVER_PENDING_ACCEPTANCE';
+                      return Padding(
+                        padding:
+                            const EdgeInsets.only(bottom: DriverSpacing.md),
+                        child: _OrderCard(
+                          passenger: formatPassengerName(
+                            item,
+                            fallback: driverText('乘客', '乘客', 'Passenger'),
+                          ),
+                          time: _formatTripTime(item['scheduledAt']),
+                          price: _formatPrice(item['price'], item['currency']),
+                          origin: item['pickupAddress']?.toString() ??
+                              item['origin']?.toString() ??
+                              driverText('起點待確認', '起点待确认', 'Pickup pending'),
+                          destination: item['dropoffAddress']?.toString() ??
+                              item['destination']?.toString() ??
+                              driverText(
+                                  '終點待確認', '终点待确认', 'Destination pending'),
+                          estimatedTime: pendingAssignment
+                              ? driverText(
+                                  '等待確認接單', '等待确认接单', 'Awaiting confirmation')
+                              : driverText('待接行程', '待接行程', 'Available trip'),
+                          actionLabel: pendingAssignment
+                              ? driverText('確認訂單', '确认订单', 'Confirm')
+                              : driverText('接單', '接单', 'Accept'),
+                          onTap: () => _openOrderDetail(item['id'].toString()),
                         ),
-                        time: _formatTripTime(item['scheduledAt']),
-                        price: _formatPrice(item['price'], item['currency']),
-                        origin: item['pickupAddress']?.toString() ??
-                            item['origin']?.toString() ??
-                            driverText('起點待確認', '起点待确认', 'Pickup pending'),
-                        destination: item['dropoffAddress']?.toString() ??
-                            item['destination']?.toString() ??
-                            driverText('終點待確認', '终点待确认', 'Destination pending'),
-                        estimatedTime: pendingAssignment
-                            ? driverText(
-                                '等待確認接單', '等待确认接单', 'Awaiting confirmation')
-                            : driverText('待接行程', '待接行程', 'Available trip'),
-                        actionLabel: pendingAssignment
-                            ? driverText('確認訂單', '确认订单', 'Confirm')
-                            : driverText('接單', '接单', 'Accept'),
-                        onTap: () => _openOrderDetail(item['id'].toString()),
-                      ),
-                    );
-                  })
+                      );
+                    })
                 else if (_myTrips.isEmpty)
                   const _EmptyAcceptedOrders()
                 else
@@ -565,6 +572,159 @@ class _RouteRow extends StatelessWidget {
                     fontWeight: FontWeight.w500,
                     color: DriverColors.text))),
       ]);
+}
+
+class _EmptyAvailableOrders extends StatefulWidget {
+  const _EmptyAvailableOrders({required this.isOnline});
+
+  final bool isOnline;
+
+  @override
+  State<_EmptyAvailableOrders> createState() => _EmptyAvailableOrdersState();
+}
+
+class _EmptyAvailableOrdersState extends State<_EmptyAvailableOrders>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _rotationController;
+
+  @override
+  void initState() {
+    super.initState();
+    _rotationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2200),
+    );
+    if (widget.isOnline) _rotationController.repeat();
+  }
+
+  @override
+  void didUpdateWidget(covariant _EmptyAvailableOrders oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isOnline && !oldWidget.isOnline) {
+      _rotationController.repeat();
+    } else if (!widget.isOnline && oldWidget.isOnline) {
+      _rotationController.stop();
+    }
+  }
+
+  @override
+  void dispose() {
+    _rotationController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final title = widget.isOnline
+        ? driverText('正在搜尋附近訂單', '正在搜索附近订单', 'Searching nearby orders')
+        : driverText('目前未開啟接單', '目前未开启接单', 'Order taking is offline');
+    final subtitle = widget.isOnline
+        ? driverText('有新行程時會立即通知你', '有新行程时会立即通知你',
+            'You will be notified when a trip is available')
+        : driverText('上線後即可開始接收行程', '上线后即可开始接收行程',
+            'Go online to receive available trips');
+
+    return Semantics(
+      liveRegion: true,
+      label: '$title。$subtitle',
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 310),
+        padding: const EdgeInsets.symmetric(vertical: DriverSpacing.xl),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            RepaintBoundary(
+              child: AnimatedBuilder(
+                animation: _rotationController,
+                builder: (context, child) => Transform.rotate(
+                  angle: widget.isOnline
+                      ? _rotationController.value * math.pi * 2
+                      : 0,
+                  child: child,
+                ),
+                child: const _RadarIllustration(),
+              ),
+            ),
+            const SizedBox(height: DriverSpacing.lg),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: DriverColors.text,
+              ),
+            ),
+            const SizedBox(height: DriverSpacing.xs),
+            Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: DriverTypography.body,
+                color: DriverColors.secondaryText,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RadarIllustration extends StatelessWidget {
+  const _RadarIllustration();
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        width: 164,
+        height: 164,
+        child: CustomPaint(painter: _RadarPainter()),
+      );
+}
+
+class _RadarPainter extends CustomPainter {
+  final Paint _ringPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2;
+  final Paint _sweepPaint = Paint()
+    ..style = PaintingStyle.fill
+    ..color = DriverColors.primary.withValues(alpha: 0.14);
+  final Paint _dotPaint = Paint()..color = DriverColors.primary;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = size.center(Offset.zero);
+    final radius = size.shortestSide / 2 - 5;
+    _ringPaint.color = DriverColors.primary.withValues(alpha: 0.16);
+    for (final scale in [1.0, 0.72, 0.44]) {
+      canvas.drawCircle(center, radius * scale, _ringPaint);
+    }
+
+    final sweepPath = Path()
+      ..moveTo(center.dx, center.dy)
+      ..arcTo(
+        Rect.fromCircle(center: center, radius: radius),
+        -math.pi / 2,
+        math.pi / 2.3,
+        false,
+      )
+      ..close();
+    canvas.drawPath(sweepPath, _sweepPaint);
+    canvas.drawLine(
+      center,
+      Offset(center.dx, center.dy - radius),
+      _ringPaint..color = DriverColors.primary.withValues(alpha: 0.55),
+    );
+    canvas.drawCircle(center, 7, _dotPaint);
+    canvas.drawCircle(
+      Offset(center.dx + radius * 0.56, center.dy - radius * 0.35),
+      4,
+      _dotPaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _RadarPainter oldDelegate) => false;
 }
 
 class _EmptyAcceptedOrders extends StatelessWidget {
