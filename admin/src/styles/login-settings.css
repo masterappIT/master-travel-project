@@ -89,6 +89,7 @@
 .login-settings-admin .wechat-secret-help{ margin-top: 2px; color: var(--color-muted); font-size: 11px; font-weight: 500; line-height: 1.4; }
 .login-settings-admin .login-settings-save-bar{ display: flex; align-items: center; justify-content: flex-end; gap: 16px; padding: 16px 24px; border: 1px solid #e2e8f0; border-radius: 14px; background: #fff; box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04); }
 .login-settings-admin .login-settings-note{ margin-right: auto; color: var(--color-muted); font-size: 13px; }
+.login-settings-admin .login-settings-note.is-centered{ margin-right: 0; text-align: center; }
 .login-settings-admin .login-settings-save-bar button.primary{ min-height: 44px; border: 0; background: var(--gradient-primary); color: #fff; border-radius: var(--radius-control); padding: 0 24px; font-size: 14px; font-weight: 750; cursor: pointer; box-shadow: var(--shadow-primary); }
 .login-settings-admin .login-settings-save-bar button.primary:hover:not(:disabled){ filter: brightness(1.06); transform: translateY(-1px); }
 .login-settings-admin .login-settings-form-grid .switch{ align-self: center; }
