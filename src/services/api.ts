@@ -169,6 +169,14 @@ export async function authenticateWechatPhone(loginCode: string, phoneCode: stri
   return response.data as AuthResult
 }
 
+export type AppleWebConfig = { clientId: string; redirectUri: string }
+
+export async function getAppleWebConfig(): Promise<AppleWebConfig> {
+  const response = await uni.request({ url: `${API_BASE_URL}/auth/third-party/apple-config` })
+  if (response.statusCode >= 400) throw apiError(response, 'Apple 登入尚未配置', false)
+  return response.data as AppleWebConfig
+}
+
 export async function authenticateThirdParty(provider: 'wechat' | 'apple', providerToken: string, state?: string): Promise<AuthResult> {
   const response = await uni.request({
     url: `${API_BASE_URL}/auth/third-party`,
@@ -258,7 +266,7 @@ export async function verifyClientPhoneChange(challengeId: string, code: string)
 }
 
 
-export async function linkClientProvider(provider: 'wechat' | 'apple', providerToken = `${provider}-dev-account`): Promise<ClientSecurity> {
+export async function linkClientProvider(provider: 'wechat' | 'apple', providerToken: string): Promise<ClientSecurity> {
   const response = await uni.request({ url: `${API_BASE_URL}/client/security/providers`, method: 'POST', header: authHeaders(), data: { provider, providerToken } })
   if (response.statusCode >= 400) throw apiError(response, '第三方帳戶連結失敗')
   return response.data as ClientSecurity

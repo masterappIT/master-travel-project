@@ -328,9 +328,9 @@ const App = { setup() {
      navigate,
      ...financePageState
    })
-   // 登入配置頁（短信／微信／Apple／登入方式管理）的所有寫入與測試端點後端僅允許 SUPER_ADMIN，
-   // 故 canWrite 在此綁定 isSuperAdministrator 而非全域「非 VIEWER 可寫」的 canWrite，
-   // 讓 OPERATOR 在此頁看到的可編輯狀態與後端實際權限一致（唯讀）。
+   // 登入配置頁（分配層：登入方式管理／配置層：短信、微信、Apple）的所有寫入與測試端點
+   // 後端僅允許 SUPER_ADMIN，故 canWrite 在此綁定 isSuperAdministrator 而非全域
+   // 「非 VIEWER 可寫」的 canWrite，讓 OPERATOR 在此頁看到的可編輯狀態與後端實際權限一致（唯讀）。
    provide('adminLoginSettingsContext', {
     view,
     t,

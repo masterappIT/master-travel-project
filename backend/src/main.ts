@@ -4275,6 +4275,27 @@ class ClientAuthController {
     return { data: visibleMethods.map(publicLoginMethod) };
   }
 
+  @Get("third-party/apple-config")
+  async appleConfig() {
+    await requireLoginMethodEnabled("apple", "passenger");
+    const settings = await prisma.appSetting.findUnique({
+      where: { id: appSettingsDefaults.id },
+      select: {
+        appleWebEnabled: true,
+        appleWebClientId: true,
+        appleWebRedirectUri: true,
+      },
+    });
+    if (!settings?.appleWebEnabled ||
+        !settings.appleWebClientId?.trim() ||
+        !settings.appleWebRedirectUri?.trim())
+      throw new HttpException("Apple web login is not configured", HttpStatus.SERVICE_UNAVAILABLE);
+    return {
+      clientId: settings.appleWebClientId,
+      redirectUri: settings.appleWebRedirectUri,
+    };
+  }
+
   @Post("phone/request")
   async requestPhoneCode(
     @Body() body: { countryCode?: string; phoneNumber?: string; platform?: string },
@@ -14807,13 +14828,19 @@ class ClientOrdersController {
         "Valid third-party provider credentials are required",
         HttpStatus.BAD_REQUEST,
       );
-    if (process.env.NODE_ENV === "production")
-      throw new HttpException(
-        "Third-party provider verification is not configured",
-        HttpStatus.SERVICE_UNAVAILABLE,
-      );
+    let providerId: string;
+    if (provider === "apple") {
+      providerId = `sub:${(await verifyAppleIdentityToken(providerToken)).sub}`;
+    } else {
+      if (process.env.NODE_ENV === "production")
+        throw new HttpException(
+          "Third-party provider verification is not configured",
+          HttpStatus.SERVICE_UNAVAILABLE,
+        );
+      providerId = providerToken;
+    }
     const existing = await prisma.authIdentity.findUnique({
-      where: { provider_providerId: { provider, providerId: providerToken } },
+      where: { provider_providerId: { provider, providerId } },
     });
     if (existing && existing.userId !== session.sub)
       throw new HttpException(
@@ -14822,7 +14849,7 @@ class ClientOrdersController {
       );
     if (!existing)
       await prisma.authIdentity.create({
-        data: { provider, providerId: providerToken, userId: session.sub },
+        data: { provider, providerId, userId: session.sub },
       });
     return clientSecurityResponse(
       await prisma.user.findUniqueOrThrow({
