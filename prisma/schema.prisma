@@ -680,6 +680,15 @@ model AppSetting {
   updatedAt                       DateTime @updatedAt
 }
 
+model PhoneLoginDevelopmentSetting {
+  id                 String   @id @default("default")
+  passengerEnabled   Boolean  @default(false)
+  driverEnabled      Boolean  @default(false)
+  verificationCodeHash String  @db.Text
+  updatedAt          DateTime @updatedAt
+  updatedBy          String?
+}
+
 model LoginMethodSetting {
   id              String   @id @default(cuid())
   provider        String   @unique

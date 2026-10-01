@@ -1,5 +1,3 @@
-.login-settings-admin .mini-program-login-mode{display:grid;gap:7px;grid-column:span 2}.login-settings-admin .mini-program-login-mode span{color:#344b68;font-size:13px;font-weight:800}.login-settings-admin .mini-program-login-mode select{min-height:42px;border:1px solid #cbd9e9;border-radius:9px;padding:0 11px;color:#12243b;background:#fff;font:inherit}.login-settings-admin .mini-program-login-mode select:focus{outline:none;border-color:#1769e0;box-shadow:0 0 0 3px rgba(23,105,224,.12)}.login-settings-admin .mini-program-login-mode small{color:#7b8da4;font-size:11px;line-height:1.5}@media(max-width:700px){.login-settings-admin .mini-program-login-mode{grid-column:auto}}
-
 .login-settings-admin .login-settings-tabs button{min-height:54px;border:0;border-radius:13px;padding:0 16px;background:transparent;color:#52657d;font-size:16px;font-weight:800;cursor:pointer;transition:background .16s ease,color .16s ease,box-shadow .16s ease}
 .login-settings-admin .login-settings-tabs button:hover{background:#eaf2fc;color:#1769e0}
 .login-settings-admin .login-settings-tabs button.active{background:#1769e0;color:#fff;box-shadow:0 7px 15px rgba(23,105,224,.2)}

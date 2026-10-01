@@ -3812,6 +3812,33 @@ function verifyPassword(password: string, stored: string) {
   const expected = Buffer.from(hash, "hex");
   return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
+function hashDevelopmentVerificationCode(code: string) {
+  return `scrypt$${hashPassword(code)}`;
+}
+function hashSmsVerificationCode(code: string) {
+  return `sha256$${createHash("sha256").update(code).digest("hex")}`;
+}
+function hashDriverSmsVerificationCode(code: string) {
+  return `scrypt$${hashPassword(code)}`;
+}
+function verifyStoredVerificationCode(code: string, stored: string) {
+  if (stored.startsWith("scrypt$")) return verifyPassword(code, stored.slice(7));
+  if (stored.startsWith("sha256$")) return createHash("sha256").update(code).digest("hex") === stored.slice(7);
+  return stored.includes(":")
+    ? verifyPassword(code, stored)
+    : createHash("sha256").update(code).digest("hex") === stored;
+}
+async function phoneLoginDevelopmentSetting() {
+  return prisma.phoneLoginDevelopmentSetting.upsert({
+    where: { id: "default" },
+    create: { id: "default", verificationCodeHash: hashDevelopmentVerificationCode("00000") },
+    update: {},
+  });
+}
+async function isPhoneLoginDevelopmentEnabled(client: "passenger" | "driver") {
+  const setting = await phoneLoginDevelopmentSetting();
+  return { enabled: client === "passenger" ? setting.passengerEnabled : setting.driverEnabled, setting };
+}
 const ADMIN_PASSWORD_MIN_LENGTH = 8;
 const ADMIN_LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const ADMIN_LOGIN_MAX_FAILURES = 10;
@@ -4344,14 +4371,20 @@ class ClientAuthController {
         windowStartedAt: now,
       });
     else if (shouldRateLimit && requestState) requestState.count += 1;
-    await loadSms253Settings();
-    const code = process.env.NODE_ENV === "production"
-      ? String(Math.floor(10000 + Math.random() * 90000))
-      : "00000";
-    try {
-      await sendSms253(`${identity.countryCode}${identity.phoneNumber}`, code);
-    } catch (error) {
-      if (process.env.NODE_ENV === "production") throw error;
+    const developmentMode = await isPhoneLoginDevelopmentEnabled("passenger");
+    const code = developmentMode.enabled
+      ? "00000"
+      : String(Math.floor(10000 + Math.random() * 90000));
+    const codeHash = developmentMode.enabled
+      ? developmentMode.setting.verificationCodeHash
+      : hashSmsVerificationCode(code);
+    if (!developmentMode.enabled) {
+      try {
+        await loadSms253Settings();
+        await sendSms253(`${identity.countryCode}${identity.phoneNumber}`, code);
+      } catch (error) {
+        if (process.env.NODE_ENV === "production") throw error;
+      }
     }
     const challengeId = randomBytes(18).toString("hex");
     const exp = now + PHONE_CODE_TTL_MS;
@@ -4366,7 +4399,7 @@ class ClientAuthController {
         userId: requestedUser?.id,
         countryCode: identity.countryCode,
         phoneNumber: identity.phoneNumber,
-        codeHash: createHash("sha256").update(code).digest("hex"),
+        codeHash,
         expiresAt: new Date(exp),
       },
     });
@@ -4422,10 +4455,7 @@ class ClientAuthController {
     if (!/^\d{5}$/.test(submittedCode)) {
       throw new UnauthorizedException("Invalid verification code");
     }
-    if (
-      createHash("sha256").update(submittedCode).digest("hex") !==
-      storedChallenge.codeHash
-    ) {
+    if (!verifyStoredVerificationCode(submittedCode, storedChallenge.codeHash)) {
       const attempts = storedChallenge.attempts + 1;
       await prisma.verificationCode.update({
         where: { id: challengeId },
@@ -4720,9 +4750,7 @@ class DriverAuthController {
         HttpStatus.CONFLICT,
       );
     await loadSms253Settings();
-    const code = process.env.NODE_ENV === "production"
-      ? String(Math.floor(10000 + Math.random() * 90000))
-      : "00000";
+    const code = String(Math.floor(10000 + Math.random() * 90000));
     await sendSms253(`${identity.countryCode}${identity.phoneNumber}`, code);
     const challengeId = randomBytes(18).toString("hex");
     const expiresAt = new Date(Date.now() + PHONE_CODE_TTL_MS);
@@ -4739,9 +4767,6 @@ class DriverAuthController {
     return {
       challengeId,
       expiresAt: expiresAt.toISOString(),
-      ...(process.env.NODE_ENV !== "production"
-        ? { developmentCode: code }
-        : {}),
     };
   }
 
@@ -4994,12 +5019,18 @@ class DriverAuthController {
     const driver = matchingDrivers[0];
     if (!driver)
       throw new HttpException("Driver not found", HttpStatus.NOT_FOUND);
-    await loadSms253Settings();
-    const code = process.env.NODE_ENV === "production"
-      ? String(Math.floor(10000 + Math.random() * 90000))
-      : "00000";
-    await sendSms253(`${identity.countryCode}${identity.phoneNumber}`, code);
+    const developmentMode = await isPhoneLoginDevelopmentEnabled("driver");
+    const code = developmentMode.enabled
+      ? "00000"
+      : String(Math.floor(10000 + Math.random() * 90000));
+    const codeHash = developmentMode.enabled
+      ? developmentMode.setting.verificationCodeHash
+      : hashDriverSmsVerificationCode(code);
     const challengeId = randomBytes(18).toString("hex");
+    if (!developmentMode.enabled) {
+      await loadSms253Settings();
+      await sendSms253(`${identity.countryCode}${identity.phoneNumber}`, code);
+    }
     const expiresAt = new Date(Date.now() + PHONE_CODE_TTL_MS);
     await prisma.driverOtpChallenge.create({
       data: {
@@ -5007,7 +5038,7 @@ class DriverAuthController {
         driverId: driver.id,
         countryCode: identity.countryCode,
         phone: identity.phoneNumber,
-        codeHash: hashPassword(code),
+        codeHash,
         expiresAt,
       },
     });
@@ -5044,7 +5075,7 @@ class DriverAuthController {
     const code = body.code?.trim() || "";
     if (code.length !== 5)
       throw new UnauthorizedException("Invalid verification code");
-    if (!verifyPassword(code, challenge.codeHash))
+    if (!verifyStoredVerificationCode(code, challenge.codeHash))
       throw new UnauthorizedException("Invalid verification code");
     const consumed = await prisma.driverOtpChallenge.updateMany({
       where: { id: challenge.id, consumedAt: null, expiresAt: { gt: new Date() } },
@@ -6736,9 +6767,7 @@ class DriverOrderInviteController {
     if (existing)
       throw new HttpException("REGISTERED_DRIVER", HttpStatus.CONFLICT);
     await loadSms253Settings();
-    const code = process.env.NODE_ENV === "production"
-      ? String(Math.floor(10000 + Math.random() * 90000))
-      : "00000";
+    const code = String(Math.floor(10000 + Math.random() * 90000));
     await sendSms253(`${identity.countryCode}${identity.phoneNumber}`, code);
     const challengeId = randomBytes(18).toString("hex");
     const expiresAt = new Date(Date.now() + PHONE_CODE_TTL_MS);
@@ -6755,7 +6784,6 @@ class DriverOrderInviteController {
     return {
       challengeId,
       expiresAt: expiresAt.toISOString(),
-      ...(process.env.NODE_ENV !== "production" ? { developmentCode: code } : {}),
     };
   }
 
@@ -12598,6 +12626,26 @@ class SettingsController {
     return { data: (await publishLoginMethodDrafts()).map(publicLoginMethod) };
   }
 
+  @Get("phone-login-development")
+  async getPhoneLoginDevelopment(@Req() req: RequestLike) {
+    requireRole(req, ["SUPER_ADMIN", "OPERATOR"]);
+    const setting = await phoneLoginDevelopmentSetting();
+    return { passengerEnabled: setting.passengerEnabled, driverEnabled: setting.driverEnabled };
+  }
+  @Post("phone-login-development")
+  async updatePhoneLoginDevelopment(@Req() req: RequestLike, @Body() body: { passengerEnabled?: boolean; driverEnabled?: boolean; verificationCode?: string }) {
+    const session = requireRole(req, ["SUPER_ADMIN"]);
+    if (typeof body.passengerEnabled !== "boolean" || typeof body.driverEnabled !== "boolean") throw new BadRequestException("開發模式端別開關必須是布林值");
+    const verificationCode = body.verificationCode?.trim();
+    if (verificationCode !== undefined && !/^\d{5}$/.test(verificationCode)) throw new BadRequestException("指定驗證碼必須是 5 位數字");
+    const current = await phoneLoginDevelopmentSetting();
+    const setting = await prisma.phoneLoginDevelopmentSetting.update({
+      where: { id: current.id },
+      data: { passengerEnabled: body.passengerEnabled, driverEnabled: body.driverEnabled, ...(verificationCode === undefined ? {} : { verificationCodeHash: hashDevelopmentVerificationCode(verificationCode) }), updatedBy: session.sub },
+    });
+    return { passengerEnabled: setting.passengerEnabled, driverEnabled: setting.driverEnabled };
+  }
+
   @Get() async get(@Req() req: RequestLike) {
     return appSettingsResponse(
       await prisma.appSetting.findUniqueOrThrow({
@@ -14685,9 +14733,7 @@ class ClientOrdersController {
         HttpStatus.CONFLICT,
       );
     await loadSms253Settings();
-    const code = process.env.NODE_ENV === "production"
-      ? String(Math.floor(10000 + Math.random() * 90000))
-      : "00000";
+    const code = String(Math.floor(10000 + Math.random() * 90000));
     await sendSms253(`${identity.countryCode}${identity.phoneNumber}`, code);
     const challengeId = randomBytes(18).toString("hex");
     const exp = Date.now() + PHONE_CODE_TTL_MS;
@@ -14712,9 +14758,6 @@ class ClientOrdersController {
     return {
       challengeId,
       expiresAt: new Date(exp).toISOString(),
-      ...(process.env.NODE_ENV !== "production"
-        ? { developmentCode: code }
-        : {}),
     };
   }
 
