@@ -118,7 +118,7 @@ export type LoginMethod = {
   sortOrder: number
 }
 
-export async function listLoginMethods(client: 'passenger' | 'driver' = 'passenger', platform?: 'miniProgram' | 'web' | 'android' | 'ios', preview = false, previewToken = '', loginMode?: 'smsOnly' | 'wechatOnly' | 'wechatAndSms'): Promise<LoginMethod[]> {
+export async function listLoginMethods(client: 'passenger' | 'driver' = 'passenger', platform?: 'miniProgram' | 'web', preview = false, previewToken = '', loginMode?: 'smsOnly' | 'wechatOnly' | 'wechatAndSms'): Promise<LoginMethod[]> {
   const platformQuery = platform ? `&platform=${platform}` : ''
   const loginModeQuery = platform === 'miniProgram' && loginMode ? `&loginMode=${encodeURIComponent(loginMode)}` : ''
   const previewQuery = preview ? `&preview=1&previewToken=${encodeURIComponent(previewToken)}` : ''
@@ -153,7 +153,7 @@ export async function authenticateWechat(code: string): Promise<AuthResult> {
   const response = await uni.request({
     url: `${API_BASE_URL}/auth/wechat/login`,
     method: 'POST',
-    data: { code, platform: 'mp-weixin' }
+    data: { loginCode: code }
   })
   if (response.statusCode >= 400) throw apiError(response, '微信登入失敗')
   return response.data as AuthResult

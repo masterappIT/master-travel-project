@@ -2355,6 +2355,16 @@ function isWechatMiniProgramLoginMode(value: unknown): value is WechatMiniProgra
   return typeof value === "string" && WECHAT_MINI_PROGRAM_LOGIN_MODES.includes(value as WechatMiniProgramLoginMode);
 }
 
+async function wechatMiniProgramLoginMode(): Promise<WechatMiniProgramLoginMode> {
+  const settings = await prisma.appSetting.findUnique({
+    where: { id: appSettingsDefaults.id },
+    select: { wechatMiniProgramLoginMode: true },
+  });
+  return isWechatMiniProgramLoginMode(settings?.wechatMiniProgramLoginMode)
+    ? settings.wechatMiniProgramLoginMode
+    : "wechatOnly";
+}
+
 async function wechatMiniProgramCredentials() {
   const settings = await prisma.appSetting.findUnique({ where: { id: appSettingsDefaults.id } });
   const appId = settings?.wechatMiniProgramAppId || process.env.WECHAT_MINIPROGRAM_APP_ID;
@@ -4174,13 +4184,14 @@ async function masterBoxRequest<T>(
 class ClientAuthController {
   @Get("login-methods")
   async publicLoginMethods(@Query("client") client?: string, @Query("platform") platform?: string, @Query("preview") preview?: string, @Query("previewToken") previewToken?: string, @Query("loginMode") loginMode?: string) {
+    if (client !== "passenger" && client !== "driver") throw new BadRequestException("登入端別無效");
     if (preview === "1" && !isValidLoginPreviewToken(previewToken)) throw new UnauthorizedException("預覽已失效，請重新載入");
     if (platform !== undefined && platform !== "web" && platform !== "miniProgram") throw new BadRequestException("登入平台無效");
     if (platform === "miniProgram" && client !== "passenger") throw new BadRequestException("小程序只支援乘客端");
     if (loginMode !== undefined && !isWechatMiniProgramLoginMode(loginMode)) throw new BadRequestException("小程序登入模式無效");
     const methods = preview === "1" ? await ensureLoginMethodDrafts() : await ensureLoginMethodSettings();
     const miniProgramMode = platform === "miniProgram" && client === "passenger"
-      ? (preview === "1" && loginMode ? loginMode : (await wechatMiniProgramCredentials()).loginMode)
+      ? (preview === "1" && loginMode ? loginMode : await wechatMiniProgramLoginMode())
       : null;
     const visibleMethods = methods.filter((item) => {
       if ((client === "passenger" ? !item.passengerEnabled : !item.driverEnabled)) return false;
@@ -4197,7 +4208,7 @@ class ClientAuthController {
     @Body() body: { countryCode?: string; phoneNumber?: string; platform?: string },
   ) {
     if (body.platform !== undefined && body.platform !== "web" && body.platform !== "miniProgram") throw new BadRequestException("登入平台無效");
-    if (body.platform === "miniProgram" && (await wechatMiniProgramCredentials()).loginMode === "wechatOnly") throw new ForbiddenException("短信登入未在小程序中啟用");
+    if (body.platform === "miniProgram" && (await wechatMiniProgramLoginMode()) === "wechatOnly") throw new ForbiddenException("短信登入未在小程序中啟用");
     await requireLoginMethodEnabled("phone", "passenger");
     const identity = parsePhoneIdentity(body);
     const requestKey = `${identity.countryCode}:${identity.phoneNumber}`;
@@ -4266,7 +4277,7 @@ class ClientAuthController {
   @Post("phone/verify")
   async verifyPhoneCode(@Body() body: { challengeId?: string; code?: string; invitationCode?: string; platform?: string }) {
     if (body.platform !== undefined && body.platform !== "web" && body.platform !== "miniProgram") throw new BadRequestException("登入平台無效");
-    if (body.platform === "miniProgram" && (await wechatMiniProgramCredentials()).loginMode === "wechatOnly") throw new ForbiddenException("短信登入未在小程序中啟用");
+    if (body.platform === "miniProgram" && (await wechatMiniProgramLoginMode()) === "wechatOnly") throw new ForbiddenException("短信登入未在小程序中啟用");
     await requireLoginMethodEnabled("phone", "passenger");
     const challengeId = body.challengeId?.trim() || "";
     const memoryChallenge = phoneChallenges.get(challengeId);
@@ -4384,9 +4395,12 @@ class ClientAuthController {
   async wechatLogin(@Body() body: { loginCode?: string }) {
     await requireLoginMethodEnabled("wechat", "passenger");
     const loginCode = body.loginCode?.trim();
-    const { enabled, loginMode, appId, appSecret } = await wechatMiniProgramCredentials();
+    const { enabled, appId, appSecret } = await wechatMiniProgramCredentials();
+    const loginMode = await wechatMiniProgramLoginMode();
     if (!enabled)
       throw new HttpException("WeChat login is not enabled", HttpStatus.SERVICE_UNAVAILABLE);
+    if (loginMode === "smsOnly")
+      throw new HttpException("WeChat login is not enabled for this mini program mode", HttpStatus.SERVICE_UNAVAILABLE);
     if (!loginCode || !appId || !appSecret)
       throw new HttpException("Valid WeChat login is required", HttpStatus.BAD_REQUEST);
     const sessionResponse = await fetchWechat(`https://api.weixin.qq.com/sns/jscode2session?${new URLSearchParams({ appid: appId, secret: appSecret, js_code: loginCode, grant_type: "authorization_code" })}`);
@@ -4406,7 +4420,8 @@ class ClientAuthController {
     await requireLoginMethodEnabled("wechat", "passenger");
     const loginCode = body.loginCode?.trim();
     const phoneCode = body.phoneCode?.trim();
-    const { enabled, loginMode, phoneCapability, appId, appSecret } = await wechatMiniProgramCredentials();
+    const { enabled, phoneCapability, appId, appSecret } = await wechatMiniProgramCredentials();
+    const loginMode = await wechatMiniProgramLoginMode();
     if (!enabled)
       throw new HttpException("WeChat login is not enabled", HttpStatus.SERVICE_UNAVAILABLE);
     if (loginMode === "smsOnly")
@@ -12421,22 +12436,29 @@ class SettingsController {
     const allowed = new Set<string>(loginMethodDefaults.map((item) => item.provider));
     if (!Array.isArray(body.methods)) throw new BadRequestException("登入方式配置無效");
     if (body.miniProgram?.loginMode !== undefined && !isWechatMiniProgramLoginMode(body.miniProgram.loginMode)) throw new BadRequestException("小程序登入模式無效");
-    for (const method of body.methods) {
+    const seenProviders = new Set<string>();
+    const updates = body.methods.map((method) => {
       const provider = method.provider?.trim();
       if (!provider || !allowed.has(provider)) throw new BadRequestException("不支援的登入方式");
+      if (seenProviders.has(provider)) throw new BadRequestException("登入方式配置不可重複");
+      seenProviders.add(provider);
+      if (typeof method.passengerEnabled !== "boolean" || typeof method.driverEnabled !== "boolean") throw new BadRequestException("登入方式端別分配無效");
       if (method.logoUrl !== undefined && method.logoUrl !== null) validateAdminLogo(method.logoUrl);
       const displayName = method.displayName?.trim();
       if (displayName !== undefined && (!displayName || displayName.length > 80)) throw new BadRequestException("登入方式名稱無效");
-      await prisma.loginMethodSettingDraft.update({ where: { provider }, data: {
+      return { provider, data: {
         enabled: Boolean(method.passengerEnabled || method.driverEnabled), passengerEnabled: method.passengerEnabled, driverEnabled: method.driverEnabled,
         displayName, logoUrl: method.logoUrl === undefined ? undefined : method.logoUrl,
         description: method.description?.trim(), sortOrder: method.sortOrder === undefined ? undefined : Math.max(0, Math.trunc(method.sortOrder)),
-        miniProgramLoginMode: body.miniProgram?.loginMode,
-      } });
-    }
-    if (body.miniProgram?.loginMode !== undefined && !body.methods.length) {
-      await prisma.loginMethodSettingDraft.updateMany({ data: { miniProgramLoginMode: body.miniProgram.loginMode } });
-    }
+      } };
+    });
+    if (seenProviders.size !== allowed.size) throw new BadRequestException("登入方式配置必須包含全部登入方式");
+    await prisma.$transaction(async (tx) => {
+      if (body.miniProgram?.loginMode !== undefined) {
+        await tx.loginMethodSettingDraft.updateMany({ data: { miniProgramLoginMode: body.miniProgram.loginMode } });
+      }
+      await Promise.all(updates.map((update) => tx.loginMethodSettingDraft.update({ where: { provider: update.provider }, data: update.data })));
+    });
     const settings = await prisma.appSetting.findUniqueOrThrow({ where: { id: appSettingsDefaults.id } });
     const drafts = await ensureLoginMethodDrafts();
     return { data: drafts.map(publicLoginMethod), miniProgram: { loginMode: drafts[0]?.miniProgramLoginMode || (isWechatMiniProgramLoginMode(settings.wechatMiniProgramLoginMode) ? settings.wechatMiniProgramLoginMode : "wechatOnly") } };
