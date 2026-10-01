@@ -1731,6 +1731,16 @@ async function requireLoginMethodEnabled(provider: string, client: "passenger" |
   }
 }
 
+// 手機短信登入在小程序內是否可用，完全由「小程序登入模式」決定，
+// 不受乘客端 Web／App 共用的 passengerEnabled 開關影響（與微信小程序入口的判斷方式一致）。
+async function requirePhoneChannelAllowed(platform: string | undefined, client: "passenger" | "driver") {
+  if (platform === "miniProgram") {
+    if ((await wechatMiniProgramLoginMode()) === "wechatOnly") throw new ForbiddenException("短信登入未在小程序中啟用");
+    return;
+  }
+  await requireLoginMethodEnabled("phone", client);
+}
+
 function loginPreviewSecret() {
   return process.env.ADMIN_PREVIEW_SECRET || process.env.JWT_SECRET || process.env.SESSION_SECRET || "development-preview-secret";
 }
@@ -4262,15 +4272,21 @@ class ClientAuthController {
     if (platform === "miniProgram" && client !== "passenger") throw new BadRequestException("小程序只支援乘客端");
     if (loginMode !== undefined && !isWechatMiniProgramLoginMode(loginMode)) throw new BadRequestException("小程序登入模式無效");
     const methods = preview === "1" ? await ensureLoginMethodDrafts() : await ensureLoginMethodSettings();
-    const miniProgramMode = platform === "miniProgram" && client === "passenger"
+    const isMiniProgram = platform === "miniProgram" && client === "passenger";
+    const miniProgramMode = isMiniProgram
       ? (preview === "1" && loginMode ? loginMode : await wechatMiniProgramLoginMode())
       : null;
+    // 小程序因登入模式拆成三種版面，入口完全由「小程序微信啟用開關」與「小程序登入模式」決定，
+    // 不受乘客端 Web／App 共用的 passengerEnabled 開關影響；Web／App／司機端共用同一套 UI，
+    // 僅以 passengerEnabled／driverEnabled 作為顯示與否的唯一開關。
+    const miniProgramWechatEnabled = isMiniProgram ? (await wechatMiniProgramCredentials()).enabled : false;
     const visibleMethods = methods.filter((item) => {
-      if ((client === "passenger" ? !item.passengerEnabled : !item.driverEnabled)) return false;
-      if (miniProgramMode === "wechatOnly") return item.provider === "wechat";
-      if (miniProgramMode === "wechatAndSms") return item.provider === "wechat" || item.provider === "phone";
-      if (miniProgramMode === "smsOnly") return item.provider === "phone";
-      return true;
+      if (isMiniProgram) {
+        if (item.provider === "wechat") return miniProgramWechatEnabled && miniProgramMode !== "smsOnly";
+        if (item.provider === "phone") return miniProgramMode !== "wechatOnly";
+        return false;
+      }
+      return client === "passenger" ? item.passengerEnabled : item.driverEnabled;
     });
     return { data: visibleMethods.map(publicLoginMethod) };
   }
@@ -4301,8 +4317,7 @@ class ClientAuthController {
     @Body() body: { countryCode?: string; phoneNumber?: string; platform?: string },
   ) {
     if (body.platform !== undefined && body.platform !== "web" && body.platform !== "miniProgram") throw new BadRequestException("登入平台無效");
-    if (body.platform === "miniProgram" && (await wechatMiniProgramLoginMode()) === "wechatOnly") throw new ForbiddenException("短信登入未在小程序中啟用");
-    await requireLoginMethodEnabled("phone", "passenger");
+    await requirePhoneChannelAllowed(body.platform, "passenger");
     const identity = parsePhoneIdentity(body);
     const requestKey = `${identity.countryCode}:${identity.phoneNumber}`;
     const now = Date.now();
@@ -4370,8 +4385,7 @@ class ClientAuthController {
   @Post("phone/verify")
   async verifyPhoneCode(@Body() body: { challengeId?: string; code?: string; invitationCode?: string; platform?: string }) {
     if (body.platform !== undefined && body.platform !== "web" && body.platform !== "miniProgram") throw new BadRequestException("登入平台無效");
-    if (body.platform === "miniProgram" && (await wechatMiniProgramLoginMode()) === "wechatOnly") throw new ForbiddenException("短信登入未在小程序中啟用");
-    await requireLoginMethodEnabled("phone", "passenger");
+    await requirePhoneChannelAllowed(body.platform, "passenger");
     const challengeId = body.challengeId?.trim() || "";
     const memoryChallenge = phoneChallenges.get(challengeId);
     const storedChallenge = await prisma.verificationCode.findUnique({
@@ -4486,7 +4500,6 @@ class ClientAuthController {
 
   @Post("wechat/login")
   async wechatLogin(@Body() body: { loginCode?: string }) {
-    await requireLoginMethodEnabled("wechat", "passenger");
     const loginCode = body.loginCode?.trim();
     const { enabled, appId, appSecret } = await wechatMiniProgramCredentials();
     const loginMode = await wechatMiniProgramLoginMode();
@@ -4510,7 +4523,6 @@ class ClientAuthController {
 
   @Post("wechat/phone")
   async wechatPhone(@Body() body: { loginCode?: string; phoneCode?: string; avatarUrl?: string; invitationCode?: string }) {
-    await requireLoginMethodEnabled("wechat", "passenger");
     const loginCode = body.loginCode?.trim();
     const phoneCode = body.phoneCode?.trim();
     const { enabled, phoneCapability, appId, appSecret } = await wechatMiniProgramCredentials();
