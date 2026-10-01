@@ -31,6 +31,7 @@
 .login-settings-admin .login-settings-header .section-desc{ max-width: 760px; margin: 0; color: var(--color-muted); font-size: 13px; line-height: 1.5; }
 .login-settings-admin .login-settings-scope{ display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 14px 18px; border: 1px solid #dce7f5; border-radius: 12px; background: #f8fbff; color: var(--color-muted); font-size: 13px; }
 .login-settings-admin .login-settings-scope strong{ color: var(--color-ink); font-size: 14px; }
+.login-settings-admin .login-settings-page-error{ display: block; padding: 12px 18px; border: 1px solid #efc2c2; border-radius: 12px; background: #fff7f7; font-weight: 650; }
 .login-settings-admin .login-settings-scope > span:last-child{ flex: 1 1 260px; }
 .login-settings-admin .login-settings-card + .login-settings-card{ margin-top: 0; }
 .login-settings-admin .login-settings-form-grid .col-span-2{ grid-column: span 2 / span 2; }
@@ -107,5 +108,15 @@
 .login-settings-admin .sms-platform-panel{ border-top: 1px solid #edf1f6; margin-top: 14px; }
 .login-settings-admin .sms-platform-panel .sms-status-panel{ margin-top: 18px; }
 @media (max-width: 700px) { .login-settings-admin .sms-platform-tabs{ margin-left: 18px; margin-right: 18px; } }
+.login-settings-admin .sms-history{ margin: 16px 24px 0; padding: 14px 18px; border: 1px solid #e2e8f0; border-radius: 12px; background: #fbfcfe; }
+.login-settings-admin .sms-history-header{ display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.login-settings-admin .sms-history-header h4{ margin: 0; color: #12243b; font-size: 14px; font-weight: 800; }
+.login-settings-admin .sms-history-header button{ min-height: 34px; border: 1px solid #cbd9e9; border-radius: 8px; padding: 0 12px; color: #526985; background: #fff; font-size: 12px; font-weight: 750; cursor: pointer; }
+.login-settings-admin .sms-history-header button:hover:not(:disabled){ border-color: #8fb6ec; color: var(--color-primary); background: #f5f9ff; }
+.login-settings-admin .sms-history-header button:disabled{ cursor: wait; opacity: .55; }
+.login-settings-admin .sms-history .history-table{ margin-top: 10px; }
+.login-settings-admin .sms-history .history-table th{ padding: 8px 10px; color: #7b8da4; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; border-bottom: 1px solid #edf1f6; }
+.login-settings-admin .sms-history .history-table td{ padding: 8px 10px; color: #344b68; font-size: 12px; border-bottom: 1px solid #f3f6fa; }
+@media (max-width: 700px) { .login-settings-admin .sms-history{ margin-left: 18px; margin-right: 18px; } }
 
 .login-settings-admin .method-switch{min-height:40px;gap:10px}.login-settings-admin .method-switch i{position:relative;width:32px;height:18px;border:0;border-radius:999px;background:#b8c5d6;transition:background .16s ease}.login-settings-admin .method-switch i::after{content:"";position:absolute;top:3px;left:3px;width:12px;height:12px;border-radius:50%;background:#fff;transition:transform .16s ease}.login-settings-admin .method-switch.active i{border:0;background:#1769e0;box-shadow:none}.login-settings-admin .method-switch.active i::after{transform:translateX(14px)}.login-settings-admin .method-switch:focus-visible,.login-settings-admin .logo-upload-button:focus-within,.login-settings-admin .logo-clear-button:focus-visible{outline:3px solid rgba(23,105,224,.32);outline-offset:2px}.login-settings-admin .login-method-details{display:grid;gap:14px}.login-settings-admin .login-method-switches,.login-settings-admin .login-method-logo-actions{justify-content:flex-start}.login-settings-admin .login-method-logo-actions{padding-top:2px}.login-settings-admin .login-method-actions .unsaved-hint{margin-right:auto;color:#a05e17;font-size:12px;font-weight:700}.login-settings-admin .login-method-actions .unsaved-hint + .success-hint{margin-right:0}

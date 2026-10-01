@@ -169,14 +169,22 @@ export async function authenticateWechatPhone(loginCode: string, phoneCode: stri
   return response.data as AuthResult
 }
 
-export async function authenticateThirdParty(provider: 'wechat' | 'apple', providerToken: string): Promise<AuthResult> {
+export async function authenticateThirdParty(provider: 'wechat' | 'apple', providerToken: string, state?: string): Promise<AuthResult> {
   const response = await uni.request({
     url: `${API_BASE_URL}/auth/third-party`,
     method: 'POST',
-    data: { provider, providerToken }
+    data: { provider, providerToken, state }
   })
   if (response.statusCode >= 400) throw apiError(response, '第三方登入失敗')
   return response.data as AuthResult
+}
+
+export async function getWechatWebAuthorizeUrl(): Promise<{ url: string; state: string }> {
+  const response = await uni.request({
+    url: `${API_BASE_URL}/auth/wechat/web/authorize-url`
+  })
+  if (response.statusCode >= 400) throw apiError(response, '無法取得微信登入連結')
+  return response.data as { url: string; state: string }
 }
 
 export async function logoutClient(): Promise<void> {

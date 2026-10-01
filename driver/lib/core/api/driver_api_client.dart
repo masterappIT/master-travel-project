@@ -116,9 +116,15 @@ class DriverApiClient {
         headers: _headers,
       ));
 
+  Future<Map<String, dynamic>> wechatWebAuthorizeUrl() async => _decode(await _client.get(
+        Uri.parse('$baseUrl/driver/auth/third-party/wechat/web/authorize-url'),
+        headers: _headers,
+      ));
+
   Future<DriverSession> thirdPartyLogin({
     required String provider,
     required String providerToken,
+    String? state,
   }) async {
     final session = DriverSession.fromJson(_decode(await _client.post(
       Uri.parse('$baseUrl/driver/auth/third-party'),
@@ -126,6 +132,7 @@ class DriverApiClient {
       body: jsonEncode({
         'provider': provider,
         'providerToken': providerToken,
+        if (state != null) 'state': state,
       }),
     )));
     _token = session.token;
@@ -140,6 +147,7 @@ class DriverApiClient {
     required String providerToken,
     required String challengeId,
     required String code,
+    String? state,
   }) async {
     final session = DriverSession.fromJson(_decode(await _client.post(
       Uri.parse('$baseUrl/driver/auth/third-party/bind'),
@@ -149,6 +157,7 @@ class DriverApiClient {
         'providerToken': providerToken,
         'challengeId': challengeId,
         'code': code,
+        if (state != null) 'state': state,
       }),
     )));
     _token = session.token;

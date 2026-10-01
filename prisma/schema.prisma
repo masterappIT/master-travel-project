@@ -628,6 +628,10 @@ model AppSetting {
   wechatMiniProgramAppId          String?
   wechatMiniProgramAppSecret      String?  @db.Text
   wechatMiniProgramPhoneCapability Boolean  @default(false)
+  wechatWebEnabled                Boolean  @default(false)
+  wechatWebAppId                  String?
+  wechatWebAppSecret              String?  @db.Text
+  wechatWebRedirectUri            String?
   appleIosEnabled                 Boolean  @default(false)
   appleIosTeamId                 String?
   appleIosKeyId                  String?
@@ -645,7 +649,6 @@ model AppSetting {
   sms253SendUrl                   String?
   sms253VariableUrl               String?
   sms253BalanceUrl                String?
-  sms253ReportUrl                 String?
   sms253Account                   String?
   sms253Password                  String?  @db.Text
   sms253Template                  String   @default("【253云通讯】您的验证码是{code}。如非本人操作，请忽略。")
@@ -659,7 +662,6 @@ model AppSetting {
   sms253InternationalSendUrl      String?
   sms253InternationalVariableUrl  String?
   sms253InternationalBalanceUrl   String?
-  sms253InternationalReportUrl    String?
   sms253InternationalAccount      String?
   sms253InternationalPassword     String?  @db.Text
   sms253InternationalTemplate     String?

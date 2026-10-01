@@ -69,7 +69,7 @@ import { disableInputAssistantToolbar } from '../../uni_modules/ios-keyboard-acc
 import { authenticateWechat, authenticateWechatPhone } from '../../services/api'
 // #endif
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
-import { authenticateThirdParty, listLoginMethods, requestPhoneVerificationCode, verifyPhoneVerificationCode, type LoginMethod } from '../../services/api'
+import { authenticateThirdParty, getWechatWebAuthorizeUrl, listLoginMethods, requestPhoneVerificationCode, verifyPhoneVerificationCode, type LoginMethod } from '../../services/api'
 import { setAuthenticated, isAuthenticated } from '../../utils/auth'
 import { goHome } from '../../utils/navigation'
 import { isAdminPreview } from '../../utils/adminPreview'
@@ -138,6 +138,23 @@ onLoad(async (options) => {
     loginMethods.value = []
   }
   invitationCode.value = typeof options?.invite === 'string' ? options.invite.trim().toUpperCase() : ''
+  // #ifdef H5
+  const wechatWebCode = typeof options?.code === 'string' ? options.code : ''
+  const wechatWebState = typeof options?.state === 'string' ? options.state : ''
+  if (wechatWebCode && wechatWebState && !isPreview.value) {
+    loginSubmitting.value = true
+    try {
+      const result = await authenticateThirdParty('wechat', wechatWebCode, wechatWebState)
+      setAuthenticated(result.token, result.user, result.expiresAt)
+      goHome()
+      return
+    } catch (error) {
+      uni.showToast({ title: error instanceof Error ? error.message : '微信登入失敗', icon: 'none' })
+    } finally {
+      loginSubmitting.value = false
+    }
+  }
+  // #endif
 })
 
 const handleMiniProgramWechatLogin = async () => {
@@ -263,7 +280,17 @@ const handleThirdPartyLogin = async (provider: 'wechat' | 'apple') => {
     return
   }
   if (provider === 'wechat') {
-    // #ifndef MP-WEIXIN
+    // #ifdef H5
+    try {
+      loginSubmitting.value = true
+      const { url } = await getWechatWebAuthorizeUrl()
+      window.location.href = url
+    } catch (error) {
+      uni.showToast({ title: error instanceof Error ? error.message : '微信登入目前未開放', icon: 'none' })
+      loginSubmitting.value = false
+    }
+    // #endif
+    // #ifndef H5
     uni.showToast({ title: '微信登入目前只支援小程序', icon: 'none' })
     // #endif
     return

@@ -7,6 +7,7 @@ import '../app/route_names.dart';
 import '../core/api/driver_api_client.dart';
 import '../core/navigation/driver_navigation.dart';
 import '../core/platform/apple_sign_in.dart';
+import '../core/platform/wechat_web_login.dart';
 
 import 'package:driver_web/core/tokens/driver_tokens.dart';
 
@@ -37,6 +38,45 @@ class _LoginPageState extends State<LoginPage> {
     super.initState();
     _phoneController.addListener(_clearChallenge);
     _loadLoginMethods();
+    _handleWechatWebCallback();
+  }
+
+  Future<void> _handleWechatWebCallback() async {
+    final code = Uri.base.queryParameters['code'];
+    final state = Uri.base.queryParameters['state'];
+    if (code == null || code.isEmpty || state == null || state.isEmpty || _isAdminPreview) return;
+    setState(() {
+      _loading = true;
+      _error = null;
+      _pendingProvider = 'wechat';
+    });
+    try {
+      await _api.thirdPartyLogin(provider: 'wechat', providerToken: code, state: state);
+      if (!mounted) return;
+      DriverNavigation.replace(
+        context,
+        _api.isApproved ? DriverRouteNames.home : DriverRouteNames.reviewStatus,
+      );
+    } on DriverApiException catch (error) {
+      if (!mounted) return;
+      if (error.statusCode == 409) {
+        setState(() => _error = '請輸入已註冊的司機手機號碼，以完成第三方帳戶綁定');
+      } else {
+        setState(() {
+          _error = error.message;
+          _pendingProvider = null;
+        });
+      }
+    } on Object {
+      if (mounted) {
+        setState(() {
+          _error = '微信登入暫時無法使用，請稍後再試';
+          _pendingProvider = null;
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   Future<void> _loadLoginMethods() async {
@@ -77,7 +117,9 @@ class _LoginPageState extends State<LoginPage> {
     });
     try {
       if (provider == 'wechat') {
-        throw DriverApiException(503, '微信網站 OAuth 尚未配置');
+        final result = await _api.wechatWebAuthorizeUrl();
+        redirectToWechatWebLogin(result['url'] as String);
+        return;
       }
       final config = await _api.appleConfig();
       final providerToken = await signInWithApple(
