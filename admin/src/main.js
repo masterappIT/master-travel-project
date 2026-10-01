@@ -328,10 +328,13 @@ const App = { setup() {
      navigate,
      ...financePageState
    })
+   // 登入配置頁(分配層＋配置層)所有寫入端點皆僅限 SUPER_ADMIN，
+   // 故 canWrite 在此綁定 isSuperAdministrator 而非全域「非 VIEWER 可寫」的 canWrite，
+   // 讓 OPERATOR 看到的可編輯狀態與後端實際權限一致。
    provide('adminLoginSettingsContext', {
     view,
     t,
-    canWrite,
+    canWrite: isSuperAdministrator,
     api
   })
 

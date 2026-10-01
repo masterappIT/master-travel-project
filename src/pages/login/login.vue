@@ -73,6 +73,7 @@ import { authenticateThirdParty, listLoginMethods, requestPhoneVerificationCode,
 import { setAuthenticated, isAuthenticated } from '../../utils/auth'
 import { goHome } from '../../utils/navigation'
 import { isAdminPreview } from '../../utils/adminPreview'
+import { isAppleSignInSupported, signInWithApple } from '../../utils/appleSignIn'
 
 const { responsiveStyle } = useResponsiveCanvas()
 const countryOptions = ['香港 +852', '澳門 +853', '內地 +86', '美國/加拿大 +1', '英國 +44']
@@ -88,7 +89,7 @@ const isMiniProgram = computed(() => loginPlatform.value === 'miniProgram')
 type MiniProgramMode = 'smsOnly' | 'wechatOnly' | 'wechatAndSms'
 const miniProgramMode = ref<MiniProgramMode>('wechatOnly')
 const phoneLoginEnabled = computed(() => loginMethods.value.some((method) => method.provider === 'phone'))
-const availableThirdPartyMethods = computed(() => loginMethods.value.filter((method) => method.provider === 'wechat' || method.provider === 'apple'))
+const availableThirdPartyMethods = computed(() => loginMethods.value.filter((method) => method.provider === 'wechat' || (method.provider === 'apple' && isAppleSignInSupported())))
 const invitationCode = ref('')
 const loginPlatform = ref<'web' | 'miniProgram'>('web')
 const previewToken = ref('')
@@ -269,7 +270,7 @@ const handleThirdPartyLogin = async (provider: 'wechat' | 'apple') => {
     return
   }
   try {
-    const providerToken = `${provider}-dev-account`
+    const providerToken = await signInWithApple()
     const result = await authenticateThirdParty(provider, providerToken)
     setAuthenticated(result.token, result.user, result.expiresAt)
     goHome()

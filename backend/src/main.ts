@@ -1295,7 +1295,8 @@ async function sendSms253(phone: string, code: string): Promise<void> {
   try {
     const result = await requestSms253("/msg/send/json", { phone, msg: message, report: String(config.report) });
     await recordSms253Message({ phone, mode: "ordinary", message, report: config.report, result, status: result.code === "0" ? "sent" : "rejected" });
-    if (result.code !== "0") throw new HttpException(String(result.errorMsg || "短信发送失败"), HttpStatus.BAD_GATEWAY);
+    // 面向終端使用者的發送流程只回傳友善訊息；供應商原始錯誤已寫入 recordSms253Message，可於後台 /settings/sms253/messages 查詢
+    if (result.code !== "0") throw new HttpException("短信發送失敗，請稍後再試", HttpStatus.BAD_GATEWAY);
   } catch (error) {
     await recordSms253Message({ phone, mode: "ordinary", message, report: config.report, status: "failed", error: error instanceof Error ? error.message : String(error) });
     throw error;
@@ -4190,6 +4191,27 @@ class ClientAuthController {
       return true;
     });
     return { data: visibleMethods.map(publicLoginMethod) };
+  }
+
+  @Get("third-party/apple-config")
+  async appleConfig() {
+    await requireLoginMethodEnabled("apple", "passenger");
+    const settings = await prisma.appSetting.findUnique({
+      where: { id: appSettingsDefaults.id },
+      select: {
+        appleWebEnabled: true,
+        appleWebClientId: true,
+        appleWebRedirectUri: true,
+      },
+    });
+    if (!settings?.appleWebEnabled ||
+        !settings.appleWebClientId?.trim() ||
+        !settings.appleWebRedirectUri?.trim())
+      throw new HttpException("Apple web login is not configured", HttpStatus.SERVICE_UNAVAILABLE);
+    return {
+      clientId: settings.appleWebClientId,
+      redirectUri: settings.appleWebRedirectUri,
+    };
   }
 
   @Post("phone/request")
@@ -12265,7 +12287,8 @@ class SettingsController {
       return { status: "error", message: cause instanceof HttpException ? cause.message : "Apple 配置或接口檢查失敗" };
     }
   }
-  @Get("wechat/status") async wechatStatus() {
+  @Get("wechat/status") async wechatStatus(@Req() req: RequestLike) {
+    requireRole(req, ["SUPER_ADMIN"]);
     const settings = await prisma.appSetting.findUniqueOrThrow({ where: { id: appSettingsDefaults.id } });
     const appId = settings.wechatMiniProgramAppId || process.env.WECHAT_MINIPROGRAM_APP_ID;
     const encryptedSecret = settings.wechatMiniProgramAppSecret;
@@ -14684,13 +14707,19 @@ class ClientOrdersController {
         "Valid third-party provider credentials are required",
         HttpStatus.BAD_REQUEST,
       );
-    if (process.env.NODE_ENV === "production")
-      throw new HttpException(
-        "Third-party provider verification is not configured",
-        HttpStatus.SERVICE_UNAVAILABLE,
-      );
+    let providerId: string;
+    if (provider === "apple") {
+      providerId = `sub:${(await verifyAppleIdentityToken(providerToken)).sub}`;
+    } else {
+      if (process.env.NODE_ENV === "production")
+        throw new HttpException(
+          "Third-party provider verification is not configured",
+          HttpStatus.SERVICE_UNAVAILABLE,
+        );
+      providerId = providerToken;
+    }
     const existing = await prisma.authIdentity.findUnique({
-      where: { provider_providerId: { provider, providerId: providerToken } },
+      where: { provider_providerId: { provider, providerId } },
     });
     if (existing && existing.userId !== session.sub)
       throw new HttpException(
@@ -14699,7 +14728,7 @@ class ClientOrdersController {
       );
     if (!existing)
       await prisma.authIdentity.create({
-        data: { provider, providerId: providerToken, userId: session.sub },
+        data: { provider, providerId, userId: session.sub },
       });
     return clientSecurityResponse(
       await prisma.user.findUniqueOrThrow({

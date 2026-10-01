@@ -31,7 +31,7 @@
       </view>
       <view class="third-party-card">
         <text class="third-party-title">第三方登入帳戶</text>
-        <view class="provider-row apple-row"><image class="provider-icon apple" src="/static/security/apple.svg" mode="aspectFit" /><text>Apple</text><view class="link-button linked" @tap="toggleProvider('apple')"><text>{{ security.appleLinked ? '解除連結' : '連結' }}</text></view></view>
+        <view v-if="appleLinkSupported" class="provider-row apple-row"><image class="provider-icon apple" src="/static/security/apple.svg" mode="aspectFit" /><text>Apple</text><view class="link-button linked" @tap="toggleProvider('apple')"><text>{{ security.appleLinked ? '解除連結' : '連結' }}</text></view></view>
         <view class="provider-row"><image class="provider-icon wechat" src="/static/security/wechat.svg" mode="aspectFit" /><text>Wechat</text><view class="link-button" :class="{ linked: security.wechatLinked }" @tap="toggleProvider('wechat')"><text>{{ security.wechatLinked ? '解除連結' : '連結' }}</text></view></view>
       </view>
     </template>
@@ -68,6 +68,7 @@ import { onShow } from '@dcloudio/uni-app'
 import { computed, reactive, ref, onMounted } from 'vue'
 import { getAuthToken, getAuthUser, isAuthSessionCurrent, setAuthenticated } from '../../utils/auth'
 import { getClientProfile, updateClientProfile, uploadClientAvatar, getClientSecurity, updateClientSecurity, requestClientPhoneChange, verifyClientPhoneChange, linkClientProvider, unlinkClientProvider } from '../../services/api'
+import { isAppleSignInSupported, signInWithApple } from '../../utils/appleSignIn'
 type Provider = 'apple' | 'wechat'
 const stored = uni.getStorageSync('account-profile') || {}
 const storedSecurity = uni.getStorageSync('account-security') || {}
@@ -78,6 +79,7 @@ const cachedProfile = () => ({ ...form })
 const form = reactive({ name: stored.name || '', displayName: stored.displayName || '', gender: stored.gender || '先生', region: stored.region || '香港', birthday: stored.birthday || '1990-01-01' })
 const registeredPhone = authenticatedUser?.countryCode && authenticatedUser.phoneNumber ? `${authenticatedUser.countryCode} ${authenticatedUser.phoneNumber}` : ''
 const security = reactive({ phone: registeredPhone || storedSecurity.phone || '', password: '', email: storedSecurity.email || '', passwordSet: storedSecurity.passwordSet ?? false, appleLinked: storedSecurity.appleLinked ?? false, wechatLinked: storedSecurity.wechatLinked ?? true })
+const appleLinkSupported = isAppleSignInSupported()
 const emailDialogVisible = ref(false)
 const emailDialogValue = ref('')
 const emailDialogError = ref('')
@@ -214,7 +216,9 @@ const verifyPhoneCode = async () => {
 const toggleProvider = async (provider: Provider) => {
   const key = `${provider}Linked` as 'appleLinked' | 'wechatLinked'
   try {
-    const result = security[key] ? await unlinkClientProvider(provider) : await linkClientProvider(provider)
+    const result = security[key]
+      ? await unlinkClientProvider(provider)
+      : await linkClientProvider(provider, provider === 'apple' ? await signInWithApple() : `${provider}-dev-account`)
     security.appleLinked = result.linkedProviders.includes('apple')
     security.wechatLinked = result.linkedProviders.includes('wechat')
     uni.setStorageSync('account-security', { ...security })

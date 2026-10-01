@@ -8,6 +8,13 @@
     /* 5+App特有相关 */
     "app-plus" : {
         "usingComponents" : true,
+        /* Apple 登入（Sign in with Apple）僅 iOS 13+ 原生支援；bundleId 需與 Apple Developer App ID
+           及後台「Apple 登入 - iOS」設定的 Bundle ID 完全一致（區分大小寫），雲端打包憑證需啟用該能力 */
+        "oauth" : {
+            "apple" : {
+                "bundleId" : ""
+            }
+        },
         "nvueStyleCompiler" : "uni-app",
         "compilerVersion" : 3,
         "splashscreen" : {
@@ -44,8 +51,14 @@
                     "<uses-permission android:name=\"android.permission.WRITE_SETTINGS\"/>"
                 ]
             },
-            /* ios打包配置 */
-            "ios" : {},
+            /* ios打包配置：bundleid 需與上方 oauth.apple.bundleId 一致，並啟用 Sign In with Apple 能力 */
+            "ios" : {
+                "capabilities" : {
+                    "signin-with-apple" : {
+                        "enable" : true
+                    }
+                }
+            },
             /* SDK配置 */
             "sdkConfigs" : {}
         }
