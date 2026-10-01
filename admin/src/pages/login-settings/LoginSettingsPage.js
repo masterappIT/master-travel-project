@@ -133,14 +133,20 @@ export const LoginSettingsPage = {
         ? `${baseUrl.replace(/\/$/, '')}/?${revision}${mode}${token}`
         : `${baseUrl.replace(/\/$/, '')}/#/pages/login/login?${revision}${platform}${mode}${token}`
     })
-    const previewMethods = computed(() => previewClient.value === 'miniProgram'
-      ? loginMethods.filter(method => method.provider === 'wechat' || method.provider === 'phone')
-      : loginMethods.filter(method => method[previewClient.value === 'driver' ? 'driverEnabled' : 'passengerEnabled']))
+    const previewMethods = computed(() => {
+      const client = previewClient.value === 'driver' ? 'driverEnabled' : 'passengerEnabled'
+      const allocatedMethods = loginMethods.filter(method => method[client])
+      if (previewClient.value !== 'miniProgram') return allocatedMethods
+      const mode = configurations.miniProgram.loginMode
+      return allocatedMethods.filter(method => mode === 'wechatOnly'
+        ? method.provider === 'wechat'
+        : mode === 'smsOnly'
+          ? method.provider === 'phone'
+          : method.provider === 'wechat' || method.provider === 'phone')
+    })
     const defaultLoginMethodLogos = { phone: '/login-methods/sms.svg', wechat: '/login-methods/wechat.svg', apple: '/login-methods/apple.svg' }
     const loginMethodLogoUrl = method => method.provider === 'phone' ? defaultLoginMethodLogos.phone : method.logoUrl || defaultLoginMethodLogos[method.provider] || ''
-    const managementMethods = computed(() => previewClient.value === 'miniProgram'
-      ? loginMethods.filter(method => method.provider === 'wechat' || method.provider === 'phone')
-      : loginMethods)
+    const managementMethods = computed(() => loginMethods)
     const miniProgramLoginModeOptions = [
       { value: 'smsOnly', label: '僅手機短信登入' },
       { value: 'wechatOnly', label: '僅微信登入' },

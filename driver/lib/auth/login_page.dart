@@ -28,7 +28,7 @@ class _LoginPageState extends State<LoginPage> {
   bool _isRegistration = false;
   String? _error;
   bool _loading = false;
-  bool _phoneEnabled = true;
+  bool _phoneEnabled = false;
   bool _wechatEnabled = false;
   bool _appleEnabled = false;
   final bool _isAdminPreview = Uri.base.queryParameters['adminPreview'] == '1';
@@ -56,14 +56,12 @@ class _LoginPageState extends State<LoginPage> {
       });
     } on Object {
       if (!mounted) return;
-      if (_isAdminPreview) {
-        setState(() {
-          _phoneEnabled = false;
-          _wechatEnabled = false;
-          _appleEnabled = false;
-        });
-      }
-      // Keep the existing phone-first UI available outside admin preview if settings cannot be read.
+      setState(() {
+        _phoneEnabled = false;
+        _wechatEnabled = false;
+        _appleEnabled = false;
+        _error = '無法載入登入方式，請稍後重試';
+      });
     }
   }
 
