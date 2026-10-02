@@ -1,5 +1,17 @@
 @import './tokens.css';
 
+.vehicle-photo-viewer-overlay { position: fixed; inset: 0; z-index: 2000; display: grid; grid-template-rows: auto minmax(0, 1fr); padding: 16px; background: rgba(8,18,31,.94); }
+.vehicle-photo-viewer-toolbar { display: flex; align-items: center; justify-content: center; gap: 8px; padding-bottom: 16px; }
+.vehicle-photo-viewer-toolbar button { display: grid; place-items: center; min-width: 44px; height: 44px; padding: 0 12px; border: 1px solid rgba(255,255,255,.3); border-radius: 8px; color: #fff; background: rgba(255,255,255,.12); font-size: 22px; line-height: 1; }
+.vehicle-photo-viewer-toolbar button:hover:not(:disabled), .vehicle-photo-viewer-toolbar button:focus-visible { border-color: rgba(255,255,255,.75); background: rgba(255,255,255,.22); }
+.vehicle-photo-viewer-toolbar button:focus-visible { outline: 3px solid rgba(105,164,255,.65); outline-offset: 2px; }
+.vehicle-photo-viewer-toolbar button:disabled { opacity: .4; cursor: not-allowed; }
+.vehicle-photo-viewer-toolbar .vehicle-photo-viewer-scale { min-width: 72px; font-size: 14px; font-weight: 750; }
+.vehicle-photo-viewer-toolbar .vehicle-photo-viewer-close { margin-left: 16px; font-size: 28px; }
+.vehicle-photo-viewer-canvas { display: grid; place-items: center; min-width: 0; min-height: 0; overflow: auto; overscroll-behavior: contain; }
+.vehicle-photo-viewer-canvas img { display: block; max-width: 100%; max-height: 100%; object-fit: contain; transform-origin: center; transition: transform .15s ease; }
+@media (max-width: 600px) { .vehicle-photo-viewer-overlay { padding: 10px; } .vehicle-photo-viewer-toolbar { gap: 6px; padding-bottom: 10px; } .vehicle-photo-viewer-toolbar .vehicle-photo-viewer-close { margin-left: 4px; } }
+
 .shell button.primary,
 .shell button.btn-save,
 .shell button.add-btn,

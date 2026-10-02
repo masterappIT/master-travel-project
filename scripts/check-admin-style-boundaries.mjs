@@ -14,7 +14,8 @@ const moduleScopes = {
   'audit-logs.css': '.audit-log-page',
   'vehicle-pricing.css': ['.vehicle-admin', '.route-pricing-admin'],
   'payments.css': '.payment-settings-admin',
-  'promotions.css': '.promotion-admin'
+  'promotions.css': '.promotion-admin',
+  'user-management.css': '.user-management'
 }
 const sharedStyles = new Set(['tokens.css', 'components.css', 'layout.css', 'tables.css', 'overlays.css', 'forms.css', 'states.css'])
 const approvedSharedExtractions = new Set(['components.css'])

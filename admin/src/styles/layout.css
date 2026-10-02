@@ -43,7 +43,7 @@
 .logo-upload, .logo-remove { border: 0; border-radius: 9px; padding: 10px 12px; color: #fff; background: #1769e0; font-size: 12px; font-weight: 700; cursor: pointer; }
 .logo-upload input { display: none; }
 .logo-remove { background: #d74b4b; }
-.shell nav { position: relative; z-index: 1; display: grid; gap: 8px; margin-top: 62px; }
+.shell nav { position: relative; z-index: 1; display: grid; gap: 8px; margin-top: 24px; }
 .shell nav button, .shell .logout {
   width: 100%;
   border: 1px solid transparent;

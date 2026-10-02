@@ -192,7 +192,7 @@ const { resetNotification, createTemplate, clearNotificationRecipients, toggleNo
 const paymentsActions = createPaymentsActions({ api, paymentSettings, paymentCurrencies, paymentSettingsSaved, driverRaceSaving, error, displayError, configs: paymentConfigs, selectedConfig: selectedPaymentConfig, editorOpen: paymentEditorOpen, editorStep: paymentEditorStep, testResult: paymentTestResult })
 const { savePaymentSettings, closePaymentEditor, savePaymentConfigDraft, duplicatePaymentConfig, togglePaymentConfig, testPaymentConfig } = paymentsActions
 const { updateCharterStatus, editCharter, saveCharter } = createCharterActions({ api, charterForm, load, error, displayError, dateTimeInput })
-const { edit: editUser, reset: resetUser, select: selectUser, save: saveUser, updateStatus: updateUserStatus, remove: removeUser, openWalletAdjustment, saveWalletAdjustment } = usersActions
+const { edit: editUser, reset: resetUser, select: selectUser, save: saveUser, saving: userSaving, updateStatus: updateUserStatus, remove: removeUser, openWalletAdjustment, saveWalletAdjustment } = usersActions
 const loadUserOptions = async selectedId => {
   const options = await loadAllOptions(query => usersApi.options(query))
   users.value = retainSelectedOptions(users.value, options, [selectedId])
@@ -514,7 +514,7 @@ const App = { setup() {
      saveRouteMinimumFare,
      removeRouteMinimumFare
    })
-   provide('adminUsersAddressesContext', {
+   provide('adminUsersContext', {
      view,
      t,
      formatDate,
@@ -528,6 +528,7 @@ const App = { setup() {
      topUpWithdrawalHistory,
      walletAdjustment,
      userForm,
+     userSaving,
      userPage,
      userPageSize,
      userPageCount,
@@ -535,6 +536,22 @@ const App = { setup() {
      filteredUsers,
      userSearchQuery,
      userStatusFilter,
+     resetUser,
+     editUser,
+     selectUser,
+     saveUser,
+     updateUserStatus,
+     removeUser,
+     openWalletAdjustment,
+     saveWalletAdjustment,
+     goToUserPage
+   })
+   provide('adminUsersAddressesContext', {
+     view,
+     t,
+     formatDate,
+     translateStatus,
+     canWrite,
      addressForm,
      addresses,
      mainlandCities,
@@ -549,15 +566,6 @@ const App = { setup() {
      addressSearchResults,
      addressSearching,
      displayMainlandCity,
-     resetUser,
-     editUser,
-     selectUser,
-     saveUser,
-     updateUserStatus,
-     removeUser,
-     openWalletAdjustment,
-     saveWalletAdjustment,
-     goToUserPage,
      resetAddress,
      editAddress,
      searchAddressPlaces,

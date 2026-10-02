@@ -1,4 +1,7 @@
+import { ref } from 'vue'
+
 export function createUsersActions({ usersApi, users, selectedUser, userForm, walletTransactions, topUpWithdrawalHistory, walletAdjustment, load, view, requestConfirmation, canWrite, displayError, error, notify }) {
+  const saving = ref(false)
   const edit = item => {
     selectedUser.value = null
     walletAdjustment.value = null
@@ -28,14 +31,18 @@ export function createUsersActions({ usersApi, users, selectedUser, userForm, wa
   }
 
   const save = async () => {
+    if (saving.value || !userForm.value) return
+    saving.value = true
     try {
       const user = await usersApi.save(userForm.value.id, userForm.value)
-      userForm.value = null
       view.value = 'users'
       await load()
       await select(user)
+
     } catch (err) {
       error.value = displayError(err)
+    } finally {
+      saving.value = false
     }
   }
 
@@ -99,5 +106,5 @@ export function createUsersActions({ usersApi, users, selectedUser, userForm, wa
     }
   }
 
-  return { edit, reset, select, save, updateStatus, remove, openWalletAdjustment, saveWalletAdjustment, users }
+  return { edit, reset, select, save, saving, updateStatus, remove, openWalletAdjustment, saveWalletAdjustment, users }
 }
