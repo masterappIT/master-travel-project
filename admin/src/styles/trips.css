@@ -227,7 +227,8 @@
 .trip-edit-form > .trip-region-field,
 .trip-edit-form > .trip-origin-field,
 .trip-edit-form > .trip-destination-field,
-.trip-edit-form > .trip-scheduled-field { grid-column: 1 / -1; }
+.trip-edit-form > .trip-scheduled-field,
+.trip-edit-form > .trip-status-field { grid-column: 1 / -1; }
 .trip-booking-form-content input,
 .trip-booking-form-content select,
 .trip-booking-form-content button {
@@ -280,7 +281,9 @@
 .trip-route-actions { grid-column: 1 / -1; display: grid; grid-template-columns: auto minmax(100px, 1fr) minmax(240px, 2fr) auto; align-items: center; gap: 10px; padding-top: 16px; border-top: 1px solid #dbe7f5; }
 .trip-route-actions button { min-height: 44px; height: 44px; border-radius: 9px; box-shadow: none; }
 .trip-route-actions button.secondary { color: #1769e0; background: #dcecff; }
-.trip-route-actions select { width: 100%; min-width: 0; }
+.trip-route-actions .trip-calculate-route { width: auto; min-width: 132px; border: 1px solid #cbd9e9; border-radius: 9px; color: #1769e0; background: #dcecff; box-shadow: none; }
+.trip-route-actions .trip-calculate-route:hover:not(:disabled) { border-color: #9bbce8; color: #1769e0; background: #f5f9ff; }
+.trip-route-actions .trip-calculate-route:focus-visible { outline: 3px solid rgba(74,141,240,.28); outline-offset: 2px; }
 .trip-route-actions span { color: #526985; font-size: 12px; font-weight: 700; }
 .trip-form-actions { grid-column: 1 / -1; display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding-top: 16px; border-top: 1px solid #dbe7f5; }
 .trip-form-actions button,

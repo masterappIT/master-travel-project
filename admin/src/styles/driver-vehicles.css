@@ -8,7 +8,7 @@
 .vehicle-registry .vehicle-page-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; }
 .vehicle-registry .vehicle-page-heading h2 { margin: 6px 0 5px; color: #12243b; font-size: 28px; }
 .vehicle-registry .vehicle-page-heading p, .vehicle-registry .vehicle-form-heading p, .vehicle-registry .vehicle-modal-heading p { margin: 0; color: #6f829a; font-size: 13px; }
-.vehicle-registry .vehicle-primary-action { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 44px; padding: 0 18px; border: 0; border-radius: 8px; color: #fff; background: #1769e0; font-size: 13px; font-weight: 750; box-shadow: 0 6px 16px rgba(23,105,224,.2); white-space: nowrap; }
+.vehicle-registry .vehicle-primary-action { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 44px; padding: 0 18px; border: 0; border-radius: 8px; color: #fff; background: #1769e0; font-size: 16px; font-weight: 750; line-height: 1; box-shadow: 0 6px 16px rgba(23,105,224,.2); white-space: nowrap; }
 .vehicle-registry .vehicle-primary-action:hover:not(:disabled) { background: #105cc8; transform: translateY(-1px); }
 .vehicle-registry .vehicle-primary-action:disabled { opacity: .48; cursor: not-allowed; box-shadow: none; }
 .vehicle-registry .vehicle-summary-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }

@@ -134,7 +134,10 @@
 }
 .driver-management .driver-history-pagination { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 14px; }
 .driver-management .driver-history-pagination span { margin-right: auto; color: #647892; font-size: 12px; }
-.driver-management .driver-history-pagination button { min-height: 38px; padding: 0 13px; }
+.driver-management .driver-history-pagination button { display: inline-flex; align-items: center; justify-content: center; min-width: 78px; min-height: 38px; height: 38px; padding: 0 13px; border: 1px solid #cbd9e9; border-radius: 8px; color: #425974; background: #fff; box-shadow: none; font-size: 12px; font-weight: 700; line-height: 1; white-space: nowrap; transition: background-color .16s ease, border-color .16s ease, color .16s ease, transform .16s ease; }
+.driver-management .driver-history-pagination button:hover:not(:disabled) { border-color: #9bbce8; color: #1769e0; background: #f5f9ff; transform: translateY(-1px); }
+.driver-management .driver-history-pagination button:disabled { color: #a7b4c5; border-color: #e1e8f0; background: #f5f7fa; cursor: not-allowed; }
+.driver-management .driver-history-pagination button:active:not(:disabled) { transform: translateY(0); }
 .driver-management .driver-finance-summary { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; margin: 20px 0 14px; }
 .driver-management .driver-finance-summary article { min-width: 0; padding: 16px 18px; border: 1px solid #dce7f5; border-radius: 12px; background: #fff; }
 .driver-management .driver-finance-summary span { display: block; color: #647892; font-size: 12px; }
@@ -207,9 +210,10 @@
 .driver-management .driver-vehicle-photo-card .driver-status { width: fit-content; margin-top: 10px; }
 .driver-management .driver-vehicle-section-actions, .driver-management .driver-vehicle-actions { display: flex; align-items: center; gap: 8px; }
 .driver-management .driver-vehicle-section-actions { justify-content: flex-end; }
-.driver-management .driver-vehicle-section-actions button, .driver-management .driver-vehicle-actions button { min-height: 44px; height: 44px; padding: 0 14px; border-radius: 8px; font-weight: 700; }
-.driver-management .driver-vehicle-section-actions .driver-vehicle-add-action { border: 0; color: #fff; background: var(--gradient-primary); box-shadow: var(--shadow-primary); }
+.driver-management .driver-vehicle-section-actions button, .driver-management .driver-vehicle-actions button { min-height: 44px; height: 44px; padding: 0 14px; border-radius: 8px; font-size: 14px; font-weight: 700; line-height: 1; white-space: nowrap; }
+.driver-management .driver-vehicle-section-actions .driver-vehicle-add-action { border: 0; color: #fff; background: var(--gradient-primary); box-shadow: var(--shadow-primary); font-size: 16px; }
 .driver-management .driver-vehicle-section-actions .driver-vehicle-refresh-action, .driver-management .driver-vehicle-action-edit { border: 1px solid #b9d3f4; color: #1769e0; background: #f4f8ff; }
+.driver-management .driver-vehicle-section-actions .driver-vehicle-refresh-action { font-size: 14px; }
 .driver-management .driver-vehicle-actions { justify-content: flex-end; }
 .driver-management .driver-vehicle-action-status { border: 1px solid #cbd8e7; color: #425974; background: #fff; }
 .driver-management .driver-vehicle-actions .driver-vehicle-action-delete { border: 1px solid #e3a2a2; color: #b42318; background: #fff5f5; }
