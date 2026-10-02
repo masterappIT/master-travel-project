@@ -13,7 +13,7 @@ const moduleScopes = {
   'administrators.css': '.administrator-management',
   'membership.css': '.membership-management',
   'audit-logs.css': '.audit-log-page',
-  'payments.css': '.payment-center',
+  'payments.css': '.payment-settings-admin',
   'promotions.css': '.promotion-admin'
 }
 
