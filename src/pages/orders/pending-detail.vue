@@ -44,6 +44,7 @@ import { closeCachedPage, cachedPageUrl, openCachedPage, replaceCachedPage, page
 import OrdersBackButton from '../../components/orders/OrdersBackButton.vue'
 import { formatOrderDetailAddress, formatOrderDetailAddressLine } from '../../utils/orderAddress'
 import { formatCurrencyAmount, normalizeCurrency } from '../../composables/useCurrency'
+import { sumOrderDiscounts } from '../../utils/orderDiscount'
 import { cancelClientTrip, getClientTrip, getFareQuote, getWalletMe, payTrip, type ClientTrip, type FareQuote } from '../../services/api'
 import { readWallet } from '../../utils/wallet'
 const isCompleted = ref(false)
@@ -236,8 +237,8 @@ const baseFareTotal = computed(() => quoteLines.value.filter(item => item.type !
 const surchargeItems = computed(() => quoteLines.value.filter(item => item.type === 'EXTRA'))
 const formatLineAmount = (line: { totalAmount: number; currency: string }) => formatCurrencyAmount(Math.abs(line.totalAmount), normalizeCurrency(line.currency) || normalizeCurrency(storedOrder.value?.quote?.currency) || 'RMB')
 const discountLabel = computed(() => {
-  const line = quoteLines.value.find(item => item.type === 'DISCOUNT' && item.totalAmount < 0)
-  return line ? `-${formatCurrencyAmount(Math.abs(line.totalAmount), normalizeCurrency(line.currency) || normalizeCurrency(storedOrder.value?.quote?.currency) || 'RMB')}` : '—'
+  const discount = sumOrderDiscounts(quoteLines.value)
+  return discount > 0 ? `-${formatCurrencyAmount(discount, normalizeCurrency(storedOrder.value?.quote?.currency) || 'RMB')}` : '—'
 })
 const paymentMethodLabel = computed(() => storedOrder.value?.payment?.externalPaymentMethod === 'internal' ? '內部測試付款' : storedOrder.value?.payment?.externalPaymentMethod || '外部付款')
 const detailDateLabel = computed(() => {

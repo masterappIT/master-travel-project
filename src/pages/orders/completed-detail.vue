@@ -60,6 +60,7 @@ import { cancelClientTrip, getClientTrip, type ClientTrip } from '../../services
 import OrdersBackButton from '../../components/orders/OrdersBackButton.vue'
 import { formatOrderDetailAddress, formatOrderDetailAddressLine } from '../../utils/orderAddress'
 import { formatCurrencyAmount, normalizeCurrency } from '../../composables/useCurrency'
+import { sumOrderDiscounts } from '../../utils/orderDiscount'
 const tripStore = useTripStore()
 const { responsiveStyle } = useResponsiveCanvas()
 const isCompleted = ref(false)
@@ -180,8 +181,8 @@ const baseFareTotal = computed(() => quoteLines.value.filter(item => item.type !
 const surchargeItems = computed(() => quoteLines.value.filter(item => item.type === 'EXTRA'))
 const formatLineAmount = (line: { totalAmount: number; currency: string }) => formatCurrencyAmount(Math.abs(line.totalAmount), normalizeCurrency(line.currency) || normalizeCurrency(storedOrder.value?.quote?.currency) || 'RMB')
 const discountLabel = computed(() => {
-  const line = quoteLines.value.find(item => item.type === 'DISCOUNT' && item.totalAmount < 0)
-  return line ? `-${formatCurrencyAmount(Math.abs(line.totalAmount), normalizeCurrency(line.currency) || normalizeCurrency(storedOrder.value?.quote?.currency) || 'RMB')}` : '—'
+  const discount = sumOrderDiscounts(quoteLines.value)
+  return discount > 0 ? `-${formatCurrencyAmount(discount, normalizeCurrency(storedOrder.value?.quote?.currency) || 'RMB')}` : '—'
 })
 const detailDateLabel = computed(() => {
   const value = storedOrder.value?.scheduledAt

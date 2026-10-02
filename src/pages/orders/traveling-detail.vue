@@ -40,6 +40,7 @@ import OrdersBackButton from '../../components/orders/OrdersBackButton.vue'
 import { formatOrderDetailAddress, formatOrderDetailAddressLine } from '../../utils/orderAddress'
 import { getClientTrip, type ClientTrip } from '../../services/api'
 import { formatCurrencyAmount, normalizeCurrency } from '../../composables/useCurrency'
+import { sumOrderDiscounts } from '../../utils/orderDiscount'
 
 const { responsiveStyle } = useResponsiveCanvas()
 const headerStyle = computed(() => {
@@ -124,7 +125,7 @@ const quoteLines = computed(() => storedOrder.value?.quote?.lines || [])
 const baseFareTotal = computed(() => quoteLines.value.filter(item => item.type !== 'EXTRA' && item.type !== 'DISCOUNT').reduce((sum, item) => sum + Number(item.totalAmount || 0), 0))
 const surchargeItems = computed(() => quoteLines.value.filter(item => item.type === 'EXTRA'))
 const formatLineAmount = (line: { totalAmount: number; currency: string }) => formatCurrencyAmount(Math.abs(line.totalAmount), normalizeCurrency(line.currency) || currencyLabel.value)
-const discountLabel = computed(() => { const line = quoteLines.value.find(item => item.type === 'DISCOUNT' && item.totalAmount < 0); return line ? `-${formatCurrencyAmount(Math.abs(line.totalAmount), normalizeCurrency(line.currency) || currencyLabel.value)}` : '—' })
+const discountLabel = computed(() => { const discount = sumOrderDiscounts(quoteLines.value); return discount > 0 ? `-${formatCurrencyAmount(discount, currencyLabel.value)}` : '—' })
 const paymentTotal = computed(() => storedOrder.value?.payment?.total || storedOrder.value?.quote?.total || 0)
 const detailDateLabel = computed(() => { const value = storedOrder.value?.scheduledAt; const date = value ? new Date(value) : null; return date && !Number.isNaN(date.valueOf()) ? `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')}` : '—' })
 const isLongAddress = (value: string) => Array.from(value.replace(/\s/g, '')).length > 14
