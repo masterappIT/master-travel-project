@@ -116,7 +116,8 @@ class DriverApiClient {
         headers: _headers,
       ));
 
-  Future<Map<String, dynamic>> wechatWebAuthorizeUrl() async => _decode(await _client.get(
+  Future<Map<String, dynamic>> wechatWebAuthorizeUrl() async =>
+      _decode(await _client.get(
         Uri.parse('$baseUrl/driver/auth/third-party/wechat/web/authorize-url'),
         headers: _headers,
       ));
@@ -325,6 +326,30 @@ class DriverApiClient {
         body: jsonEncode({'isOnline': isOnline})));
     DriverStatusController.instance.isOnline.value = isOnline;
     return result;
+  }
+
+  Future<Map<String, dynamic>> requestPhoneChange({
+    required String target,
+    required String countryCode,
+    required String phoneNumber,
+  }) async =>
+      _decode(await _client.post(
+          Uri.parse('$baseUrl/driver/auth/me/phone/request'),
+          headers: _headers,
+          body: jsonEncode({
+            'target': target,
+            'countryCode': countryCode,
+            'phoneNumber': phoneNumber
+          })));
+
+  Future<Map<String, dynamic>> verifyPhoneChange(
+      String challengeId, String code) async {
+    final driver = _decode(await _client.post(
+        Uri.parse('$baseUrl/driver/auth/me/phone/verify'),
+        headers: _headers,
+        body: jsonEncode({'challengeId': challengeId, 'code': code})));
+    _currentDriver = driver;
+    return driver;
   }
 
   Future<Map<String, dynamic>> updateProfile(

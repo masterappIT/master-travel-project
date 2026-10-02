@@ -3812,6 +3812,16 @@ function verifyPassword(password: string, stored: string) {
   const expected = Buffer.from(hash, "hex");
   return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
+async function requireDriverPhoneAvailable(db: Pick<Prisma.TransactionClient, "driver">, driverId: string, countryCode: string, phone: string) {
+  const duplicate = await db.driver.findFirst({ where: {
+    id: { not: driverId }, OR: [
+      { phoneCountryCode: countryCode, phone },
+      ...(countryCode === "+86" ? [{ mainlandPhone: phone }] : [{ hongKongMacauCountryCode: countryCode, hongKongMacauPhone: phone }]),
+    ],
+  }, select: { id: true } });
+  if (duplicate) throw new HttpException("Driver phone number is already registered", HttpStatus.CONFLICT);
+}
+
 function hashDevelopmentVerificationCode(code: string) {
   return `scrypt$${hashPassword(code)}`;
 }
@@ -5408,6 +5418,62 @@ class DriverAuthController {
     return driverResponse(driver);
   }
 
+  @Post("me/phone/request")
+  async requestPhoneChange(@Req() req: RequestLike, @Body() body: { target?: string; countryCode?: string; phoneNumber?: string }) {
+    const session = await driverSessionFrom(req);
+    const identity = parsePhoneIdentity(body);
+    if (!((body.target === "mainland" && identity.countryCode === "+86") ||
+      (body.target === "hongKongMacau" && ["+852", "+853"].includes(identity.countryCode))))
+      throw new BadRequestException("Invalid phone target");
+    await requireDriverPhoneAvailable(prisma, session.sub, identity.countryCode, identity.phoneNumber);
+    const development = await isPhoneLoginDevelopmentEnabled("driver");
+    const code = development.enabled ? "" : String(Math.floor(10000 + Math.random() * 90000));
+    if (!development.enabled) {
+      await loadSms253Settings();
+      await sendSms253(`${identity.countryCode}${identity.phoneNumber}`, code);
+    }
+    const challenge = await prisma.driverPhoneChangeChallenge.create({ data: {
+      id: randomBytes(18).toString("hex"), driverId: session.sub, target: body.target,
+      countryCode: identity.countryCode, phone: identity.phoneNumber,
+      codeHash: development.enabled ? development.setting.verificationCodeHash : hashDriverSmsVerificationCode(code),
+      expiresAt: new Date(Date.now() + PHONE_CODE_TTL_MS),
+    } });
+    return { challengeId: challenge.id, expiresAt: challenge.expiresAt.toISOString() };
+  }
+
+  @Post("me/phone/verify")
+  async verifyPhoneChange(@Req() req: RequestLike, @Body() body: { challengeId?: string; code?: string }) {
+    const session = await driverSessionFrom(req);
+    const challenge = await prisma.driverPhoneChangeChallenge.findUnique({ where: { id: body.challengeId?.trim() || "" } });
+    if (!challenge || challenge.driverId !== session.sub || challenge.consumedAt ||
+      challenge.expiresAt.getTime() <= Date.now() || challenge.attempts >= PHONE_CODE_MAX_ATTEMPTS)
+      throw new UnauthorizedException("Verification code expired");
+    if (!verifyStoredVerificationCode(body.code?.trim() || "", challenge.codeHash)) {
+      await prisma.driverPhoneChangeChallenge.updateMany({ where: { id: challenge.id, consumedAt: null }, data: { attempts: { increment: 1 } } });
+      throw new UnauthorizedException("Invalid verification code");
+    }
+    const driver = await prisma.$transaction(async (tx) => {
+      // Serialize phone claims so two drivers cannot claim the same number concurrently.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(782134)`;
+      await requireDriverPhoneAvailable(tx, session.sub, challenge.countryCode, challenge.phone);
+      const consumed = await tx.driverPhoneChangeChallenge.updateMany({ where: {
+        id: challenge.id, driverId: session.sub, consumedAt: null,
+        expiresAt: { gt: new Date() }, attempts: { lt: PHONE_CODE_MAX_ATTEMPTS },
+      }, data: { consumedAt: new Date() } });
+      if (consumed.count !== 1) throw new UnauthorizedException("Verification code expired");
+      const current = await tx.driver.findUniqueOrThrow({ where: { id: session.sub } });
+      const data: Prisma.DriverUpdateInput = challenge.target === "mainland"
+        ? { mainlandPhone: challenge.phone }
+        : { hongKongMacauCountryCode: challenge.countryCode, hongKongMacauPhone: challenge.phone };
+      if ((challenge.target === "mainland") === (current.phoneCountryCode === "+86")) {
+        data.phoneCountryCode = challenge.countryCode;
+        data.phone = challenge.phone;
+      }
+      return tx.driver.update({ where: { id: session.sub }, data });
+    });
+    return driverResponse(driver);
+  }
+
   @Patch("me")
   async updateMe(
     @Req() req: RequestLike,
@@ -5561,6 +5627,13 @@ class DriverAuthController {
         const vehicle = await primaryDriverVehicle(tx, session.sub);
         if (!vehicle) throw new HttpException("Assigned vehicle not found", HttpStatus.NOT_FOUND);
         await tx.driverVehicle.update({ where: { id: vehicle.id }, data: vehicleData });
+      }
+      const currentDriver = await tx.driver.findUniqueOrThrow({ where: { id: session.sub } });
+      for (const field of ["phoneCountryCode", "phone", "hongKongMacauCountryCode", "hongKongMacauPhone", "mainlandPhone"] as const) {
+        if (data[field] !== undefined) {
+          if (data[field] !== currentDriver[field]) throw new BadRequestException("Phone changes require verification");
+          delete data[field];
+        }
       }
       return tx.driver.update({ where: { id: session.sub }, data });
     });

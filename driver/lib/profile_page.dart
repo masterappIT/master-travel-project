@@ -165,6 +165,8 @@ class _ProfilePageState extends State<ProfilePage> {
         'mainlandPhone': _mainlandPhone ?? '',
       },
     );
+    if (!mounted) return;
+    await _loadProfile();
     if (!mounted || result is! Map<String, String>) return;
     setState(() {
       _name = result['name'] ?? _name;

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'core/widgets/driver_overlays.dart';
+import 'driver_phone_verification_dialog.dart';
 
 import 'package:driver_web/core/api/driver_api_client.dart';
 import 'package:driver_web/core/tokens/driver_tokens.dart';
@@ -76,6 +77,29 @@ class _DriverProfilePageState extends State<DriverProfilePage> {
     });
   }
 
+  Future<bool> _verifyChangedPhone(
+      String target, String countryCode, String phone) async {
+    var challenge = await DriverApiClient.instance.requestPhoneChange(
+        target: target, countryCode: countryCode, phoneNumber: phone);
+    if (!mounted) return false;
+    return await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => DriverPhoneVerificationDialog(
+            phone: '$countryCode $phone',
+            resend: () async {
+              challenge = await DriverApiClient.instance.requestPhoneChange(
+                  target: target, countryCode: countryCode, phoneNumber: phone);
+            },
+            verify: (code) async {
+              await DriverApiClient.instance
+                  .verifyPhoneChange(challenge['challengeId'] as String, code);
+            },
+          ),
+        ) ==
+        true;
+  }
+
   Future<void> _saveProfile() async {
     FocusScope.of(context).unfocus();
     final name = _nameController.text.trim();
@@ -91,12 +115,30 @@ class _DriverProfilePageState extends State<DriverProfilePage> {
       final mainlandPhone = _mainlandPhoneController.text
           .trim()
           .replaceFirst(RegExp(r'^\+86\s*'), '');
-      await DriverApiClient.instance.updateProfile({
-        'name': name,
-        'hongKongMacauCountryCode': _phoneCodes[_hongKongMacauRegion],
-        'hongKongMacauPhone': hongKongMacauPhone,
-        'mainlandPhone': mainlandPhone,
-      });
+      final currentResult = await DriverApiClient.instance.me();
+      final current = currentResult['driver'] is Map
+          ? currentResult['driver'] as Map
+          : currentResult;
+      final countryCode = _phoneCodes[_hongKongMacauRegion]!;
+      final currentHkCode = current['hongKongMacauCountryCode'] ??
+          (current['phoneCountryCode'] == '+853' ? '+853' : '+852');
+      final currentHkPhone = current['hongKongMacauPhone'] ??
+          (current['phoneCountryCode'] == '+86' ? '' : current['phone']);
+      final currentMainlandPhone = current['mainlandPhone'] ??
+          (current['phoneCountryCode'] == '+86' ? current['phone'] : '');
+      if (countryCode != currentHkCode ||
+          hongKongMacauPhone != currentHkPhone) {
+        if (!await _verifyChangedPhone(
+            'hongKongMacau', countryCode, hongKongMacauPhone)) {
+          return;
+        }
+      }
+      if (mainlandPhone != currentMainlandPhone) {
+        if (!await _verifyChangedPhone('mainland', '+86', mainlandPhone)) {
+          return;
+        }
+      }
+      await DriverApiClient.instance.updateProfile({'name': name});
       if (!mounted) return;
       final result = <String, String>{
         'name': name,
@@ -372,6 +414,7 @@ class _ProfilePhoneField extends StatelessWidget {
   final String? prefix;
 
   void _showRegionPicker(BuildContext context) {
+    if (!editing) return;
     showDriverDialog<void>(
       context: context,
       builder: (dialogContext) => DriverDialog(
@@ -428,7 +471,8 @@ class _ProfilePhoneField extends StatelessWidget {
                       color: Colors.transparent,
                       child: InkWell(
                         borderRadius: BorderRadius.circular(DriverRadii.input),
-                        onTap: () => _showRegionPicker(context),
+                        onTap:
+                            editing ? () => _showRegionPicker(context) : null,
                         child: Container(
                           padding: const EdgeInsets.symmetric(
                               horizontal: DriverSpacing.sm),

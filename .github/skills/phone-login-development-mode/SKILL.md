@@ -115,6 +115,16 @@ API 只處理開發模式設定：
 - 此流程屬已登入帳戶管理，不新增登入方式開關限制；保留 session、手機格式、號碼重複、期限、錯誤次數及一次性驗證規則。
 - API 回應不包含開發驗證碼或雜湊；不影響司機端與其他登入方式。
 
+### 司機端修改已連結手機號碼
+
+- 港澳與內地電話分別透過 `POST /driver/auth/me/phone/request`（`target: hongKongMacau | mainland`、`countryCode`、`phoneNumber`）申請驗證碼，回傳 `challengeId` 與 `expiresAt`；透過 `POST /driver/auth/me/phone/verify`（`challengeId`、`code`）驗證並更新對應電話。
+- 以申請當下的司機端開發模式開關為準；開啟時使用後台設定雜湊且不讀取短信配置、不發送短信，關閉時發送短信。回應不包含驗證碼或雜湊。
+- 獨立 `DriverPhoneChangeChallenge` 資料表隔離登入／註冊 challenge，保留所有者、有效期限、最多五次錯誤與一次性驗證；消耗 challenge 與電話更新在同一交易內。
+- `PATCH /driver/auth/me` 禁止修改電話欄位，允許傳入未變更的值；當驗證的區域對應主要登入電話，同步更新主要電話。
+- 兩組都改動時依序驗證，各組成功後立即更新；第二組取消不回滾已完成的第一組，返回個人資料時重新讀取後端。
+- 驗證對話框提供 60 秒重發冷卻倒數；倒數結束可重新獲取同一目標電話的驗證碼。成功後改用新 challenge、清空輸入並重啟倒數；失敗保留原 challenge 並允許重試。此倒數只控制前端重發按鈕，不修改後端驗證碼有效期限。
+- 部署需先執行 Prisma migration，再啟動新後端與前端。
+
 ## 7. 與 sms253 的隔離
 
 開發模式啟用時：
