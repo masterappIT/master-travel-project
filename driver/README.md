@@ -1,10 +1,25 @@
-# driver_web
+# Driver Web
 
-A new Flutter project.
+Driver Web 是 Flutter Web 司機端產品，負責司機登入、接單與訂單操作介面。
 
-## Getting Started
+## 開發與建置
 
-This project is a starting point for a Flutter application.
+```bash
+cd driver
+flutter pub get
+flutter build web
+```
+
+正式建置會由根目錄的 GitHub Actions 使用 `flutter build web --release`，並注入 `DRIVER_API_BASE_URL`。詳細正式環境部署請參考 [正式環境部署文件](../docs/PRODUCTION-DEPLOYMENT.md)。
+
+## 驗證
+
+```bash
+npm run check:scope -- --scope driver
+npm run verify:driver
+```
+
+Driver Web UI 的切版、平台與元件邊界請遵守 [Driver Web UI instructions](../.github/instructions/driver-web-ui.instructions.md)。
 
 A few resources to get you started if this is your first Flutter project:
 

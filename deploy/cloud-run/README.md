@@ -1,5 +1,7 @@
 # Cloud Run production operations
 
+本文件是 Cloud Run 的操作 runbook，負責部署執行細節、migration、健康檢查、回滾與 restore drill。系統整體架構、前端服務清單與 CI/CD 全流程請以 [`docs/PRODUCTION-DEPLOYMENT.md`](../../docs/PRODUCTION-DEPLOYMENT.md) 為準。
+
 The API runs as a Cloud Run service backed by Cloud SQL for PostgreSQL. Schema changes run only through a separate Cloud Run Job. The service never runs migrations during startup.
 
 ## Ownership boundaries

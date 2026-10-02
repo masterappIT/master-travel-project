@@ -84,7 +84,19 @@ npm --prefix brand run dev
 
 H5 與管理後台使用固定連接埠；若連接埠已被其他程序占用，Vite 會直接報錯，不會自動切換到其他連接埠。開發環境的瀏覽器請求統一經由同源 `/api` 代理到 `http://127.0.0.1:3010`，原生、小程序等非 H5 目標則使用 `VITE_API_BASE_URL`。真機小程序必須將該變數設為開發電腦的區域網路 IP，並確保手機與電腦在同一 Wi-Fi。
 
-H5 靜態檔案與 `/api/` 同源反向代理可參考 `deploy/nginx.h5.conf`。正式 API 使用 Cloud Run + Cloud SQL，migration、發布、smoke test、回滾、監控與備份還原流程定義於 `deploy/cloud-run/README.md`；應用程式啟動不會修改資料庫 schema。
+H5 靜態檔案與 `/api/` 同源反向代理可參考 `deploy/nginx.h5.conf`。正式 API 使用 Cloud Run + Cloud SQL；完整架構與部署說明請參考 [`docs/PRODUCTION-DEPLOYMENT.md`](docs/PRODUCTION-DEPLOYMENT.md)，Cloud Run 操作細節請參考 [`deploy/cloud-run/README.md`](deploy/cloud-run/README.md)。migration、發布、smoke test、回滾、監控與備份還原流程不在應用程式啟動時執行。
+
+## 文件索引
+
+- [文件總索引](docs/README.md)
+- [本機開發指南](docs/DEVELOPMENT.md)
+- [系統架構與責任邊界](docs/ARCHITECTURE.md)
+- [API 開發指南](docs/API.md)
+- [正式環境部署](docs/PRODUCTION-DEPLOYMENT.md)
+- [維運操作入口](docs/OPERATIONS.md)
+- [Cloud Run 操作 Runbook](deploy/cloud-run/README.md)
+- [Driver 專案說明](driver/README.md)
+- [開發規範](.github/instructions/)
 
 ## 部署流程
 
