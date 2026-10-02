@@ -14732,9 +14732,17 @@ class ClientOrdersController {
         "Phone number is already connected",
         HttpStatus.CONFLICT,
       );
-    await loadSms253Settings();
-    const code = String(Math.floor(10000 + Math.random() * 90000));
-    await sendSms253(`${identity.countryCode}${identity.phoneNumber}`, code);
+    const developmentMode = await isPhoneLoginDevelopmentEnabled("passenger");
+    const code = developmentMode.enabled
+      ? ""
+      : String(Math.floor(10000 + Math.random() * 90000));
+    const codeHash = developmentMode.enabled
+      ? developmentMode.setting.verificationCodeHash
+      : hashSmsVerificationCode(code);
+    if (!developmentMode.enabled) {
+      await loadSms253Settings();
+      await sendSms253(`${identity.countryCode}${identity.phoneNumber}`, code);
+    }
     const challengeId = randomBytes(18).toString("hex");
     const exp = Date.now() + PHONE_CODE_TTL_MS;
     clientPhoneChangeChallenges.set(challengeId, {
@@ -14750,7 +14758,7 @@ class ClientOrdersController {
         userId: session.sub,
         countryCode: identity.countryCode,
         phoneNumber: identity.phoneNumber,
-        codeHash: createHash("sha256").update(code).digest("hex"),
+        codeHash,
         expiresAt: new Date(exp),
         purpose: "PHONE_CHANGE",
       },
@@ -14803,10 +14811,7 @@ class ClientOrdersController {
       userId: session.sub,
     };
     const submittedCode = body.code?.trim() || "";
-    if (
-      createHash("sha256").update(submittedCode).digest("hex") !==
-      storedChallenge.codeHash
-    ) {
+    if (!verifyStoredVerificationCode(submittedCode, storedChallenge.codeHash)) {
       const attempts = storedChallenge.attempts + 1;
       await prisma.verificationCode.update({
         where: { id: challengeId },
