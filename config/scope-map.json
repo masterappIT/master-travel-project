@@ -1,7 +1,7 @@
 {
   "version": 1,
   "areas": {
-    "passenger": ["src/", "vite.config.js", "index.html", "shims-uni.d.ts", "project.config.json", ".hbuilderx/"],
+    "passenger": ["src/", "test/", "vite.config.js", "index.html", "shims-uni.d.ts", "project.config.json", ".hbuilderx/"],
     "api": ["backend/"],
     "admin": ["admin/"],
     "driver": ["driver/"],
