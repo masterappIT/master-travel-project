@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -27,6 +28,7 @@ import 'package:driver_web/core/layout/driver_page_shell.dart';
 import 'package:driver_web/core/platform/new_order_alert.dart';
 import 'package:driver_web/core/state/driver_alert_audio_controller.dart';
 import 'package:driver_web/core/state/driver_order_alert_coordinator.dart';
+import 'package:driver_web/core/state/driver_currency_preference.dart';
 import 'package:driver_web/core/state/driver_language_preference.dart';
 import 'package:driver_web/core/tokens/driver_tokens.dart';
 
@@ -352,10 +354,12 @@ void main() {
     expect(find.text('搶單失敗'), findsOneWidget);
     expect(find.byType(SnackBar), findsNothing);
     final failureNotice = tester.widget<Container>(
-      find.ancestor(
-        of: find.text('搶單失敗'),
-        matching: find.byType(Container),
-      ).first,
+      find
+          .ancestor(
+            of: find.text('搶單失敗'),
+            matching: find.byType(Container),
+          )
+          .first,
     );
     final failureDecoration = failureNotice.decoration! as BoxDecoration;
     expect(failureDecoration.color, DriverColors.surface);
@@ -578,6 +582,35 @@ void main() {
     expect(find.text('6123 4567'), findsOneWidget);
     expect(find.text('13800138000'), findsOneWidget);
   });
+  testWidgets('ignores old currency errors after profile switches to HKD',
+      (WidgetTester tester) async {
+    final preference = DriverCurrencyPreference.instance;
+    final original = preference.value;
+    final oldResponse = Completer<http.Response>();
+    preference.value = 'CNY';
+    DriverApiClient.instance = DriverApiClient(
+      client: MockClient((request) {
+        if (request.url.path == '/driver/auth/statistics' &&
+            request.url.queryParameters['currency'] == 'CNY') {
+          return oldResponse.future;
+        }
+        return _driverFixtureResponse(request);
+      }),
+    );
+    await tester.pumpWidget(testApp(const ProfilePage()));
+    await tester.pump();
+    preference.value = 'HKD';
+    await tester.pumpAndSettle();
+    expect(find.text('陳大文'), findsOneWidget);
+    oldResponse
+        .complete(http.Response('{"message":"stale currency error"}', 500));
+    await tester.pumpAndSettle();
+    expect(find.text('stale currency error'), findsNothing);
+    expect(find.text('陳大文'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    preference.value = original;
+  });
+
   testWidgets('renders the driver profile page and navigation',
       (WidgetTester tester) async {
     await tester.pumpWidget(testApp(const ProfilePage()));
@@ -1031,6 +1064,27 @@ void main() {
     expect(requests[2].body, contains('name="vehicleColor"'));
     expect(requests[2].body, contains('白色'));
     expect(requests[2].body, isNot(contains('name="vehiclePhoto"')));
+  });
+
+  test('history requests follow CNY to HKD preference changes', () async {
+    final preference = DriverCurrencyPreference.instance;
+    final original = preference.value;
+    addTearDown(() => preference.value = original);
+    final currencies = <String?>[];
+    final api = DriverApiClient(
+      baseUrl: 'https://driver.example.test',
+      client: MockClient((request) async {
+        currencies.add(request.url.queryParameters['currency']);
+        return http.Response('[]', 200);
+      }),
+    );
+    preference.value = 'CNY';
+    await api.trips();
+    preference.value = 'HKD';
+    await api.trips();
+    preference.value = 'CNY';
+    await api.trips();
+    expect(currencies, ['CNY', 'HKD', 'CNY']);
   });
 
   test('uses driver trip endpoints for listing, detail and acceptance',

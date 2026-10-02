@@ -5,6 +5,7 @@ import 'app/route_names.dart';
 import 'core/api/driver_api_client.dart';
 import 'core/formatters/passenger_name.dart';
 import 'core/layout/driver_page_shell.dart';
+import 'core/state/driver_currency_preference.dart';
 import 'core/navigation/driver_navigation.dart';
 
 import 'package:driver_web/core/tokens/driver_tokens.dart';
@@ -27,7 +28,14 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
   @override
   void initState() {
     super.initState();
+    DriverCurrencyPreference.instance.addListener(_loadTrips);
     _loadTrips();
+  }
+
+  @override
+  void dispose() {
+    DriverCurrencyPreference.instance.removeListener(_loadTrips);
+    super.dispose();
   }
 
   List<Map<String, dynamic>> get _visibleTrips {
@@ -85,9 +93,14 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
   }
 
   Future<void> _loadTrips() async {
+    final currency = DriverCurrencyPreference.instance.code;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
       final trips = await _api.trips();
-      if (mounted) {
+      if (mounted && currency == DriverCurrencyPreference.instance.code) {
         setState(() {
           _trips = trips
               .where((trip) =>
@@ -108,7 +121,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
         });
       }
     } on DriverApiException catch (error) {
-      if (mounted) {
+      if (mounted && currency == DriverCurrencyPreference.instance.code) {
         setState(() {
           _error = error.message;
           _loading = false;

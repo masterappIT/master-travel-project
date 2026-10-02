@@ -34,10 +34,22 @@ class _ProfilePageState extends State<ProfilePage> {
   @override
   void initState() {
     super.initState();
+    DriverCurrencyPreference.instance.addListener(_loadProfile);
     _loadProfile();
   }
 
+  @override
+  void dispose() {
+    DriverCurrencyPreference.instance.removeListener(_loadProfile);
+    super.dispose();
+  }
+
   Future<void> _loadProfile() async {
+    final currency = DriverCurrencyPreference.instance.code;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
       final results = await Future.wait<dynamic>([
         _api.me(),
@@ -53,7 +65,9 @@ class _ProfilePageState extends State<ProfilePage> {
       final vehicleItems = vehicles['data'] is List
           ? List<dynamic>.from(vehicles['data'] as List)
           : const <dynamic>[];
-      if (!mounted) return;
+      if (!mounted || currency != DriverCurrencyPreference.instance.code) {
+        return;
+      }
       setState(() {
         _name = driver['name']?.toString() ?? '';
         _vehicleSummary = vehicleItems.isEmpty
@@ -86,7 +100,7 @@ class _ProfilePageState extends State<ProfilePage> {
         _loading = false;
       });
     } on DriverApiException catch (error) {
-      if (mounted) {
+      if (mounted && currency == DriverCurrencyPreference.instance.code) {
         setState(() {
           _error = error.message;
           _loading = false;

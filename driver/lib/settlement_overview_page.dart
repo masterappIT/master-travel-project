@@ -22,23 +22,39 @@ class _SettlementOverviewPageState extends State<SettlementOverviewPage> {
   @override
   void initState() {
     super.initState();
+    DriverCurrencyPreference.instance.addListener(_loadStatistics);
     _loadStatistics();
   }
 
+  @override
+  void dispose() {
+    DriverCurrencyPreference.instance.removeListener(_loadStatistics);
+    super.dispose();
+  }
+
   Future<void> _loadStatistics() async {
+    final currency = DriverCurrencyPreference.instance.code;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
       final statistics = await _api.statistics();
       final settlement = statistics['settlement'] is Map
           ? Map<String, dynamic>.from(statistics['settlement'] as Map)
           : <String, dynamic>{};
-      if (!mounted) return;
+      if (!mounted || currency != DriverCurrencyPreference.instance.code) {
+        return;
+      }
       setState(() {
         _settledAmount = _formatAmount(settlement['settledEarnings']);
         _unsettledAmount = _formatAmount(settlement['unsettledEarnings']);
         _loading = false;
       });
     } on DriverApiException catch (error) {
-      if (!mounted) return;
+      if (!mounted || currency != DriverCurrencyPreference.instance.code) {
+        return;
+      }
       setState(() {
         _error = error.message;
         _loading = false;

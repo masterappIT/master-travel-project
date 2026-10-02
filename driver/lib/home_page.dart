@@ -9,6 +9,7 @@ import 'core/layout/driver_page_shell.dart';
 import 'core/navigation/driver_navigation.dart';
 import 'core/state/driver_language_preference.dart';
 import 'core/state/driver_order_alert_coordinator.dart';
+import 'core/state/driver_currency_preference.dart';
 import 'core/state/driver_status.dart';
 
 import 'package:driver_web/core/tokens/driver_tokens.dart';
@@ -49,6 +50,7 @@ class _HomePageState extends State<HomePage> {
     super.initState();
     DriverOrderAlertCoordinator.notificationsChanged
         .addListener(_onNotificationsChanged);
+    DriverCurrencyPreference.instance.addListener(_loadStatistics);
     _loadDriver();
     _loadStatistics();
   }
@@ -57,6 +59,7 @@ class _HomePageState extends State<HomePage> {
   void dispose() {
     DriverOrderAlertCoordinator.notificationsChanged
         .removeListener(_onNotificationsChanged);
+    DriverCurrencyPreference.instance.removeListener(_loadStatistics);
     super.dispose();
   }
 
@@ -84,16 +87,21 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _loadStatistics() async {
+    final currency = DriverCurrencyPreference.instance.code;
+    setState(() {
+      _statsLoading = true;
+      _statsError = null;
+    });
     try {
       final result = await _api.statistics();
-      if (mounted) {
+      if (mounted && currency == DriverCurrencyPreference.instance.code) {
         setState(() {
           _statistics = result;
           _statsLoading = false;
         });
       }
     } on DriverApiException catch (error) {
-      if (mounted) {
+      if (mounted && currency == DriverCurrencyPreference.instance.code) {
         setState(() {
           _statsError = error.message;
           _statsLoading = false;

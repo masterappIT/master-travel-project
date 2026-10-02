@@ -4,6 +4,7 @@ import 'core/api/driver_api_client.dart';
 import 'core/formatters/passenger_name.dart';
 import 'core/layout/driver_page_shell.dart';
 import 'core/navigation/driver_navigation.dart';
+import 'core/state/driver_currency_preference.dart';
 
 import 'package:driver_web/core/tokens/driver_tokens.dart';
 
@@ -25,10 +26,22 @@ class _OrderCompletedPageState extends State<OrderCompletedPage> {
   @override
   void initState() {
     super.initState();
+    DriverCurrencyPreference.instance.addListener(_loadTrip);
     _loadTrip();
   }
 
+  @override
+  void dispose() {
+    DriverCurrencyPreference.instance.removeListener(_loadTrip);
+    super.dispose();
+  }
+
   Future<void> _loadTrip() async {
+    final currency = DriverCurrencyPreference.instance.code;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     final tripId = widget.tripId;
     if (tripId == null || tripId.isEmpty) {
       setState(() {
@@ -40,11 +53,17 @@ class _OrderCompletedPageState extends State<OrderCompletedPage> {
 
     try {
       final trip = await _api.trip(tripId);
-      if (mounted) setState(() => _trip = trip);
+      if (mounted && currency == DriverCurrencyPreference.instance.code) {
+        setState(() => _trip = trip);
+      }
     } on DriverApiException catch (error) {
-      if (mounted) setState(() => _error = error.message);
+      if (mounted && currency == DriverCurrencyPreference.instance.code) {
+        setState(() => _error = error.message);
+      }
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && currency == DriverCurrencyPreference.instance.code) {
+        setState(() => _loading = false);
+      }
     }
   }
 

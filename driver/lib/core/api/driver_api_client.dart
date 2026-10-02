@@ -6,6 +6,7 @@ import 'package:http_parser/http_parser.dart';
 
 import '../platform/browser_storage.dart';
 import '../state/driver_status.dart';
+import '../state/driver_currency_preference.dart';
 
 Map<String, dynamic>? selectTripVehicle({
   required bool accepted,
@@ -456,8 +457,11 @@ class DriverApiClient {
   Future<Map<String, dynamic>> settings() async => _decode(
       await _client.get(Uri.parse('$baseUrl/settings'), headers: _headers));
 
-  Future<Map<String, dynamic>> statistics() async => _decode(await _client
-      .get(Uri.parse('$baseUrl/driver/auth/statistics'), headers: _headers));
+  Future<Map<String, dynamic>> statistics() async => _decode(await _client.get(
+      Uri.parse('$baseUrl/driver/auth/statistics').replace(queryParameters: {
+        'currency': DriverCurrencyPreference.instance.code,
+      }),
+      headers: _headers));
 
   Future<Map<String, dynamic>> notificationEventTicket() async =>
       _decode(await _client.post(
@@ -467,15 +471,27 @@ class DriverApiClient {
       await _client.post(Uri.parse('$baseUrl/driver/auth/trips/events/ticket'),
           headers: _headers));
   Future<List<dynamic>> availableTrips() async => _decodeList(await _client.get(
-      Uri.parse('$baseUrl/driver/auth/trips/available'),
+      Uri.parse('$baseUrl/driver/auth/trips/available').replace(
+          queryParameters: {
+            'currency': DriverCurrencyPreference.instance.code
+          }),
       headers: _headers));
-  Future<List<dynamic>> activeTrips() async => _decodeList(await _client
-      .get(Uri.parse('$baseUrl/driver/auth/trips/active'), headers: _headers));
-  Future<List<dynamic>> trips() async => _decodeList(await _client
-      .get(Uri.parse('$baseUrl/driver/auth/trips'), headers: _headers));
+  Future<List<dynamic>> activeTrips() async => _decodeList(await _client.get(
+      Uri.parse('$baseUrl/driver/auth/trips/active').replace(queryParameters: {
+        'currency': DriverCurrencyPreference.instance.code
+      }),
+      headers: _headers));
+  Future<List<dynamic>> trips() async => _decodeList(await _client.get(
+      Uri.parse('$baseUrl/driver/auth/trips').replace(queryParameters: {
+        'currency': DriverCurrencyPreference.instance.code,
+      }),
+      headers: _headers));
   Future<Map<String, dynamic>> trip(String id) async =>
       _decode(await _client.get(
-          Uri.parse('$baseUrl/driver/auth/trips/${Uri.encodeComponent(id)}'),
+          Uri.parse('$baseUrl/driver/auth/trips/${Uri.encodeComponent(id)}')
+              .replace(queryParameters: {
+            'currency': DriverCurrencyPreference.instance.code
+          }),
           headers: _headers));
   Future<Map<String, dynamic>> acceptTrip(String id,
           {String? vehicleId}) async =>

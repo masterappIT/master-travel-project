@@ -7,6 +7,7 @@ import 'core/api/driver_api_client.dart';
 import 'core/formatters/passenger_name.dart';
 import 'core/layout/driver_page_shell.dart';
 import 'core/navigation/driver_navigation.dart';
+import 'core/state/driver_currency_preference.dart';
 import 'core/state/driver_order_alert_coordinator.dart';
 import 'core/state/driver_language_preference.dart';
 import 'core/state/driver_status.dart';
@@ -44,6 +45,7 @@ class _OrderHallPageState extends State<OrderHallPage>
   @override
   void initState() {
     super.initState();
+    DriverCurrencyPreference.instance.addListener(_currencyChanged);
     WidgetsBinding.instance.addObserver(this);
     _loadTrips();
     DriverOrderAlertCoordinator.tripsChanged
@@ -52,10 +54,19 @@ class _OrderHallPageState extends State<OrderHallPage>
 
   @override
   void dispose() {
+    DriverCurrencyPreference.instance.removeListener(_currencyChanged);
     WidgetsBinding.instance.removeObserver(this);
     DriverOrderAlertCoordinator.tripsChanged
         .removeListener(_refreshFromCoordinator);
     super.dispose();
+  }
+
+  void _currencyChanged() {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    _loadTrips();
   }
 
   void _refreshFromCoordinator() {
@@ -72,6 +83,7 @@ class _OrderHallPageState extends State<OrderHallPage>
   Future<void> _loadTrips({bool background = false}) async {
     if (_refreshInFlight) return;
     _refreshInFlight = true;
+    final currency = DriverCurrencyPreference.instance.code;
     try {
       final acceptedTrips = await _api.activeTrips();
       List<dynamic> availableTrips;
@@ -81,7 +93,9 @@ class _OrderHallPageState extends State<OrderHallPage>
         if (error.statusCode != 403) rethrow;
         availableTrips = [];
       }
-      if (!mounted) return;
+      if (!mounted || currency != DriverCurrencyPreference.instance.code) {
+        return;
+      }
       final assignedTrips = acceptedTrips
           .where((trip) =>
               trip is Map &&
@@ -130,7 +144,9 @@ class _OrderHallPageState extends State<OrderHallPage>
         _loading = false;
       });
     } on DriverApiException catch (error) {
-      if (mounted && !background) {
+      if (mounted &&
+          currency == DriverCurrencyPreference.instance.code &&
+          !background) {
         setState(() {
           _error = error.message;
           _loading = false;
@@ -138,6 +154,9 @@ class _OrderHallPageState extends State<OrderHallPage>
       }
     } finally {
       _refreshInFlight = false;
+      if (mounted && currency != DriverCurrencyPreference.instance.code) {
+        _loadTrips();
+      }
     }
   }
 

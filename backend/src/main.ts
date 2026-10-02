@@ -3585,6 +3585,20 @@ function driverTripResponse(
       : null,
   };
 }
+function driverTripDisplayResponse(
+  trip: Parameters<typeof driverTripResponse>[0],
+  phoneVisible: boolean,
+  requestedCurrency: string | undefined,
+  exchangeRate: number,
+) {
+  const result = driverTripResponse(trip, phoneVisible);
+  const currency = displayCurrency(requestedCurrency, "RMB");
+  return {
+    ...result,
+    price: result.price == null ? null : convertCurrency(result.price, result.currency ?? "", currency, exchangeRate),
+    currency,
+  };
+}
 function invitationTripResponse(
   trip: Parameters<typeof driverTripResponse>[0],
   now = new Date(),
@@ -5953,8 +5967,12 @@ class DriverAuthController {
   }
 
   @Get("statistics")
-  async statistics(@Req() req: RequestLike) {
+  async statistics(@Req() req: RequestLike, @Query("currency") requestedCurrency?: string) {
     const session = await driverSessionFrom(req);
+    const currency = displayCurrency(requestedCurrency, "RMB");
+    const settings = await prisma.appSetting.findUniqueOrThrow({
+      where: { id: appSettingsDefaults.id }, select: { exchangeRate: true },
+    });
     const now = new Date();
     const todayStart = new Date(
       now.getFullYear(),
@@ -5984,12 +6002,11 @@ class DriverAuthController {
     const settledTrips = trips.filter((item) => item.settlement != null);
     const unsettledTrips = trips.filter((item) => item.settlement == null);
     const sum = (items: typeof trips) =>
-      roundMoney(
-        items.reduce(
-          (total, item) => total + (item.driverPayoutAmount ?? 0),
-          0,
-        ),
-      );
+      roundMoney(items.reduce((total, item) => {
+        const amount = item.driverPayoutAmount ?? 0;
+        if (amount === 0) return total;
+        return total + convertCurrency(amount, item.driverPayoutCurrency ?? "", currency, settings.exchangeRate);
+      }, 0));
     const ratings = await prisma.driverRating.findMany({
       where: { driverId: session.sub },
       select: { score: true },
@@ -6011,24 +6028,18 @@ class DriverAuthController {
     return {
       today: {
         earnings: sum(todayTrips),
-        currency:
-          trips.find((item) => item.driverPayoutCurrency)
-            ?.driverPayoutCurrency ?? null,
+        currency,
         completedTrips: todayTrips.length,
         onlineHours: durationMs / 3600000,
       },
       month: {
         earnings: sum(monthTrips),
-        currency:
-          trips.find((item) => item.driverPayoutCurrency)
-            ?.driverPayoutCurrency ?? null,
+        currency,
       },
       settlement: {
         settledEarnings: sum(settledTrips),
         unsettledEarnings: sum(unsettledTrips),
-        currency:
-          trips.find((item) => item.driverPayoutCurrency)
-            ?.driverPayoutCurrency ?? "HKD",
+        currency,
       },
       rating: {
         average: ratings.length ? ratingTotal / ratings.length : null,
@@ -6039,7 +6050,7 @@ class DriverAuthController {
   }
 
   @Get("trips/active")
-  async activeTrips(@Req() req: RequestLike) {
+  async activeTrips(@Req() req: RequestLike, @Query("currency") requestedCurrency?: string) {
     const { session } = await reviewedDriverFrom(req);
     const trips = await prisma.trip.findMany({
       where: {
@@ -6050,12 +6061,24 @@ class DriverAuthController {
       include: { user: true, settlement: true },
       orderBy: { scheduledAt: "asc" },
     });
-    return trips.map((trip) => driverTripResponse(trip, true));
+    const settings = await prisma.appSetting.findUniqueOrThrow({ where: { id: appSettingsDefaults.id } });
+    return trips.map((trip) => driverTripDisplayResponse(trip, true, requestedCurrency, settings.exchangeRate));
   }
 
   @Get("trips")
-  async history(@Req() req: RequestLike) {
+  async history(@Req() req: RequestLike, @Query("currency") requestedCurrency?: string) {
     const { session } = await reviewedDriverFrom(req);
+    const currency = displayCurrency(requestedCurrency, "RMB");
+    const settings = await prisma.appSetting.findUniqueOrThrow({
+      where: { id: appSettingsDefaults.id }, select: { exchangeRate: true },
+    });
+    const response = (trip: Parameters<typeof driverTripResponse>[0]) => {
+      const result = driverTripResponse(trip, true);
+      return { ...result,
+        price: result.price == null ? null : convertCurrency(result.price, result.currency ?? "", currency, settings.exchangeRate),
+        currency,
+      };
+    };
     const [trips, driverCancellations] = await Promise.all([
       prisma.trip.findMany({
         where: {
@@ -6072,9 +6095,9 @@ class DriverAuthController {
       }),
     ]);
     return [
-      ...trips.map((trip) => driverTripResponse(trip, true)),
+      ...trips.map(response),
       ...driverCancellations.map((item) => ({
-        ...driverTripResponse(item.trip, true),
+        ...response(item.trip),
         cancelledAt: item.cancelledAt.toISOString(),
         cancellationSource: "DRIVER",
         settlement: null,
@@ -6527,7 +6550,7 @@ class DriverAuthController {
   }
 
   @Get("trips/available")
-  async available(@Req() req: RequestLike) {
+  async available(@Req() req: RequestLike, @Query("currency") requestedCurrency?: string) {
     const session = await driverSessionFrom(req);
     const driver = await prisma.driver.findUnique({
       where: { id: session.sub },
@@ -6569,11 +6592,11 @@ class DriverAuthController {
       include: { user: true },
       orderBy: { scheduledAt: "asc" },
     });
-    return trips.map((trip) => driverTripResponse(trip));
+    return trips.map((trip) => driverTripDisplayResponse(trip, false, requestedCurrency, settings.exchangeRate));
   }
 
   @Get("trips/:id")
-  async tripDetails(@Req() req: RequestLike, @Param("id") id: string) {
+  async tripDetails(@Req() req: RequestLike, @Param("id") id: string, @Query("currency") requestedCurrency?: string) {
     const { session, driver } = await reviewedDriverFrom(req);
     const trip = await prisma.trip.findUnique({
       where: { id },
@@ -6616,7 +6639,7 @@ class DriverAuthController {
       !tripOfferIsExpired(visibleTrip.scheduledAt);
     if (!assignedToDriver && !availableToDriver)
       throw new HttpException("Trip not found", HttpStatus.NOT_FOUND);
-    return driverTripResponse(visibleTrip, assignedToDriver);
+    return driverTripDisplayResponse(visibleTrip, assignedToDriver, requestedCurrency, settings.exchangeRate);
   }
 
   @Post("trips/:id/accept")
