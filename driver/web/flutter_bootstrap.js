@@ -6,5 +6,9 @@ window.__driverCacheMigration.then((shouldReload) => {
     window.location.reload();
     return;
   }
-  _flutter.loader.load();
+  _flutter.loader.load({
+    config: {
+      canvasKitBaseUrl: 'canvaskit/',
+    },
+  });
 });

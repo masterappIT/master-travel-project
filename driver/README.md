@@ -12,6 +12,13 @@ flutter build web
 
 正式建置會由根目錄的 GitHub Actions 使用 `flutter build web --release`，並注入 `DRIVER_API_BASE_URL`。詳細正式環境部署請參考 [正式環境部署文件](../docs/PRODUCTION-DEPLOYMENT.md)。
 
+## 啟動資源交付
+
+- Flutter bootstrap 固定使用建置產物中的 `canvaskit/`，保留原有 renderer 與引擎版本，不從 Google CDN 下載 CanvasKit。
+- 共用前端容器只針對司機端 `assets/assets/fonts/NotoSansTC-*.ttf` 產生 gzip 副本；Nginx 依瀏覽器的 `Accept-Encoding` 提供壓縮版本，不支援 gzip 時仍提供原始字體。字體內容、字重與快取規則不變。
+- 本次不變更登入、API、路由、頁面、Apple SDK 或通知流程，也不消除其他外部字體依賴。
+- 發布前須驗證內地／香港首次及再次載入、iOS／Android 字體與頁面呈現，以及登入、訂單與通知功能。效能收益以真機測量為準；回退使用上一個完整容器映像。
+
 ## 收款貨幣與收入顯示
 
 - 收款貨幣偏好使用 `HKD` 或 `CNY`；司機端讀取 `GET /driver/auth/statistics?currency=HKD|CNY`，後端回傳 `HKD` 或 `RMB`。
@@ -22,6 +29,12 @@ flutter build web
 - 非零收入若幣種缺失或換算匯率不可用，API 明確報錯，不猜測幣種或偽造換算金額。
 
 ## 驗證
+
+啟動腳本回歸測試：
+
+```bash
+node --test driver/test/web_bootstrap.test.mjs
+```
 
 ```bash
 npm run check:scope -- --scope driver
