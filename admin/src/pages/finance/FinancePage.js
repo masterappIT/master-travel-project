@@ -1,7 +1,9 @@
 import { inject } from 'vue'
+import { FinanceCard, FinanceMetricCard } from './finance.components.js'
 
 export const FinancePage = {
   name: 'FinancePage',
+  components: { FinanceCard, FinanceMetricCard },
   setup() { return inject('adminFinanceContext') },
   template: String.raw`<section v-if="view==='finance'" class="finance-center">
   <header class="finance-hero">
@@ -24,7 +26,7 @@ export const FinancePage = {
       <div><span class="finance-label">財務總覽</span><h2>本月資金摘要</h2></div>
       <div class="finance-controls"><label>統計期間<select v-model="overviewPeriod"><option>今日</option><option>本週</option><option>本月</option><option>本季</option></select></label><label>報表貨幣<select v-model="reportCurrency"><option>原始貨幣</option><option>RMB</option><option>HKD</option></select></label></div>
     </section>
-    <section class="finance-card finance-summary-card"><div class="finance-card-heading"><div><span class="finance-label">收入摘要</span><h2>跨地區交易概覽</h2></div><span class="finance-pill warning">尚未接入交易 API</span></div><div class="finance-metrics"><article v-for="item in incomeSummary" :key="item.label"><span>{{item.label}}</span><strong>{{item.value}}</strong><small>{{item.note}}</small></article></div><div class="finance-table-wrap"><table><thead><tr><th>地區</th><th>貨幣</th><th>乘客實收</th><th>退款</th><th>司機應付</th><th>平台淨收入</th></tr></thead><tbody><tr v-for="item in incomeBreakdown" :key="item.currency"><td>{{item.region}}</td><td><b>{{item.currency}}</b></td><td>{{item.received}}</td><td>{{item.refund}}</td><td>{{item.driver}}</td><td><b>{{item.net}}</b></td></tr></tbody></table></div></section>
+    <FinanceCard class="finance-summary-card" eyebrow="收入摘要" title="跨地區交易概覽" status="尚未接入交易 API"><div class="finance-metrics"><FinanceMetricCard v-for="item in incomeSummary" :key="item.label" :label="item.label" :value="item.value" :note="item.note" /></div><div class="finance-table-wrap"><table><thead><tr><th>地區</th><th>貨幣</th><th>乘客實收</th><th>退款</th><th>司機應付</th><th>平台淨收入</th></tr></thead><tbody><tr v-for="item in incomeBreakdown" :key="item.currency"><td>{{item.region}}</td><td><b>{{item.currency}}</b></td><td>{{item.received}}</td><td>{{item.refund}}</td><td>{{item.driver}}</td><td><b>{{item.net}}</b></td></tr></tbody></table></div></FinanceCard>
     <div class="finance-columns"><section class="finance-card"><div class="finance-card-heading"><div><span class="finance-label">資金流程</span><h2>配置狀態</h2></div><span class="finance-pill warning">待配置</span></div><div class="finance-list"><article v-for="flow in flowStatuses" :key="flow.title"><div><b>{{flow.title}}</b><small>{{flow.description}}</small></div><span class="finance-pill warning">{{flow.status}}</span></article></div></section><section class="finance-card"><div class="finance-card-heading"><div><span class="finance-label">地區設定</span><h2>結算貨幣</h2></div></div><div class="finance-list"><article v-for="region in regions" :key="region.code"><div><b>{{region.name}}</b><small>{{region.methods}}</small></div><strong class="finance-currency">{{region.currency}}</strong><span class="finance-pill warning">{{region.status}}</span></article></div></section></div>
   </div>
 
