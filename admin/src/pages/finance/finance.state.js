@@ -38,7 +38,13 @@ export function createFinancePageState() {
       { id: 'driver', label: '司機資金' },
       { id: 'audit', label: '對帳與記錄' }
     ],
-    settings: reactive({ quoteCurrency: 'RMB', baseCurrency: 'RMB', activeConfigs: 0, rateVersion: '未建立', updatedAt: '尚未設定' }),
+    settings: reactive({ quoteCurrency: 'RMB', baseCurrency: 'RMB', decimalPlaces: '2', roundingMode: '四捨五入', activeConfigs: 0, rateVersion: '未建立', updatedAt: '尚未設定' }),
+    pricingChecks: [
+      { label: '車型定價貨幣一致性', detail: '檢查所有車型是否使用統一報價貨幣。', status: '尚未檢查', tone: 'warning' },
+      { label: '路線最低價完整性', detail: '檢查地區與路線是否已設定最低報價。', status: '尚未檢查', tone: 'warning' },
+      { label: '匯率資料狀態', detail: '目前沒有已接入的匯率服務。', status: 'UI 原型', tone: 'warning' }
+    ],
+    quotePreview: reactive({ origin: '中國內地', vehicle: '舒適型', distance: '12', baseFare: '100', currency: 'RMB', result: '待輸入報價資料' }),
     incomeSummary: [
       { label: '乘客實收', value: 'RMB 0.00', note: '付款成功後統計' },
       { label: '退款金額', value: 'RMB 0.00', note: '包含原路及部分退款' },
@@ -59,8 +65,8 @@ export function createFinancePageState() {
       { title: '司機結算', description: '平台 → 司機', status: '待配置', tone: 'warning' }
     ],
     rates: [{ pair: 'RMB → HKD', value: '未設定', source: '人工／API（待接入）', status: '待設定' }, { pair: 'HKD → RMB', value: '未設定', source: '人工／API（待接入）', status: '待設定' }],
-    passengerItems: [{ title: '付款方式設定', description: '管理地區、貨幣及乘客收款渠道。', status: '新增模組' }, { title: '退款設定與管理', description: '管理原路退款、審批及部分退款。', status: '新增模組' }, { title: '付款交易', description: '查看乘客付款狀態及第三方交易編號。', status: '新增模組' }],
-    driverItems: [{ title: '結算方式設定', description: '管理司機原始收入貨幣、結算貨幣及出款渠道。', status: '新增模組' }, { title: '待結算帳款', description: '查看待計算、待審批及可結算金額。', status: '新增模組' }, { title: '結算批次與出款記錄', description: '追蹤平台付款給司機的執行狀態。', status: '新增模組' }],
-    auditItems: [{ title: '對帳管理', description: '統一比對付款、退款及司機出款結果。', status: '新增模組' }, { title: '財務操作日誌', description: '追蹤配置、啟用、退款及出款操作。', status: '新增模組' }]
+    passengerItems: [{ title: '付款方式設定', description: '管理地區、貨幣及乘客收款渠道。', status: '前往支付設定', tone: 'info' }, { title: '退款設定與管理', description: '管理原路退款、審批及部分退款。', status: 'UI 原型' }, { title: '付款交易', description: '查看乘客付款狀態及第三方交易編號。', status: '尚未接入 API' }],
+    driverItems: [{ title: '結算方式設定', description: '管理司機原始收入貨幣、結算貨幣及出款渠道。', status: '前往支付設定' }, { title: '待結算帳款', description: '查看待計算、待審批及可結算金額。', status: '尚未接入 API' }, { title: '結算批次與出款記錄', description: '追蹤平台付款給司機的執行狀態。', status: '尚未接入 API' }],
+    auditItems: [{ title: '對帳管理', description: '統一比對付款、退款及司機出款結果。', status: '尚未接入 API' }, { title: '財務操作日誌', description: '追蹤配置、啟用、退款及出款操作。', status: '尚未接入 API' }]
   }
 }
