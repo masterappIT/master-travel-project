@@ -10,11 +10,11 @@ export function createPaymentsActions({ api, paymentSettings, paymentCurrencies,
     } catch (err) { error.value = displayError(err) } finally { driverRaceSaving.value = false }
   }
   const closePaymentEditor = () => { editorOpen.value = false; selectedConfig.value = null }
-  const savePaymentConfigDraft = () => {
-    const value = JSON.parse(JSON.stringify(selectedConfig.value))
+  const savePaymentConfigDraft = value => {
+    if (!value) return
     const index = configs.value.findIndex(item => item.id === value.id)
-    if (index === -1) configs.value.push(value)
-    else configs.value[index] = value
+    if (index === -1) configs.value.push(JSON.parse(JSON.stringify(value)))
+    else configs.value[index] = JSON.parse(JSON.stringify(value))
     paymentSettingsSaved.value = true
     setTimeout(() => { paymentSettingsSaved.value = false }, 3000)
     closePaymentEditor()

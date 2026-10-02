@@ -13,7 +13,7 @@ const moduleScopes = {
   'membership.css': '.membership-management',
   'audit-logs.css': '.audit-log-page',
   'vehicle-pricing.css': ['.vehicle-admin', '.route-pricing-admin'],
-  'payments.css': '.payment-center',
+  'payments.css': '.payment-settings-admin',
   'promotions.css': '.promotion-admin'
 }
 const sharedStyles = new Set(['tokens.css', 'components.css', 'layout.css', 'tables.css', 'overlays.css', 'forms.css', 'states.css'])

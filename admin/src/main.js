@@ -325,7 +325,6 @@ const App = { setup() {
    })
    provide('adminFinanceContext', {
      view,
-     navigate,
      ...financePageState
    })
    // 登入配置頁（分配層：登入方式管理／配置層：短信、微信、Apple）的所有寫入與測試端點

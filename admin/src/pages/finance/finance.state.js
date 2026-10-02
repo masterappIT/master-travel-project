@@ -10,6 +10,18 @@ export function createFinancePageState() {
     rateEditorOpen.value = true
   }
   const closeRateEditor = () => { rateEditorOpen.value = false }
+  const saveRateDraft = () => {
+    const value = Number(rateForm.value)
+    if (!Number.isFinite(value) || value <= 0) return false
+    const existing = rates.find(rate => rate.pair === rateForm.pair)
+    if (existing) {
+      existing.value = value.toFixed(4)
+      existing.source = rateForm.source
+      existing.status = '已設定'
+    }
+    rateEditorOpen.value = false
+    return true
+  }
   return {
     activeTab: ref('overview'),
     overviewPeriod: ref('本月'),
@@ -18,9 +30,10 @@ export function createFinancePageState() {
     rateForm,
     openRateEditor,
     closeRateEditor,
+    saveRateDraft,
     tabs: [
       { id: 'overview', label: '總覽' },
-      { id: 'currency', label: '貨幣與匯率' },
+      { id: 'currency', label: '全域貨幣與報價' },
       { id: 'passenger', label: '乘客資金' },
       { id: 'driver', label: '司機資金' },
       { id: 'audit', label: '對帳與記錄' }
