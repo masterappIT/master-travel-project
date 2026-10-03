@@ -2,9 +2,15 @@
 
 本文件是發布、監控、回滾與資料庫復原的導航頁。Cloud Run 的具體命令與檢查細節以 [deploy/cloud-run/README.md](../deploy/cloud-run/README.md) 為準；完整系統部署架構以 [PRODUCTION-DEPLOYMENT.md](./PRODUCTION-DEPLOYMENT.md) 為準。
 
+## 發布與恢復操作門檻
+
+發布、回滾、Git 回復及事故後整合遵循 [可信基線保護與變更、恢復控管 skill](../.github/skills/verified-baseline-change-control/SKILL.md)：保護已驗收版本與未提交工作，確認變更範圍及授權，沿用現有推送即發布流程。事故恢復時才補充相關版本狀態；流量回滾不等於 Git 或資料庫回復，問題版須隔離並從可信基線選擇性整合。workflow 成功與健康端點可達不能代替正式業務驗收，執行中流程不得回報為已完成。
+
 ## 正式發布
 
-正式發布由 `.github/workflows/deploy-production.yml` 執行：
+### 現行流程與文件邊界
+
+以下僅記錄目前文件所描述的既有操作順序，不逆轉「推送即發布」，也不把文件要求擴大成新的候選發布、人工切流量或額外審批流程。執行前仍以 [production workflow](../.github/workflows/deploy-production.yml) 與其呼叫腳本為準；本文件不是雲端現況證據：
 
 1. `main` push 或手動觸發。
 2. Quality gates 通過。
@@ -17,9 +23,17 @@
 9. 通過後切換 100% API traffic，並再次檢查正式 API URL。
 10. 部署三個前端服務。
 
+「candidate」在此沿用既有 workflow 的服務部署名稱，不代表要求新增 Cloud Run 候選階段。此次事故教訓只限於：回滾後流量可能仍固定在舊 Revision；新版本部署成功或正式網址 HTTP 200，不能單獨證明新版已承接流量。這是查核限制，不是要求使用者手動切流量或修改不在控制範圍內的腳本／workflow。
+
 ## 發布後檢查
 
-至少確認：
+### 版本與流量查核邊界
+
+發布結果依既有 workflow 回報，不另設全服務候選驗證表或新的發布階段。查核回滾後版本是否生效時，依可取得的證據核對本次產物、Revision 與實際 `status.traffic`，並區分部署結果與業務驗收；未知就標明未驗證，不宣稱已恢復，也不擅自切流量。
+
+現有版本指向正確時，不因歷史事故再次回滾或切換。超出控制範圍的腳本、workflow 或正式環境問題只回報，不把額外操作轉交使用者；不增加前端啟動負擔。
+
+既有發布後檢查項目：
 
 - API `/health/live`
 - API `/health/ready`
