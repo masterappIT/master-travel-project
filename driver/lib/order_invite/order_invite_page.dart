@@ -1,3 +1,4 @@
+import '../core/widgets/driver_address_text.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -1571,7 +1572,7 @@ class _RoutePoint extends StatelessWidget {
                         color: DriverColors.secondaryText,
                         fontSize: DriverTypography.caption)),
                 const SizedBox(height: DriverSpacing.xs),
-                Text(legacyText ?? '$label：$value',
+                DriverAddressText(legacyText ?? '$label：$value',
                     style: const TextStyle(
                         color: DriverColors.text,
                         fontSize: DriverTypography.bodyLarge,

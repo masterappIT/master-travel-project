@@ -536,6 +536,50 @@ void main() {
     expect(find.text('香港車牌'), findsOneWidget);
     expect(find.text('澳門車牌'), findsNothing);
   });
+  testWidgets(
+      'recent orders render API conversion and reload on currency change',
+      (WidgetTester tester) async {
+    final preference = DriverCurrencyPreference.instance;
+    final originalCurrency = preference.value;
+    addTearDown(() => preference.value = originalCurrency);
+    preference.value = 'CNY';
+    DriverApiClient.instance =
+        DriverApiClient(client: MockClient((request) async {
+      if (request.url.path != '/driver/auth/statistics') {
+        return _driverFixtureResponse(request);
+      }
+      final hkd = request.url.queryParameters['currency'] == 'HKD';
+      return _jsonResponse({
+        'today': {'earnings': 0, 'currency': hkd ? 'HKD' : 'RMB'},
+        'month': {'earnings': 0, 'currency': hkd ? 'HKD' : 'RMB'},
+        'recentOrders': [
+          {
+            'price': hkd ? 2360.83 : 2006.71,
+            'currency': hkd ? 'HKD' : 'RMB',
+            'completedAt': '2026-09-26T02:11:00Z',
+          },
+          {'price': 987.65},
+          {'currency': 'HKD'},
+        ],
+      });
+    }));
+    await tester.pumpWidget(testApp(const HomePage()));
+    await tester.pumpAndSettle();
+
+    expect(find.text('¥2006.71'), findsOneWidget);
+    expect(find.text('HK\$2360.83'), findsNothing);
+    preference.value = 'HKD';
+    await tester.pumpAndSettle();
+    expect(find.text('HK\$2360.83'), findsOneWidget);
+    expect(find.text('¥2006.71'), findsNothing);
+    preference.value = 'CNY';
+    await tester.pumpAndSettle();
+    expect(find.text('¥2006.71'), findsOneWidget);
+    expect(find.text('\$2360.83'), findsNothing);
+    expect(find.textContaining('987.65'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('renders the driver home page and toggles online status',
       (WidgetTester tester) async {
     await tester.pumpWidget(testApp(const HomePage()));
@@ -625,6 +669,41 @@ void main() {
     expect(find.text('我的'), findsOneWidget);
   });
 
+  for (final page in <String, Widget>{
+    'home': const HomePage(),
+    'profile': const ProfilePage(),
+  }.entries) {
+    testWidgets('${page.key} bell displays notification content and marks read',
+        (tester) async {
+      var readCalls = 0;
+      DriverApiClient.instance = DriverApiClient(
+        client: MockClient((request) async {
+          if (request.url.path == '/driver/auth/notifications') {
+            return _jsonResponse([
+              {'id': 'notice-1', 'title': '通知標題', 'content': '完整通知內文'},
+            ]);
+          }
+          if (request.url.path == '/driver/auth/notifications/notice-1/read') {
+            expect(request.method, 'POST');
+            readCalls++;
+            return _jsonResponse({'id': 'notice-1'});
+          }
+          return _driverFixtureResponse(request);
+        }),
+      );
+      await tester.pumpWidget(testApp(page.value));
+      await tester.pumpAndSettle();
+      await tester.tap(find.bySemanticsLabel('通知'));
+      await tester.pumpAndSettle();
+      expect(find.text('通知標題'), findsOneWidget);
+      expect(find.text('完整通知內文'), findsOneWidget);
+      await tester.tap(find.text('通知標題'));
+      await tester.pumpAndSettle();
+      expect(readCalls, 1);
+      expect(find.text('完整通知內文'), findsNothing);
+    });
+  }
+
   testWidgets('shows the new-order alert sound setting',
       (WidgetTester tester) async {
     await tester.pumpWidget(testApp(const NotificationSettingsPage()));
@@ -651,6 +730,25 @@ void main() {
     await tester.pumpWidget(testApp(const NotificationSettingsPage()));
     await tester.pumpAndSettle();
     expect(find.text('清亮三音'), findsOneWidget);
+  });
+
+  testWidgets('selects and restores the crisp double alert tone',
+      (tester) async {
+    final preference = DriverAlertSoundPreference.instance;
+    final original = preference.tone;
+    addTearDown(() => preference.setTone(original));
+    preference.setTone(DriverAlertTone.classic);
+    await tester.pumpWidget(testApp(const NotificationSettingsPage()));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(DropdownButtonFormField<DriverAlertTone>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('清脆雙音').last);
+    await tester.pumpAndSettle();
+    expect(preference.tone, DriverAlertTone.crisp);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpWidget(testApp(const NotificationSettingsPage()));
+    await tester.pumpAndSettle();
+    expect(find.text('清脆雙音'), findsOneWidget);
   });
 
   testWidgets('tests the new-order alert sound from settings',

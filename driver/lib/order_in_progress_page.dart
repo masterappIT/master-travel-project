@@ -1,3 +1,4 @@
+import 'core/widgets/driver_address_text.dart';
 import 'package:flutter/material.dart';
 import 'core/widgets/driver_overlays.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -228,7 +229,7 @@ class _ProgressMapPreview extends StatelessWidget {
         child: Stack(children: [
           Center(
               child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Text('$origin → $destination',
+            DriverAddressText('$origin → $destination',
                 style: TextStyle(
                     fontSize: DriverTypography.label,
                     color: Color(0xb3ffffff))),
@@ -258,7 +259,7 @@ class _RouteText extends StatelessWidget {
           SvgPicture.asset('assets/in-progress-origin.svg',
               width: 8, height: 8),
           const SizedBox(width: DriverSpacing.sm),
-          Text(origin,
+          DriverAddressText(origin,
               style: TextStyle(
                   fontSize: DriverTypography.bodyLarge,
                   fontWeight: FontWeight.w700,
@@ -273,7 +274,7 @@ class _RouteText extends StatelessWidget {
           SvgPicture.asset('assets/in-progress-destination.svg',
               width: 8, height: 8),
           const SizedBox(width: DriverSpacing.sm),
-          Text(destination,
+          DriverAddressText(destination,
               style: TextStyle(
                   fontSize: DriverTypography.bodyLarge,
                   fontWeight: FontWeight.w700,
@@ -482,7 +483,7 @@ class _ProgressAddressColumn extends StatelessWidget {
                   fontSize: DriverTypography.body,
                   color: DriverColors.secondaryText)),
           const SizedBox(height: DriverSpacing.xs),
-          Text(value,
+          DriverAddressText(value,
               maxLines: expanded ? null : 2,
               overflow: expanded ? TextOverflow.visible : TextOverflow.ellipsis,
               style: const TextStyle(

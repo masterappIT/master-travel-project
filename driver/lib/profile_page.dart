@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'core/widgets/driver_overlays.dart';
+import 'core/widgets/driver_notifications_sheet.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import 'app/route_names.dart';
@@ -129,45 +129,7 @@ class _ProfilePageState extends State<ProfilePage> {
     return amount.toStringAsFixed(digits);
   }
 
-  Future<void> _showNotifications() async {
-    try {
-      final items = await _api.notifications();
-      if (!mounted) return;
-      await showModalBottomSheet<void>(
-        context: context,
-        builder: (context) => SafeArea(
-          child: ListView(
-            shrinkWrap: true,
-            padding: const EdgeInsets.all(DriverSpacing.xl),
-            children: [
-              const Text('通知',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
-              const SizedBox(height: DriverSpacing.md),
-              if (items.isEmpty) const Text('目前沒有通知'),
-              ...items.map((item) {
-                final notification = Map<String, dynamic>.from(item as Map);
-                final id = notification['id']?.toString();
-                return ListTile(
-                  title: Text(notification['title']?.toString() ?? '通知'),
-                  subtitle: Text(notification['message']?.toString() ?? ''),
-                  onTap: id == null
-                      ? null
-                      : () async {
-                          await _api.readNotification(id);
-                          if (context.mounted) Navigator.of(context).pop();
-                        },
-                );
-              }),
-            ],
-          ),
-        ),
-      );
-    } on DriverApiException catch (error) {
-      if (mounted) {
-        showDriverNotice(context, error.message);
-      }
-    }
-  }
+  Future<void> _showNotifications() => showDriverNotifications(context);
 
   Future<void> _openProfileEditor() async {
     final result = await DriverNavigation.push(

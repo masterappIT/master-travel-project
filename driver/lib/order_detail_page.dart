@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'core/widgets/driver_address_text.dart';
 import 'package:flutter/material.dart';
 import 'core/widgets/driver_overlays.dart';
 import 'package:flutter_svg/flutter_svg.dart';

@@ -1,3 +1,4 @@
+import 'core/widgets/driver_address_text.dart';
 import 'package:flutter/material.dart';
 import 'app/route_names.dart';
 import 'core/api/driver_api_client.dart';
@@ -254,7 +255,7 @@ class _CompletedRouteText extends StatelessWidget {
           const Icon(Icons.radio_button_checked_rounded,
               size: 8, color: DriverColors.primary),
           const SizedBox(width: DriverSpacing.sm),
-          Text(origin,
+          DriverAddressText(origin,
               style: const TextStyle(
                   fontSize: DriverTypography.bodyLarge,
                   fontWeight: FontWeight.w700,
@@ -269,7 +270,7 @@ class _CompletedRouteText extends StatelessWidget {
           const Icon(Icons.location_on_rounded,
               size: 8, color: DriverColors.primary),
           const SizedBox(width: DriverSpacing.sm),
-          Text(destination,
+          DriverAddressText(destination,
               style: const TextStyle(
                   fontSize: DriverTypography.bodyLarge,
                   fontWeight: FontWeight.w700,
@@ -370,12 +371,19 @@ class _InfoRow extends StatelessWidget {
                         color: DriverColors.text,
                       ),
                     )
-                  : Text(value,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                          fontSize: DriverTypography.body,
-                          fontWeight: FontWeight.w500,
-                          color: DriverColors.text))),
+                  : (label == '出發地' || label == '目的地')
+                      ? DriverAddressText(value,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              fontSize: DriverTypography.body,
+                              fontWeight: FontWeight.w500,
+                              color: DriverColors.text))
+                      : Text(value,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              fontSize: DriverTypography.body,
+                              fontWeight: FontWeight.w500,
+                              color: DriverColors.text))),
         ],
       );
 }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../core/widgets/driver_overlays.dart';
 import 'package:flutter/services.dart';
@@ -29,6 +31,26 @@ class _LoginPageState extends State<LoginPage> {
   bool _isRegistration = false;
   String? _error;
   bool _loading = false;
+  int _resendSeconds = 0;
+  Timer? _resendTimer;
+  VoidCallback? _dismissCodeNotice;
+  Animation<double>? _routeCoverAnimation;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _routeCoverAnimation?.removeListener(_dismissNoticeWhenCovered);
+    _routeCoverAnimation = ModalRoute.of(context)?.secondaryAnimation;
+    _routeCoverAnimation?.addListener(_dismissNoticeWhenCovered);
+  }
+
+  void _dismissNoticeWhenCovered() {
+    if (_routeCoverAnimation!.value > 0) {
+      _dismissCodeNotice?.call();
+      _dismissCodeNotice = null;
+    }
+  }
+
   bool _loginMethodsLoading = true;
   bool _phoneEnabled = false;
   bool _wechatEnabled = false;
@@ -45,16 +67,23 @@ class _LoginPageState extends State<LoginPage> {
   Future<void> _handleWechatWebCallback() async {
     final code = Uri.base.queryParameters['code'];
     final state = Uri.base.queryParameters['state'];
-    if (code == null || code.isEmpty || state == null || state.isEmpty || _isAdminPreview) return;
+    if (code == null ||
+        code.isEmpty ||
+        state == null ||
+        state.isEmpty ||
+        _isAdminPreview) {
+      return;
+    }
     setState(() {
       _loading = true;
       _error = null;
       _pendingProvider = 'wechat';
     });
     try {
-      await _api.thirdPartyLogin(provider: 'wechat', providerToken: code, state: state);
+      await _api.thirdPartyLogin(
+          provider: 'wechat', providerToken: code, state: state);
       if (!mounted) return;
-      DriverNavigation.replace(
+      _replaceLogin(
         context,
         _api.isApproved ? DriverRouteNames.home : DriverRouteNames.reviewStatus,
       );
@@ -136,7 +165,7 @@ class _LoginPageState extends State<LoginPage> {
       await _api.thirdPartyLogin(
           provider: provider, providerToken: providerToken);
       if (!mounted) return;
-      DriverNavigation.replace(
+      _replaceLogin(
         context,
         _api.isApproved ? DriverRouteNames.home : DriverRouteNames.reviewStatus,
       );
@@ -173,7 +202,17 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   @override
+  void deactivate() {
+    _dismissCodeNotice?.call();
+    _dismissCodeNotice = null;
+    super.deactivate();
+  }
+
+  @override
   void dispose() {
+    _resendTimer?.cancel();
+    _routeCoverAnimation?.removeListener(_dismissNoticeWhenCovered);
+    _dismissCodeNotice?.call();
     _phoneController.removeListener(_clearChallenge);
     _phoneController.dispose();
     _codeController.dispose();
@@ -181,6 +220,7 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> _requestCode() async {
+    if (_loading || _resendSeconds > 0 || !_phoneEnabled) return;
     if (_isAdminPreview) {
       showDriverNotice(context, 'LIVE PREVIEW 僅供預覽，不能登入或前往其他頁面');
       return;
@@ -212,16 +252,31 @@ class _LoginPageState extends State<LoginPage> {
       setState(() {
         _challengeId = result['challengeId'] as String?;
         _isRegistration = isRegistration;
+        _resendSeconds = 60;
         if (developmentCode != null) _codeController.text = developmentCode;
+      });
+      _resendTimer?.cancel();
+      _resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        final remaining = (60 - timer.tick).clamp(0, 60);
+        if (!mounted || remaining == 0) timer.cancel();
+        if (mounted) setState(() => _resendSeconds = remaining);
       });
       final message =
           developmentCode == null ? '驗證碼已發送' : '開發環境驗證碼：$developmentCode';
-      showDriverNotice(context, message);
+      _dismissCodeNotice?.call();
+      _dismissCodeNotice = showDriverNotice(context, message,
+          duration: const Duration(seconds: 2));
     } on DriverApiException catch (error) {
       if (mounted) setState(() => _error = error.message);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  void _replaceLogin(BuildContext context, String route, {Object? arguments}) {
+    _dismissCodeNotice?.call();
+    _dismissCodeNotice = null;
+    DriverNavigation.replace(context, route, arguments: arguments);
   }
 
   Future<void> _verify() async {
@@ -251,7 +306,7 @@ class _LoginPageState extends State<LoginPage> {
           code: code,
         );
         if (!mounted) return;
-        DriverNavigation.replace(
+        _replaceLogin(
           context,
           _api.isApproved
               ? DriverRouteNames.home
@@ -262,7 +317,7 @@ class _LoginPageState extends State<LoginPage> {
             challengeId: _challengeId!, code: code);
         if (!mounted) return;
         final phone = _phoneController.text.replaceAll(RegExp(r'[\s-]'), '');
-        DriverNavigation.replace(
+        _replaceLogin(
           context,
           DriverRouteNames.registration,
           arguments: {
@@ -275,7 +330,7 @@ class _LoginPageState extends State<LoginPage> {
       } else {
         await _api.verifyPhoneCode(challengeId: _challengeId!, code: code);
         if (!mounted) return;
-        DriverNavigation.replace(
+        _replaceLogin(
           context,
           _api.isApproved
               ? DriverRouteNames.home
@@ -325,6 +380,7 @@ class _LoginPageState extends State<LoginPage> {
                                 }),
                             onRequestCode: _requestCode,
                             loading: _loading,
+                            resendSeconds: _resendSeconds,
                             enabled: _phoneEnabled),
                       if (!_phoneEnabled && (_wechatEnabled || _appleEnabled))
                         const Padding(
@@ -434,6 +490,7 @@ class _VerificationCard extends StatelessWidget {
       required this.countryCode,
       required this.onCountryCodeChanged,
       required this.onRequestCode,
+      required this.resendSeconds,
       required this.loading,
       required this.enabled});
   final TextEditingController phoneController;
@@ -441,6 +498,7 @@ class _VerificationCard extends StatelessWidget {
   final String countryCode;
   final ValueChanged<String> onCountryCodeChanged;
   final VoidCallback onRequestCode;
+  final int resendSeconds;
   final bool loading;
   final bool enabled;
 
@@ -523,10 +581,16 @@ class _VerificationCard extends StatelessWidget {
                       decoration: _inputDecoration('請輸入 5 位數驗證碼')));
               final compact = constraints.maxWidth < 350;
               final button = _PrimaryButton(
-                  label: loading ? '處理中' : '獲取驗證碼',
+                  label: resendSeconds > 0
+                      ? '$resendSeconds秒後重發'
+                      : loading
+                          ? '處理中'
+                          : '獲取驗證碼',
                   fontSize: DriverTypography.body,
                   fullWidth: compact,
-                  onPressed: loading || !enabled ? null : onRequestCode);
+                  onPressed: loading || !enabled || resendSeconds > 0
+                      ? null
+                      : onRequestCode);
               return compact
                   ? Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,

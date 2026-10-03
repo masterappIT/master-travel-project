@@ -6,7 +6,8 @@ enum DriverAlertTone {
   original('original', [880, 1174]),
   classic('classic', [880, 1174]),
   chime('chime', [659, 831, 988]),
-  bright('bright', [1047, 1319, 1568]);
+  bright('bright', [1047, 1319, 1568]),
+  crisp('crisp', [1397, 1760]);
 
   const DriverAlertTone(this.id, this.frequencies);
 
@@ -17,7 +18,11 @@ enum DriverAlertTone {
   static const attackSeconds = 0.02;
   static const releaseSeconds = 0.18;
 
-  double get duration => this == original ? 0.55 : durationSeconds;
+  double get duration => switch (this) {
+        original => 0.55,
+        crisp => 0.64,
+        _ => durationSeconds,
+      };
   double get gain => this == original ? 0.22 : peakGain;
   double get noteDuration => duration / frequencies.length;
 
@@ -30,7 +35,7 @@ enum DriverAlertTone {
 
   static DriverAlertTone fromId(String? id) => values.firstWhere(
         (tone) => tone.id == id,
-        orElse: () => classic,
+        orElse: () => crisp,
       );
 }
 

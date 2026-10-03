@@ -1,3 +1,4 @@
+import 'core/widgets/driver_address_text.dart';
 import 'package:flutter/material.dart';
 import 'core/widgets/driver_overlays.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -393,7 +394,7 @@ class _MapRouteText extends StatelessWidget {
           SvgPicture.asset('assets/order-detail-origin.svg',
               width: 8, height: 8),
           const SizedBox(width: DriverSpacing.sm),
-          Text(origin,
+          DriverAddressText(origin,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                   fontSize: DriverTypography.bodyLarge,
@@ -409,7 +410,7 @@ class _MapRouteText extends StatelessWidget {
           SvgPicture.asset('assets/order-detail-destination.svg',
               width: 8, height: 8),
           const SizedBox(width: DriverSpacing.sm),
-          Text(destination,
+          DriverAddressText(destination,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                   fontSize: DriverTypography.bodyLarge,
@@ -575,7 +576,7 @@ class _AddressColumn extends StatelessWidget {
                   fontSize: DriverTypography.body,
                   color: DriverColors.secondaryText)),
           const SizedBox(height: DriverSpacing.xs),
-          Text(value,
+          DriverAddressText(value,
               maxLines: expanded ? null : 2,
               overflow: expanded ? TextOverflow.visible : TextOverflow.ellipsis,
               style: const TextStyle(

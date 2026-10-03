@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'core/widgets/driver_address_text.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'app/route_names.dart';
@@ -584,7 +585,7 @@ class _RouteRow extends StatelessWidget {
         SvgPicture.asset(asset, width: 8, height: 8),
         const SizedBox(width: DriverSpacing.sm),
         Expanded(
-            child: Text(label,
+            child: DriverAddressText(label,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                     fontSize: DriverTypography.body,

@@ -225,6 +225,8 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
                         driverText('柔和三音', '柔和三音', 'Chime'),
                       DriverAlertTone.bright =>
                         driverText('清亮三音', '清亮三音', 'Bright'),
+                      DriverAlertTone.crisp =>
+                        driverText('清脆雙音', '清脆双音', 'Crisp double tone'),
                     };
                     return DropdownMenuItem(value: tone, child: Text(label));
                   }).toList(),

@@ -1,5 +1,7 @@
+import 'core/widgets/driver_address_text.dart';
 import 'package:flutter/material.dart';
 import 'core/widgets/driver_overlays.dart';
+import 'core/widgets/driver_notifications_sheet.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import 'app/route_names.dart';
@@ -143,45 +145,7 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  Future<void> _showNotifications() async {
-    try {
-      final items = await _api.notifications();
-      if (!mounted) return;
-      await showModalBottomSheet<void>(
-        context: context,
-        builder: (context) => SafeArea(
-          child: ListView(
-            shrinkWrap: true,
-            padding: const EdgeInsets.all(DriverSpacing.xl),
-            children: [
-              const Text('通知',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
-              const SizedBox(height: DriverSpacing.md),
-              if (items.isEmpty) const Text('目前沒有通知'),
-              ...items.map((item) {
-                final notification = Map<String, dynamic>.from(item as Map);
-                final id = notification['id']?.toString();
-                return ListTile(
-                  title: Text(notification['title']?.toString() ?? '通知'),
-                  subtitle: Text(notification['content']?.toString() ?? ''),
-                  onTap: id == null
-                      ? null
-                      : () async {
-                          await _api.readNotification(id);
-                          if (context.mounted) Navigator.of(context).pop();
-                        },
-                );
-              }),
-            ],
-          ),
-        ),
-      );
-    } on DriverApiException catch (error) {
-      if (mounted) {
-        showDriverNotice(context, error.message);
-      }
-    }
-  }
+  Future<void> _showNotifications() => showDriverNotifications(context);
 
   Future<void> _toggleOnline(bool value) async {
     final previous = _isOnline;
@@ -585,8 +549,9 @@ class _RecentOrdersSection extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: DriverSpacing.md),
               child: _RecentOrderCard(
                 time: _formatCompletedAt(order['completedAt']),
-                price: order['price'] is num
-                    ? '\$${(order['price'] as num).toStringAsFixed(2)}'
+                price: order['price'] is num &&
+                        (order['currency']?.toString().isNotEmpty ?? false)
+                    ? _formatMoney(order['price'], order['currency'])
                     : '—',
                 origin: order['origin']?.toString() ?? '—',
                 destination: order['destination']?.toString() ?? '—',
@@ -713,7 +678,7 @@ class _RouteRow extends StatelessWidget {
         SvgPicture.asset(asset, width: 8, height: 8),
         const SizedBox(width: DriverSpacing.sm),
         Expanded(
-            child: Text(text,
+            child: DriverAddressText(text,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                     fontSize: 15,

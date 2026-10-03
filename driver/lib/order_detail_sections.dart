@@ -45,7 +45,7 @@ class _MapPreview extends StatelessWidget {
                       fontSize: DriverTypography.label,
                       color: Color(0xb3ffffff))),
               const SizedBox(height: DriverSpacing.sm),
-              Text('$origin → $destination',
+              DriverAddressText('$origin → $destination',
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.center,
@@ -242,7 +242,7 @@ class _AddressRow extends StatelessWidget {
           ),
           const SizedBox(width: DriverSpacing.sm),
           Expanded(
-            child: Text(
+            child: DriverAddressText(
               label,
               maxLines: expanded ? null : 2,
               overflow: expanded ? TextOverflow.visible : TextOverflow.ellipsis,

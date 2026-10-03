@@ -4,24 +4,38 @@ import 'package:flutter/material.dart';
 
 import '../tokens/driver_tokens.dart';
 
-void showDriverNotice(BuildContext context, String message) {
+VoidCallback showDriverNotice(
+  BuildContext context,
+  String message, {
+  Duration duration = const Duration(seconds: 3),
+}) {
   final overlay = Overlay.of(context, rootOverlay: true);
   late final OverlayEntry entry;
+  var dismissed = false;
+  void dismiss() {
+    if (dismissed) return;
+    dismissed = true;
+    entry.remove();
+    entry.dispose();
+  }
+
   entry = OverlayEntry(
     builder: (context) => _DriverNotice(
       message: message,
-      onDismiss: () {
-        if (entry.mounted) entry.remove();
-      },
+      duration: duration,
+      onDismiss: dismiss,
     ),
   );
   overlay.insert(entry);
+  return dismiss;
 }
 
 class _DriverNotice extends StatefulWidget {
-  const _DriverNotice({required this.message, required this.onDismiss});
+  const _DriverNotice(
+      {required this.message, required this.onDismiss, required this.duration});
 
   final String message;
+  final Duration duration;
   final VoidCallback onDismiss;
 
   @override
@@ -34,7 +48,7 @@ class _DriverNoticeState extends State<_DriverNotice> {
   @override
   void initState() {
     super.initState();
-    _timer = Timer(const Duration(seconds: 3), widget.onDismiss);
+    _timer = Timer(widget.duration, widget.onDismiss);
   }
 
   @override
@@ -67,11 +81,11 @@ class _DriverNoticeState extends State<_DriverNotice> {
                   widget.message,
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodyLarge!.copyWith(
-                    color: DriverColors.text,
-                    fontSize: DriverTypography.bodyLarge,
-                    fontWeight: FontWeight.w700,
-                    decoration: TextDecoration.none,
-                  ),
+                        color: DriverColors.text,
+                        fontSize: DriverTypography.bodyLarge,
+                        fontWeight: FontWeight.w700,
+                        decoration: TextDecoration.none,
+                      ),
                 ),
               ),
             ),

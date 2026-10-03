@@ -44,11 +44,28 @@ test("statistics convert each mixed-currency payout before aggregation", async (
   assert.equal(cny.month.earnings, 192);
   assert.equal(cny.settlement.settledEarnings, 92);
   assert.equal(cny.settlement.unsettledEarnings, 100);
-  assert.equal(cny.recentOrders[0].price, 100);
-  assert.equal(cny.recentOrders[0].currency, "HKD");
+  assert.equal(cny.recentOrders[0].price, 92);
+  assert.equal(cny.recentOrders[0].currency, "RMB");
+  assert.equal(cny.recentOrders[1].price, 100);
+  assert.equal(cny.recentOrders[1].currency, "RMB");
   const hkd = await controller.statistics({}, "HKD");
   assert.equal(hkd.today.currency, "HKD");
   assert.equal(hkd.today.earnings, 208.7);
+  assert.equal(hkd.recentOrders[0].price, 100);
+  assert.equal(hkd.recentOrders[0].currency, "HKD");
+  assert.equal(hkd.recentOrders[1].price, 108.7);
+  assert.equal(hkd.recentOrders[1].currency, "HKD");
+});
+test("recent orders follow repeated currency changes without mutating payouts", async () => {
+  const items = [trip(2360.83, "HKD", false)];
+  const controller = fixture(items, 0.85);
+  for (const currency of ["CNY", "HKD", "CNY"]) {
+    const result = await controller.statistics({}, currency);
+    assert.equal(result.recentOrders[0].price, currency === "HKD" ? 2360.83 : 2006.71);
+    assert.equal(result.recentOrders[0].currency, currency === "HKD" ? "HKD" : "RMB");
+  }
+  assert.equal(items[0].driverPayoutAmount, 2360.83);
+  assert.equal(items[0].driverPayoutCurrency, "HKD");
 });
 test("empty income uses selected currency and invalid conversion fails explicitly", async () => {
   const empty = await fixture().statistics({}, "CNY");

@@ -6015,8 +6015,8 @@ class DriverAuthController {
     const recentOrders = trips.slice(0, 3).map((item) => ({
       id: item.id,
       completedAt: item.completedAt!.toISOString(),
-      price: item.driverPayoutAmount,
-      currency: item.driverPayoutCurrency,
+      price: sum([item]),
+      currency,
       origin: item.origin,
       destination: item.destination,
       passenger: item.passengerName,
