@@ -27,6 +27,8 @@ import 'package:driver_web/core/api/driver_api_client.dart';
 import 'package:driver_web/core/layout/driver_page_shell.dart';
 import 'package:driver_web/core/platform/new_order_alert.dart';
 import 'package:driver_web/core/state/driver_alert_audio_controller.dart';
+import 'package:driver_web/core/platform/driver_alert_tone.dart';
+import 'package:driver_web/core/state/driver_alert_sound_preference.dart';
 import 'package:driver_web/core/state/driver_order_alert_coordinator.dart';
 import 'package:driver_web/core/state/driver_currency_preference.dart';
 import 'package:driver_web/core/state/driver_language_preference.dart';
@@ -631,6 +633,24 @@ void main() {
     expect(find.text('新訂單提示聲'), findsOneWidget);
     expect(find.text('有新可接訂單時播放提示聲'), findsOneWidget);
     expect(find.text('測試提示聲'), findsOneWidget);
+  });
+
+  testWidgets('selects and restores the local alert tone', (tester) async {
+    final preference = DriverAlertSoundPreference.instance;
+    final original = preference.tone;
+    addTearDown(() => preference.setTone(original));
+    preference.setTone(DriverAlertTone.classic);
+    await tester.pumpWidget(testApp(const NotificationSettingsPage()));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(DropdownButtonFormField<DriverAlertTone>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('清亮三音').last);
+    await tester.pumpAndSettle();
+    expect(preference.tone, DriverAlertTone.bright);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpWidget(testApp(const NotificationSettingsPage()));
+    await tester.pumpAndSettle();
+    expect(find.text('清亮三音'), findsOneWidget);
   });
 
   testWidgets('tests the new-order alert sound from settings',

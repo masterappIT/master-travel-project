@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'core/api/driver_api_client.dart';
 import 'core/layout/driver_page_shell.dart';
 import 'core/platform/new_order_alert.dart';
+import 'core/platform/driver_alert_tone.dart';
+import 'core/state/driver_alert_sound_preference.dart';
 import 'core/state/driver_alert_audio_controller.dart';
 import 'core/state/driver_language_preference.dart';
 import 'core/tokens/driver_tokens.dart';
@@ -90,9 +92,15 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
   }
 
   Future<void> _setSoundEnabled(bool value) async {
+    if (_saving || _testingSound) return;
+    _alertAudio.setEnabled(value);
     bool? activated;
-    if (value) activated = await _alertAudio.activate();
+    if (value) {
+      setState(() => _testingSound = true);
+      activated = await _alertAudio.activate();
+    }
     if (!mounted) return;
+    setState(() => _testingSound = false);
     if (activated == false) {
       setState(() {
         _soundTestMessage = driverText(
@@ -198,6 +206,37 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
                       'Play a sound for new available orders'),
                   value: _soundEnabled,
                   onChanged: _saving ? null : _setSoundEnabled),
+              Padding(
+                padding: const EdgeInsets.all(DriverSpacing.md),
+                child: DropdownButtonFormField<DriverAlertTone>(
+                  initialValue: DriverAlertSoundPreference.instance.tone,
+                  isExpanded: true,
+                  decoration: InputDecoration(
+                    labelText: driverText(
+                        '提示聲款式（此裝置）', '提示音款式（此设备）', 'Alert tone (this device)'),
+                  ),
+                  items: DriverAlertTone.values.map((tone) {
+                    final label = switch (tone) {
+                      DriverAlertTone.original =>
+                        driverText('原版提示音', '原版提示音', 'Original'),
+                      DriverAlertTone.classic =>
+                        driverText('經典雙音', '经典双音', 'Classic'),
+                      DriverAlertTone.chime =>
+                        driverText('柔和三音', '柔和三音', 'Chime'),
+                      DriverAlertTone.bright =>
+                        driverText('清亮三音', '清亮三音', 'Bright'),
+                    };
+                    return DropdownMenuItem(value: tone, child: Text(label));
+                  }).toList(),
+                  onChanged: !_soundEnabled || _saving || _testingSound
+                      ? null
+                      : (tone) {
+                          if (tone == null) return;
+                          DriverAlertSoundPreference.instance.setTone(tone);
+                          setState(() => _soundTestMessage = null);
+                        },
+                ),
+              ),
               _SoundTestRow(
                 enabled: _soundEnabled && !_saving && !_testingSound,
                 testing: _testingSound,

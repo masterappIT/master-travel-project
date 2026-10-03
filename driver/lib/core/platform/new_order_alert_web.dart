@@ -1,12 +1,12 @@
 // ignore_for_file: avoid_web_libraries_in_flutter, deprecated_member_use
 
-import 'dart:convert';
 import 'dart:html' as html;
 import 'dart:js_interop';
-import 'dart:math' as math;
-import 'dart:typed_data';
 
 import 'package:web/web.dart' as web_audio;
+
+import 'driver_alert_tone.dart';
+import '../state/driver_alert_sound_preference.dart';
 
 abstract class NewOrderAlert {
   factory NewOrderAlert() = WebNewOrderAlert;
@@ -17,42 +17,42 @@ abstract class NewOrderAlert {
 }
 
 class WebNewOrderAlert implements NewOrderAlert {
-  static final html.AudioElement _audio =
-      html.AudioElement(_createToneDataUri())..preload = 'auto';
+  static final html.AudioElement _audio = html.AudioElement()..preload = 'auto';
+  static final Map<DriverAlertTone, String> _sources = {};
   static web_audio.AudioContext? _audioContext;
   static bool _unlocked = false;
+  static Future<bool>? _playback;
 
   @override
-  Future<bool> unlock() async {
-    if (await _unlockAudioContext()) {
-      _unlocked = true;
-      _playWebAudioTone();
-      return true;
-    }
+  Future<bool> unlock() => _startPlayback(requireUnlocked: false);
 
-    try {
-      _audio.volume = 0.22;
-      _audio.currentTime = 0;
-      await _audio.play();
-      _unlocked = true;
-      return true;
-    } on Object {
-      _unlocked = false;
-      return false;
-    }
+  @override
+  Future<bool> play() => _startPlayback(requireUnlocked: true);
+
+  Future<bool> _startPlayback({required bool requireUnlocked}) {
+    if (requireUnlocked && !_unlocked) return Future.value(false);
+    return _playback ??= _playTone().whenComplete(() => _playback = null);
   }
 
-  @override
-  Future<bool> play() async {
-    if (!_unlocked) return false;
-    if (await _unlockAudioContext()) {
-      _playWebAudioTone();
-      return true;
-    }
-
+  Future<bool> _playTone() async {
+    final tone = DriverAlertSoundPreference.instance.tone;
     try {
-      _audio.currentTime = 0;
+      if (await _unlockAudioContext()) {
+        _unlocked = true;
+        _playWebAudioTone(tone);
+        await Future<void>.delayed(
+            Duration(milliseconds: (tone.duration * 1000).round()));
+        return true;
+      }
+      _audio
+        ..src = _sources.putIfAbsent(tone, () => driverAlertToneDataUri(tone))
+        ..loop = false
+        ..volume = tone == DriverAlertTone.original ? 0.22 : 1
+        ..currentTime = 0;
       await _audio.play();
+      _unlocked = true;
+      await Future<void>.delayed(
+          Duration(milliseconds: (tone.duration * 1000).round()));
       return true;
     } on Object {
       _unlocked = false;
@@ -70,67 +70,40 @@ class WebNewOrderAlert implements NewOrderAlert {
     }
   }
 
-  void _playWebAudioTone() {
-    final context = _audioContext;
-    final destination = context?.destination;
-    final start = context?.currentTime;
-    if (context == null || destination == null || start == null) return;
-
-    final gain = context.createGain();
-    gain.gain
-      ..setValueAtTime(0.0001, start)
-      ..exponentialRampToValueAtTime(0.22, start + 0.02)
-      ..exponentialRampToValueAtTime(0.0001, start + 0.55);
-    gain.connect(destination);
-
-    final first = context.createOscillator();
-    first.frequency.value = 880;
-    first.connect(gain);
-    first.start(start);
-    first.stop(start + 0.28);
-
-    final second = context.createOscillator();
-    second.frequency.value = 1174;
-    second.connect(gain);
-    second.start(start + 0.28);
-    second.stop(start + 0.55);
+  void _playWebAudioTone(DriverAlertTone tone) {
+    final context = _audioContext!;
+    final start = context.currentTime;
+    for (var index = 0; index < tone.frequencies.length; index++) {
+      final noteStart = start + tone.noteStart(index);
+      final noteEnd = start + tone.noteEnd(index);
+      final gain = context.createGain();
+      if (tone != DriverAlertTone.original) {
+        gain.gain
+          ..setValueAtTime(0, noteStart)
+          ..linearRampToValueAtTime(
+              tone.gain, noteStart + DriverAlertTone.attackSeconds)
+          ..setValueAtTime(tone.gain, noteEnd - DriverAlertTone.releaseSeconds)
+          ..linearRampToValueAtTime(0, noteEnd);
+      }
+      if (tone == DriverAlertTone.original) {
+        gain.gain
+          ..setValueAtTime(0.0001, start)
+          ..exponentialRampToValueAtTime(0.22, start + 0.02)
+          ..exponentialRampToValueAtTime(0.0001, start + 0.55);
+      }
+      gain.connect(context.destination);
+      final oscillator = context.createOscillator();
+      oscillator.frequency.value = tone.frequencies[index];
+      oscillator.connect(gain);
+      oscillator.onended = ((web_audio.Event event) {
+        oscillator.disconnect();
+        gain.disconnect();
+      }).toJS;
+      oscillator.start(noteStart);
+      oscillator.stop(noteEnd);
+    }
   }
 
   @override
   void dispose() {}
-}
-
-String _createToneDataUri() {
-  const sampleRate = 22050;
-  const durationSeconds = 0.55;
-  final sampleCount = (sampleRate * durationSeconds).round();
-  final pcm = Int16List(sampleCount);
-  for (var index = 0; index < sampleCount; index++) {
-    final time = index / sampleRate;
-    final frequency = time < 0.28 ? 880.0 : 1174.0;
-    final localTime = time < 0.28 ? time : time - 0.28;
-    final toneDuration = time < 0.28 ? 0.28 : 0.27;
-    final envelope = math.sin(math.pi * localTime / toneDuration);
-    pcm[index] =
-        (math.sin(2 * math.pi * frequency * time) * envelope * 0.22 * 32767)
-            .round();
-  }
-
-  final byteLength = pcm.lengthInBytes;
-  final wav = ByteData(44 + byteLength)
-    ..setUint32(0, 0x52494646, Endian.big)
-    ..setUint32(4, 36 + byteLength, Endian.little)
-    ..setUint32(8, 0x57415645, Endian.big)
-    ..setUint32(12, 0x666D7420, Endian.big)
-    ..setUint32(16, 16, Endian.little)
-    ..setUint16(20, 1, Endian.little)
-    ..setUint16(22, 1, Endian.little)
-    ..setUint32(24, sampleRate, Endian.little)
-    ..setUint32(28, sampleRate * 2, Endian.little)
-    ..setUint16(32, 2, Endian.little)
-    ..setUint16(34, 16, Endian.little)
-    ..setUint32(36, 0x64617461, Endian.big)
-    ..setUint32(40, byteLength, Endian.little);
-  wav.buffer.asInt16List(44 ~/ 2, pcm.length).setAll(0, pcm);
-  return 'data:audio/wav;base64,${base64Encode(wav.buffer.asUint8List())}';
 }
