@@ -66,7 +66,7 @@ class _DriverNoticeState extends State<_DriverNotice> {
                 child: Text(
                   widget.message,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
+                  style: Theme.of(context).textTheme.bodyLarge!.copyWith(
                     color: DriverColors.text,
                     fontSize: DriverTypography.bodyLarge,
                     fontWeight: FontWeight.w700,

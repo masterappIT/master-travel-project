@@ -29,6 +29,7 @@ class _LoginPageState extends State<LoginPage> {
   bool _isRegistration = false;
   String? _error;
   bool _loading = false;
+  bool _loginMethodsLoading = true;
   bool _phoneEnabled = false;
   bool _wechatEnabled = false;
   bool _appleEnabled = false;
@@ -89,6 +90,7 @@ class _LoginPageState extends State<LoginPage> {
       );
       if (!mounted) return;
       setState(() {
+        _loginMethodsLoading = false;
         _phoneEnabled = methods.any((method) => method['provider'] == 'phone');
         _wechatEnabled =
             methods.any((method) => method['provider'] == 'wechat');
@@ -97,6 +99,7 @@ class _LoginPageState extends State<LoginPage> {
     } on Object {
       if (!mounted) return;
       setState(() {
+        _loginMethodsLoading = false;
         _phoneEnabled = false;
         _wechatEnabled = false;
         _appleEnabled = false;
@@ -311,17 +314,18 @@ class _LoginPageState extends State<LoginPage> {
                     children: [
                       const _Header(),
                       const SizedBox(height: DriverSpacing.xl),
-                      _VerificationCard(
-                          phoneController: _phoneController,
-                          codeController: _codeController,
-                          countryCode: _countryCode,
-                          onCountryCodeChanged: (value) => setState(() {
-                                _countryCode = value;
-                                _phoneController.clear();
-                              }),
-                          onRequestCode: _requestCode,
-                          loading: _loading,
-                          enabled: _phoneEnabled),
+                      if (_loginMethodsLoading || _phoneEnabled)
+                        _VerificationCard(
+                            phoneController: _phoneController,
+                            codeController: _codeController,
+                            countryCode: _countryCode,
+                            onCountryCodeChanged: (value) => setState(() {
+                                  _countryCode = value;
+                                  _phoneController.clear();
+                                }),
+                            onRequestCode: _requestCode,
+                            loading: _loading,
+                            enabled: _phoneEnabled),
                       if (!_phoneEnabled && (_wechatEnabled || _appleEnabled))
                         const Padding(
                           padding: EdgeInsets.only(top: DriverSpacing.md),
@@ -337,6 +341,7 @@ class _LoginPageState extends State<LoginPage> {
                       _ActionCard(
                           onLogin: _verify,
                           loading: _loading,
+                          enabled: !_loginMethodsLoading,
                           wechatEnabled: _wechatEnabled,
                           appleEnabled: _appleEnabled),
                     ],
@@ -440,116 +445,116 @@ class _VerificationCard extends StatelessWidget {
   final bool enabled;
 
   @override
-  Widget build(BuildContext context) => enabled
-      ? _Card(
-          children: [
-            const _FieldLabel('手機號碼'),
-            const SizedBox(height: DriverSpacing.sm),
-            Container(
-              height: 50,
-              padding: const EdgeInsets.symmetric(horizontal: DriverSpacing.lg),
-              decoration: _fieldDecoration(),
-              child: Row(children: [
-                InkWell(
-                  onTap: loading
-                      ? null
-                      : () async {
-                          final selected = await showModalBottomSheet<String>(
-                            context: context,
-                            builder: (context) => SafeArea(
-                              child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    for (final entry in const {
-                                      '+852': '香港',
-                                      '+853': '澳門',
-                                      '+86': '中國內地'
-                                    }.entries)
-                                      ListTile(
-                                        title:
-                                            Text('${entry.value} ${entry.key}'),
-                                        onTap: () =>
-                                            Navigator.pop(context, entry.key),
-                                      ),
-                                  ]),
-                            ),
-                          );
-                          if (selected != null) onCountryCodeChanged(selected);
-                        },
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    Text(countryCode,
-                        style: const TextStyle(
-                            fontSize: 15,
-                            color: DriverColors.text,
-                            fontWeight: FontWeight.w500)),
-                    const SizedBox(width: DriverSpacing.xs),
-                    const Text('▼',
-                        style: TextStyle(
-                            fontSize: 10, color: DriverColors.mutedText)),
-                  ]),
-                ),
-                const SizedBox(width: DriverSpacing.md),
-                Container(width: 1, height: 20, color: const Color(0xffd1d1d9)),
-                const SizedBox(width: DriverSpacing.sm),
-                Expanded(
-                    child: TextField(
-                        controller: phoneController,
-                        keyboardType: TextInputType.phone,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly
-                        ],
-                        decoration: const InputDecoration(
-                            border: InputBorder.none, hintText: '請輸入手機號碼'))),
-              ]),
-            ),
-            const SizedBox(height: DriverSpacing.lg),
-            const _FieldLabel('驗證碼'),
-            const SizedBox(height: DriverSpacing.sm),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final codeField = SizedBox(
-                    height: 50,
-                    child: TextField(
-                        controller: codeController,
-                        keyboardType: TextInputType.number,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                          LengthLimitingTextInputFormatter(5),
-                        ],
-                        decoration: _inputDecoration('請輸入 5 位數驗證碼')));
-                final compact = constraints.maxWidth < 350;
-                final button = _PrimaryButton(
-                    label: loading ? '處理中' : '獲取驗證碼',
-                    fontSize: DriverTypography.body,
-                    fullWidth: compact,
-                    onPressed: loading ? null : onRequestCode);
-                return compact
-                    ? Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                            codeField,
-                            const SizedBox(height: DriverSpacing.md),
-                            button
-                          ])
-                    : Row(children: [
-                        Expanded(child: codeField),
-                        const SizedBox(width: DriverSpacing.md),
-                        button
-                      ]);
-              },
-            ),
-          ],
-        )
-      : const SizedBox.shrink();
+  Widget build(BuildContext context) => _Card(
+        children: [
+          const _FieldLabel('手機號碼'),
+          const SizedBox(height: DriverSpacing.sm),
+          Container(
+            height: 50,
+            padding: const EdgeInsets.symmetric(horizontal: DriverSpacing.lg),
+            decoration: _fieldDecoration(),
+            child: Row(children: [
+              InkWell(
+                onTap: loading || !enabled
+                    ? null
+                    : () async {
+                        final selected = await showModalBottomSheet<String>(
+                          context: context,
+                          builder: (context) => SafeArea(
+                            child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  for (final entry in const {
+                                    '+852': '香港',
+                                    '+853': '澳門',
+                                    '+86': '中國內地'
+                                  }.entries)
+                                    ListTile(
+                                      title:
+                                          Text('${entry.value} ${entry.key}'),
+                                      onTap: () =>
+                                          Navigator.pop(context, entry.key),
+                                    ),
+                                ]),
+                          ),
+                        );
+                        if (selected != null) onCountryCodeChanged(selected);
+                      },
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Text(countryCode,
+                      style: const TextStyle(
+                          fontSize: 15,
+                          color: DriverColors.text,
+                          fontWeight: FontWeight.w500)),
+                  const SizedBox(width: DriverSpacing.xs),
+                  const Text('▼',
+                      style: TextStyle(
+                          fontSize: 10, color: DriverColors.mutedText)),
+                ]),
+              ),
+              const SizedBox(width: DriverSpacing.md),
+              Container(width: 1, height: 20, color: const Color(0xffd1d1d9)),
+              const SizedBox(width: DriverSpacing.sm),
+              Expanded(
+                  child: TextField(
+                      controller: phoneController,
+                      enabled: enabled,
+                      keyboardType: TextInputType.phone,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      decoration: const InputDecoration(
+                          border: InputBorder.none, hintText: '請輸入手機號碼'))),
+            ]),
+          ),
+          const SizedBox(height: DriverSpacing.lg),
+          const _FieldLabel('驗證碼'),
+          const SizedBox(height: DriverSpacing.sm),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final codeField = SizedBox(
+                  height: 50,
+                  child: TextField(
+                      controller: codeController,
+                      enabled: enabled,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                        LengthLimitingTextInputFormatter(5),
+                      ],
+                      decoration: _inputDecoration('請輸入 5 位數驗證碼')));
+              final compact = constraints.maxWidth < 350;
+              final button = _PrimaryButton(
+                  label: loading ? '處理中' : '獲取驗證碼',
+                  fontSize: DriverTypography.body,
+                  fullWidth: compact,
+                  onPressed: loading || !enabled ? null : onRequestCode);
+              return compact
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                          codeField,
+                          const SizedBox(height: DriverSpacing.md),
+                          button
+                        ])
+                  : Row(children: [
+                      Expanded(child: codeField),
+                      const SizedBox(width: DriverSpacing.md),
+                      button
+                    ]);
+            },
+          ),
+        ],
+      );
 }
 
 class _ActionCard extends StatelessWidget {
   const _ActionCard(
       {required this.onLogin,
+      required this.enabled,
       required this.loading,
       required this.wechatEnabled,
       required this.appleEnabled});
   final VoidCallback onLogin;
+  final bool enabled;
   final bool loading;
   final bool wechatEnabled;
   final bool appleEnabled;
@@ -561,7 +566,7 @@ class _ActionCard extends StatelessWidget {
               label: loading ? '登入中' : '登入 / 註冊',
               fontSize: DriverTypography.bodyLarge,
               fullWidth: true,
-              onPressed: loading ? null : onLogin),
+              onPressed: loading || !enabled ? null : onLogin),
           const SizedBox(height: DriverSpacing.lg),
           const Text.rich(
               TextSpan(text: '登入即代表您同意 ', children: [
