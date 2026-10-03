@@ -9,6 +9,11 @@ RUN if [ -d /usr/share/nginx/html/assets/assets/fonts ]; then \
       done; \
     fi
 
+RUN if [ -d /usr/share/nginx/html/canvaskit ]; then \
+      find /usr/share/nginx/html/canvaskit -type f -name '*.wasm' \
+        -exec sh -c 'gzip -6 -c "$1" > "$1.gz"' sh {} \; ; \
+    fi
+
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \

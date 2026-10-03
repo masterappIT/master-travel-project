@@ -16,6 +16,7 @@ flutter build web
 
 - Flutter bootstrap 固定使用建置產物中的 `canvaskit/`，保留原有 renderer 與引擎版本，不從 Google CDN 下載 CanvasKit。
 - 共用前端容器只針對司機端 `assets/assets/fonts/NotoSansTC-*.ttf` 產生 gzip 副本；Nginx 依瀏覽器的 `Accept-Encoding` 提供壓縮版本，不支援 gzip 時仍提供原始字體。字體內容、字重與快取規則不變。
+- 共用前端容器也為 `canvaskit/**/*.wasm` 產生 gzip 副本（包含根目錄）；Nginx 只在 `canvaskit/` 的 WASM 路徑啟用靜態 gzip。原始 WASM 保留，不支援 gzip 時回退原檔，解壓後內容、`application/wasm` MIME、renderer、引擎版本及快取規則不變。沒有 CanvasKit 的其他前端不產生副本。
 - 本次不變更登入、API、路由、頁面、Apple SDK 或通知流程，也不消除其他外部字體依賴。
 - 發布前須驗證內地／香港首次及再次載入、iOS／Android 字體與頁面呈現，以及登入、訂單與通知功能。效能收益以真機測量為準；回退使用上一個完整容器映像。
 
@@ -35,6 +36,14 @@ flutter build web
 ```bash
 node --test driver/test/web_bootstrap.test.mjs
 ```
+
+CanvasKit HTTP 壓縮整合測試（需 Docker、Node.js 與 curl，先完成 `flutter build web` 產生本地 WASM）：
+
+```bash
+node --test deploy/frontend/test-wasm-gzip.mjs
+```
+
+測試會建立臨時容器，驗證全部 WASM 的 gzip／原檔回退、解壓後位元組一致、MIME、快取與路徑隔離，完成後清理容器、映像及臨時檔。不使用正式流量；發布仍透過原 GitHub Actions 流程。
 
 ```bash
 npm run check:scope -- --scope driver
