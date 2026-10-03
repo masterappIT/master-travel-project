@@ -31,7 +31,7 @@ Production access must use separate runtime, migration, and GitHub deploy servic
 2. All quality gates must pass.
 3. The workflow builds and pushes the API image and resolves its digest.
 4. Cloud SQL creates an on-demand pre-migration backup. Do not continue if it fails.
-5. The migration job runs `prisma migrate deploy` using the same image digest.
+5. The deployment script updates the share renderer, then runs `prisma migrate deploy` in the migration job using the API image digest. A migration failure stops subsequent deployment but does not automatically roll back the renderer.
 6. The first revision creates the service and is tested immediately at its public URL.
 7. Later revisions deploy as candidates with no production traffic.
 8. `/health/live` and `/health/ready` smoke tests run against the candidate URL.
@@ -43,7 +43,7 @@ Migrations must follow expand/contract: add backward-compatible structures first
 ## Health boundaries
 
 - `GET /health/live`: process liveness only. Use for Cloud Run startup and liveness probes.
-- `GET /health/ready`: verifies a bounded database query. Use for release and external availability checks.
+- `GET /health/ready`: runs `SELECT 1` and returns 503 on query failure; the handler does not set its own query timeout. Use for release and external availability checks.
 - `GET /health`: compatibility alias for readiness.
 
 Do not use dependency readiness as a liveness probe; a database incident must not create a restart loop.

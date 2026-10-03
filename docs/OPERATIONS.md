@@ -10,11 +10,12 @@
 2. Quality gates 通過。
 3. 建置並推送 immutable images。
 4. 建立 Cloud SQL pre-migration backup。
-5. 執行 migration job。
-6. 部署 API candidate。
-7. 執行 health smoke test。
-8. 通過後切換 100% API traffic。
-9. 部署三個前端服務。
+5. 部署 Share Renderer。
+6. 執行 migration job；失敗會中止後續發布，但不自動回滾已更新的 Renderer。
+7. 部署 API candidate（首次部署沒有既有 revision，直接建立服務並檢查）。
+8. 執行 health smoke test。
+9. 通過後切換 100% API traffic，並再次檢查正式 API URL。
+10. 部署三個前端服務。
 
 ## 發布後檢查
 
@@ -31,6 +32,8 @@
 ## 監控與告警
 
 監控 Cloud Run 5xx、p95 latency、instance health、startup/liveness failure、API readiness、Cloud SQL 資源與連線、backup、PITR、migration job 及 GitHub Actions workflow。
+
+以上是維運要求，不代表已配置完成；須查驗實際雲端 dashboards、告警、檢查排程、備份與 PITR 設定。
 
 Log 不得包含 credentials、session tokens、Authorization headers 或未核准個資。
 
@@ -54,3 +57,5 @@ PROJECT_ID=... REGION=... SERVICE_NAME=... REVISION=... \\
 ## 權限
 
 部署帳號、API runtime account、migration account 與 renderer account 應分離。部署帳號可更新服務與執行 job，但不應直接讀取 Secret value。
+
+這是權限原則，腳本未強制帳號彼此不同；workflow 未設定 `GCP_SHARE_RENDERER_SERVICE_ACCOUNT` 時會使用 API runtime 帳號。實際隔離狀態須查驗 IAM 設定。

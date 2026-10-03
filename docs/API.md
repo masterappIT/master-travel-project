@@ -27,6 +27,8 @@ API 包含管理員、乘客與司機等不同 session/token 流程。管理員 
 
 API 使用 Prisma 存取 PostgreSQL。正式 schema 變更只能透過 migration Cloud Run Job 執行；API 啟動不自動修改 schema。
 
+啟動流程仍會呼叫 `ensurePricingDefaults()` 與 `ensureMembershipPlanDefaults()` 初始化預設資料；不執行 schema migration 不代表啟動時不寫入資料。
+
 Migration 應採 expand/contract：
 
 1. 加入向後相容欄位或資料結構。
@@ -39,8 +41,10 @@ Migration 應採 expand/contract：
 | Endpoint | 用途 |
 |---|---|
 | `GET /health/live` | process liveness |
-| `GET /health/ready` | bounded database readiness check |
+| `GET /health/ready` | database readiness check（執行 `SELECT 1`，失敗回傳 503） |
 | `GET /health` | readiness compatibility alias |
+
+目前 readiness handler 未設定自身的查詢逾時上限；`SELECT 1` 是輕量查詢，不代表有明確的 handler 層時間界限。
 
 不要使用資料庫 readiness 取代 process liveness，避免資料庫短暫故障造成 instance restart loop。
 

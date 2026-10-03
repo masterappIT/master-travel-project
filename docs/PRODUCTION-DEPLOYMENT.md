@@ -136,7 +136,7 @@ API 位於 `backend/`，使用 NestJS + TypeScript。
 1. Node.js 20 build stage 安裝 dependencies。
 2. 複製 Prisma schema 與 backend source。
 3. 執行 `npm --prefix backend run build`。
-4. runtime stage 只保留 production 執行所需檔案。
+4. runtime stage 複製建置階段的 `node_modules`、編譯產物、Prisma generated client、schema 與 migrations；目前未執行 production-only 安裝或移除 devDependencies。
 5. 以非 root 的 `node` 使用者啟動。
 6. 監聽 Cloud Run 提供的 `PORT`，預設 host 為 `0.0.0.0`。
 
@@ -191,19 +191,22 @@ postgresql://USER:PASSWORD@localhost/DATABASE?host=/cloudsql/PROJECT:REGION:INST
 
 ### 6.1 Migration 原則
 
-API 啟動時不執行 schema migration。正式 migration 使用獨立 Cloud Run Job，執行：
+API 啟動時不執行 schema migration，但會呼叫 `ensurePricingDefaults()` 與 `ensureMembershipPlanDefaults()` 初始化預設資料。正式 migration 使用獨立 Cloud Run Job，在容器工作目錄 `/app/backend` 執行：
 
 ```bash
 npm run prisma:migrate:deploy
 ```
 
-正式發布順序：
+若從專案根目錄手動執行相同 migration，命令為 `npm --prefix backend run prisma:migrate:deploy`；須先確認連線環境與發布授權，不可把手動命令當成正式 Job 流程的替代。
 
-1. 建立 Cloud SQL pre-migration backup。
-2. 使用與 API 相同的 immutable image 部署 migration job。
-3. 執行 Prisma migration。
-4. migration 成功後才部署 API service。
-5. migration 失敗時中止發布。
+正式 workflow 與部署腳本的順序：
+
+1. Workflow 建立 Cloud SQL pre-migration backup。
+2. 部署腳本先更新 Share Renderer。
+3. 使用與 API 相同的 immutable image 部署 migration job。
+4. 執行 Prisma migration。
+5. migration 成功後才部署 API service。
+6. migration 失敗時中止後續發布；先前已部署的 Share Renderer 不會因此自動回滾。
 
 Migration 必須遵循 expand/contract：先加入向後相容結構，再部署程式與搬移資料，最後於後續版本移除舊結構。正式環境不使用自動 down migration。
 
@@ -218,16 +221,16 @@ Migration 必須遵循 expand/contract：先加入向後相容結構，再部署
 
 流程如下：
 
-1. Checkout immutable commit。
-2. 使用 Workload Identity Federation 登入 GCP。
-3. 執行 quality gates。
+1. 獨立 quality-gates job 執行驗證，通過後才啟動 deploy job。
+2. Deploy job checkout 本次 commit。
+3. 使用 Workload Identity Federation 登入 GCP。
 4. 安裝 Node.js 20 與 Flutter 3.47.4。
 5. 建置 Passenger H5、微信小程序、Admin 與 Driver Web。
 6. 建置並推送 `passenger`、`admin`、`driver`、`api`、`share-renderer` images。
 7. 解析每個 image 的 SHA-256 digest。
 8. 建立 Cloud SQL pre-migration backup。
-9. 執行 migration Cloud Run Job。
-10. 部署 Share Renderer。
+9. 部署 Share Renderer。
+10. 執行 migration Cloud Run Job。
 11. 部署 API candidate revision。
 12. 執行 `/health/live` 與 `/health/ready` smoke tests。
 13. 成功後切換 API 100% traffic。
@@ -266,7 +269,7 @@ gcloud run services update-traffic SERVICE_NAME \\
 | Endpoint | 用途 |
 |---|---|
 | `/health/live` | process liveness，供 startup/liveness probe |
-| `/health/ready` | 執行受限資料庫查詢，確認可接受請求 |
+| `/health/ready` | 執行 `SELECT 1` 確認資料庫可連線，查詢失敗回傳 503；handler 未設定自身的查詢逾時上限 |
 | `/health` | readiness 相容別名 |
 
 資料庫故障不應被 liveness probe 當成 process failure，避免造成無限重啟。
@@ -281,7 +284,7 @@ Share Renderer 是獨立 Cloud Run service，負責產生訂單邀請分享圖�
 - concurrency：`1`
 - min instances：`1`
 - max instances：`3`
-- 獨立 service account
+- service account 由 `GCP_SHARE_RENDERER_SERVICE_ACCOUNT` 指定；workflow 未設定該值時會 fallback 至 `GCP_RUNTIME_SERVICE_ACCOUNT`，並非強制獨立帳號
 - Cloud Storage private bucket
 - 使用 `DRIVER_ORDER_URL_BASE`
 - 使用 `SHARE_IMAGE_BUCKET`
@@ -323,6 +326,8 @@ dist/build/mp-weixin
 
 GitHub deploy account 不應直接讀取 secret value。Runtime 與 migration job 應由 Cloud Run 透過 Secret Manager 注入 secrets。
 
+以上是權限分離原則，不代表腳本強制驗證帳號彼此不同。尤其 Renderer 帳號目前允許 fallback 至 API runtime 帳號；實際 IAM 權限與帳號分離狀態須於雲端查驗。
+
 ## 12. 回滾
 
 若新 API revision 發生程式 regression：
@@ -337,7 +342,7 @@ Migration 已執行時不可直接假設可以 down migration。若 schema 仍�
 
 ## 13. 監控與告警
 
-正式環境至少應監控：
+正式環境至少應監控以下項目。這是維運配置要求，不是已完成配置的證明；告警、多區域檢查、備份策略及 PITR 狀態須查驗實際雲端設定：
 
 - Cloud Run 5xx ratio
 - p95 latency
