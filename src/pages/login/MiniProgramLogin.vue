@@ -1,33 +1,68 @@
 <template>
-  <template v-if="isMiniProgram">
-    <MiniProgramLogin v-if="miniProgramOptions" :options="miniProgramOptions" />
-  </template>
-  <view v-else class="login-page" :style="responsiveStyle">
+  <view class="login-page" :style="responsiveStyle">
     <image class="back-button" src="/static/login/back.svg" mode="scaleToFill" @tap="handleBack" />
     <image class="login-illustration" src="/static/login/illustration.svg" mode="scaleToFill" />
-      <view class="login-card">
-        <text class="welcome-title">Welcome</text>
-        <image class="register-icon" src="/static/login/register.svg" mode="scaleToFill" />
-        <text class="register-label">註冊/登入</text>
 
-        <view v-if="phoneLoginEnabled" class="phone-field">
-          <picker class="country-picker" mode="selector" :range="countryOptions" :value="countryIndex" @change="handleCountryChange"><view class="country-picker-content"><text class="country-code">{{ countryCode }}</text><image class="phone-mark" src="/static/login/phone-mark.svg" mode="scaleToFill" /></view></picker>
-          <view class="phone-divider"><image src="/static/login/phone-divider.svg" mode="scaleToFill" /></view><input v-model="phone" class="phone-input" type="number" :maxlength="phoneMaxLength" />
-        </view>
-        <view class="agreement"><view class="agreement-checkbox" :class="{ checked: agreed }" @tap="agreed = !agreed"><text v-if="agreed">✓</text></view><text class="agreement-text">同意 </text><text class="agreement-link">私隱協議</text><text class="agreement-text"> 與 </text><text class="agreement-link">使用條款</text></view>
-        <button v-if="phoneLoginEnabled" class="login-button" type="button" :disabled="loginSubmitting" @tap="handleLogin"><text>登入</text></button>
-        <text v-if="availableThirdPartyMethods.length" class="third-party-label">第三方登入</text>
-        <!-- #ifdef MP-WEIXIN --><view v-if="availableThirdPartyMethods.length" class="third-party-options third-party-options-single"><button class="wechat-phone-button" open-type="getPhoneNumber" :disabled="loginSubmitting || !agreed || isPreview" aria-label="微信登入並授權手機號碼" @getphonenumber="handleWechatPhoneNumber"><image class="wechat-icon" src="/static/login/wechat.svg" mode="scaleToFill" /></button></view><!-- #endif -->
-        <!-- #ifdef H5 --><view v-if="availableThirdPartyMethods.length" class="third-party-options"><image v-for="method in availableThirdPartyMethods" :key="method.provider" :class="method.provider === 'wechat' ? 'wechat-icon' : 'apple-icon'" :src="method.logoUrl || (method.provider === 'wechat' ? '/static/login/wechat.svg' : '/static/login/apple.svg')" mode="scaleToFill" @tap="handleThirdPartyLogin(method.provider as 'wechat' | 'apple')" /></view><!-- #endif -->
-        <!-- #ifdef APP-PLUS --><view v-if="availableThirdPartyMethods.length" class="third-party-options"><image v-for="method in availableThirdPartyMethods" :key="method.provider" :class="method.provider === 'wechat' ? 'wechat-icon' : 'apple-icon'" :src="method.logoUrl || (method.provider === 'wechat' ? '/static/login/wechat.svg' : '/static/login/apple.svg')" mode="scaleToFill" @tap="handleThirdPartyLogin(method.provider as 'wechat' | 'apple')" /></view><!-- #endif -->
+
+      <view class="mini-program-login-shell">
+        <text class="mini-program-welcome">Welcome</text>
+        <image class="mini-program-register-icon" src="/static/login/mini-program/register.svg" mode="scaleToFill" />
+        <text class="mini-program-register-label">註冊/登入</text>
+        <MiniProgramWechatLogin
+          v-if="miniProgramMode === 'wechatOnly'"
+          v-model:phone="phone"
+          v-model:agreed="agreed"
+          :country-options="countryOptions"
+          :country-index="countryIndex"
+          :country-code="countryCode"
+          :phone-max-length="phoneMaxLength"
+          :login-submitting="loginSubmitting"
+          :wechat-submitting="wechatSubmitting"
+          :is-preview="isPreview"
+          @country-change="handleCountryChange"
+          @wechat-login="handleMiniProgramWechatLogin"
+          @phone-login="handleLogin"
+        />
+        <MiniProgramPhoneLogin
+          v-if="miniProgramMode === 'smsOnly'"
+          v-model:phone="phone"
+          v-model:agreed="agreed"
+          :country-options="countryOptions"
+          :country-index="countryIndex"
+          :country-code="countryCode"
+          :phone-max-length="phoneMaxLength"
+          :login-submitting="loginSubmitting"
+          :wechat-submitting="wechatSubmitting"
+          :is-preview="isPreview"
+          @country-change="handleCountryChange"
+          @wechat-login="handleMiniProgramWechatLogin"
+          @phone-login="handleLogin"
+        />
+        <MiniProgramWechatPhoneLogin
+          v-if="miniProgramMode === 'wechatAndSms'"
+          v-model:phone="phone"
+          v-model:agreed="agreed"
+          :country-options="countryOptions"
+          :country-index="countryIndex"
+          :country-code="countryCode"
+          :phone-max-length="phoneMaxLength"
+          :login-submitting="loginSubmitting"
+          :wechat-submitting="wechatSubmitting"
+          :is-preview="isPreview"
+          @country-change="handleCountryChange"
+          @wechat-login="handleMiniProgramWechatLogin"
+          @phone-login="handleLogin"
+        />
       </view>
+
   </view>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import MiniProgramLogin from './MiniProgramLogin.vue'
-import { onLoad } from '@dcloudio/uni-app'
+import { computed, ref, onMounted } from 'vue'
+import MiniProgramWechatLogin from './MiniProgramWechatLogin.vue'
+import MiniProgramPhoneLogin from './MiniProgramPhoneLogin.vue'
+import MiniProgramWechatPhoneLogin from './MiniProgramWechatPhoneLogin.vue'
 // #ifdef APP-IOS
 import { disableInputAssistantToolbar } from '../../uni_modules/ios-keyboard-accessory'
 // #endif
@@ -39,9 +74,7 @@ import { authenticateThirdParty, getWechatWebAuthorizeUrl, listLoginMethods, req
 import { setAuthenticated, isAuthenticated } from '../../utils/auth'
 import { goHome } from '../../utils/navigation'
 import { isAdminPreview } from '../../utils/adminPreview'
-import { isAppleSignInSupported, signInWithApple } from '../../utils/appleSignIn'
 
-defineOptions({ inheritAttrs: false })
 
 const { responsiveStyle } = useResponsiveCanvas()
 const countryOptions = ['香港 +852', '澳門 +853', '內地 +86', '美國/加拿大 +1', '英國 +44']
@@ -52,20 +85,12 @@ const countryCode = ref(countryCodes[countryIndex.value])
 const phone = ref('')
 const agreed = ref(false)
 const loginSubmitting = ref(false)
+const wechatSubmitting = ref(false)
 const loginMethods = ref<LoginMethod[]>([])
-const isMiniProgram = computed(() => loginPlatform.value === 'miniProgram')
 type MiniProgramMode = 'smsOnly' | 'wechatOnly' | 'wechatAndSms'
-const miniProgramMode = ref<MiniProgramMode>('wechatOnly')
-const phoneLoginEnabled = computed(() => loginMethods.value.some((method) => method.provider === 'phone'))
-const availableThirdPartyMethods = computed(() => loginMethods.value.filter((method) => method.provider === 'wechat' || (method.provider === 'apple' && isAppleSignInSupported())))
+const miniProgramMode = ref<MiniProgramMode | null>(null)
 const invitationCode = ref('')
-// #ifdef MP-WEIXIN
 const loginPlatform = ref<'web' | 'miniProgram'>('miniProgram')
-// #endif
-// #ifndef MP-WEIXIN
-const loginPlatform = ref<'web' | 'miniProgram'>('web')
-// #endif
-const miniProgramOptions = ref<Record<string, string> | null>(null)
 const previewToken = ref('')
 const isPreview = ref(false)
 const phoneMaxLength = computed(() => countryPhoneLengths[countryIndex.value])
@@ -78,21 +103,13 @@ const readPreviewLoginMode = () => {
   return mode && ['smsOnly', 'wechatOnly', 'wechatAndSms'].includes(mode) ? mode as MiniProgramMode : undefined
 }
 
-onLoad(async (options) => {
+const props = defineProps<{ options: Record<string, string> }>()
+onMounted(async () => {
+  const options = props.options
   // #ifdef APP-IOS
   disableInputAssistantToolbar()
   // #endif
-  // #ifdef MP-WEIXIN
-  loginPlatform.value = 'miniProgram'
-  // #endif
-  // #ifndef MP-WEIXIN
-  loginPlatform.value = options?.platform === 'miniProgram' ? 'miniProgram' : 'web'
-  // #endif
   isPreview.value = isAdminPreview(options)
-  if (isMiniProgram.value) {
-    miniProgramOptions.value = { ...options }
-    return
-  }
   if (!isPreview.value && isAuthenticated()) {
     goHome()
     return
@@ -115,25 +132,10 @@ onLoad(async (options) => {
     }
   } catch {
     loginMethods.value = []
+    uni.showToast({ title: '登入配置載入失敗，請重新進入', icon: 'none' })
   }
   invitationCode.value = typeof options?.invite === 'string' ? options.invite.trim().toUpperCase() : ''
-  // #ifdef H5
-  const wechatWebCode = typeof options?.code === 'string' ? options.code : ''
-  const wechatWebState = typeof options?.state === 'string' ? options.state : ''
-  if (wechatWebCode && wechatWebState && !isPreview.value) {
-    loginSubmitting.value = true
-    try {
-      const result = await authenticateThirdParty('wechat', wechatWebCode, wechatWebState)
-      setAuthenticated(result.token, result.user, result.expiresAt)
-      goHome()
-      return
-    } catch (error) {
-      uni.showToast({ title: error instanceof Error ? error.message : '微信登入失敗', icon: 'none' })
-    } finally {
-      loginSubmitting.value = false
-    }
-  }
-  // #endif
+
 })
 
 const handleMiniProgramWechatLogin = async () => {
@@ -142,12 +144,13 @@ const handleMiniProgramWechatLogin = async () => {
     return
   }
   // #ifdef MP-WEIXIN
+  if (loginSubmitting.value || wechatSubmitting.value) return
   if (!agreed.value) {
     uni.showToast({ title: '請先同意私隱協議及使用條款', icon: 'none' })
     return
   }
   try {
-    loginSubmitting.value = true
+    wechatSubmitting.value = true
     const result = await new Promise<UniApp.LoginRes>((resolve, reject) => uni.login({ provider: 'weixin', success: resolve, fail: reject }))
     if (!result.code) throw new Error('微信授權碼無效')
     const auth = await authenticateWechat(result.code)
@@ -156,7 +159,7 @@ const handleMiniProgramWechatLogin = async () => {
   } catch (error) {
     uni.showToast({ title: error instanceof Error ? error.message : '微信登入失敗', icon: 'none' })
   } finally {
-    loginSubmitting.value = false
+    wechatSubmitting.value = false
   }
   // #endif
   // #ifndef MP-WEIXIN
@@ -183,7 +186,7 @@ const handleLogin = async () => {
     uni.showToast({ title: 'LIVE PREVIEW 僅供預覽，不能登入或前往其他頁面', icon: 'none' })
     return
   }
-  if (loginSubmitting.value) return
+  if (loginSubmitting.value || wechatSubmitting.value) return
   if (!agreed.value) {
     uni.showToast({ title: '請先同意私隱協議及使用條款', icon: 'none' })
     return
@@ -211,81 +214,9 @@ const handleLogin = async () => {
   }
 }
 
-// #ifdef MP-WEIXIN
-const handleWechatPhoneNumber = async (event: { detail?: { code?: string; errMsg?: string } }) => {
-  if (isPreview.value) {
-    uni.showToast({ title: 'LIVE PREVIEW 僅供預覽，不能登入或前往其他頁面', icon: 'none' })
-    return
-  }
-  if (loginSubmitting.value) return
-  if (!agreed.value) {
-    uni.showToast({ title: '請先同意私隱協議及使用條款', icon: 'none' })
-    return
-  }
-  const phoneCode = event.detail?.code?.trim()
-  if (!phoneCode) {
-    uni.showToast({ title: event.detail?.errMsg || '請授權微信手機號碼', icon: 'none' })
-    return
-  }
-  try {
-    loginSubmitting.value = true
-    const loginResult = await new Promise<UniApp.LoginRes>((resolve, reject) => {
-      uni.login({ provider: 'weixin', success: resolve, fail: reject })
-    })
-    if (!loginResult.code) throw new Error('微信授權碼無效')
-    let avatarUrl = ''
-    try {
-      const profile = await new Promise<{ userInfo?: { avatarUrl?: string } }>((resolve, reject) => {
-        uni.getUserProfile({ desc: '用於設定您的頭像', success: resolve, fail: reject })
-      })
-      avatarUrl = profile.userInfo?.avatarUrl?.trim() || ''
-    } catch {
-      // 頭像授權是可選的，不影響手機號碼登入。
-    }
-    const result = await authenticateWechatPhone(loginResult.code, phoneCode, invitationCode.value, avatarUrl)
-    setAuthenticated(result.token, result.user, result.expiresAt)
-    goHome()
-  } catch (error) {
-    uni.showToast({ title: error instanceof Error ? error.message : '微信手機號碼授權失敗', icon: 'none' })
-  } finally {
-    loginSubmitting.value = false
-  }
-}
-// #endif
-
-const handleThirdPartyLogin = async (provider: 'wechat' | 'apple') => {
-  if (isPreview.value) {
-    uni.showToast({ title: 'LIVE PREVIEW 僅供預覽，不能登入或前往其他頁面', icon: 'none' })
-    return
-  }
-  if (provider === 'wechat') {
-    // #ifdef H5
-    try {
-      loginSubmitting.value = true
-      const { url } = await getWechatWebAuthorizeUrl()
-      window.location.href = url
-    } catch (error) {
-      uni.showToast({ title: error instanceof Error ? error.message : '微信登入目前未開放', icon: 'none' })
-      loginSubmitting.value = false
-    }
-    // #endif
-    // #ifndef H5
-    uni.showToast({ title: '微信登入目前只支援小程序', icon: 'none' })
-    // #endif
-    return
-  }
-  try {
-    const providerToken = await signInWithApple()
-    const result = await authenticateThirdParty(provider, providerToken)
-    setAuthenticated(result.token, result.user, result.expiresAt)
-    goHome()
-  } catch (error) {
-    uni.showToast({ title: error instanceof Error ? error.message : '第三方登入失敗', icon: 'none' })
-  }
-}
 </script>
 
-<style>
+<style scoped>
 @import '../../styles/tokens.css';
 
 .login-page {
@@ -337,21 +268,12 @@ const handleThirdPartyLogin = async (provider: 'wechat' | 'apple') => {
 .mini-program-phone-field { position: absolute; left: 34px; top: 288px; width: 362px; height: 64px; box-sizing: border-box; overflow: hidden; border: .5px solid #d9d9d9; border-radius: 10px; background: #fff; box-shadow: 0 4px 4px #d9d9d9; }
 .mini-program-other-login { position: absolute; left: 140px; top: 264px; width: 150px; text-align: center; color: #38434a; background: #fff; font-size: 14px; line-height: 20px; }
 .mini-program-agreement { left: 117px; }
-.mini-program-login-card--wechatOnly .mini-program-agreement { top: 297px; }
-.mini-program-login-card--wechatAndSms .mini-program-agreement { top: 367px; }
 .mini-program-login-button { position: absolute; left: 36.5px; top: 399px; width: 357px; height: 62px; margin: 0; padding: 0; border: 0; border-radius: 10px; background: #285cfc; display: flex; align-items: center; justify-content: center; }
 .mini-program-login-button::after { border: 0; }
  .mini-program-login-button.is-disabled { opacity: 0.55; pointer-events: none; }
 .mini-program-login-button text { color: #fff; font-family: 'Noto Sans TC', sans-serif; font-size: 20px; font-weight: 700; }
 .mini-program-phone-field { top: 288px; left: 34px; }
 .mini-program-phone-field .phone-input { left: var(--login-phone-number-left); }
-.mini-program-login-card--wechatAndSms .mini-program-phone-field { top: 291px; }
-.mini-program-login-card--wechatAndSms .mini-program-other-login { top: 259px; }
-.mini-program-login-card--wechatAndSms .mini-program-agreement { top: 370px; }
-.mini-program-login-card--wechatAndSms .mini-program-login-button { top: 397px; }
-.mini-program-login-card--smsOnly .mini-program-phone-field { top: 213px; }
-.mini-program-login-card--smsOnly .mini-program-agreement { top: 297px; }
-.mini-program-login-card--smsOnly .mini-program-login-button { top: 375px; }
 .back-button {
   position: absolute;
   left: 33px;

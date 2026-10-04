@@ -125,7 +125,7 @@ export async function listLoginMethods(client: 'passenger' | 'driver' = 'passeng
   const response = await uni.request({
     url: `${API_BASE_URL}/auth/login-methods?client=${client}${platformQuery}${loginModeQuery}${previewQuery}`
   })
-  if (response.statusCode >= 400) throw apiError(response, '無法載入登入方式')
+  if (response.statusCode >= 400) throw apiError(response, '無法載入登入方式', !preview)
   return ((response.data as { data?: LoginMethod[] }).data || []).sort((a, b) => a.sortOrder - b.sortOrder)
 }
 
