@@ -15,7 +15,7 @@
         :focus="focusedIndex === index"
         class="code-field"
         type="number"
-        maxlength="5"
+        maxlength="1"
         @input="handleCodeInput(index, $event)"
       />
     </view>
