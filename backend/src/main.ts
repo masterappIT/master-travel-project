@@ -4773,9 +4773,16 @@ class DriverAuthController {
         "Driver phone number is already registered",
         HttpStatus.CONFLICT,
       );
-    await loadSms253Settings();
-    const code = String(Math.floor(10000 + Math.random() * 90000));
-    await sendSms253(`${identity.countryCode}${identity.phoneNumber}`, code);
+    const development = await isPhoneLoginDevelopmentEnabled("driver");
+    let codeHash: string;
+    if (development.enabled) {
+      codeHash = development.setting.verificationCodeHash;
+    } else {
+      await loadSms253Settings();
+      const code = String(Math.floor(10000 + Math.random() * 90000));
+      await sendSms253(`${identity.countryCode}${identity.phoneNumber}`, code);
+      codeHash = hashDriverSmsVerificationCode(code);
+    }
     const challengeId = randomBytes(18).toString("hex");
     const expiresAt = new Date(Date.now() + PHONE_CODE_TTL_MS);
     await prisma.driverOtpChallenge.create({
@@ -4784,7 +4791,7 @@ class DriverAuthController {
         driverId: null,
         countryCode: identity.countryCode,
         phone: identity.phoneNumber,
-        codeHash: hashPassword(code),
+        codeHash,
         expiresAt,
       },
     });
@@ -4809,7 +4816,7 @@ class DriverAuthController {
       challenge.consumedAt ||
       challenge.expiresAt.getTime() <= Date.now() ||
       code.length !== 5 ||
-      !verifyPassword(code, challenge.codeHash)
+      !verifyStoredVerificationCode(code, challenge.codeHash)
     ) {
       throw new UnauthorizedException("Invalid registration verification code");
     }
@@ -4947,7 +4954,7 @@ class DriverAuthController {
       challenge.countryCode !== identity.countryCode ||
       challenge.phone !== identity.phoneNumber ||
       code.length !== 5 ||
-      !verifyPassword(code, challenge.codeHash)
+      !verifyStoredVerificationCode(code, challenge.codeHash)
     ) {
       throw new UnauthorizedException("Invalid registration verification code");
     }
