@@ -66,6 +66,7 @@ const loginPlatform = ref<'web' | 'miniProgram'>('miniProgram')
 const loginPlatform = ref<'web' | 'miniProgram'>('web')
 // #endif
 const miniProgramOptions = ref<Record<string, string> | null>(null)
+const miniProgramConfig = ref<Awaited<ReturnType<typeof getWechatMiniProgramConfig>> | null>(null)
 const previewToken = ref('')
 const isPreview = ref(false)
 const phoneMaxLength = computed(() => countryPhoneLengths[countryIndex.value])
@@ -234,15 +235,17 @@ const handleWechatPhoneNumber = async (event: { detail?: { code?: string; errMsg
     })
     if (!loginResult.code) throw new Error('微信授權碼無效')
     let avatarUrl = ''
+    let nickname = ''
     try {
-      const profile = await new Promise<{ userInfo?: { avatarUrl?: string } }>((resolve, reject) => {
-        uni.getUserProfile({ desc: '用於設定您的頭像', success: resolve, fail: reject })
+      const profile = await new Promise<{ userInfo?: { avatarUrl?: string; nickName?: string } }>((resolve, reject) => {
+        uni.getUserProfile({ desc: '用於設定您的頭像與暱稱', success: resolve, fail: reject })
       })
       avatarUrl = profile.userInfo?.avatarUrl?.trim() || ''
+      nickname = profile.userInfo?.nickName?.trim() || ''
     } catch {
-      // 頭像授權是可選的，不影響手機號碼登入。
+      // 頭像與暱稱授權是可選的，不影響手機號碼登入。
     }
-    const result = await authenticateWechatPhone(loginResult.code, phoneCode, invitationCode.value, avatarUrl)
+    const result = await authenticateWechatPhone(loginResult.code, phoneCode, invitationCode.value, avatarUrl, nickname)
     setAuthenticated(result.token, result.user, result.expiresAt)
     goHome()
   } catch (error) {

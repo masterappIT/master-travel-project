@@ -110,6 +110,8 @@ export type AuthResult = {
   }
 }
 
+export type WechatLoginResult = AuthResult | { needsPhone: true; pendingWechatChallenge: string; expiresAt: string }
+
 export type LoginMethod = {
   provider: 'phone' | 'wechat' | 'apple'
   displayName: string
@@ -129,27 +131,39 @@ export async function listLoginMethods(client: 'passenger' | 'driver' = 'passeng
   return ((response.data as { data?: LoginMethod[] }).data || []).sort((a, b) => a.sortOrder - b.sortOrder)
 }
 
-export async function requestPhoneVerificationCode(countryCode: string, phoneNumber: string, platform?: 'web' | 'miniProgram'): Promise<PhoneAuthChallenge> {
+export async function requestPhoneVerificationCode(countryCode: string, phoneNumber: string, platform?: 'web' | 'miniProgram', pendingWechatChallenge = ''): Promise<PhoneAuthChallenge> {
   const response = await uni.request({
     url: `${API_BASE_URL}/auth/phone/request`,
     method: 'POST',
-    data: { countryCode, phoneNumber, platform }
+    data: { countryCode, phoneNumber, platform, pendingWechatChallenge: pendingWechatChallenge || undefined }
   })
   if (response.statusCode >= 400) throw apiError(response, '驗證碼發送失敗')
   return response.data as PhoneAuthChallenge
 }
 
-export async function verifyPhoneVerificationCode(challengeId: string, code = '', invitationCode = '', platform?: 'web' | 'miniProgram'): Promise<AuthResult> {
+export async function verifyPhoneVerificationCode(challengeId: string, code = '', invitationCode = '', platform?: 'web' | 'miniProgram', pendingWechatChallenge = ''): Promise<AuthResult> {
   const response = await uni.request({
     url: `${API_BASE_URL}/auth/phone/verify`,
     method: 'POST',
-    data: { challengeId, code, invitationCode: invitationCode || undefined, platform }
+    data: { challengeId, code, invitationCode: invitationCode || undefined, platform, pendingWechatChallenge: pendingWechatChallenge || undefined }
   })
   if (response.statusCode >= 400) throw apiError(response, '驗證碼錯誤或已過期', false)
   return response.data as AuthResult
 }
 
-export async function authenticateWechat(code: string): Promise<AuthResult> {
+export type WechatMiniProgramConfig = {
+  enabled: boolean
+  loginMode: 'smsOnly' | 'wechatOnly' | 'wechatAndSms'
+  capabilities: { phone: boolean; avatar: boolean; nickname: boolean }
+}
+
+export async function getWechatMiniProgramConfig(): Promise<WechatMiniProgramConfig> {
+  const response = await uni.request({ url: `${API_BASE_URL}/auth/wechat/mini-program-config` })
+  if (response.statusCode >= 400) throw apiError(response, '無法載入微信小程序配置')
+  return response.data as WechatMiniProgramConfig
+}
+
+export async function authenticateWechat(code: string): Promise<WechatLoginResult> {
   const response = await uni.request({
     url: `${API_BASE_URL}/auth/wechat/login`,
     method: 'POST',
@@ -159,11 +173,11 @@ export async function authenticateWechat(code: string): Promise<AuthResult> {
   return response.data as AuthResult
 }
 
-export async function authenticateWechatPhone(loginCode: string, phoneCode: string, invitationCode = ''): Promise<AuthResult> {
+export async function authenticateWechatPhone(loginCode: string, phoneCode: string, invitationCode = '', avatarUrl = '', nickname = '', profileStatus: 'provided' | 'declined' | 'not_requested' = 'not_requested'): Promise<AuthResult> {
   const response = await uni.request({
     url: `${API_BASE_URL}/auth/wechat/phone`,
     method: 'POST',
-    data: { loginCode, phoneCode, invitationCode: invitationCode || undefined }
+    data: { loginCode, phoneCode, invitationCode: invitationCode || undefined, avatarUrl: avatarUrl || undefined, nickname: nickname || undefined, profileStatus }
   })
   if (response.statusCode >= 400) throw apiError(response, '微信手機號碼授權失敗')
   return response.data as AuthResult

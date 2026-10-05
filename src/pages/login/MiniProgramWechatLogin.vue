@@ -1,6 +1,10 @@
 <template>
         <view class="mini-program-login-card" >
-          <button  class="mini-program-wechat-button" :disabled="wechatSubmitting" :class="{ 'is-preview': isPreview }" @tap="emit('wechat-login')">
+          <button v-if="phoneCapability" class="mini-program-wechat-button" open-type="getPhoneNumber" :disabled="wechatSubmitting" :class="{ 'is-preview': isPreview }" @getphonenumber="emit('wechat-phone', $event)">
+            <image class="mini-program-wechat-icon" src="/static/login/mini-program/wechat-auth-icon.svg" mode="scaleToFill" />
+            <text class="mini-program-wechat-label">微信授權登录</text>
+          </button>
+          <button v-else class="mini-program-wechat-button" :disabled="wechatSubmitting" :class="{ 'is-preview': isPreview }" @tap="emit('wechat-login')">
             <image class="mini-program-wechat-icon" src="/static/login/mini-program/wechat-auth-icon.svg" mode="scaleToFill" />
             <text class="mini-program-wechat-label">微信授權登录</text>
           </button>
@@ -24,12 +28,14 @@ defineProps<{
   loginSubmitting: boolean
   wechatSubmitting: boolean
   isPreview: boolean
+  phoneCapability: boolean
 }>()
 const emit = defineEmits<{
   'update:phone': [value: string]
   'update:agreed': [value: boolean]
   'country-change': [event: { detail: { value: string | number } }]
   'wechat-login': []
+  'wechat-phone': [event: { detail?: { code?: string; errMsg?: string } }]
   'phone-login': []
 }>()
 </script>

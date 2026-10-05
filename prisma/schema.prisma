@@ -237,6 +237,17 @@ model AuthIdentity {
   @@index([userId])
 }
 
+model PendingWechatChallenge {
+  id         String   @id @default(cuid())
+  tokenHash  String   @unique
+  providerId String
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime @default(now())
+
+  @@index([expiresAt, consumedAt])
+}
+
 model VerificationCode {
   id          String    @id @default(cuid())
   userId      String?
@@ -248,6 +259,8 @@ model VerificationCode {
   attempts    Int       @default(0)
   expiresAt   DateTime
   consumedAt  DateTime?
+  pendingWechatChallengeHash String?
+  pendingWechatProviderId   String?
   createdAt   DateTime  @default(now())
   user        User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
 
@@ -627,7 +640,10 @@ model AppSetting {
   wechatMiniProgramLoginMode      String   @default("wechatOnly")
   wechatMiniProgramAppId          String?
   wechatMiniProgramAppSecret      String?  @db.Text
-  wechatMiniProgramPhoneCapability Boolean  @default(false)
+  wechatMiniProgramPhoneCapability  Boolean  @default(false)
+  wechatMiniProgramAvatarCapability Boolean  @default(false)
+  wechatMiniProgramNicknameCapability Boolean @default(false)
+  wechatMiniProgramCapabilityVerification Json?
   wechatWebEnabled                Boolean  @default(false)
   wechatWebAppId                  String?
   wechatWebAppSecret              String?  @db.Text

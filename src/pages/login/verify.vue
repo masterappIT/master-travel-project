@@ -49,6 +49,7 @@ const countryCode = ref('')
 const phoneNumber = ref('')
 const challengeId = ref('')
 const invitationCode = ref('')
+const pendingWechatChallenge = ref('')
 const platform = ref<'web' | 'miniProgram'>('web')
 const isPreview = ref(false)
 const codes = ref(['', '', '', '', ''])
@@ -78,6 +79,7 @@ onLoad((options) => {
   if (options?.phoneNumber) phoneNumber.value = decodeURIComponent(options.phoneNumber)
   if (options?.challengeId) challengeId.value = options.challengeId
   if (options?.invite) invitationCode.value = options.invite.trim().toUpperCase()
+  if (options?.pendingWechatChallenge) pendingWechatChallenge.value = decodeURIComponent(options.pendingWechatChallenge)
   if (options?.platform === 'miniProgram') platform.value = 'miniProgram'
   if (isAdminPreview(options)) {
     isPreview.value = true
@@ -109,7 +111,7 @@ const handleResend = async () => {
   if (resendCountdown.value > 0 || resending.value || !countryCode.value || !phoneNumber.value) return
   resending.value = true
   try {
-    const challenge = await requestPhoneVerificationCode(countryCode.value, phoneNumber.value, platform.value)
+    const challenge = await requestPhoneVerificationCode(countryCode.value, phoneNumber.value, platform.value, pendingWechatChallenge.value)
     challengeId.value = challenge.challengeId
     codes.value = ['', '', '', '', '']
     focusedIndex.value = 0
@@ -150,7 +152,7 @@ const handleSubmit = async () => {
   }
   submitting.value = true
   try {
-    const result = await verifyPhoneVerificationCode(challengeId.value, code, invitationCode.value, platform.value)
+    const result = await verifyPhoneVerificationCode(challengeId.value, code, invitationCode.value, platform.value, pendingWechatChallenge.value)
     setAuthenticated(result.token, result.user, result.expiresAt)
     goHome()
   } catch (error) {

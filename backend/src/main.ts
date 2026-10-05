@@ -221,6 +221,7 @@ type PhoneChallenge = {
   code: string;
   exp: number;
   attempts: number;
+  pendingWechatChallenge?: string;
 };
 type ClientPhoneChangeChallenge = PhoneChallenge & { userId: string };
 
@@ -748,6 +749,8 @@ const appSettingsDefaults = {
   wechatMiniProgramAppId: null as string | null,
   wechatMiniProgramAppSecret: null as string | null,
   wechatMiniProgramPhoneCapability: false,
+  wechatMiniProgramAvatarCapability: false,
+  wechatMiniProgramNicknameCapability: false,
   wechatWebEnabled: false,
   wechatWebAppId: null as string | null,
   wechatWebAppSecret: null as string | null,
@@ -1731,6 +1734,17 @@ async function requireLoginMethodEnabled(provider: string, client: "passenger" |
   }
 }
 
+async function requireWechatChannelAllowed(platform: string | undefined, client: "passenger" | "driver") {
+  if (platform === "miniProgram" && client === "passenger") {
+    const { enabled } = await wechatMiniProgramCredentials();
+    if (!enabled || (await wechatMiniProgramLoginMode()) === "smsOnly") {
+      throw new HttpException("微信登入目前未開放", HttpStatus.SERVICE_UNAVAILABLE);
+    }
+    return;
+  }
+  await requireLoginMethodEnabled("wechat", client);
+}
+
 // 手機短信登入在小程序內是否可用，完全由「小程序登入模式」決定，
 // 不受乘客端 Web／App 共用的 passengerEnabled 開關影響（與微信小程序入口的判斷方式一致）。
 async function requirePhoneChannelAllowed(platform: string | undefined, client: "passenger" | "driver") {
@@ -1847,6 +1861,8 @@ function appSettingsResponse(settings: Omit<typeof appSettingsDefaults, "payment
       appId: settings.wechatMiniProgramAppId ?? "",
       appSecretConfigured: Boolean(settings.wechatMiniProgramAppSecret),
       phoneCapability: settings.wechatMiniProgramPhoneCapability ?? false,
+      avatarCapability: settings.wechatMiniProgramAvatarCapability ?? false,
+      nicknameCapability: settings.wechatMiniProgramNicknameCapability ?? false,
     },
     wechatWeb: {
       enabled: settings.wechatWebEnabled ?? false,
@@ -2394,9 +2410,28 @@ async function wechatMiniProgramCredentials() {
     enabled: settings?.wechatMiniProgramEnabled ?? false,
     loginMode: isWechatMiniProgramLoginMode(settings?.wechatMiniProgramLoginMode) ? settings.wechatMiniProgramLoginMode : "wechatOnly",
     phoneCapability: settings?.wechatMiniProgramPhoneCapability ?? false,
+    avatarCapability: settings?.wechatMiniProgramAvatarCapability ?? false,
+    nicknameCapability: settings?.wechatMiniProgramNicknameCapability ?? false,
     appId,
     appSecret,
   };
+}
+
+async function recordWechatCapabilityVerification(capability: "phone" | "avatar" | "nickname", result: { status: string; detail: string; errcode?: number; source: string }) {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      await prisma.$transaction(async (tx) => {
+        const settings = await tx.appSetting.findUnique({ where: { id: appSettingsDefaults.id }, select: { wechatMiniProgramCapabilityVerification: true } });
+        const current = settings?.wechatMiniProgramCapabilityVerification && typeof settings.wechatMiniProgramCapabilityVerification === "object" && !Array.isArray(settings.wechatMiniProgramCapabilityVerification)
+          ? settings.wechatMiniProgramCapabilityVerification as Prisma.InputJsonObject
+          : {};
+        await tx.appSetting.update({ where: { id: appSettingsDefaults.id }, data: { wechatMiniProgramCapabilityVerification: { ...current, [capability]: { ...result, checkedAt: new Date().toISOString() } } } });
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+      return;
+    } catch {
+      if (attempt === 2) return;
+    }
+  }
 }
 
 async function wechatWebCredentials() {
@@ -4342,6 +4377,22 @@ class ClientAuthController {
     return { data: visibleMethods.map(publicLoginMethod) };
   }
 
+  @Get("wechat/mini-program-config")
+  async wechatMiniProgramConfig() {
+    const { enabled, phoneCapability, avatarCapability, nicknameCapability, appId, appSecret } = await wechatMiniProgramCredentials();
+    const loginMode = await wechatMiniProgramLoginMode();
+    const configured = Boolean(enabled && appId && appSecret);
+    return {
+      enabled: configured,
+      loginMode,
+      capabilities: {
+        phone: configured && phoneCapability,
+        avatar: configured && avatarCapability,
+        nickname: configured && nicknameCapability,
+      },
+    };
+  }
+
   @Get("third-party/apple-config")
   async appleConfig() {
     await requireLoginMethodEnabled("apple", "passenger");
@@ -4365,11 +4416,21 @@ class ClientAuthController {
 
   @Post("phone/request")
   async requestPhoneCode(
-    @Body() body: { countryCode?: string; phoneNumber?: string; platform?: string },
+    @Body() body: { countryCode?: string; phoneNumber?: string; platform?: string; pendingWechatChallenge?: string },
   ) {
     if (body.platform !== undefined && body.platform !== "web" && body.platform !== "miniProgram") throw new BadRequestException("登入平台無效");
     await requirePhoneChannelAllowed(body.platform, "passenger");
     const identity = parsePhoneIdentity(body);
+    const pendingWechatChallenge = body.pendingWechatChallenge?.trim();
+    const pendingWechatTokenHash = pendingWechatChallenge
+      ? createHash("sha256").update(pendingWechatChallenge).digest("hex")
+      : undefined;
+    if (pendingWechatTokenHash) {
+      const pending = await prisma.pendingWechatChallenge.findUnique({ where: { tokenHash: pendingWechatTokenHash } });
+      if (!pending || pending.consumedAt || pending.expiresAt.getTime() <= Date.now()) {
+        throw new UnauthorizedException("微信登入流程已失效");
+      }
+    }
     const requestKey = `${identity.countryCode}:${identity.phoneNumber}`;
     const now = Date.now();
     const requestState = phoneChallengeRequests.get(requestKey);
@@ -4412,7 +4473,7 @@ class ClientAuthController {
     }
     const challengeId = randomBytes(18).toString("hex");
     const exp = now + PHONE_CODE_TTL_MS;
-    phoneChallenges.set(challengeId, { ...identity, code, exp, attempts: 0 });
+    phoneChallenges.set(challengeId, { ...identity, code, exp, attempts: 0, pendingWechatChallenge: pendingWechatTokenHash });
     const requestedUser = await prisma.user.findUnique({
       where: { countryCode_phoneNumber: identity },
       select: { id: true },
@@ -4425,6 +4486,10 @@ class ClientAuthController {
         phoneNumber: identity.phoneNumber,
         codeHash,
         expiresAt: new Date(exp),
+        pendingWechatChallengeHash: pendingWechatTokenHash,
+        pendingWechatProviderId: pendingWechatTokenHash
+          ? (await prisma.pendingWechatChallenge.findUniqueOrThrow({ where: { tokenHash: pendingWechatTokenHash } })).providerId
+          : undefined,
       },
     });
     for (const [id, challenge] of phoneChallenges) {
@@ -4440,7 +4505,7 @@ class ClientAuthController {
   }
 
   @Post("phone/verify")
-  async verifyPhoneCode(@Body() body: { challengeId?: string; code?: string; invitationCode?: string; platform?: string }) {
+  async verifyPhoneCode(@Body() body: { challengeId?: string; code?: string; invitationCode?: string; platform?: string; pendingWechatChallenge?: string }) {
     if (body.platform !== undefined && body.platform !== "web" && body.platform !== "miniProgram") throw new BadRequestException("登入平台無效");
     await requirePhoneChannelAllowed(body.platform, "passenger");
     const challengeId = body.challengeId?.trim() || "";
@@ -4474,6 +4539,7 @@ class ClientAuthController {
       code: "",
       exp: storedChallenge.expiresAt.getTime(),
       attempts: storedChallenge.attempts,
+      pendingWechatChallenge: storedChallenge.pendingWechatChallengeHash,
     };
     const submittedCode = body.code?.trim() || "";
     if (!/^\d{5}$/.test(submittedCode)) {
@@ -4492,7 +4558,7 @@ class ClientAuthController {
         phoneChallenges.delete(challengeId);
       throw new UnauthorizedException("Invalid verification code");
     }
-    phoneChallenges.delete(challengeId);
+    if (!challenge.pendingWechatChallenge) phoneChallenges.delete(challengeId);
     const existing = await prisma.user.findUnique({
       where: {
         countryCode_phoneNumber: {
@@ -4512,6 +4578,18 @@ class ClientAuthController {
       : null;
     if (!existing && invitationCode && !inviter)
       throw new HttpException("邀請碼無效", HttpStatus.BAD_REQUEST);
+    const pendingWechatChallenge = body.pendingWechatChallenge?.trim() || "";
+    const expectedPendingWechatChallengeHash = challenge.pendingWechatChallenge || "";
+    const pendingWechatChallengeHash = pendingWechatChallenge
+      ? createHash("sha256").update(pendingWechatChallenge).digest("hex")
+      : "";
+    if (pendingWechatChallengeHash !== expectedPendingWechatChallengeHash)
+      throw new UnauthorizedException("微信登入流程已失效");
+    const pendingWechatProviderId = expectedPendingWechatChallengeHash
+      ? storedChallenge.pendingWechatProviderId
+      : undefined;
+    if (expectedPendingWechatChallengeHash && !pendingWechatProviderId)
+      throw new UnauthorizedException("微信登入流程已失效");
     const loggedInUser = await prisma.$transaction(async (tx) => {
       const user =
         existing ||
@@ -4540,20 +4618,46 @@ class ClientAuthController {
           },
         });
       }
+      if (pendingWechatProviderId) {
+        const boundIdentity = await tx.authIdentity.findUnique({
+          where: { provider_providerId: { provider: "wechat", providerId: pendingWechatProviderId } },
+          select: { userId: true },
+        });
+        if (boundIdentity && boundIdentity.userId !== user.id)
+          throw new HttpException("微信帳號已綁定其他使用者", HttpStatus.CONFLICT);
+        await tx.authIdentity.upsert({
+          where: { provider_providerId: { provider: "wechat", providerId: pendingWechatProviderId } },
+          update: { userId: user.id },
+          create: { provider: "wechat", providerId: pendingWechatProviderId, userId: user.id },
+        });
+      }
       await tx.verificationCode.update({
         where: { id: challengeId },
         data: { userId: user.id, status: "VERIFIED", consumedAt: new Date() },
       });
+      if (pendingWechatProviderId) {
+        const consumedPending = await tx.pendingWechatChallenge.updateMany({
+          where: {
+            tokenHash: expectedPendingWechatChallengeHash,
+            consumedAt: null,
+            expiresAt: { gt: new Date() },
+          },
+          data: { consumedAt: new Date() },
+        });
+        if (consumedPending.count !== 1)
+          throw new UnauthorizedException("微信登入流程已失效");
+      }
       return tx.user.update({
         where: { id: user.id },
         data: { lastLoginAt: new Date() },
       });
-    });
+      });
     return clientAuthResponse(loggedInUser);
   }
 
   @Post("wechat/login")
-  async wechatLogin(@Body() body: { loginCode?: string }) {
+  async wechatLogin(@Req() req: RequestLike, @Body() body: { loginCode?: string }) {
+    await requireWechatChannelAllowed("miniProgram", "passenger");
     const loginCode = body.loginCode?.trim();
     const { enabled, appId, appSecret } = await wechatMiniProgramCredentials();
     const loginMode = await wechatMiniProgramLoginMode();
@@ -4569,17 +4673,28 @@ class ClientAuthController {
       throw new UnauthorizedException(session.errmsg || "WeChat authorization failed");
     const providerId = session.unionid ? `unionid:${session.unionid}` : `openid:${session.openid}`;
     const identity = await prisma.authIdentity.findUnique({ where: { provider_providerId: { provider: "wechat", providerId } }, include: { user: true } });
-    if (!identity) return { needsPhone: true };
+    if (!identity) {
+      const pendingWechatChallenge = randomBytes(24).toString("hex");
+      await prisma.pendingWechatChallenge.create({
+        data: {
+          tokenHash: createHash("sha256").update(pendingWechatChallenge).digest("hex"),
+          providerId,
+          expiresAt: new Date(Date.now() + PHONE_CODE_TTL_MS),
+        },
+      });
+      return { needsPhone: true, pendingWechatChallenge, expiresAt: new Date(Date.now() + PHONE_CODE_TTL_MS).toISOString() };
+    }
     const existingUser = identity.user;
     const loggedInUser = await prisma.user.update({ where: { id: existingUser.id }, data: { lastLoginAt: new Date() } });
     return clientAuthResponse(loggedInUser);
   }
 
   @Post("wechat/phone")
-  async wechatPhone(@Body() body: { loginCode?: string; phoneCode?: string; avatarUrl?: string; invitationCode?: string }) {
+  async wechatPhone(@Body() body: { loginCode?: string; phoneCode?: string; avatarUrl?: string; nickname?: string; profileStatus?: "provided" | "declined" | "not_requested"; invitationCode?: string }) {
+    await requireWechatChannelAllowed("miniProgram", "passenger");
     const loginCode = body.loginCode?.trim();
     const phoneCode = body.phoneCode?.trim();
-    const { enabled, phoneCapability, appId, appSecret } = await wechatMiniProgramCredentials();
+    const { enabled, phoneCapability, avatarCapability, nicknameCapability, appId, appSecret } = await wechatMiniProgramCredentials();
     const loginMode = await wechatMiniProgramLoginMode();
     if (!enabled)
       throw new HttpException("WeChat login is not enabled", HttpStatus.SERVICE_UNAVAILABLE);
@@ -4590,28 +4705,41 @@ class ClientAuthController {
     if (!loginCode || !phoneCode || !appId || !appSecret)
       throw new HttpException("Valid WeChat phone authorization is required", HttpStatus.BAD_REQUEST);
     const sessionResponse = await fetchWechat(`https://api.weixin.qq.com/sns/jscode2session?${new URLSearchParams({ appid: appId, secret: appSecret, js_code: loginCode, grant_type: "authorization_code" })}`);
-    const session = await sessionResponse.json() as { openid?: string; unionid?: string; errcode?: number; errmsg?: string };
-    if (!sessionResponse.ok || session.errcode || !session.openid)
-      throw new UnauthorizedException(session.errmsg || "WeChat authorization failed");
+    const phoneSession = await sessionResponse.json() as { openid?: string; unionid?: string; errcode?: number; errmsg?: string };
+    if (!sessionResponse.ok || phoneSession.errcode || !phoneSession.openid) {
+      await recordWechatCapabilityVerification("phone", { status: "verified_unavailable", detail: phoneSession.errmsg || "微信登入 API 不可用", ...(phoneSession.errcode !== undefined ? { errcode: phoneSession.errcode } : {}), source: "wechat_api" });
+      throw new UnauthorizedException(phoneSession.errmsg || "WeChat authorization failed");
+    }
+    const providerId = phoneSession.unionid ? `unionid:${phoneSession.unionid}` : `openid:${phoneSession.openid}`;
     const tokenResponse = await fetchWechat(`https://api.weixin.qq.com/cgi-bin/token?${new URLSearchParams({ grant_type: "client_credential", appid: appId, secret: appSecret })}`);
     const token = await tokenResponse.json() as { access_token?: string; errcode?: number; errmsg?: string };
-    if (!tokenResponse.ok || token.errcode || !token.access_token)
+    if (!tokenResponse.ok || token.errcode || !token.access_token) {
+      await recordWechatCapabilityVerification("phone", { status: "verified_unavailable", detail: token.errmsg || "微信憑證 API 不可用", ...(token.errcode !== undefined ? { errcode: token.errcode } : {}), source: "wechat_api" });
       throw new UnauthorizedException(token.errmsg || "WeChat access token failed");
+    }
     const phoneResponse = await fetchWechat(`https://api.weixin.qq.com/wxa/business/getuserphonenumber?access_token=${encodeURIComponent(token.access_token)}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ code: phoneCode }) });
     const phoneResult = await phoneResponse.json() as { phone_info?: { phoneNumber?: string; purePhoneNumber?: string; countryCode?: string }; errcode?: number; errmsg?: string };
     const phoneInfo = phoneResult.phone_info;
-    if (!phoneResponse.ok || phoneResult.errcode || !phoneInfo?.purePhoneNumber)
+    if (!phoneResponse.ok || phoneResult.errcode || !phoneInfo?.purePhoneNumber) {
+      await recordWechatCapabilityVerification("phone", { status: "verified_unavailable", detail: phoneResult.errmsg || "微信手機號碼能力不可用", ...(phoneResult.errcode !== undefined ? { errcode: phoneResult.errcode } : {}), source: "wechat_api" });
       throw new UnauthorizedException(phoneResult.errmsg || "WeChat phone authorization failed");
+    }
+    await recordWechatCapabilityVerification("phone", { status: "verified_available", detail: "微信已成功回傳手機號碼", source: "wechat_api" });
     const countryCode = phoneInfo.countryCode ? `+${phoneInfo.countryCode.replace(/^\+/, "")}` : "+86";
     const phoneNumber = phoneInfo.purePhoneNumber;
-    const providerId = session.unionid ? `unionid:${session.unionid}` : `openid:${session.openid}`;
     const identity = await prisma.authIdentity.findUnique({ where: { provider_providerId: { provider: "wechat", providerId } }, include: { user: true } });
     const existingPhone = await prisma.user.findUnique({ where: { countryCode_phoneNumber: { countryCode, phoneNumber } } });
     if (identity && existingPhone && identity.user.id !== existingPhone.id)
       throw new HttpException("WeChat account and phone number belong to different users", HttpStatus.CONFLICT);
     const user = identity?.user || existingPhone || await prisma.user.create({ data: { id: await generateUserId(), countryCode, phoneNumber, name: "WeChat User", lastLoginAt: new Date() } });
     let wechatAvatar: { data: Uint8Array; mimeType: string } | null = null;
-    const submittedAvatarUrl = body.avatarUrl?.trim() || "";
+    if (user.countryCode !== countryCode || user.phoneNumber !== phoneNumber) {
+      await prisma.user.update({ where: { id: user.id }, data: { countryCode, phoneNumber } });
+    }
+    const submittedNickname = nicknameCapability ? body.nickname?.trim().slice(0, 80) || "" : "";
+    const submittedAvatarUrl = avatarCapability ? body.avatarUrl?.trim() || "" : "";
+    const avatarRequested = Boolean(submittedAvatarUrl);
+    let avatarVerification: { status: string; detail: string; source: string } | null = null;
     if (!user.avatarData && submittedAvatarUrl) {
       try {
         const avatarUrl = new URL(submittedAvatarUrl);
@@ -4620,15 +4748,36 @@ class ClientAuthController {
           const avatarResponse = await fetch(avatarUrl, { signal: AbortSignal.timeout(5000) });
           const contentType = avatarResponse.headers.get("content-type")?.split(";", 1)[0] || "";
           const avatarBytes = new Uint8Array(await avatarResponse.arrayBuffer());
-          if (avatarResponse.ok && contentType.startsWith("image/") && avatarBytes.byteLength > 0 && avatarBytes.byteLength <= 5 * 1024 * 1024)
+          if (avatarResponse.ok && contentType.startsWith("image/") && avatarBytes.byteLength > 0 && avatarBytes.byteLength <= 5 * 1024 * 1024) {
             wechatAvatar = { data: new Uint8Array(Buffer.from(avatarBytes)), mimeType: contentType };
+            avatarVerification = { status: "verified_available", detail: "小程序已回傳並成功下載微信頭像", source: "wechat_user_profile" };
+          } else {
+            avatarVerification = { status: "unknown", detail: "小程序已提供頭像資料，但頭像內容無法驗證", source: "wechat_user_profile" };
+          }
+        } else {
+          avatarVerification = { status: "unknown", detail: "小程序已提供頭像資料，但頭像網址不符合微信安全限制", source: "wechat_user_profile" };
         }
       } catch {
-        // 頭像授權或下載失敗不影響微信手機登入。
+        avatarVerification = { status: "unknown", detail: "小程序已提供頭像資料，但頭像下載失敗", source: "wechat_user_profile" };
       }
+    } else if (avatarRequested && user.avatarData) {
+      avatarVerification = { status: "verified_available", detail: "小程序已提供微信頭像；帳戶已有保存的頭像", source: "wechat_user_profile" };
     }
-    if (user.countryCode !== countryCode || user.phoneNumber !== phoneNumber) {
-      await prisma.user.update({ where: { id: user.id }, data: { countryCode, phoneNumber } });
+    if (submittedNickname) {
+      await recordWechatCapabilityVerification("nickname", { status: "verified_available", detail: "小程序已回傳暱稱資料", source: "wechat_user_profile" });
+    } else if (nicknameCapability && body.profileStatus === "declined") {
+      await recordWechatCapabilityVerification("nickname", { status: "requires_consent", detail: "需要使用者同意提供微信暱稱", source: "wechat_user_profile" });
+    } else if (nicknameCapability) {
+      await recordWechatCapabilityVerification("nickname", { status: "runtime_verification_required", detail: "需在小程序實際流程取得微信暱稱資料", source: "wechat_user_profile" });
+    }
+    if (avatarCapability) {
+      const verification = avatarVerification || (body.profileStatus === "declined"
+        ? { status: "requires_consent", detail: "需要使用者同意提供微信頭像", source: "wechat_user_profile" }
+        : { status: "runtime_verification_required", detail: "需在小程序實際流程取得並處理微信頭像資料", source: "wechat_user_profile" });
+      await recordWechatCapabilityVerification("avatar", verification);
+    }
+    if (user.countryCode !== countryCode || user.phoneNumber !== phoneNumber || (submittedNickname && (!user.name || user.name === "WeChat User"))) {
+      await prisma.user.update({ where: { id: user.id }, data: { countryCode, phoneNumber, ...(submittedNickname && (!user.name || user.name === "WeChat User") ? { name: submittedNickname } : {}) } });
     }
     if (wechatAvatar) {
       await prisma.user.update({ where: { id: user.id }, data: { avatarUrl: null, avatarData: Buffer.from(wechatAvatar.data), avatarMimeType: wechatAvatar.mimeType } });
@@ -12526,13 +12675,37 @@ class SettingsController {
     const appId = settings.wechatMiniProgramAppId || process.env.WECHAT_MINIPROGRAM_APP_ID;
     const encryptedSecret = settings.wechatMiniProgramAppSecret;
     const appSecret = encryptedSecret ? decryptWechatSecret(encryptedSecret) : process.env.WECHAT_MINIPROGRAM_APP_SECRET;
-    if (!settings.wechatMiniProgramEnabled) return { status: "disabled", message: "微信登入未啟用" };
-    if (!appId || !appSecret) return { status: "not_configured", message: "AppID 或 AppSecret 尚未配置" };
+    const credentialsConfigured = Boolean(appId && appSecret);
+    if (!settings.wechatMiniProgramEnabled) return { status: "disabled", message: "微信小程序服務未啟用", credentialsConfigured };
+    if (!appId || !appSecret) return { status: "not_configured", message: "AppID 或 AppSecret 尚未配置", credentialsConfigured };
+
     try {
       const response = await fetch(`https://api.weixin.qq.com/cgi-bin/token?${new URLSearchParams({ grant_type: "client_credential", appid: appId, secret: appSecret })}`, { signal: AbortSignal.timeout(8000) });
       const result = await response.json() as { access_token?: string; errcode?: number; errmsg?: string };
-      if (!response.ok || result.errcode || !result.access_token) return { status: "error", message: result.errmsg || "微信接口連線失敗" };
-      return { status: "ok", message: "微信接口連線正常", checkedAt: new Date().toISOString() };
+      if (!response.ok || result.errcode || !result.access_token) return { status: "error", message: result.errmsg || "微信接口連線失敗", credentialsConfigured, capabilities: [] };
+    const verification = settings.wechatMiniProgramCapabilityVerification && typeof settings.wechatMiniProgramCapabilityVerification === "object" && !Array.isArray(settings.wechatMiniProgramCapabilityVerification)
+      ? settings.wechatMiniProgramCapabilityVerification as Record<string, { status?: string; detail?: string; errcode?: number; source?: string; checkedAt?: string }>
+      : {};
+    const capability = (id: "phone" | "avatar" | "nickname", enabled: boolean) => {
+      const result = verification[id];
+      return { id, status: result?.status || "runtime_verification_required", configurable: true, enabled, detail: result?.detail || ({ phone: "需完成一次小程序手機授權流程後確認", avatar: "需完成一次小程序頭像提供流程後確認", nickname: "需完成一次小程序暱稱提供流程後確認" }[id] || "需完成一次小程序實際流程後確認"), ...(result?.errcode !== undefined ? { errcode: result.errcode } : {}), ...(result?.source ? { source: result.source } : {}), ...(result?.checkedAt ? { lastCheckedAt: result.checkedAt } : {}) };
+    };
+    const capabilities = [
+      capability("phone", Boolean(settings.wechatMiniProgramPhoneCapability)),
+      capability("avatar", Boolean(settings.wechatMiniProgramAvatarCapability)),
+      capability("nickname", Boolean(settings.wechatMiniProgramNicknameCapability)),
+    ];
+    const lastCapabilityCheck = capabilities.map((item) => item.lastCheckedAt).filter(Boolean).sort().at(-1);
+    const checkedAt = new Date().toISOString();
+    return {
+      status: "ok",
+      message: "微信小程序憑證連線正常，可配置乘客端小程序能力",
+      checkedAt,
+      ...(lastCapabilityCheck ? { capabilityCheckedAt: lastCapabilityCheck } : {}),
+      appId,
+      credentialsConfigured,
+      capabilities,
+    };
     } catch {
       return { status: "error", message: "無法連線微信接口" };
     }
@@ -12779,7 +12952,7 @@ class SettingsController {
       alipayPayEnabled?: boolean;
       bankCardPayEnabled?: boolean;
       sandboxMode?: boolean;
-      wechatMiniProgram?: { enabled?: boolean; loginMode?: "wechatOnly" | "wechatAndSms" | "smsOnly"; appId?: string; appSecret?: string; phoneCapability?: boolean };
+      wechatMiniProgram?: { enabled?: boolean; loginMode?: "wechatOnly" | "wechatAndSms" | "smsOnly"; appId?: string; appSecret?: string; phoneCapability?: boolean; avatarCapability?: boolean; nicknameCapability?: boolean };
       wechatWeb?: { enabled?: boolean; appId?: string; appSecret?: string; redirectUri?: string };
       appleLogin?: { ios?: { enabled?: boolean; teamId?: string; keyId?: string; clientId?: string; privateKey?: string; bundleId?: string }; web?: { enabled?: boolean; teamId?: string; keyId?: string; clientId?: string; redirectUri?: string; privateKey?: string } };      sms253?: { enabled?: boolean; endpoint?: string; sendUrl?: string; variableUrl?: string; balanceUrl?: string; account?: string; password?: string; template?: string; report?: boolean; variableReport?: boolean; variableTemplate?: string; variableParams?: string; testPhone?: string; international?: { enabled?: boolean; endpoint?: string; sendUrl?: string; variableUrl?: string; balanceUrl?: string; account?: string; password?: string; template?: string; report?: boolean; variableReport?: boolean; variableTemplate?: string; variableParams?: string; testPhone?: string } };
     },
@@ -12882,6 +13055,8 @@ class SettingsController {
       wechatMiniProgramAppId: wechat?.appId === undefined ? settings.wechatMiniProgramAppId : wechat.appId.trim() || null,
       wechatMiniProgramAppSecret: wechat?.appSecret?.trim() ? encryptWechatSecret(wechat.appSecret.trim()) : settings.wechatMiniProgramAppSecret,
       wechatMiniProgramPhoneCapability: wechat?.phoneCapability ?? settings.wechatMiniProgramPhoneCapability,
+      wechatMiniProgramAvatarCapability: wechat?.avatarCapability ?? settings.wechatMiniProgramAvatarCapability,
+      wechatMiniProgramNicknameCapability: wechat?.nicknameCapability ?? settings.wechatMiniProgramNicknameCapability,
       wechatWebEnabled: wechatWeb?.enabled ?? settings.wechatWebEnabled,
       wechatWebAppId: wechatWeb?.appId === undefined ? settings.wechatWebAppId : wechatWeb.appId.trim() || null,
       wechatWebAppSecret: wechatWeb?.appSecret?.trim() ? encryptWechatSecret(wechatWeb.appSecret.trim()) : settings.wechatWebAppSecret,

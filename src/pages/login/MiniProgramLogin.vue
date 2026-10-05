@@ -19,8 +19,10 @@
           :login-submitting="loginSubmitting"
           :wechat-submitting="wechatSubmitting"
           :is-preview="isPreview"
+          :phone-capability="miniProgramCapabilities.phone"
           @country-change="handleCountryChange"
           @wechat-login="handleMiniProgramWechatLogin"
+          @wechat-phone="handleMiniProgramWechatPhone"
           @phone-login="handleLogin"
         />
         <MiniProgramPhoneLogin
@@ -49,8 +51,10 @@
           :login-submitting="loginSubmitting"
           :wechat-submitting="wechatSubmitting"
           :is-preview="isPreview"
+          :phone-capability="miniProgramCapabilities.phone"
           @country-change="handleCountryChange"
           @wechat-login="handleMiniProgramWechatLogin"
+          @wechat-phone="handleMiniProgramWechatPhone"
           @phone-login="handleLogin"
         />
       </view>
@@ -67,7 +71,7 @@ import MiniProgramWechatPhoneLogin from './MiniProgramWechatPhoneLogin.vue'
 import { disableInputAssistantToolbar } from '../../uni_modules/ios-keyboard-accessory'
 // #endif
 // #ifdef MP-WEIXIN
-import { authenticateWechat, authenticateWechatPhone } from '../../services/api'
+import { authenticateWechat, authenticateWechatPhone, getWechatMiniProgramConfig } from '../../services/api'
 // #endif
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { authenticateThirdParty, getWechatWebAuthorizeUrl, listLoginMethods, requestPhoneVerificationCode, verifyPhoneVerificationCode, type LoginMethod } from '../../services/api'
@@ -87,6 +91,7 @@ const agreed = ref(false)
 const loginSubmitting = ref(false)
 const wechatSubmitting = ref(false)
 const loginMethods = ref<LoginMethod[]>([])
+const miniProgramCapabilities = ref({ phone: false, avatar: false, nickname: false })
 type MiniProgramMode = 'smsOnly' | 'wechatOnly' | 'wechatAndSms'
 const miniProgramMode = ref<MiniProgramMode | null>(null)
 const invitationCode = ref('')
@@ -125,6 +130,13 @@ onMounted(async () => {
     // #ifndef MP-WEIXIN
     loginMethods.value = await listLoginMethods('passenger', loginPlatform.value, isPreview.value, previewToken.value, previewMode)
     // #endif
+    // #ifdef MP-WEIXIN
+    const hasWechat = loginMethods.value.some((method) => method.provider === 'wechat')
+    if (hasWechat) {
+      const miniProgramConfig = await getWechatMiniProgramConfig()
+      miniProgramCapabilities.value = miniProgramConfig.capabilities
+    }
+    // #endif
     if (loginPlatform.value === 'miniProgram') {
       const hasWechat = loginMethods.value.some((method) => method.provider === 'wechat')
       const hasPhone = loginMethods.value.some((method) => method.provider === 'phone')
@@ -154,6 +166,31 @@ const handleMiniProgramWechatLogin = async () => {
     const result = await new Promise<UniApp.LoginRes>((resolve, reject) => uni.login({ provider: 'weixin', success: resolve, fail: reject }))
     if (!result.code) throw new Error('微信授權碼無效')
     const auth = await authenticateWechat(result.code)
+    if ('needsPhone' in auth && auth.needsPhone) {
+      const pendingWechatChallenge = auth.pendingWechatChallenge
+      const modal = await new Promise<{ confirmed: boolean; value: string }>((resolve) => {
+        uni.showModal({
+          title: '補充手機號碼',
+          editable: true,
+          placeholderText: '請輸入手機號碼',
+          confirmText: '取得驗證碼',
+          cancelText: '取消',
+          success: (result) => resolve({
+            confirmed: result.confirm,
+            value: String(result.content || '').replace(/\D/g, '')
+          }),
+          fail: () => resolve({ confirmed: false, value: '' })
+        })
+      })
+      if (!modal.confirmed || !new RegExp(`^\\d{${phoneMaxLength.value}}$`).test(modal.value)) {
+        uni.showToast({ title: `請輸入${phoneMaxLength.value}位手機號碼`, icon: 'none' })
+        return
+      }
+      const challenge = await requestPhoneVerificationCode(countryCode.value, modal.value, 'miniProgram', pendingWechatChallenge)
+      const query = [`challengeId=${encodeURIComponent(challenge.challengeId)}`, `phone=${encodeURIComponent(`${countryCode.value}-${modal.value}`)}`, `countryCode=${encodeURIComponent(countryCode.value)}`, `phoneNumber=${encodeURIComponent(modal.value)}`, 'platform=miniProgram', `pendingWechatChallenge=${encodeURIComponent(pendingWechatChallenge)}`, `invite=${encodeURIComponent(invitationCode.value)}`].join('&')
+      uni.navigateTo({ url: `/pages/login/verify?${query}`, animationType: 'none', animationDuration: 0 })
+      return
+    }
     setAuthenticated(auth.token, auth.user, auth.expiresAt)
     goHome()
   } catch (error) {
@@ -166,6 +203,40 @@ const handleMiniProgramWechatLogin = async () => {
   uni.showToast({ title: '微信登入目前只支援小程序', icon: 'none' })
   // #endif
 }
+const handleMiniProgramWechatPhone = async (event: { detail?: { code?: string; errMsg?: string } }) => {
+  if (isPreview.value) return uni.showToast({ title: 'LIVE PREVIEW 僅供預覽，不能登入或前往其他頁面', icon: 'none' })
+  const phoneCode = event.detail?.code?.trim()
+  if (!phoneCode) return uni.showToast({ title: event.detail?.errMsg || '請授權微信手機號碼', icon: 'none' })
+  if (!miniProgramCapabilities.value.phone) return uni.showToast({ title: '微信手機號碼授權尚未配置', icon: 'none' })
+  if (wechatSubmitting.value) return
+  if (!agreed.value) return uni.showToast({ title: '請先同意私隱協議及使用條款', icon: 'none' })
+  try {
+    wechatSubmitting.value = true
+    const result = await new Promise<UniApp.LoginRes>((resolve, reject) => uni.login({ provider: 'weixin', success: resolve, fail: reject }))
+    if (!result.code) throw new Error('微信授權碼無效')
+    let avatarUrl = ''
+    let nickname = ''
+    let profileStatus: 'provided' | 'declined' | 'not_requested' = 'not_requested'
+    if (miniProgramCapabilities.value.avatar || miniProgramCapabilities.value.nickname) {
+      try {
+        const profile = await new Promise<{ userInfo?: { avatarUrl?: string; nickName?: string } }>((resolve, reject) => uni.getUserProfile({ desc: '用於設定您的頭像與暱稱', success: resolve, fail: reject }))
+        profileStatus = 'provided'
+        if (miniProgramCapabilities.value.avatar) avatarUrl = profile.userInfo?.avatarUrl?.trim() || ''
+        if (miniProgramCapabilities.value.nickname) nickname = profile.userInfo?.nickName?.trim() || ''
+      } catch {
+        profileStatus = 'declined'
+      }
+    }
+    const auth = await authenticateWechatPhone(result.code, phoneCode, invitationCode.value, avatarUrl, nickname, profileStatus)
+    setAuthenticated(auth.token, auth.user, auth.expiresAt)
+    goHome()
+  } catch (error) {
+    uni.showToast({ title: error instanceof Error ? error.message : '微信手機號碼授權失敗', icon: 'none' })
+  } finally {
+    wechatSubmitting.value = false
+  }
+}
+
 const handleCountryChange = (event: { detail: { value: string | number } }) => {
   const index = Number(event.detail.value)
   countryIndex.value = index
