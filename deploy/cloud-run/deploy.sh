@@ -95,7 +95,7 @@ for attempt in {1..60}; do
   revision_ready="$(gcloud run revisions describe "$REVISION" \
     --project "$PROJECT_ID" \
     --region "$REGION" \
-    --format='value(status.conditions[?type=Ready].status)' 2>/dev/null || true)"
+    --format=json | python3 "$(dirname "$0")/revision-ready.py")"
   if [[ "$revision_image" == "$IMAGE" && "$revision_ready" == "True" ]]; then
     break
   fi

@@ -38,6 +38,14 @@ Production access must use separate runtime, migration, and GitHub deploy servic
 9. Only a successful candidate receives 100% traffic; the public URL is tested again.
 10. Monitor the release for at least 30 minutes before closing the change.
 
+API and frontend deployment scripts verify the created revision's immutable image and
+read the `Ready` condition by type from Cloud Run JSON using `revision-ready.py`.
+Do not use `status.conditions[?type=Ready].status` as a gcloud projection: it can
+return an empty value even when the revision is healthy. After promotion, the
+serving revision, 100% traffic, and image digest must match the release target.
+Validate readiness parsing locally with
+`PYTHONDONTWRITEBYTECODE=1 python3 deploy/cloud-run/test_revision_ready.py`.
+
 Migrations must follow expand/contract: add backward-compatible structures first, deploy compatible code, migrate data, then remove old structures in a later release. Never use automatic down migrations in production.
 
 ## Health boundaries
