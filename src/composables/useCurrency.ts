@@ -58,7 +58,7 @@ export function useCurrency() {
     loaded = true
     try {
       const settings = await getSettings()
-      const savedCurrency = normalizeCurrency(settings.currency)
+      const savedCurrency = normalizeCurrency(settings.passengerDefaultCurrency)
       if (savedCurrency && !hasUserCurrency) currency.value = savedCurrency
       if (settings.exchangeRate) setExchangeRate(settings.exchangeRate)
     } catch { /* use cached defaults */ }

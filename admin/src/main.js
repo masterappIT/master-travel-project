@@ -83,7 +83,7 @@ const vehiclesPageState = createVehiclesPageState()
 const vehicleTab = vehiclesPageState.tab
 const extraSortId = vehiclesPageState.extraSortId
 let loadRequestId = 0
-const { exchangeRate, pricingCurrency, settlementCurrency, paymentCurrencies, severeWeatherEnabled, adminLogo, paymentSettings } = createAdminSettingsState()
+const { exchangeRate, pricingCurrency, settlementCurrency, passengerDefaultCurrency, driverDefaultCurrency, paymentCurrencies, severeWeatherEnabled, adminLogo, paymentSettings } = createAdminSettingsState()
 const { users, selectedUser, walletTransactions, topUpWithdrawalHistory, trips, charterOrders, addresses, mainlandCities, addressSearchKeyword, addressSearchResults, addressSearching, categories, vehicles, extras, distancePricing, routeMinimumFares, routeMinimumFareForm, membershipPlans, membershipOrders, promotions, promotionForm, promotionSaving, promotionDeletingId, promotionTogglingId, mileageRules, mileageRewards, mileageAccounts, mileageRewardForm, mileageLedger, mileageSelectedAccount, mileageSaving, invitationSettings, invitationWalletCurrency, invitationSummary, invitationRecords, invitationSaving } = createAdminResourceState()
 const { administrators, auditLogs, notifications, notificationTemplates, notificationUsers, notificationDrivers, personnel, entryItems, drivers, selectedDriver, expenseItems } = createAdminAuxiliaryState()
 const allVehicles = ref([])
@@ -92,6 +92,7 @@ const { orderUrls, createdOrderUrl, tripCatalog, tripVehicleCategoryId, tripQuot
 const { toasts, confirmDialog, dismissToast, notify, requestConfirmation, resolveConfirmation } = createFeedbackController()
 const paymentsPageState = createPaymentsPageState()
 const financePageState = createFinancePageState()
+watch([pricingCurrency, settlementCurrency, passengerDefaultCurrency, driverDefaultCurrency], () => financePageState.syncCurrencySettings({ pricingCurrency: pricingCurrency.value, settlementCurrency: settlementCurrency.value, passengerDefaultCurrency: passengerDefaultCurrency.value, driverDefaultCurrency: driverDefaultCurrency.value }), { immediate: true })
 const { saved: paymentSettingsSaved, raceSaving: driverRaceSaving, configs: paymentConfigs, selectedConfig: selectedPaymentConfig, editorOpen: paymentEditorOpen, editorStep: paymentEditorStep, filter: paymentConfigFilter, testResult: paymentTestResult, openEditor: openPaymentEditor, visibleConfigs: visiblePaymentConfigs } = paymentsPageState
 const notificationPageState = createNotificationsPageState(notificationUsers, notificationDrivers)
 const notificationRecipientSearch = notificationPageState.recipientSearch
@@ -132,7 +133,7 @@ const resourceLoader = createAdminResourceLoader({
   displayError,
   applySettings: applyAdminSettings,
   loadSettings: settingsLoader.load,
-  settings: { exchangeRate, pricingCurrency, settlementCurrency, paymentCurrencies, severeWeatherEnabled, adminLogo, paymentSettings },
+  settings: { exchangeRate, pricingCurrency, settlementCurrency, passengerDefaultCurrency, driverDefaultCurrency, paymentCurrencies, severeWeatherEnabled, adminLogo, paymentSettings },
   resourceLoaders: {
     coreUsers: () => import('./utils/admin-resource-loader.js').then(({ loadCoreUsers }) => loadCoreUsers({ usersApi, users, state: usersPageState })),
     drivers: () => import('./utils/admin-resource-loader.js').then(({ loadDriversResources }) => loadDriversResources({ driversApi, vehicleCategories, drivers, allVehicles, state: driversPageState })),
@@ -187,6 +188,15 @@ const usersActions = createUsersActions({
 })
 const adminSessionActions = createAdminSessionActions({ api, token, username, password, currentAdministrator, error, exchangeRate, adminLogo, view, load, displayError })
 const { apiLogin, logout, saveExchangeRate, uploadAdminLogo, removeAdminLogo } = adminSessionActions
+const saveFinanceCurrencySettings = async () => {
+  try {
+    await financePageState.saveCurrencySettings(api)
+    settingsLoader.invalidate()
+    await load()
+  } catch (e) {
+    error.value = displayError(e)
+  }
+}
 const notificationsActions = createNotificationsActions({ api, notificationForm, notificationRecipientSearch, notificationTemplates, load, error, displayError })
 const { resetNotification, createTemplate, clearNotificationRecipients, toggleNotificationRecipient, notificationRecipientChecked, saveNotification } = notificationsActions
 const paymentsActions = createPaymentsActions({ api, paymentSettings, paymentCurrencies, paymentSettingsSaved, driverRaceSaving, error, displayError, configs: paymentConfigs, selectedConfig: selectedPaymentConfig, editorOpen: paymentEditorOpen, editorStep: paymentEditorStep, testResult: paymentTestResult })
@@ -325,7 +335,9 @@ const App = { setup() {
    })
    provide('adminFinanceContext', {
      view,
-     ...financePageState
+     api,
+     ...financePageState,
+     saveFinanceCurrencySettings
    })
    // 登入配置頁（分配層：登入方式管理／配置層：短信、微信、Apple）的所有寫入與測試端點
    // 後端僅允許 SUPER_ADMIN，故 canWrite 在此綁定 isSuperAdministrator 而非全域

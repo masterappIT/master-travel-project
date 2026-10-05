@@ -387,7 +387,8 @@ export type AppSettings = {
   region: string
   currency: string
   pricingCurrency?: string
-  walletCurrency?: string
+  passengerDefaultCurrency?: string
+  driverDefaultCurrency?: string
   exchangeRate?: number
   fareBalancePayEnabled?: boolean
   cashBalancePayEnabled?: boolean

@@ -372,6 +372,7 @@ interface CreateQuoteRequest {
   couponCode?: unknown;
   userId?: unknown;
   reservePromotion?: unknown;
+  adminPreview?: unknown;
   previousQuoteId?: unknown;
   membershipLevel?: unknown;
   originRegion?: unknown;
@@ -731,6 +732,8 @@ const appSettingsDefaults = {
   pricingCurrency: "RMB",
   walletCurrency: "RMB",
   settlementCurrency: "RMB",
+  passengerDefaultCurrency: "RMB",
+  driverDefaultCurrency: "RMB",
   paymentCurrencies: ["RMB", "HKD"],
   exchangeRate: 0.92,
   adminLogo: null as string | null,
@@ -1837,6 +1840,8 @@ function appSettingsResponse(settings: Omit<typeof appSettingsDefaults, "payment
     currency: settings.currency,
     pricingCurrency: settings.pricingCurrency,
     settlementCurrency: settings.settlementCurrency,
+    passengerDefaultCurrency: settings.passengerDefaultCurrency ?? appSettingsDefaults.passengerDefaultCurrency,
+    driverDefaultCurrency: settings.driverDefaultCurrency ?? appSettingsDefaults.driverDefaultCurrency,
     paymentCurrencies: Array.isArray(settings.paymentCurrencies)
       ? settings.paymentCurrencies
       : appSettingsDefaults.paymentCurrencies,
@@ -11975,6 +11980,12 @@ class PublicVehiclesController {
     };
   }
 }
+class AdminQuotePreviewRollback extends Error {
+  constructor(readonly quote: PersistedQuote) {
+    super("ADMIN_QUOTE_PREVIEW_ROLLBACK");
+  }
+}
+
 @Controller("quotes")
 class PublicQuotesController {
   @Post()
@@ -11999,8 +12010,10 @@ class PublicQuotesController {
     const durationSeconds = Number(body.durationSeconds);
     const authenticatedSession = await clientSessionFrom(req).catch(() => null);
     const userId = authenticatedSession?.sub || null;
+    const adminPreview = body.adminPreview === true;
+    if (adminPreview) requireRole(req, ["SUPER_ADMIN", "OPERATOR"]);
     const reservePromotion = body.reservePromotion !== false;
-    const isPreview = body.reservePromotion === false;
+    const isPreview = body.reservePromotion === false || adminPreview;
     const previousQuoteId = typeof body.previousQuoteId === "string" ? body.previousQuoteId.trim() : "";
     if (!Number.isFinite(durationSeconds) || durationSeconds < 0)
       throw new HttpException(
@@ -12028,7 +12041,9 @@ class PublicQuotesController {
         HttpStatus.BAD_REQUEST,
       );
     const requestedExtras = parseQuoteExtras(body);
-    const quote = await prisma.$transaction(async (tx) => {
+    let quote;
+    try {
+      quote = await prisma.$transaction(async (tx) => {
       const [settings, category, vehicle, extras, routeMinimumFares] =
         await Promise.all([
           tx.appSetting.findUniqueOrThrow({
@@ -12477,7 +12492,7 @@ class PublicQuotesController {
           )
         : [];
       const total = roundMoney(subtotal - (applied?.discount || 0));
-      return tx.fareQuote.create({
+      const createdQuote = await tx.fareQuote.create({
         data: {
           distanceKm,
           durationSeconds,
@@ -12548,7 +12563,13 @@ class PublicQuotesController {
           lines: { orderBy: { order: "asc" } },
         },
       });
+      if (adminPreview) throw new AdminQuotePreviewRollback(createdQuote);
+      return createdQuote;
     });
+    } catch (error) {
+      if (error instanceof AdminQuotePreviewRollback) return quoteResponse(error.quote);
+      throw error;
+    }
     return quoteResponse(quote);
   }
 
@@ -12939,6 +12960,8 @@ class SettingsController {
       currency?: string;
       pricingCurrency?: string;
       settlementCurrency?: string;
+      passengerDefaultCurrency?: string;
+      driverDefaultCurrency?: string;
       paymentCurrencies?: unknown;
       exchangeRate?: number;
       adminLogo?: string | null;
@@ -12967,6 +12990,10 @@ class SettingsController {
     });
     if (body.settlementCurrency !== undefined && body.settlementCurrency !== "RMB")
       throw new HttpException("Settlement currency must be RMB", HttpStatus.BAD_REQUEST);
+    for (const key of ["passengerDefaultCurrency", "driverDefaultCurrency"] as const) {
+      if (body[key] !== undefined && !["RMB", "HKD"].includes(body[key] as string))
+        throw new HttpException(`${key} is invalid`, HttpStatus.BAD_REQUEST);
+    }
     if (body.paymentCurrencies !== undefined &&
       (!Array.isArray(body.paymentCurrencies) || !body.paymentCurrencies.length ||
         body.paymentCurrencies.some((currency) => !["RMB", "HKD"].includes(currency)) ||
@@ -13021,7 +13048,9 @@ class SettingsController {
           ? body.currency
           : settings.currency,
       pricingCurrency,
-      settlementCurrency: "RMB",
+      settlementCurrency: body.settlementCurrency === undefined ? settings.settlementCurrency : body.settlementCurrency,
+      passengerDefaultCurrency: body.passengerDefaultCurrency === undefined ? settings.passengerDefaultCurrency : body.passengerDefaultCurrency,
+      driverDefaultCurrency: body.driverDefaultCurrency === undefined ? settings.driverDefaultCurrency : body.driverDefaultCurrency,
       paymentCurrencies: body.paymentCurrencies === undefined
         ? (Array.isArray(settings.paymentCurrencies) ? settings.paymentCurrencies : appSettingsDefaults.paymentCurrencies)
         : body.paymentCurrencies as string[],

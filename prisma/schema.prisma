@@ -238,31 +238,31 @@ model AuthIdentity {
 }
 
 model PendingWechatChallenge {
-  id         String   @id @default(cuid())
-  tokenHash  String   @unique
+  id         String    @id @default(cuid())
+  tokenHash  String    @unique
   providerId String
   expiresAt  DateTime
   consumedAt DateTime?
-  createdAt  DateTime @default(now())
+  createdAt  DateTime  @default(now())
 
   @@index([expiresAt, consumedAt])
 }
 
 model VerificationCode {
-  id          String    @id @default(cuid())
-  userId      String?
-  countryCode String
-  phoneNumber String
-  purpose     String    @default("LOGIN")
-  status      String    @default("ISSUED")
-  codeHash    String
-  attempts    Int       @default(0)
-  expiresAt   DateTime
-  consumedAt  DateTime?
+  id                         String    @id @default(cuid())
+  userId                     String?
+  countryCode                String
+  phoneNumber                String
+  purpose                    String    @default("LOGIN")
+  status                     String    @default("ISSUED")
+  codeHash                   String
+  attempts                   Int       @default(0)
+  expiresAt                  DateTime
+  consumedAt                 DateTime?
   pendingWechatChallengeHash String?
-  pendingWechatProviderId   String?
-  createdAt   DateTime  @default(now())
-  user        User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  pendingWechatProviderId    String?
+  createdAt                  DateTime  @default(now())
+  user                       User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([userId, createdAt])
   @@index([countryCode, phoneNumber, createdAt])
@@ -616,107 +616,109 @@ enum TripExecutionPhase {
 }
 
 model AppSetting {
-  id                              String   @id
-  language                        String
-  region                          String
-  currency                        String
-  pricingCurrency                 String   @default("RMB")
-  settlementCurrency              String   @default("RMB")
-  paymentCurrencies               Json     @default("[\"RMB\",\"HKD\"]")
-  walletCurrency                  String   @default("RMB")
-  exchangeRate                    Float
-  adminLogo                       String?  @db.Text
-  severeWeatherEnabled            Boolean  @default(false)
-  dispatchSchedulingEnabled       Boolean  @default(true)
-  driverRaceEnabled               Boolean  @default(false)
-  driverPayoutPercentage          Float    @default(100)
-  fareBalancePayEnabled           Boolean  @default(true)
-  cashBalancePayEnabled           Boolean  @default(true)
-  wechatPayEnabled                Boolean  @default(true)
-  alipayPayEnabled                Boolean  @default(true)
-  bankCardPayEnabled              Boolean  @default(true)
-  sandboxMode                     Boolean  @default(false)
-  wechatMiniProgramEnabled        Boolean  @default(false)
-  wechatMiniProgramLoginMode      String   @default("wechatOnly")
-  wechatMiniProgramAppId          String?
-  wechatMiniProgramAppSecret      String?  @db.Text
-  wechatMiniProgramPhoneCapability  Boolean  @default(false)
-  wechatMiniProgramAvatarCapability Boolean  @default(false)
-  wechatMiniProgramNicknameCapability Boolean @default(false)
+  id                                      String   @id
+  language                                String
+  region                                  String
+  currency                                String
+  pricingCurrency                         String   @default("RMB")
+  settlementCurrency                      String   @default("RMB")
+  passengerDefaultCurrency                String   @default("RMB")
+  driverDefaultCurrency                   String   @default("RMB")
+  paymentCurrencies                       Json     @default("[\"RMB\",\"HKD\"]")
+  walletCurrency                          String   @default("RMB")
+  exchangeRate                            Float
+  adminLogo                               String?  @db.Text
+  severeWeatherEnabled                    Boolean  @default(false)
+  dispatchSchedulingEnabled               Boolean  @default(true)
+  driverRaceEnabled                       Boolean  @default(false)
+  driverPayoutPercentage                  Float    @default(100)
+  fareBalancePayEnabled                   Boolean  @default(true)
+  cashBalancePayEnabled                   Boolean  @default(true)
+  wechatPayEnabled                        Boolean  @default(true)
+  alipayPayEnabled                        Boolean  @default(true)
+  bankCardPayEnabled                      Boolean  @default(true)
+  sandboxMode                             Boolean  @default(false)
+  wechatMiniProgramEnabled                Boolean  @default(false)
+  wechatMiniProgramLoginMode              String   @default("wechatOnly")
+  wechatMiniProgramAppId                  String?
+  wechatMiniProgramAppSecret              String?  @db.Text
+  wechatMiniProgramPhoneCapability        Boolean  @default(false)
+  wechatMiniProgramAvatarCapability       Boolean  @default(false)
+  wechatMiniProgramNicknameCapability     Boolean  @default(false)
   wechatMiniProgramCapabilityVerification Json?
-  wechatWebEnabled                Boolean  @default(false)
-  wechatWebAppId                  String?
-  wechatWebAppSecret              String?  @db.Text
-  wechatWebRedirectUri            String?
-  appleIosEnabled                 Boolean  @default(false)
-  appleIosTeamId                 String?
-  appleIosKeyId                  String?
-  appleIosClientId               String?
-  appleIosPrivateKey             String?  @db.Text
-  appleIosBundleId               String?
-  appleWebEnabled                Boolean  @default(false)
-  appleWebTeamId                 String?
-  appleWebKeyId                  String?
-  appleWebClientId               String?
-  appleWebRedirectUri            String?
-  appleWebPrivateKey             String?  @db.Text
-  sms253Enabled                   Boolean  @default(false)
-  sms253Endpoint                  String   @default("https://smssh1.253.com")
-  sms253SendUrl                   String?
-  sms253VariableUrl               String?
-  sms253BalanceUrl                String?
-  sms253Account                   String?
-  sms253Password                  String?  @db.Text
-  sms253Template                  String   @default("【253云通讯】您的验证码是{code}。如非本人操作，请忽略。")
-  sms253VariableTemplate          String?
-  sms253VariableParams            String?
-  sms253Report                    Boolean  @default(false)
-  sms253VariableReport            Boolean  @default(false)
-  sms253TestPhone                 String?
-  sms253InternationalEnabled      Boolean  @default(false)
-  sms253InternationalEndpoint     String?
-  sms253InternationalSendUrl      String?
-  sms253InternationalVariableUrl  String?
-  sms253InternationalBalanceUrl   String?
-  sms253InternationalAccount      String?
-  sms253InternationalPassword     String?  @db.Text
-  sms253InternationalTemplate     String?
-  sms253InternationalVariableTemplate String?
-  sms253InternationalVariableParams String?
-  sms253InternationalReport       Boolean  @default(false)
-  sms253InternationalVariableReport Boolean @default(false)
-  sms253InternationalTestPhone    String?
-  mileageSpendPerKm               Float    @default(10)
-  mileageValidityMonths           Int      @default(12)
-  invitationEnabled               Boolean  @default(true)
-  invitationInviterMileage        Int      @default(300)
-  invitationInviteeFare           Float    @default(50)
-  invitationQualificationDays     Int      @default(30)
-  invitationMileageValidityMonths Int      @default(12)
-  updatedAt                       DateTime @updatedAt
+  wechatWebEnabled                        Boolean  @default(false)
+  wechatWebAppId                          String?
+  wechatWebAppSecret                      String?  @db.Text
+  wechatWebRedirectUri                    String?
+  appleIosEnabled                         Boolean  @default(false)
+  appleIosTeamId                          String?
+  appleIosKeyId                           String?
+  appleIosClientId                        String?
+  appleIosPrivateKey                      String?  @db.Text
+  appleIosBundleId                        String?
+  appleWebEnabled                         Boolean  @default(false)
+  appleWebTeamId                          String?
+  appleWebKeyId                           String?
+  appleWebClientId                        String?
+  appleWebRedirectUri                     String?
+  appleWebPrivateKey                      String?  @db.Text
+  sms253Enabled                           Boolean  @default(false)
+  sms253Endpoint                          String   @default("https://smssh1.253.com")
+  sms253SendUrl                           String?
+  sms253VariableUrl                       String?
+  sms253BalanceUrl                        String?
+  sms253Account                           String?
+  sms253Password                          String?  @db.Text
+  sms253Template                          String   @default("【253云通讯】您的验证码是{code}。如非本人操作，请忽略。")
+  sms253VariableTemplate                  String?
+  sms253VariableParams                    String?
+  sms253Report                            Boolean  @default(false)
+  sms253VariableReport                    Boolean  @default(false)
+  sms253TestPhone                         String?
+  sms253InternationalEnabled              Boolean  @default(false)
+  sms253InternationalEndpoint             String?
+  sms253InternationalSendUrl              String?
+  sms253InternationalVariableUrl          String?
+  sms253InternationalBalanceUrl           String?
+  sms253InternationalAccount              String?
+  sms253InternationalPassword             String?  @db.Text
+  sms253InternationalTemplate             String?
+  sms253InternationalVariableTemplate     String?
+  sms253InternationalVariableParams       String?
+  sms253InternationalReport               Boolean  @default(false)
+  sms253InternationalVariableReport       Boolean  @default(false)
+  sms253InternationalTestPhone            String?
+  mileageSpendPerKm                       Float    @default(10)
+  mileageValidityMonths                   Int      @default(12)
+  invitationEnabled                       Boolean  @default(true)
+  invitationInviterMileage                Int      @default(300)
+  invitationInviteeFare                   Float    @default(50)
+  invitationQualificationDays             Int      @default(30)
+  invitationMileageValidityMonths         Int      @default(12)
+  updatedAt                               DateTime @updatedAt
 }
 
 model PhoneLoginDevelopmentSetting {
-  id                 String   @id @default("default")
-  passengerEnabled   Boolean  @default(false)
-  driverEnabled      Boolean  @default(false)
-  verificationCodeHash String  @db.Text
-  updatedAt          DateTime @updatedAt
-  updatedBy          String?
+  id                   String   @id @default("default")
+  passengerEnabled     Boolean  @default(false)
+  driverEnabled        Boolean  @default(false)
+  verificationCodeHash String   @db.Text
+  updatedAt            DateTime @updatedAt
+  updatedBy            String?
 }
 
 model LoginMethodSetting {
-  id              String   @id @default(cuid())
-  provider        String   @unique
-  enabled         Boolean  @default(false)
-  passengerEnabled Boolean @default(false)
-  driverEnabled   Boolean  @default(false)
-  displayName     String
-  logoUrl         String?  @db.Text
-  description     String   @default("")
-  sortOrder       Int      @default(0)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id               String   @id @default(cuid())
+  provider         String   @unique
+  enabled          Boolean  @default(false)
+  passengerEnabled Boolean  @default(false)
+  driverEnabled    Boolean  @default(false)
+  displayName      String
+  logoUrl          String?  @db.Text
+  description      String   @default("")
+  sortOrder        Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   @@index([enabled, sortOrder])
   @@index([passengerEnabled, sortOrder])
@@ -724,18 +726,18 @@ model LoginMethodSetting {
 }
 
 model LoginMethodSettingDraft {
-  id              String   @id @default(cuid())
-  provider        String   @unique
-  enabled         Boolean  @default(false)
-  passengerEnabled Boolean  @default(false)
-  driverEnabled   Boolean  @default(false)
-  displayName     String
-  logoUrl         String?  @db.Text
-  description     String   @default("")
-  sortOrder       Int      @default(0)
-  miniProgramLoginMode String @default("wechatOnly")
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id                   String   @id @default(cuid())
+  provider             String   @unique
+  enabled              Boolean  @default(false)
+  passengerEnabled     Boolean  @default(false)
+  driverEnabled        Boolean  @default(false)
+  displayName          String
+  logoUrl              String?  @db.Text
+  description          String   @default("")
+  sortOrder            Int      @default(0)
+  miniProgramLoginMode String   @default("wechatOnly")
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
   @@index([sortOrder])
 }
@@ -758,7 +760,6 @@ model Sms253Message {
   @@index([phone, createdAt])
   @@index([status, createdAt])
 }
-
 
 model Sms253Report {
   id           String   @id @default(cuid())

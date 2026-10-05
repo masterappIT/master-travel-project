@@ -4,6 +4,7 @@ import 'app/router.dart';
 import 'app/route_names.dart';
 import 'core/api/driver_api_client.dart';
 import 'core/state/driver_alert_audio_controller.dart';
+import 'core/state/driver_currency_preference.dart';
 import 'core/state/driver_language_preference.dart';
 import 'core/state/driver_order_alert_coordinator.dart';
 import 'order_invite/order_invite_page.dart';
@@ -14,6 +15,12 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final api = DriverApiClient.instance;
   await api.restoreSession();
+  try {
+    final settings = await api.settings();
+    DriverCurrencyPreference.setDefaultIfUnset(settings['driverDefaultCurrency']?.toString());
+  } catch (_) {
+    // Keep the existing local preference when settings are unavailable.
+  }
   final fragmentUri = Uri.tryParse(Uri.base.fragment);
   final directToken = Uri.base.queryParameters['token'];
   final fragmentToken = fragmentUri?.queryParameters['token'];

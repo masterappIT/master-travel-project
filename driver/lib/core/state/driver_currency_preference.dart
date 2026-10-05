@@ -8,6 +8,14 @@ class DriverCurrencyPreference extends ValueNotifier<String> {
   static const _storageKey = 'driver_currency_preference';
   static final instance = DriverCurrencyPreference._();
 
+  static bool get hasStoredPreference => readBrowserValue(_storageKey) != null;
+
+  static void setDefaultIfUnset(String? configured) {
+    if (hasStoredPreference) return;
+    final normalized = configured == 'RMB' || configured == 'CNY' ? 'CNY' : 'HKD';
+    instance.value = normalized;
+  }
+
   static String _readStoredCurrency() {
     final stored = readBrowserValue(_storageKey);
     return stored == 'HKD' ? 'HKD' : 'CNY';

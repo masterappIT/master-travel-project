@@ -1,7 +1,9 @@
-export function applyAdminSettings(settings, { exchangeRate, pricingCurrency, settlementCurrency, paymentCurrencies, severeWeatherEnabled, adminLogo, paymentSettings }) {
+export function applyAdminSettings(settings, { exchangeRate, pricingCurrency, settlementCurrency, passengerDefaultCurrency, driverDefaultCurrency, paymentCurrencies, severeWeatherEnabled, adminLogo, paymentSettings }) {
   exchangeRate.value = Number(settings.exchangeRate) || 0.92
   pricingCurrency.value = settings.pricingCurrency === 'HKD' ? 'HKD' : 'RMB'
-  settlementCurrency.value = 'RMB'
+  settlementCurrency.value = settings.settlementCurrency === 'HKD' ? 'HKD' : 'RMB'
+  passengerDefaultCurrency.value = settings.passengerDefaultCurrency === 'HKD' ? 'HKD' : 'RMB'
+  driverDefaultCurrency.value = settings.driverDefaultCurrency === 'HKD' ? 'HKD' : 'RMB'
   paymentCurrencies.value = Array.isArray(settings.paymentCurrencies) ? settings.paymentCurrencies.filter(currency => ['RMB', 'HKD'].includes(currency)) : ['RMB', 'HKD']
   severeWeatherEnabled.value = Boolean(settings.severeWeatherEnabled)
   adminLogo.value = settings.adminLogo || ''
