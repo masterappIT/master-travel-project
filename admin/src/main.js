@@ -93,7 +93,7 @@ const { toasts, confirmDialog, dismissToast, notify, requestConfirmation, resolv
 const paymentsPageState = createPaymentsPageState()
 const financePageState = createFinancePageState()
 watch([pricingCurrency, settlementCurrency, passengerDefaultCurrency, driverDefaultCurrency], () => financePageState.syncCurrencySettings({ pricingCurrency: pricingCurrency.value, settlementCurrency: settlementCurrency.value, passengerDefaultCurrency: passengerDefaultCurrency.value, driverDefaultCurrency: driverDefaultCurrency.value }), { immediate: true })
-const { saved: paymentSettingsSaved, raceSaving: driverRaceSaving, configs: paymentConfigs, selectedConfig: selectedPaymentConfig, editorOpen: paymentEditorOpen, editorStep: paymentEditorStep, filter: paymentConfigFilter, testResult: paymentTestResult, openEditor: openPaymentEditor, visibleConfigs: visiblePaymentConfigs } = paymentsPageState
+const { saved: paymentSettingsSaved, raceSaving: driverRaceSaving, configs: paymentConfigs, selectedConfig: selectedPaymentConfig, editorOpen: paymentEditorOpen, editorStep: paymentEditorStep, filter: paymentConfigFilter, testResult: paymentTestResult, openEditor: openPaymentEditor, visibleConfigs: visiblePaymentConfigs, currencyConfigCount } = paymentsPageState
 const notificationPageState = createNotificationsPageState(notificationUsers, notificationDrivers)
 const notificationRecipientSearch = notificationPageState.recipientSearch
 let notificationOptionRequest = 0
@@ -334,6 +334,7 @@ const App = { setup() {
      paymentConfigFilter,
      paymentTestResult,
      visiblePaymentConfigs,
+     currencyConfigCount,
      openPaymentEditor,
      closePaymentEditor,
      savePaymentConfigDraft,
