@@ -197,6 +197,15 @@ const saveFinanceCurrencySettings = async () => {
     error.value = displayError(e)
   }
 }
+const saveFinanceRateSettings = async () => {
+  try {
+    await financePageState.saveRateSettings(api)
+    settingsLoader.invalidate()
+    await load()
+  } catch (e) {
+    error.value = displayError(e)
+  }
+}
 const notificationsActions = createNotificationsActions({ api, notificationForm, notificationRecipientSearch, notificationTemplates, load, error, displayError })
 const { resetNotification, createTemplate, clearNotificationRecipients, toggleNotificationRecipient, notificationRecipientChecked, saveNotification } = notificationsActions
 const paymentsActions = createPaymentsActions({ api, paymentSettings, paymentCurrencies, paymentSettingsSaved, driverRaceSaving, error, displayError, configs: paymentConfigs, selectedConfig: selectedPaymentConfig, editorOpen: paymentEditorOpen, editorStep: paymentEditorStep, testResult: paymentTestResult })
@@ -337,7 +346,8 @@ const App = { setup() {
      view,
      api,
      ...financePageState,
-     saveFinanceCurrencySettings
+     saveFinanceCurrencySettings,
+     saveFinanceRateSettings
    })
    // 登入配置頁（分配層：登入方式管理／配置層：短信、微信、Apple）的所有寫入與測試端點
    // 後端僅允許 SUPER_ADMIN，故 canWrite 在此綁定 isSuperAdministrator 而非全域

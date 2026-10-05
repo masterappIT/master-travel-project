@@ -5,6 +5,7 @@ export function createFinancePageState() {
   const currencyEditorOpen = ref(false)
   const settings = reactive({ pricingCurrency: 'RMB', settlementCurrency: 'RMB', passengerDefaultCurrency: 'RMB', driverDefaultCurrency: 'RMB', paymentCurrencies: ['RMB', 'HKD'], quoteCurrency: 'RMB', baseCurrency: 'RMB', decimalPlaces: '2', roundingMode: '四捨五入', activeConfigs: 0, rateVersion: '未建立', updatedAt: '尚未設定' })
   const rateForm = reactive({ pair: 'RMB → HKD', value: '', source: '人工設定' })
+  const rates = reactive([{ pair: 'RMB → HKD', value: '未設定', source: '人工／API（待接入）', status: '待設定' }])
   const currencyDraft = reactive({ pricingCurrency: 'RMB', settlementCurrency: 'RMB', passengerDefaultCurrency: 'RMB', driverDefaultCurrency: 'RMB' })
   const quotePreview = reactive({ origin: '中國內地', destination: '香港', vehicle: '舒適型', distance: '12', duration: '0', baseFare: '100', currency: 'RMB', result: '待輸入報價資料', loading: false, error: '', quote: null })
   const syncCurrencySettings = source => {
@@ -12,6 +13,11 @@ export function createFinancePageState() {
     settings.settlementCurrency = source.settlementCurrency === 'HKD' ? 'HKD' : 'RMB'
     settings.passengerDefaultCurrency = source.passengerDefaultCurrency === 'HKD' ? 'HKD' : 'RMB'
     settings.driverDefaultCurrency = source.driverDefaultCurrency === 'HKD' ? 'HKD' : 'RMB'
+    const exchangeRate = Number(source.exchangeRate)
+    if (Number.isFinite(exchangeRate) && exchangeRate > 0) {
+      const rate = rates.find(item => item.pair === 'RMB → HKD')
+      if (rate) { rate.value = exchangeRate.toFixed(4); rate.source = '正式設定'; rate.status = '已生效' }
+    }
     quotePreview.currency = settings.pricingCurrency
     currencyDraft.pricingCurrency = settings.pricingCurrency
     currencyDraft.settlementCurrency = settings.settlementCurrency
@@ -50,17 +56,20 @@ export function createFinancePageState() {
     rateEditorOpen.value = true
   }
   const closeRateEditor = () => { rateEditorOpen.value = false }
-  const saveRateDraft = () => {
+  const saveRateSettings = async api => {
     const value = Number(rateForm.value)
     if (!Number.isFinite(value) || value <= 0) return false
+    const saved = await api('/settings', { method: 'POST', body: JSON.stringify({ exchangeRate: value }) })
     const existing = rates.find(rate => rate.pair === rateForm.pair)
     if (existing) {
       existing.value = value.toFixed(4)
       existing.source = rateForm.source
-      existing.status = '已設定'
+      existing.status = '已生效'
     }
+    settings.rateVersion = '目前設定'
+    settings.updatedAt = new Date().toLocaleString('zh-Hant')
     rateEditorOpen.value = false
-    return true
+    return saved
   }
   return {
     activeTab: ref('overview'),
@@ -79,7 +88,7 @@ export function createFinancePageState() {
     finishCurrencyEditor,
     openRateEditor,
     closeRateEditor,
-    saveRateDraft,
+    saveRateSettings,
     tabs: [
       { id: 'overview', label: '總覽' },
       { id: 'currency', label: '全域貨幣與報價' },
@@ -134,7 +143,7 @@ export function createFinancePageState() {
       { title: '乘客退款', description: '平台 → 乘客（原路／部分退款）', status: '待配置', tone: 'warning' },
       { title: '司機結算', description: '平台 → 司機', status: '待配置', tone: 'warning' }
     ],
-    rates: [{ pair: 'RMB → HKD', value: '未設定', source: '人工／API（待接入）', status: '待設定' }, { pair: 'HKD → RMB', value: '未設定', source: '人工／API（待接入）', status: '待設定' }],
+    rates,
     passengerItems: [{ title: '付款方式設定', description: '管理地區、貨幣及乘客收款渠道。', status: '前往支付設定', tone: 'info' }, { title: '退款設定與管理', description: '管理原路退款、審批及部分退款。', status: 'UI 原型' }, { title: '付款交易', description: '查看乘客付款狀態及第三方交易編號。', status: '尚未接入 API' }],
     driverItems: [{ title: '結算方式設定', description: '管理司機原始收入貨幣、結算貨幣及出款渠道。', status: '前往支付設定' }, { title: '待結算帳款', description: '查看待計算、待審批及可結算金額。', status: '尚未接入 API' }, { title: '結算批次與出款記錄', description: '追蹤平台付款給司機的執行狀態。', status: '尚未接入 API' }],
     auditItems: [{ title: '對帳管理', description: '統一比對付款、退款及司機出款結果。', status: '尚未接入 API' }, { title: '財務操作日誌', description: '追蹤配置、啟用、退款及出款操作。', status: '尚未接入 API' }]
