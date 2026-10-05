@@ -28,37 +28,10 @@ gcloud run deploy "$SERVICE_NAME" \
   --allow-unauthenticated \
   --quiet
 
-revision=""
-for attempt in {1..60}; do
-  ready_revision="$(gcloud run services describe "$SERVICE_NAME" \
-    --project "$PROJECT_ID" \
-    --region "$REGION" \
-    --format='value(status.latestReadyRevisionName)')"
-  ready_image="$(gcloud run revisions describe "$ready_revision" \
-    --project "$PROJECT_ID" \
-    --region "$REGION" \
-    --format='value(spec.containers[0].image)' 2>/dev/null || true)"
-  if [[ -n "$ready_revision" && "$ready_image" == "$IMAGE" ]]; then
-    revision="$ready_revision"
-    break
-  fi
-  sleep 5
-done
-if [[ -z "$revision" ]]; then
-  printf 'Timed out waiting for %s to become ready with image %s\n' "$SERVICE_NAME" "$IMAGE" >&2
-  exit 1
-fi
-
-gcloud run services update-traffic "$SERVICE_NAME" \
-  --project "$PROJECT_ID" \
-  --region "$REGION" \
-  --to-revisions "${revision}=100" \
-  --quiet
-
 service_url="$(gcloud run services describe "$SERVICE_NAME" \
   --project "$PROJECT_ID" \
   --region "$REGION" \
   --format='value(status.url)')"
 curl --fail --silent --show-error --retry 5 --retry-delay 2 \
   "$service_url/" >/dev/null
-printf '%s=%s revision=%s\n' "$SERVICE_NAME" "$service_url" "$revision"
+printf '%s=%s\n' "$SERVICE_NAME" "$service_url"
