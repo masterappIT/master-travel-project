@@ -34,10 +34,10 @@ for attempt in {1..60}; do
     --project "$PROJECT_ID" \
     --region "$REGION" \
     --format='value(status.latestReadyRevisionName)')"
-  ready_image="$(gcloud run services describe "$SERVICE_NAME" \
+  ready_image="$(gcloud run revisions describe "$ready_revision" \
     --project "$PROJECT_ID" \
     --region "$REGION" \
-    --format='value(spec.template.spec.containers[0].image)')"
+    --format='value(spec.containers[0].image)' 2>/dev/null || true)"
   if [[ -n "$ready_revision" && "$ready_image" == "$IMAGE" ]]; then
     revision="$ready_revision"
     break
