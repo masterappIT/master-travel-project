@@ -76,40 +76,78 @@ fi
 
 gcloud "${deploy_args[@]}"
 
+REVISION="$(gcloud run services describe "$SERVICE_NAME" \
+  --project "$PROJECT_ID" \
+  --region "$REGION" \
+  --format='value(status.latestCreatedRevisionName)')"
+if [[ -z "$REVISION" ]]; then
+  printf 'Cloud Run did not report a created revision for %s\n' "$SERVICE_NAME" >&2
+  exit 1
+fi
+
+revision_image=""
+revision_ready=""
+for attempt in {1..60}; do
+  revision_image="$(gcloud run revisions describe "$REVISION" \
+    --project "$PROJECT_ID" \
+    --region "$REGION" \
+    --format='value(spec.containers[0].image)' 2>/dev/null || true)"
+  revision_ready="$(gcloud run revisions describe "$REVISION" \
+    --project "$PROJECT_ID" \
+    --region "$REGION" \
+    --format='value(status.conditions[?type=Ready].status)' 2>/dev/null || true)"
+  if [[ "$revision_image" == "$IMAGE" && "$revision_ready" == "True" ]]; then
+    break
+  fi
+  sleep 5
+done
+if [[ "$revision_image" != "$IMAGE" || "$revision_ready" != "True" ]]; then
+  printf 'Revision %s did not become ready with image %s\n' "$REVISION" "$IMAGE" >&2
+  exit 1
+fi
+
 if [[ -z "$existing_ready_revision" ]]; then
   SERVICE_URL="$(gcloud run services describe "$SERVICE_NAME" \
     --project "$PROJECT_ID" \
     --region "$REGION" \
     --format='value(status.url)')"
   SERVICE_URL="$SERVICE_URL" "$(dirname "$0")/smoke-test.sh"
-  REVISION="$(gcloud run services describe "$SERVICE_NAME" \
+else
+  CANDIDATE_URL="$(gcloud run services describe "$SERVICE_NAME" \
     --project "$PROJECT_ID" \
     --region "$REGION" \
-    --format='value(status.latestReadyRevisionName)')"
-  printf 'Released %s to %s\n' "$REVISION" "$SERVICE_URL"
-  exit 0
+    --format='csv[no-heading](status.traffic.tag,status.traffic.url)' \
+    | awk -F, '$1 == "candidate" { print $2; exit }')"
+  SERVICE_URL="$CANDIDATE_URL" "$(dirname "$0")/smoke-test.sh"
 fi
 
-CANDIDATE_URL="$(gcloud run services describe "$SERVICE_NAME" \
-  --project "$PROJECT_ID" \
-  --region "$REGION" \
-  --format='csv[no-heading](status.traffic.tag,status.traffic.url)' \
-  | awk -F, '$1 == "candidate" { print $2; exit }')"
-SERVICE_URL="$CANDIDATE_URL" "$(dirname "$0")/smoke-test.sh"
-
-REVISION="$(gcloud run services describe "$SERVICE_NAME" \
-  --project "$PROJECT_ID" \
-  --region "$REGION" \
-  --format='value(status.latestReadyRevisionName)')"
 gcloud run services update-traffic "$SERVICE_NAME" \
   --project "$PROJECT_ID" \
   --region "$REGION" \
   --to-revisions "${REVISION}=100" \
   --quiet
 
+traffic_revision="$(gcloud run services describe "$SERVICE_NAME" \
+  --project "$PROJECT_ID" \
+  --region "$REGION" \
+  --format='value(status.traffic[0].revisionName)')"
+traffic_percent="$(gcloud run services describe "$SERVICE_NAME" \
+  --project "$PROJECT_ID" \
+  --region "$REGION" \
+  --format='value(status.traffic[0].percent)')"
+traffic_image="$(gcloud run revisions describe "$traffic_revision" \
+  --project "$PROJECT_ID" \
+  --region "$REGION" \
+  --format='value(spec.containers[0].image)')"
+if [[ "$traffic_revision" != "$REVISION" || "$traffic_percent" != "100" || "$traffic_image" != "$IMAGE" ]]; then
+  printf 'Traffic verification failed for %s: revision=%s percent=%s image=%s expected_revision=%s expected_image=%s\n' \
+    "$SERVICE_NAME" "$traffic_revision" "$traffic_percent" "$traffic_image" "$REVISION" "$IMAGE" >&2
+  exit 1
+fi
+
 SERVICE_URL="$(gcloud run services describe "$SERVICE_NAME" \
   --project "$PROJECT_ID" \
   --region "$REGION" \
   --format='value(status.url)')"
 SERVICE_URL="$SERVICE_URL" "$(dirname "$0")/smoke-test.sh"
-printf 'Released %s to %s\n' "$REVISION" "$SERVICE_URL"
+printf 'Released %s to %s image=%s\n' "$REVISION" "$SERVICE_URL" "$IMAGE"
