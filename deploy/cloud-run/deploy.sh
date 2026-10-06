@@ -46,10 +46,51 @@ gcloud run jobs deploy "$MIGRATION_JOB" \
   --task-timeout 15m \
   --quiet
 
+latest_migration_execution() {
+  gcloud run jobs executions list \
+    --job "$MIGRATION_JOB" \
+    --project "$PROJECT_ID" \
+    --region "$REGION" \
+    --sort-by='~metadata.creationTimestamp' \
+    --limit 1 \
+    --format='value(metadata.name)' 2>/dev/null || true
+}
+
+report_migration_failure() {
+  local execution="$1"
+  printf 'Migration execution failed: job=%s execution=%s image=%s\n' \
+    "$MIGRATION_JOB" "${execution:-unknown}" "$IMAGE" >&2
+  if [[ -n "$execution" ]]; then
+    gcloud run jobs executions describe "$execution" \
+      --job "$MIGRATION_JOB" \
+      --project "$PROJECT_ID" \
+      --region "$REGION" \
+      --format='yaml(metadata.name,status.conditions,status.failedCount,status.cancelledCount,status.completionTime)' >&2 || true
+    printf 'Migration execution logs:\n' >&2
+    gcloud logging read \
+      "resource.type=cloud_run_job AND resource.labels.job_name=${MIGRATION_JOB} AND labels.run.googleapis.com/execution_name=${execution}" \
+      --project "$PROJECT_ID" \
+      --limit 80 \
+      --format='value(timestamp,textPayload,jsonPayload.message)' >&2 || true
+  fi
+}
+
+migration_execution=""
+set +e
 gcloud run jobs execute "$MIGRATION_JOB" \
   --project "$PROJECT_ID" \
   --region "$REGION" \
   --wait
+migration_status=$?
+set -e
+if [[ "$migration_status" -ne 0 ]]; then
+  migration_execution="$(latest_migration_execution)"
+  report_migration_failure "$migration_execution"
+  exit "$migration_status"
+fi
+migration_execution="$(latest_migration_execution)"
+printf 'Migration completed: job=%s execution=%s image=%s\n' \
+  "$MIGRATION_JOB" "${migration_execution:-unknown}" "$IMAGE"
 
 deploy_args=(
   run deploy "$SERVICE_NAME"
@@ -102,9 +143,15 @@ for attempt in {1..60}; do
   sleep 5
 done
 if [[ "$revision_image" != "$IMAGE" || "$revision_ready" != "True" ]]; then
-  printf 'Revision %s did not become ready with image %s\n' "$REVISION" "$IMAGE" >&2
+  printf 'Revision readiness failed: service=%s revision=%s expected_image=%s actual_image=%s ready=%s\n' \
+    "$SERVICE_NAME" "$REVISION" "$IMAGE" "$revision_image" "$revision_ready" >&2
+  gcloud run revisions describe "$REVISION" \
+    --project "$PROJECT_ID" \
+    --region "$REGION" \
+    --format='yaml(metadata.name,status.conditions,status.logUrl)' >&2 || true
   exit 1
 fi
+printf 'Revision ready: service=%s revision=%s image=%s\n' "$SERVICE_NAME" "$REVISION" "$IMAGE"
 
 if [[ -z "$existing_ready_revision" ]]; then
   SERVICE_URL="$(gcloud run services describe "$SERVICE_NAME" \
@@ -121,6 +168,7 @@ else
   SERVICE_URL="$CANDIDATE_URL" "$(dirname "$0")/smoke-test.sh"
 fi
 
+printf 'Promoting traffic: service=%s revision=%s image=%s percent=100\n' "$SERVICE_NAME" "$REVISION" "$IMAGE"
 gcloud run services update-traffic "$SERVICE_NAME" \
   --project "$PROJECT_ID" \
   --region "$REGION" \
@@ -140,10 +188,16 @@ traffic_image="$(gcloud run revisions describe "$traffic_revision" \
   --region "$REGION" \
   --format='value(spec.containers[0].image)')"
 if [[ "$traffic_revision" != "$REVISION" || "$traffic_percent" != "100" || "$traffic_image" != "$IMAGE" ]]; then
-  printf 'Traffic verification failed for %s: revision=%s percent=%s image=%s expected_revision=%s expected_image=%s\n' \
+  printf 'Traffic verification failed: service=%s revision=%s percent=%s image=%s expected_revision=%s expected_image=%s\n' \
     "$SERVICE_NAME" "$traffic_revision" "$traffic_percent" "$traffic_image" "$REVISION" "$IMAGE" >&2
+  gcloud run services describe "$SERVICE_NAME" \
+    --project "$PROJECT_ID" \
+    --region "$REGION" \
+    --format='yaml(status.traffic,status.latestReadyRevisionName,status.latestCreatedRevisionName)' >&2 || true
   exit 1
 fi
+printf 'Traffic verified: service=%s revision=%s percent=%s image=%s\n' \
+  "$SERVICE_NAME" "$traffic_revision" "$traffic_percent" "$traffic_image"
 
 SERVICE_URL="$(gcloud run services describe "$SERVICE_NAME" \
   --project "$PROJECT_ID" \

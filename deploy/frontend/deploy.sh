@@ -55,10 +55,17 @@ for attempt in {1..60}; do
   sleep 5
 done
 if [[ "$revision_image" != "$IMAGE" || "$revision_ready" != "True" ]]; then
-  printf 'Revision %s did not become ready with image %s\n' "$revision" "$IMAGE" >&2
+  printf 'Revision readiness failed: service=%s revision=%s expected_image=%s actual_image=%s ready=%s\n' \
+    "$SERVICE_NAME" "$revision" "$IMAGE" "$revision_image" "$revision_ready" >&2
+  gcloud run revisions describe "$revision" \
+    --project "$PROJECT_ID" \
+    --region "$REGION" \
+    --format='yaml(metadata.name,status.conditions,status.logUrl)' >&2 || true
   exit 1
 fi
+printf 'Revision ready: service=%s revision=%s image=%s\n' "$SERVICE_NAME" "$revision" "$IMAGE"
 
+printf 'Promoting traffic: service=%s revision=%s image=%s percent=100\n' "$SERVICE_NAME" "$revision" "$IMAGE"
 gcloud run services update-traffic "$SERVICE_NAME" \
   --project "$PROJECT_ID" \
   --region "$REGION" \
@@ -78,10 +85,16 @@ traffic_image="$(gcloud run revisions describe "$traffic_revision" \
   --region "$REGION" \
   --format='value(spec.containers[0].image)')"
 if [[ "$traffic_revision" != "$revision" || "$traffic_percent" != "100" || "$traffic_image" != "$IMAGE" ]]; then
-  printf 'Traffic verification failed for %s: revision=%s percent=%s image=%s expected_revision=%s expected_image=%s\n' \
+  printf 'Traffic verification failed: service=%s revision=%s percent=%s image=%s expected_revision=%s expected_image=%s\n' \
     "$SERVICE_NAME" "$traffic_revision" "$traffic_percent" "$traffic_image" "$revision" "$IMAGE" >&2
+  gcloud run services describe "$SERVICE_NAME" \
+    --project "$PROJECT_ID" \
+    --region "$REGION" \
+    --format='yaml(status.traffic,status.latestReadyRevisionName,status.latestCreatedRevisionName)' >&2 || true
   exit 1
 fi
+printf 'Traffic verified: service=%s revision=%s percent=%s image=%s\n' \
+  "$SERVICE_NAME" "$traffic_revision" "$traffic_percent" "$traffic_image"
 
 service_url="$(gcloud run services describe "$SERVICE_NAME" \
   --project "$PROJECT_ID" \
