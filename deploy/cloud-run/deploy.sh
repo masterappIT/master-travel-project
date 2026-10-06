@@ -65,14 +65,30 @@ fi
 printf 'Renderer revision ready: service=%s revision=%s image=%s\n' \
   "$SHARE_RENDERER_SERVICE_NAME" "$renderer_revision" "$SHARE_RENDERER_IMAGE"
 
-renderer_traffic_revision="$(gcloud run services describe "$SHARE_RENDERER_SERVICE_NAME" \
+printf 'Promoting renderer traffic: service=%s revision=%s image=%s percent=100\n' \
+  "$SHARE_RENDERER_SERVICE_NAME" "$renderer_revision" "$SHARE_RENDERER_IMAGE"
+gcloud run services update-traffic "$SHARE_RENDERER_SERVICE_NAME" \
   --project "$PROJECT_ID" \
   --region "$REGION" \
-  --format='value(status.traffic[0].revisionName)')"
-renderer_traffic_percent="$(gcloud run services describe "$SHARE_RENDERER_SERVICE_NAME" \
-  --project "$PROJECT_ID" \
-  --region "$REGION" \
-  --format='value(status.traffic[0].percent)')"
+  --to-revisions "${renderer_revision}=100" \
+  --quiet
+
+renderer_traffic_revision=""
+renderer_traffic_percent=""
+for attempt in {1..60}; do
+  renderer_traffic_revision="$(gcloud run services describe "$SHARE_RENDERER_SERVICE_NAME" \
+    --project "$PROJECT_ID" \
+    --region "$REGION" \
+    --format='value(status.traffic[0].revisionName)')"
+  renderer_traffic_percent="$(gcloud run services describe "$SHARE_RENDERER_SERVICE_NAME" \
+    --project "$PROJECT_ID" \
+    --region "$REGION" \
+    --format='value(status.traffic[0].percent)')"
+  if [[ "$renderer_traffic_revision" == "$renderer_revision" && "$renderer_traffic_percent" == "100" ]]; then
+    break
+  fi
+  sleep 5
+done
 if [[ "$renderer_traffic_revision" != "$renderer_revision" || "$renderer_traffic_percent" != "100" ]]; then
   printf 'Renderer traffic verification failed: service=%s revision=%s percent=%s expected_revision=%s\n' \
     "$SHARE_RENDERER_SERVICE_NAME" "$renderer_traffic_revision" "$renderer_traffic_percent" "$renderer_revision" >&2
