@@ -226,7 +226,7 @@ export const LoginSettingsPage = {
     const loginMethods = reactive([])
     const previewClient = ref('passenger')
     const previewRevision = ref(0)
-    const previewBaseUrls = { passenger: import.meta.env.VITE_PASSENGER_PREVIEW_URL || 'http://127.0.0.1:5173', miniProgram: import.meta.env.VITE_PASSENGER_PREVIEW_URL || 'http://127.0.0.1:5173', driver: import.meta.env.VITE_DRIVER_PREVIEW_URL || 'http://127.0.0.1:8080' }
+    const previewBaseUrls = { passenger: import.meta.env.VITE_PASSENGER_PREVIEW_URL || 'http://127.0.0.1:5173', miniProgram: import.meta.env.VITE_PASSENGER_PREVIEW_URL || 'http://127.0.0.1:5173', driver: import.meta.env.VITE_DRIVER_PREVIEW_URL || 'http://127.0.0.1:8085' }
     const previewToken = ref('')
     const previewUrl = computed(() => {
       const baseUrl = previewBaseUrls[previewClient.value]
