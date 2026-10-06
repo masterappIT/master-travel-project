@@ -228,15 +228,17 @@ Migration 必須遵循 expand/contract：先加入向後相容結構，再部署
 5. 建置 Passenger H5、微信小程序、Admin 與 Driver Web。
 6. 建置並推送 `passenger`、`admin`、`driver`、`api`、`share-renderer` images。
 7. 解析每個 image 的 SHA-256 digest。
-8. 建立 Cloud SQL pre-migration backup。
-9. 部署 Share Renderer。
-10. 執行 migration Cloud Run Job。
-11. 部署 API candidate revision。
-12. 執行 `/health/live` 與 `/health/ready` smoke tests。
-13. 成功後切換 API 100% traffic。
-14. 再次檢查正式 API URL。
-15. 部署三個前端 Cloud Run services。
-16. 保留微信小程序 build artifact 30 天。
+8. Before any production mutation, the workflow re-checks that `origin/main` still equals the workflow commit; a queued stale run stops without backup, migration, API promotion, or frontend deployment.
+9. 建立 Cloud SQL pre-migration backup。
+10. 部署 Share Renderer。
+11. 執行 migration Cloud Run Job。
+12. 部署 API candidate revision。
+13. 執行 `/health/live` 與 `/health/ready` smoke tests。
+14. 成功後切換 API 100% traffic。
+15. 再次檢查正式 API URL。
+16. 部署三個前端 Cloud Run services。
+17. 前端部署前再次檢查 `origin/main`，避免過時 workflow 修改前端流量。
+18. 保留微信小程序 build artifact 30 天。
 
 正式部署一律使用：
 

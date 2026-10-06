@@ -24,6 +24,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Verify commit is still current on main
+        run: |
+          set -euo pipefail
+          remote_sha="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          if [[ -z "$remote_sha" ]]; then
+            printf 'Unable to resolve origin/main; refusing production deployment.\n' >&2
+            exit 1
+          fi
+          if [[ "$remote_sha" != "${GITHUB_SHA}" ]]; then
+            printf 'Refusing stale production deployment: workflow_sha=%s current_main=%s\n' \
+              "$GITHUB_SHA" "$remote_sha" >&2
+            exit 1
+          fi
+          printf 'Production commit is current: %s\n' "$GITHUB_SHA"
+
       - uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
@@ -123,12 +138,34 @@ jobs:
           digest="$(gcloud artifacts docker images describe "$image" --format='value(image_summary.digest)')"
           printf 'image=%s@%s\n' "${image%:*}" "$digest" >> "$GITHUB_OUTPUT"
 
+      - name: Verify commit before database backup
+        run: |
+          set -euo pipefail
+          remote_sha="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          if [[ "$remote_sha" != "${GITHUB_SHA}" ]]; then
+            printf 'Refusing stale database mutation: workflow_sha=%s current_main=%s\n' \
+              "$GITHUB_SHA" "$remote_sha" >&2
+            exit 1
+          fi
+          printf 'Database mutation authorized for current commit: %s\n' "$GITHUB_SHA"
+
       - name: Create pre-migration database backup
         run: >-
           gcloud sql backups create
           --project "${{ vars.GCP_PROJECT_ID }}"
           --instance "${{ vars.GCP_SQL_INSTANCE_NAME }}"
           --description "pre-release-${GITHUB_SHA}"
+
+      - name: Verify commit before production mutation
+        run: |
+          set -euo pipefail
+          remote_sha="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          if [[ "$remote_sha" != "${GITHUB_SHA}" ]]; then
+            printf 'Refusing stale production mutation: workflow_sha=%s current_main=%s\n' \
+              "$GITHUB_SHA" "$remote_sha" >&2
+            exit 1
+          fi
+          printf 'Production mutation authorized for current commit: %s\n' "$GITHUB_SHA"
 
       - name: Migrate, deploy candidate, and promote
         env:
@@ -153,6 +190,17 @@ jobs:
           SHARE_RENDERER_IMAGE: ${{ steps.renderer-image.outputs.image }}
           SHARE_RENDERER_SERVICE_ACCOUNT: ${{ vars.GCP_SHARE_RENDERER_SERVICE_ACCOUNT || vars.GCP_RUNTIME_SERVICE_ACCOUNT }}
         run: ./deploy/cloud-run/deploy.sh
+
+      - name: Verify commit before frontend mutation
+        run: |
+          set -euo pipefail
+          remote_sha="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          if [[ "$remote_sha" != "${GITHUB_SHA}" ]]; then
+            printf 'Refusing stale frontend mutation: workflow_sha=%s current_main=%s\n' \
+              "$GITHUB_SHA" "$remote_sha" >&2
+            exit 1
+          fi
+          printf 'Frontend mutation authorized for current commit: %s\n' "$GITHUB_SHA"
 
       - name: Deploy production frontends
         env:
