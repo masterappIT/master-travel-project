@@ -31,12 +31,12 @@ Production access must use separate runtime, migration, and GitHub deploy servic
 2. All quality gates must pass.
 3. The workflow builds and pushes the API image and resolves its digest.
 4. Cloud SQL creates an on-demand pre-migration backup. Do not continue if it fails.
-5. The deployment script updates the share renderer, then runs `prisma migrate deploy` in the migration job using the API image digest. A migration failure stops subsequent deployment and prints the execution conditions plus recent Cloud Logging entries; it does not automatically roll back the renderer.
+5. The deployment script updates the share renderer, waits for its new revision to become Ready, verifies the immutable image and confirms that revision receives 100% traffic, then runs Prisma migration in the migration job using the API image digest. A migration failure stops subsequent deployment and prints the execution conditions plus recent Cloud Logging entries; it does not automatically roll back the renderer.
 6. The first revision creates the service and is tested immediately at its public URL.
 7. Later revisions deploy as candidates with no production traffic. Readiness failures print the Cloud Run conditions, revision image, and expected image.
 8. `/health/live` and `/health/ready` smoke tests run against the candidate URL.
 9. Before promotion, the target revision and image are printed. Only a successful candidate receives 100% traffic; the promotion result prints the serving revision and immutable image digest and is verified again.
-10. Monitor the release for at least 30 minutes before closing the change.
+10. Monitor the release for at least 30 minutes before closing the change. If rollback is required, `rollback.sh` verifies that the requested revision is serving 100% traffic and that its image matches the requested revision before running smoke tests.
 
 API and frontend deployment scripts verify the created revision's immutable image and
 read the `Ready` condition by type from Cloud Run JSON using `revision-ready.py`.

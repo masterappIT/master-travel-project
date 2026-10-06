@@ -28,6 +28,63 @@ gcloud run deploy "$SHARE_RENDERER_SERVICE_NAME" \
   --startup-probe "httpGet.path=/health/live,httpGet.port=8080,initialDelaySeconds=0,timeoutSeconds=3,periodSeconds=5,failureThreshold=12" \
   --allow-unauthenticated --quiet
 
+renderer_revision="$(gcloud run services describe "$SHARE_RENDERER_SERVICE_NAME" \
+  --project "$PROJECT_ID" \
+  --region "$REGION" \
+  --format='value(status.latestCreatedRevisionName)')"
+if [[ -z "$renderer_revision" ]]; then
+  printf 'Cloud Run did not report a created renderer revision for %s\n' "$SHARE_RENDERER_SERVICE_NAME" >&2
+  exit 1
+fi
+
+renderer_image=""
+renderer_ready=""
+for attempt in {1..60}; do
+  renderer_image="$(gcloud run revisions describe "$renderer_revision" \
+    --project "$PROJECT_ID" \
+    --region "$REGION" \
+    --format='value(spec.containers[0].image)' 2>/dev/null || true)"
+  renderer_ready="$(gcloud run revisions describe "$renderer_revision" \
+    --project "$PROJECT_ID" \
+    --region "$REGION" \
+    --format=json | python3 "$(dirname "$0")/revision-ready.py")"
+  if [[ "$renderer_image" == "$SHARE_RENDERER_IMAGE" && "$renderer_ready" == "True" ]]; then
+    break
+  fi
+  sleep 5
+done
+if [[ "$renderer_image" != "$SHARE_RENDERER_IMAGE" || "$renderer_ready" != "True" ]]; then
+  printf 'Renderer revision readiness failed: service=%s revision=%s expected_image=%s actual_image=%s ready=%s\n' \
+    "$SHARE_RENDERER_SERVICE_NAME" "$renderer_revision" "$SHARE_RENDERER_IMAGE" "$renderer_image" "$renderer_ready" >&2
+  gcloud run revisions describe "$renderer_revision" \
+    --project "$PROJECT_ID" \
+    --region "$REGION" \
+    --format='yaml(metadata.name,status.conditions,status.logUrl)' >&2 || true
+  exit 1
+fi
+printf 'Renderer revision ready: service=%s revision=%s image=%s\n' \
+  "$SHARE_RENDERER_SERVICE_NAME" "$renderer_revision" "$SHARE_RENDERER_IMAGE"
+
+renderer_traffic_revision="$(gcloud run services describe "$SHARE_RENDERER_SERVICE_NAME" \
+  --project "$PROJECT_ID" \
+  --region "$REGION" \
+  --format='value(status.traffic[0].revisionName)')"
+renderer_traffic_percent="$(gcloud run services describe "$SHARE_RENDERER_SERVICE_NAME" \
+  --project "$PROJECT_ID" \
+  --region "$REGION" \
+  --format='value(status.traffic[0].percent)')"
+if [[ "$renderer_traffic_revision" != "$renderer_revision" || "$renderer_traffic_percent" != "100" ]]; then
+  printf 'Renderer traffic verification failed: service=%s revision=%s percent=%s expected_revision=%s\n' \
+    "$SHARE_RENDERER_SERVICE_NAME" "$renderer_traffic_revision" "$renderer_traffic_percent" "$renderer_revision" >&2
+  gcloud run services describe "$SHARE_RENDERER_SERVICE_NAME" \
+    --project "$PROJECT_ID" \
+    --region "$REGION" \
+    --format='yaml(status.traffic,status.latestReadyRevisionName,status.latestCreatedRevisionName)' >&2 || true
+  exit 1
+fi
+printf 'Renderer traffic verified: service=%s revision=%s percent=%s image=%s\n' \
+  "$SHARE_RENDERER_SERVICE_NAME" "$renderer_traffic_revision" "$renderer_traffic_percent" "$renderer_image"
+
 RENDERER_URL="$(gcloud run services describe "$SHARE_RENDERER_SERVICE_NAME" --project "$PROJECT_ID" --region "$REGION" --format='value(status.url)')"
 if [[ "$SHARE_RENDERER_ORIGIN" != "$RENDERER_URL" ]]; then
   printf 'Warning: SHARE_RENDERER_ORIGIN (%s) differs from deployed renderer URL (%s)\n' "$SHARE_RENDERER_ORIGIN" "$RENDERER_URL" >&2

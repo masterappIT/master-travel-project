@@ -19,6 +19,34 @@ gcloud run services update-traffic "$SERVICE_NAME" \
   --region "$REGION" \
   --to-revisions "${REVISION}=100"
 
+traffic_revision="$(gcloud run services describe "$SERVICE_NAME" \
+  --project "$PROJECT_ID" \
+  --region "$REGION" \
+  --format='value(status.traffic[0].revisionName)')"
+traffic_percent="$(gcloud run services describe "$SERVICE_NAME" \
+  --project "$PROJECT_ID" \
+  --region "$REGION" \
+  --format='value(status.traffic[0].percent)')"
+revision_image="$(gcloud run revisions describe "$REVISION" \
+  --project "$PROJECT_ID" \
+  --region "$REGION" \
+  --format='value(spec.containers[0].image)')"
+traffic_image="$(gcloud run revisions describe "$traffic_revision" \
+  --project "$PROJECT_ID" \
+  --region "$REGION" \
+  --format='value(spec.containers[0].image)')"
+if [[ "$traffic_revision" != "$REVISION" || "$traffic_percent" != "100" || "$traffic_image" != "$revision_image" ]]; then
+  printf 'Rollback traffic verification failed: service=%s revision=%s percent=%s image=%s expected_revision=%s expected_image=%s\n' \
+    "$SERVICE_NAME" "$traffic_revision" "$traffic_percent" "$traffic_image" "$REVISION" "$revision_image" >&2
+  gcloud run services describe "$SERVICE_NAME" \
+    --project "$PROJECT_ID" \
+    --region "$REGION" \
+    --format='yaml(status.traffic,status.latestReadyRevisionName,status.latestCreatedRevisionName)' >&2 || true
+  exit 1
+fi
+printf 'Rollback traffic verified: service=%s revision=%s percent=%s image=%s\n' \
+  "$SERVICE_NAME" "$traffic_revision" "$traffic_percent" "$traffic_image"
+
 SERVICE_URL="$(gcloud run services describe "$SERVICE_NAME" \
   --project "$PROJECT_ID" \
   --region "$REGION" \

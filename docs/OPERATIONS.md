@@ -37,7 +37,7 @@
 | --- | --- |
 | API | candidate revision Ready；`/health/live` 與 `/health/ready` 通過；`status.traffic` 為目標 revision 100%；revision image 為本次 SHA256 image |
 | Passenger / Admin / Driver | revision Ready；`status.traffic` 為目標 revision 100%；revision image 為本次 SHA256 image；服務 URL `/` 可達 |
-| Share Renderer | deployed revision 與 immutable image 已記錄；其服務 URL 與 `SHARE_RENDERER_ORIGIN` 一致；API 使用的 renderer 來源正確 |
+| Share Renderer | deployed revision Ready；revision image 為本次 SHA256 image；`status.traffic` 為目標 revision 100%；其服務 URL 與 `SHARE_RENDERER_ORIGIN` 一致；API 使用的 renderer 來源正確 |
 
 只有 Cloud Run `status.traffic` 明確顯示目標 revision 100%，且該 revision 的 image digest 等於本次 workflow 產物，才可說「該服務已承接本次版本流量」。revision 建立成功、`latestReadyRevisionName` 正確、deploy 命令成功或正式 URL 回傳 HTTP 200，都不能單獨證明流量已切換。
 
@@ -49,7 +49,7 @@
 2. Quality gates 通過。
 3. 建置前端、微信 artifact 與 immutable images。
 4. 建立 Cloud SQL pre-migration backup。
-5. 部署 Share Renderer。
+5. 部署 Share Renderer，等待其 Revision Ready，核對 immutable image 並確認該 Revision 承接 100% traffic。
 6. 執行 migration job；失敗即停止後續 API／前端發布。
 7. 部署 API candidate、執行 health smoke tests，通過後切換 API 100% traffic 並核對 serving revision。
 8. 再次確認 workflow SHA 仍為目前 `main`，部署三個前端並逐一核對 revision、traffic、image。
