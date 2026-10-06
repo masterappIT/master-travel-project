@@ -23,9 +23,11 @@ export default {
   data() {
     const { currency, label, loadSettings, setCurrency } = useCurrency()
     loadSettings()
-    // The mini-program page host can remain mounted while App.vue lifecycle
-    // hooks are deferred, so the splash must not cover native pages there.
-    const initialShowSplash = typeof window !== 'undefined' || typeof uni !== 'undefined' && uni.getSystemInfoSync?.().uniPlatform === 'app'
+    // Keep the branded splash visible on browser, App Plus, and the WeChat mini-program.
+    // The mini-program page host can remain mounted while App.vue lifecycle hooks are deferred,
+    // so the splash is intentionally controlled by this root shell rather than a page.
+    const platform = typeof uni !== 'undefined' ? uni.getSystemInfoSync?.().uniPlatform : undefined
+    const initialShowSplash = typeof window !== 'undefined' || platform === 'app' || platform === 'mp-weixin'
     return { showSplash: initialShowSplash, splashLeaving: false, swipeStartX: 0, swipeStartY: 0, currency, label, switchCurrency: setCurrency }
   },
   methods: {
