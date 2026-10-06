@@ -19,14 +19,31 @@ gcloud run services update-traffic "$SERVICE_NAME" \
   --region "$REGION" \
   --to-revisions "${REVISION}=100"
 
-traffic_revision="$(gcloud run services describe "$SERVICE_NAME" \
-  --project "$PROJECT_ID" \
-  --region "$REGION" \
-  --format='value(status.traffic[0].revisionName)')"
-traffic_percent="$(gcloud run services describe "$SERVICE_NAME" \
-  --project "$PROJECT_ID" \
-  --region "$REGION" \
-  --format='value(status.traffic[0].percent)')"
+traffic_revision=""
+traffic_percent=""
+for attempt in {1..60}; do
+  traffic_revision="$(gcloud run services describe "$SERVICE_NAME" \
+    --project "$PROJECT_ID" \
+    --region "$REGION" \
+    --format='value(status.traffic[0].revisionName)')"
+  traffic_percent="$(gcloud run services describe "$SERVICE_NAME" \
+    --project "$PROJECT_ID" \
+    --region "$REGION" \
+    --format='value(status.traffic[0].percent)')"
+  if [[ "$traffic_revision" == "$REVISION" && "$traffic_percent" == "100" ]]; then
+    break
+  fi
+  sleep 5
+done
+if [[ "$traffic_revision" != "$REVISION" || "$traffic_percent" != "100" ]]; then
+  printf 'Rollback traffic convergence timed out: service=%s revision=%s percent=%s expected_revision=%s\n' \
+    "$SERVICE_NAME" "$traffic_revision" "$traffic_percent" "$REVISION" >&2
+  gcloud run services describe "$SERVICE_NAME" \
+    --project "$PROJECT_ID" \
+    --region "$REGION" \
+    --format='yaml(status.traffic,status.latestReadyRevisionName,status.latestCreatedRevisionName)' >&2 || true
+  exit 1
+fi
 revision_image="$(gcloud run revisions describe "$REVISION" \
   --project "$PROJECT_ID" \
   --region "$REGION" \
