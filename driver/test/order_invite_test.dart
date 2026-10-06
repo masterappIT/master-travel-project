@@ -179,7 +179,12 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('手機驗證'), findsNWidgets(2));
-    expect(find.widgetWithText(TextField, '00000'), findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (widget) => widget is TextField && widget.decoration?.hintText == '請輸入 5 位驗證碼',
+      ),
+      findsOneWidget,
+    );
     expect(find.text('獲取驗證碼'), findsOneWidget);
     expect(find.text('使用已登入正式司機身份接受'), findsOneWidget);
   });
