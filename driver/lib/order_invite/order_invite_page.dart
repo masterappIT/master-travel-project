@@ -52,7 +52,7 @@ class _OrderInvitePageState extends State<OrderInvitePage> {
       widget.sessionStore ?? BrowserOrderInviteSessionStore();
   final _name = TextEditingController();
   final _phone = TextEditingController();
-  final _code = TextEditingController(text: '00000');
+  final _code = TextEditingController();
   final _hkMacauPhone = TextEditingController();
   final _mainlandPhone = TextEditingController();
   final _hkPlate = TextEditingController();

@@ -1,3 +1,14 @@
+import { ref } from 'vue'
+
+export const PaymentCnConfigModes = {
+  name: 'PaymentCnConfigModes',
+  setup() {
+    const mode = ref('h5')
+    return { mode }
+  },
+  template: String.raw`<div class="payment-cn-mode-config"><nav class="payment-cn-mode-tabs" aria-label="內地支付寶接入模式"><button v-for="item in [{key:'h5',label:'H5'},{key:'app',label:'App'},{key:'page',label:'電腦網站'},{key:'isv',label:'服務商'}]" :key="item.key" type="button" :class="{active: mode === item.key}" @click="mode = item.key">{{item.label}}</button></nav><form class="payment-cn-mode-form" @submit.prevent><template v-if="mode === 'h5'"><label>支付產品<input value="手機網站支付（H5）" disabled /></label><label>接口名稱<input value="alipay.trade.wap.pay" disabled /></label><label class="wide">Product Code<input value="QUICK_WAP_WAY" disabled /></label><label class="wide">回跳地址（Return URL）<input placeholder="尚未接入" disabled /></label></template><template v-else-if="mode === 'app'"><label>支付產品<input value="App 支付" disabled /></label><label>接口名稱<input value="alipay.trade.app.pay" disabled /></label><label class="wide">Product Code<input value="QUICK_MSECURITY_PAY" disabled /></label><label class="wide">異步通知地址（Notify URL）<input placeholder="尚未接入" disabled /></label></template><template v-else-if="mode === 'page'"><label>支付產品<input value="電腦網站支付" disabled /></label><label>接口名稱<input value="alipay.trade.page.pay" disabled /></label><label class="wide">Product Code<input value="FAST_INSTANT_TRADE_PAY" disabled /></label><label class="wide">回跳地址（Return URL）<input placeholder="尚未接入" disabled /></label></template><template v-else><label>支付產品<input value="服務商模式" disabled /></label><label>服務商身份<input placeholder="待官方產品契約確認" disabled /></label><label>授權憑證<input placeholder="待官方產品契約確認" disabled /></label><label>被服務商商戶號<input placeholder="待官方產品契約確認" disabled /></label></template><div class="wide payment-cn-mode-form-note">人民幣結算 · 純 UI 預覽 · 尚未接入保存或連線測試</div></form></div>`
+}
+
 export const PaymentScopeTabs = {
   name: 'PaymentScopeTabs',
   props: { scope: { type: String, required: true } },

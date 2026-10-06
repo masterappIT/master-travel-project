@@ -7060,7 +7060,7 @@ class DriverOrderInviteController {
       !challenge || challenge.driverId || challenge.consumedAt ||
       challenge.invitationOrderUrlId !== invitation.invitation.id ||
       challenge.expiresAt.getTime() <= Date.now() || code.length !== 5 ||
-      !verifyPassword(code, challenge.codeHash)
+      !verifyStoredVerificationCode(code, challenge.codeHash)
     )
       throw new UnauthorizedException("Invalid invitation verification code");
     return { ok: true, challengeId: challenge.id, countryCode: challenge.countryCode, phone: challenge.phone };
