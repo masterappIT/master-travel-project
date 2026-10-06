@@ -248,18 +248,29 @@ gcloud run services update-traffic "$SERVICE_NAME" \
   --to-revisions "${REVISION}=100" \
   --quiet
 
-traffic_revision="$(gcloud run services describe "$SERVICE_NAME" \
-  --project "$PROJECT_ID" \
-  --region "$REGION" \
-  --format='value(status.traffic[0].revisionName)')"
-traffic_percent="$(gcloud run services describe "$SERVICE_NAME" \
-  --project "$PROJECT_ID" \
-  --region "$REGION" \
-  --format='value(status.traffic[0].percent)')"
-traffic_image="$(gcloud run revisions describe "$traffic_revision" \
-  --project "$PROJECT_ID" \
-  --region "$REGION" \
-  --format='value(spec.containers[0].image)')"
+traffic_revision=""
+traffic_percent=""
+traffic_image=""
+for attempt in {1..60}; do
+  traffic_revision="$(gcloud run services describe "$SERVICE_NAME" \
+    --project "$PROJECT_ID" \
+    --region "$REGION" \
+    --format='value(status.traffic[0].revisionName)')"
+  traffic_percent="$(gcloud run services describe "$SERVICE_NAME" \
+    --project "$PROJECT_ID" \
+    --region "$REGION" \
+    --format='value(status.traffic[0].percent)')"
+  if [[ "$traffic_revision" == "$REVISION" && "$traffic_percent" == "100" ]]; then
+    traffic_image="$(gcloud run revisions describe "$traffic_revision" \
+      --project "$PROJECT_ID" \
+      --region "$REGION" \
+      --format='value(spec.containers[0].image)')"
+    if [[ "$traffic_image" == "$IMAGE" ]]; then
+      break
+    fi
+  fi
+  sleep 5
+done
 if [[ "$traffic_revision" != "$REVISION" || "$traffic_percent" != "100" || "$traffic_image" != "$IMAGE" ]]; then
   printf 'Traffic verification failed: service=%s revision=%s percent=%s image=%s expected_revision=%s expected_image=%s\n' \
     "$SERVICE_NAME" "$traffic_revision" "$traffic_percent" "$traffic_image" "$REVISION" "$IMAGE" >&2
