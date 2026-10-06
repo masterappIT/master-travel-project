@@ -6,42 +6,54 @@
 
 發布、回滾、Git 回復及事故後整合遵循 [可信基線保護與變更、恢復控管 skill](../.github/skills/verified-baseline-change-control/SKILL.md)：保護已驗收版本與未提交工作，確認變更範圍及授權，沿用現有推送即發布流程。事故恢復時才補充相關版本狀態；流量回滾不等於 Git 或資料庫回復，問題版須隔離並從可信基線選擇性整合。workflow 成功與健康端點可達不能代替正式業務驗收，執行中流程不得回報為已完成。
 
-## 正式發布
+## 提交—推送—部署發布規範
 
-### 現行流程與文件邊界
+以下是一次正式發布的完整判定鏈；任何一項未完成，都只能稱為「開發中」或「發布中」，不可稱為「已部署」或「已恢復」。
 
-以下僅記錄目前文件所描述的既有操作順序，不逆轉「推送即發布」，也不把文件要求擴大成新的候選發布、人工切流量或額外審批流程。執行前仍以 [production workflow](../.github/workflows/deploy-production.yml) 與其呼叫腳本為準；本文件不是雲端現況證據：
+### A. 提交前：形成可追溯版本
 
-1. `main` push 或手動觸發。
+1. 確認工作目錄、分支、HEAD 及未提交／未追蹤檔案歸屬。
+2. 檢查完整 diff；不得只檢查最後一個測試或最後一個檔案。
+3. 列出受影響端別、API／shared／Prisma／CI／部署範圍及排除項目。
+4. 執行與範圍相符的 scope、dependency、端別驗證；單一測試通過不能代替完整驗證。
+5. 只有在差異、驗證結果與提交內容一致時才建立 commit。
+
+### B. 推送前：確認發布入口
+
+1. 確認 commit 已包含所有要發布的修改，工作目錄乾淨。
+2. 記錄完整 commit SHA，確認目前分支及目標為 `main`。
+3. 確認本次推送會觸發既有 `Deploy Production` workflow；不得把本機測試、手動 image 或手動 Cloud Run 更新當成正式部署完成。
+4. 推送後立即以 GitHub Actions run 的 SHA 作為唯一候選識別，不以本機 HEAD、快取的 `origin/main` 或局部測試結果替代。
+
+### C. workflow 中：候選建置與部署
+
+正式候選必須由同一個 workflow SHA 完成 quality gates、production builds、immutable image digests、backup、migration、revision readiness 及 smoke tests。workflow 的 stale-SHA 檢查失敗、任何 quality gate 失敗、migration 失敗或 smoke test 失敗，都代表本次發布未完成；不可跳過失敗步驟宣稱可發布。
+
+### D. Cloud Run 流量指向：部署完成的必要證據
+
+每個服務都必須同時核對「revision、image、traffic」三者：
+
+| 服務 | 必須核對 |
+| --- | --- |
+| API | candidate revision Ready；`/health/live` 與 `/health/ready` 通過；`status.traffic` 為目標 revision 100%；revision image 為本次 SHA256 image |
+| Passenger / Admin / Driver | revision Ready；`status.traffic` 為目標 revision 100%；revision image 為本次 SHA256 image；服務 URL `/` 可達 |
+| Share Renderer | deployed revision 與 immutable image 已記錄；其服務 URL 與 `SHARE_RENDERER_ORIGIN` 一致；API 使用的 renderer 來源正確 |
+
+只有 Cloud Run `status.traffic` 明確顯示目標 revision 100%，且該 revision 的 image digest 等於本次 workflow 產物，才可說「該服務已承接本次版本流量」。revision 建立成功、`latestReadyRevisionName` 正確、deploy 命令成功或正式 URL 回傳 HTTP 200，都不能單獨證明流量已切換。
+
+### F. 現行 workflow 順序
+
+實際執行仍以 [production workflow](../.github/workflows/deploy-production.yml) 與呼叫腳本為準，不新增手動切流量或額外發布階段：
+
+1. `main` push 或 `workflow_dispatch`。
 2. Quality gates 通過。
-3. 建置並推送 immutable images。
+3. 建置前端、微信 artifact 與 immutable images。
 4. 建立 Cloud SQL pre-migration backup。
 5. 部署 Share Renderer。
-6. 執行 migration job；失敗會中止後續發布，但不自動回滾已更新的 Renderer。
-7. 部署 API candidate（首次部署沒有既有 revision，直接建立服務並檢查）。
-8. 執行 health smoke test。
-9. 通過後切換 100% API traffic，並再次檢查正式 API URL。
-10. 部署三個前端服務。
-
-「candidate」在此沿用既有 workflow 的服務部署名稱，不代表要求新增 Cloud Run 候選階段。此次事故教訓只限於：回滾後流量可能仍固定在舊 Revision；新版本部署成功或正式網址 HTTP 200，不能單獨證明新版已承接流量。這是查核限制，不是要求使用者手動切流量或修改不在控制範圍內的腳本／workflow。
-
-## 發布後檢查
-
-### 版本與流量查核邊界
-
-發布結果依既有 workflow 回報，不另設全服務候選驗證表或新的發布階段。查核回滾後版本是否生效時，依可取得的證據核對本次產物、Revision 與實際 `status.traffic`，並區分部署結果與業務驗收；未知就標明未驗證，不宣稱已恢復，也不擅自切流量。
-
-現有版本指向正確時，不因歷史事故再次回滾或切換。超出控制範圍的腳本、workflow 或正式環境問題只回報，不把額外操作轉交使用者；不增加前端啟動負擔。
-
-既有發布後檢查項目：
-
-- API `/health/live`
-- API `/health/ready`
-- 前端 `/healthz`
-- 登入與主要 API critical path
-- Cloud Run revision、traffic 與 logs
-- migration job 成功
-- Cloud SQL backup 成功
+6. 執行 migration job；失敗即停止後續 API／前端發布。
+7. 部署 API candidate、執行 health smoke tests，通過後切換 API 100% traffic 並核對 serving revision。
+8. 再次確認 workflow SHA 仍為目前 `main`，部署三個前端並逐一核對 revision、traffic、image。
+9. 分開回報部署證據與業務驗收；微信 artifact、體驗版上傳及正式發布不混為同一結果。
 
 ## 監控與告警
 

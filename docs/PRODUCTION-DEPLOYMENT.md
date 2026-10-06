@@ -210,7 +210,19 @@ npm run prisma:migrate:deploy
 
 Migration 必須遵循 expand/contract：先加入向後相容結構，再部署程式與搬移資料，最後於後續版本移除舊結構。正式環境不使用自動 down migration。
 
-## 7. CI/CD 正式發布流程
+## 7.1 提交、推送與 Cloud Run 流量判定
+
+正式發布只接受同一個已提交 commit SHA 的完整 workflow 結果。單一測試、局部 build、未提交修改、手動 image 或單次 HTTP 200 均不可視為部署候選或部署完成。
+
+發布前必須確認：
+
+- 完整 diff 已檢查，工作目錄乾淨，所有要發布的修改已提交。
+- commit SHA、受影響端別及 quality gates 結果可追溯。
+- production build 已完成，所有正式 image 使用 immutable `service:<sha>@sha256:<digest>`。
+- backup、migration、revision readiness 與 smoke tests 均成功。
+
+發布完成必須逐服務核對 revision、image digest 與 `status.traffic`。只有目標 revision 的 traffic 明確為 100%，且其 image digest 等於本次 workflow 產物，才可判定該服務已承接本次版本。`latestReadyRevisionName`、deploy 命令成功或 URL HTTP 200 不能替代 traffic 證據。若任一服務的 traffic、revision 或 digest 未核實，整體只能回報為「部分完成／未驗證」，不可回報「正式部署完成」。
+
 
 正式 workflow 為 `.github/workflows/deploy-production.yml`。
 
