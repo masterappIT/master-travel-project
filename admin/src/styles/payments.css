@@ -69,10 +69,13 @@
   cursor: pointer;
 }
 .payment-settings-admin .payment-steps button:hover,
-.payment-settings-admin .payment-steps button:focus-visible { background: var(--payment-soft); outline: none; }
+.payment-settings-admin .payment-steps button:active,
+.payment-settings-admin .payment-steps button:focus-visible { color: var(--payment-muted); background: var(--payment-soft); outline: none; }
+.payment-settings-admin .payment-steps button.active,
+.payment-settings-admin .payment-steps button.active:active,
+.payment-settings-admin .payment-steps button.active:focus-visible { color: var(--payment-blue); background: var(--payment-blue-soft); font-weight: 700; }
 .payment-settings-admin .payment-steps button b { display: grid; place-items: center; flex: 0 0 24px; width: 24px; height: 24px; border: 1px solid #cfdbea; border-radius: 50%; color: var(--payment-muted); background: #fff; font-size: 11px; }
 .payment-settings-admin .payment-steps button i { margin-left: auto; color: var(--payment-blue); font-size: 10px; font-style: normal; }
-.payment-settings-admin .payment-steps button.active { color: var(--payment-blue); background: var(--payment-blue-soft); font-weight: 700; }
 .payment-settings-admin .payment-steps button.active b,
 .payment-settings-admin .payment-steps button.complete b { border-color: var(--payment-blue); color: #fff; background: var(--payment-blue); }
 .payment-settings-admin .payment-editor-main { display: flex; min-width: 0; min-height: 0; }
