@@ -50,6 +50,7 @@ export function createAdminResourceLoader({
       if (requestedView === 'notifications') viewPromise = resourceLoaders.notifications()
       if (requestedView === 'vehicles') viewPromise = resourceLoaders.vehicles()
       if (requestedView === 'route-pricing') viewPromise = resourceLoaders.routePricing()
+      if (requestedView === 'payments') viewPromise = resourceLoaders.payments()
 
       const [{ settings: settingsResponse }, administrator, viewResult] = await Promise.all([
         settingsPromise,

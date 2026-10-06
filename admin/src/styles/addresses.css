@@ -21,9 +21,9 @@
 .summary-card span { color: #647892; font-size: 13px; font-weight: 700; display: block; }
 .summary-card strong { font-size: 28px; color: #1e293b; margin-top: 4px; display: block; }
 
-.promo-toolbar { align-items: center; padding: 20px 24px; border-bottom: 1px solid #edf1f6; }
+.promo-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 20px 24px; border-bottom: 1px solid #edf1f6; }
 .promo-toolbar h2 { margin: 0; color: #0f172a; font-size: 20px; font-weight: 700; }
-.promotion-add-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.promotion-add-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-left: auto; justify-content: flex-end; }
 .add-btn { min-height: 44px; border: 0; border-radius: 10px; padding: 10px 16px; color: #fff; font-size: 13px; font-weight: 700; transition: all 0.2s ease; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
 .campaign-btn { background: linear-gradient(135deg, #2563eb, #3b82f6); box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25); }
 .coupon-btn { background: linear-gradient(135deg, #059669, #10b981); box-shadow: 0 4px 12px rgba(5, 150, 105, 0.25); }

@@ -65,16 +65,17 @@ description: Master Travel Project 後台與 API 的長期開發及隔離規範�
 
 - 每頁的業務排版、卡片、表格外觀、表單排列、尺寸、間距與響應式規則由該頁管理；使用獨立 CSS 與唯一 root scope，template 必須實際使用該 scope。
 - 所有頁面 selector 都在本頁 root 下；不得依賴另一頁的 class、樣式檔或廣泛共用的 `.panel`、`.card`、`.active` 等規則控制業務外觀。狀態 class 也要隔離，例如 `.finance-center .is-active`。
-- 頁面及獨立元件不得互相 import 樣式。獨立元件以自己的 root 封裝樣式，頁面不得任意覆蓋其內部 DOM；外觀調整透過已定義 props、variant、slots 或局部 CSS API。
+- 頁面及獨立元件不得直接使用原生 UI 物件或平台預設控件承載業務外觀與互動，例如裸用 HTML `button`／`input`／`select`、原生 date picker 或 Flutter 原生表單控件。必須使用專案既有或明確封裝、具自身 root 與公開 props／events／slots／CSS API 的 UI 元件；缺少元件時先補足封裝，不以原生物件暫代。原生 API 與平台能力只可由既定 platform／service 層管理，不能直接成為頁面依賴。原生元素若因框架實作需要，只能藏在專案 UI 元件內部，頁面不得依賴其預設樣式或 DOM。
+- 頁面與元件不可透過原生物件的預設外觀、行為或瀏覽器／平台差異實現產品規格；可及性、語意、focus、disabled、loading 與錯誤狀態由專案元件契約明確提供。
 - Teleport 到頁面 root 外的 Modal／Drawer 必須有本頁專用 root 或獨立元件 root；不能因此退回無邊界 selector。
 - 允許適度重複簡單 CSS，以換取獨立修改能力；不為減少幾行 CSS 建立跨頁依賴。
-- 禁止以 `!important`、高 specificity 疊加或重複 root 掩蓋邊界問題。頁面私有值定義在本頁／元件 root，不放全域 `:root`。
+- 禁止以 `!important`、高 specificity 疊加、重複 root 或「補丁檔／覆蓋檔」掩蓋邊界問題。頁面私有值定義在本頁／元件 root，不放全域 `:root`。CSS 優化不得追加後載入規則、inline style、style attribute 或額外 breakpoint 去覆蓋既有宣告；必須回到實際責任檔直接整理並修正唯一來源。若現有規則互相衝突，先釐清 selector 歸屬、載入來源及元件契約，再合併或移除舊規則，不以暫時性 patch 延後處理。
 
 ```css
 .finance-center .finance-card { padding: 16px; }
 ```
 
-此例只示範 selector 隔離；數值不是已批准的統一尺寸規格。
+此例只示範 selector 隔離；數值不是已批准的統一尺寸規格。錯誤例：新增 `finance-overrides.css` 以 `.page .card` 蓋過既有卡片樣式；正確例：直接在財務頁責任檔修正 `.finance-center .finance-card`，並刪除衝突宣告。
 
 ### 尺寸與間距的統一邊界
 

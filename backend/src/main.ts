@@ -34,6 +34,7 @@ import {
   createHash,
   createHmac,
   createPrivateKey,
+  createPublicKey,
   randomBytes,
   scryptSync,
   timingSafeEqual,
@@ -12647,8 +12648,54 @@ class RecommendedAddressesController {
     return { data: data.map(recommendedAddressResponse) };
   }
 }
+function alipayHkConfigResponse(config: { id: string; provider: string; region: string; environment: string; interface: string; gatewayUrl: string; partner: string; appId: string | null; privateKey: string | null; publicKey: string | null; notifyUrl: string | null; returnUrl: string | null; paymentCurrency: string; paymentCurrencies: string[]; settlementCurrency: string; configuredAt: Date; lastTestedAt: Date | null; lastTestStatus: string | null; lastTestMessage: string | null }) {
+ return { id: config.id, provider: config.provider, region: config.region, environment: config.environment, interface: config.interface, gatewayUrl: config.gatewayUrl, partner: config.partner, appId: config.appId, privateKeyConfigured: Boolean(config.privateKey), publicKeyConfigured: Boolean(config.publicKey), notifyUrl: config.notifyUrl, returnUrl: config.returnUrl, paymentCurrency: config.paymentCurrency, paymentCurrencies: config.paymentCurrencies, settlementCurrency: config.settlementCurrency, configuredAt: config.configuredAt, lastTestedAt: config.lastTestedAt, lastTestStatus: config.lastTestStatus, lastTestMessage: config.lastTestMessage };
+}
 @Controller("settings")
 class SettingsController {
+  @Get("alipayhk") async alipayHkConfig(@Req() req: RequestLike) {
+    requireRole(req, ["SUPER_ADMIN", "OPERATOR"]);
+    const configs = await prisma.paymentChannelConfig.findMany({ where: { provider: "ALIPAY_HK" }, orderBy: { environment: "asc" } });
+    return { data: configs.map(alipayHkConfigResponse) };
+  }
+  @Post("alipayhk") async saveAlipayHkConfig(@Req() req: RequestLike, @Body() body: Record<string, unknown>) {
+    requireRole(req, ["SUPER_ADMIN"]);
+    const environment = body.environment === "production" ? "production" : body.environment === "sandbox" ? "sandbox" : "";
+    const partner = typeof body.partner === "string" ? body.partner.trim() : "";
+    const gatewayUrl = typeof body.gatewayUrl === "string" && body.gatewayUrl.trim() ? body.gatewayUrl.trim() : "https://api-sea-global.alipayplus.com/gateway.do";
+    const privateKey = typeof body.privateKey === "string" ? body.privateKey.trim() : "";
+    const publicKey = typeof body.publicKey === "string" ? body.publicKey.trim() : "";
+    const paymentCurrencies = Array.isArray(body.paymentCurrencies) ? body.paymentCurrencies.filter((value): value is string => typeof value === "string" && ["HKD", "RMB"].includes(value)) : ["HKD"];
+    const uniquePaymentCurrencies = [...new Set(paymentCurrencies)];
+    if (!uniquePaymentCurrencies.length) throw new BadRequestException("AlipayHK payment currencies are required");
+    if (!environment || !/^\d{16}$/.test(partner) || !partner.startsWith("2160")) throw new BadRequestException("AlipayHK environment or partner format is invalid");
+    if (!/^https:\/\//i.test(gatewayUrl)) throw new BadRequestException("AlipayHK gateway URL must use HTTPS");
+    const existing = await prisma.paymentChannelConfig.findUnique({ where: { provider_environment: { provider: "ALIPAY_HK", environment } } });
+    if ((!privateKey && !existing?.privateKey) || (!publicKey && !existing?.publicKey)) throw new BadRequestException("AlipayHK privateKey and publicKey are required for new configurations");
+    try {
+      if (privateKey) createPrivateKey({ key: privateKey, format: "pem", type: "pkcs8" });
+      if (publicKey) createPublicKey({ key: publicKey, format: "pem", type: "spki" });
+    } catch { throw new BadRequestException("AlipayHK RSA2 key format is invalid"); }
+    const saved = await prisma.paymentChannelConfig.upsert({
+      where: { provider_environment: { provider: "ALIPAY_HK", environment } },
+      create: { provider: "ALIPAY_HK", region: "HK", environment, interface: "WAP", gatewayUrl, partner, appId: typeof body.appId === "string" ? body.appId.trim() || null : null, privateKey: privateKey ? encryptWechatSecret(privateKey) : null, publicKey: publicKey ? encryptWechatSecret(publicKey) : null, notifyUrl: typeof body.notifyUrl === "string" ? body.notifyUrl.trim() || null : null, returnUrl: typeof body.returnUrl === "string" ? body.returnUrl.trim() || null : null, paymentCurrency: uniquePaymentCurrencies[0], paymentCurrencies: uniquePaymentCurrencies, settlementCurrency: "HKD" },
+      update: { gatewayUrl, partner, appId: typeof body.appId === "string" ? body.appId.trim() || null : undefined, ...(privateKey ? { privateKey: encryptWechatSecret(privateKey) } : {}), ...(publicKey ? { publicKey: encryptWechatSecret(publicKey) } : {}), notifyUrl: typeof body.notifyUrl === "string" ? body.notifyUrl.trim() || null : undefined, returnUrl: typeof body.returnUrl === "string" ? body.returnUrl.trim() || null : undefined, region: "HK", interface: "WAP", paymentCurrency: uniquePaymentCurrencies[0], paymentCurrencies: uniquePaymentCurrencies, settlementCurrency: "HKD", configuredAt: new Date(), lastTestedAt: null, lastTestStatus: null, lastTestMessage: null },
+    });
+    return { data: alipayHkConfigResponse(saved), replacedSecrets: Boolean(existing && (privateKey || publicKey)) };
+  }
+  @Post("alipayhk/test") async testAlipayHkConfig(@Req() req: RequestLike, @Body() body: { environment?: string }) {
+    requireRole(req, ["SUPER_ADMIN"]);
+    const environment = body.environment === "production" ? "production" : "sandbox";
+    const config = await prisma.paymentChannelConfig.findUnique({ where: { provider_environment: { provider: "ALIPAY_HK", environment } } });
+    if (!config) throw new HttpException("AlipayHK configuration is not saved", HttpStatus.NOT_FOUND);
+    try {
+      if (config.privateKey) createPrivateKey({ key: decryptWechatSecret(config.privateKey), format: "pem", type: "pkcs8" });
+      if (config.publicKey) createPublicKey({ key: decryptWechatSecret(config.publicKey), format: "pem", type: "spki" });
+      const testedAt = new Date();
+      const updated = await prisma.paymentChannelConfig.update({ where: { id: config.id }, data: { lastTestedAt: testedAt, lastTestStatus: "success", lastTestMessage: "RSA2 配置格式檢查通過；尚未呼叫第三方交易接口" } });
+      return { status: "success", message: updated.lastTestMessage, checkedAt: testedAt.toISOString(), thirdPartyCalled: false };
+    } catch { throw new BadRequestException("AlipayHK saved RSA2 key cannot be parsed"); }
+  }
   @Get("apple/status") async appleStatus(@Req() req: RequestLike) {
     requireRole(req, ["SUPER_ADMIN"]);
     const settings = await prisma.appSetting.findUniqueOrThrow({ where: { id: appSettingsDefaults.id } });

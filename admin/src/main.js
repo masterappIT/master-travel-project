@@ -148,7 +148,8 @@ const resourceLoader = createAdminResourceLoader({
     auditLogs: () => import('./utils/admin-resource-loader.js').then(({ loadAuditLogResources }) => loadAuditLogResources({ api, auditLogs, query: auditLogsState.query.value }).then(result => { auditLogs.value = auditLogsState.apply(result) })),
     notifications: () => import('./utils/admin-resource-loader.js').then(({ loadNotificationResources }) => loadNotificationResources({ api, usersApi, driversApi, notifications, notificationTemplates, notificationUsers, notificationDrivers, search: notificationRecipientSearch.value, query: notificationsState.query.value, state: notificationsState })),
     vehicles: () => import('./utils/admin-resource-loader.js').then(({ loadVehicleResources }) => loadVehicleResources({ api, vehiclesApi, categories, vehicles, extras, distancePricing, sortByOrder })),
-    routePricing: () => import('./utils/admin-resource-loader.js').then(({ loadRoutePricingResources }) => loadRoutePricingResources({ api, categories, routeMinimumFares }))
+    routePricing: () => import('./utils/admin-resource-loader.js').then(({ loadRoutePricingResources }) => loadRoutePricingResources({ api, categories, routeMinimumFares })),
+    payments: () => paymentsActions.loadPaymentConfigs()
   }
 })
 load = resourceLoader.load
@@ -209,7 +210,7 @@ const saveFinanceRateSettings = async () => {
 const notificationsActions = createNotificationsActions({ api, notificationForm, notificationRecipientSearch, notificationTemplates, load, error, displayError })
 const { resetNotification, createTemplate, clearNotificationRecipients, toggleNotificationRecipient, notificationRecipientChecked, saveNotification } = notificationsActions
 const paymentsActions = createPaymentsActions({ api, paymentSettings, paymentCurrencies, paymentSettingsSaved, driverRaceSaving, error, displayError, configs: paymentConfigs, selectedConfig: selectedPaymentConfig, editorOpen: paymentEditorOpen, editorStep: paymentEditorStep, testResult: paymentTestResult })
-const { savePaymentSettings, closePaymentEditor, savePaymentConfigDraft, duplicatePaymentConfig, togglePaymentConfig, testPaymentConfig } = paymentsActions
+const { savePaymentSettings, loadPaymentConfigs, closePaymentEditor, savePaymentConfigDraft, duplicatePaymentConfig, testPaymentConfig } = paymentsActions
 const { updateCharterStatus, editCharter, saveCharter } = createCharterActions({ api, charterForm, load, error, displayError, dateTimeInput })
 const { edit: editUser, reset: resetUser, select: selectUser, save: saveUser, saving: userSaving, updateStatus: updateUserStatus, remove: removeUser, openWalletAdjustment, saveWalletAdjustment } = usersActions
 const loadUserOptions = async selectedId => {
@@ -339,7 +340,6 @@ const App = { setup() {
      closePaymentEditor,
      savePaymentConfigDraft,
      duplicatePaymentConfig,
-     togglePaymentConfig,
      testPaymentConfig,
      savePaymentSettings
    })

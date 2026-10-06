@@ -57,9 +57,18 @@ description: 接收到 Figma UI 稿、設計連結、截圖或設計附件並需
 - 元件責任清楚，依前述邊界拆分與重用；視覺值依目標端 token／Theme 管理，不私自改動共用規格。
 - 實作已確認的 loading、empty、error、disabled、hover、focus、active、success 等視覺狀態；缺少必要狀態時先確認，不自行設計。保留既有狀態與基本操作行為，不因設計稿未展示而移除。
 - 基本可用性與新增視覺設計分開處理：保留鍵盤操作、既有可見焦點、語意與標籤；若補足焦點外觀、觸控尺寸或對比需改變已確認設計，先提出衝突與建議，不自行重新設計，也不宣稱已符合無障礙要求。
-- Web 使用語意 HTML 及適當 alt/label；uni-app、Flutter 使用各自平台的可操作元件與語意能力，不強制 Flutter 使用 HTML／CSS。
+- Web、uni-app 與 Flutter 的業務元件不得直接使用原生 UI 物件或平台預設控件（例如裸用 `<button>`、`<input>`、`<select>`、`<textarea>`、原生日期／選擇器或 Flutter 原生表單控件）承載產品外觀與互動。必須使用專案既有或明確封裝的 UI 元件，透過公開 props、events、slots／variant 與 CSS API 控制；若缺少對應元件，先建立具 root scope、狀態、可及性與契約的專案元件，不以原生物件暫代。原生 API、平台生命週期及底層能力僅可留在既定 platform／service 邊界，不得直接暴露為頁面 UI。
+- Web 使用語意與可及性須由專案元件負責，不得以「語意 HTML」理由繞過元件封裝；原生元素只能在專案 UI 元件的內部實作層按框架需要使用，頁面及業務元件不得直接依賴其 DOM 或預設外觀。
 - 確認重排、換行、圖片裁切、固定/流動區域、觸控、安全區與鍵盤遮擋；遵循目標端已確認的畫布及響應式規則，不自行新增布局或斷點，不使用非均勻縮放。
-- CSS 端不使用 `!important`、全域 selector 或高 specificity 疊加掩蓋問題。Admin 遵循 `admin-development`；乘客端與司機端遵循各自適用指示。遇到指示衝突先報告，不自行選擇忽略。
+- CSS 端不使用 `!important`、全域 selector、高 specificity 疊加或「補丁檔／覆蓋檔」掩蓋問題。遇到現有樣式衝突時，必須回到原始頁面／元件的 root scope，整理並直接修正唯一來源；不得以後載入的 CSS、重複 selector、inline style、style attribute 或額外 breakpoint 覆蓋前一層。若原始樣式責任不清，先釐清 selector 歸屬與契約，再修改正確來源，不以補丁延後處理。
+- 禁止把 CSS 修正拆成暫時性 patch、hotfix、override 或 page-fix 檔；完成優化後須刪除該問題的重複規則，確保每個視覺屬性在適當 scope 只有一個可追溯來源。錯誤例：新增 `payments-overrides.css` 以 `.page .card` 蓋過 `cards.css`；正確例：在付款頁自己的 root scope 直接修正 `.payments-page .payment-card`，並移除舊的衝突規則。
+
+### CSS 修正方式（禁止疊加補丁）
+
+- 先定位實際生效的規則、來源檔、載入順序與 scope，再在原檔原元件內完成修正；不得以「先加一條能蓋過去」作為優化策略。
+- 若頁面樣式已被多層規則污染，先整理為單一 root scope、明確狀態 class 與單一責任檔，再進行視覺調整；不得在未清理舊規則前繼續追加。
+- 新增 CSS 前檢查同一 selector、同一屬性及其 responsive／state 變體是否已存在。相同用途規則應合併或取代，不得複製後以 specificity、載入順序或 `!important` 競爭。
+- 視覺驗證須包含修正後的正常、狀態及窄視窗畫面，並確認沒有依賴舊 patch 才能成立；無法判定唯一來源時，標記為未完成，不宣稱優化完成。
 
 ## 驗證與交付
 

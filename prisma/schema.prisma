@@ -590,6 +590,33 @@ model Payment {
   @@index([status, createdAt])
 }
 
+model PaymentChannelConfig {
+  id                 String    @id @default(cuid())
+  provider           String
+  region             String
+  environment        String
+  interface          String
+  gatewayUrl         String
+  partner            String
+  appId              String?
+  privateKey         String?   @db.Text
+  publicKey          String?   @db.Text
+  notifyUrl          String?
+  returnUrl          String?
+  paymentCurrency    String
+  paymentCurrencies  String[]  @default(["HKD"])
+  settlementCurrency String
+  configuredAt       DateTime  @default(now())
+  lastTestedAt       DateTime?
+  lastTestStatus     String?
+  lastTestMessage    String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@unique([provider, environment])
+  @@index([provider, region, paymentCurrency])
+}
+
 enum PaymentStatus {
   PAID
   REFUNDED
