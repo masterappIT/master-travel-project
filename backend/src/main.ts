@@ -7024,10 +7024,18 @@ class DriverOrderInviteController {
     });
     if (existing)
       throw new HttpException("REGISTERED_DRIVER", HttpStatus.CONFLICT);
-    await loadSms253Settings();
-    const code = String(Math.floor(10000 + Math.random() * 90000));
-    await sendSms253(`${identity.countryCode}${identity.phoneNumber}`, code);
+    const developmentMode = await isPhoneLoginDevelopmentEnabled("driver");
+    const code = developmentMode.enabled
+      ? "00000"
+      : String(Math.floor(10000 + Math.random() * 90000));
+    const codeHash = developmentMode.enabled
+      ? developmentMode.setting.verificationCodeHash
+      : hashPassword(code);
     const challengeId = randomBytes(18).toString("hex");
+    if (!developmentMode.enabled) {
+      await loadSms253Settings();
+      await sendSms253(`${identity.countryCode}${identity.phoneNumber}`, code);
+    }
     const expiresAt = new Date(Date.now() + PHONE_CODE_TTL_MS);
     await prisma.driverOtpChallenge.create({
       data: {
@@ -7035,7 +7043,7 @@ class DriverOrderInviteController {
         invitationOrderUrlId: invitation.invitation.id,
         countryCode: identity.countryCode,
         phone: identity.phoneNumber,
-        codeHash: hashPassword(code),
+        codeHash,
         expiresAt,
       },
     });
