@@ -24,9 +24,11 @@ export function createPaymentsActions({ api, paymentSettings, paymentCurrencies,
       const index = configs.value.findIndex(item => item.id === config.id)
       if (index === -1) configs.value.push(config)
       else configs.value[index] = config
+      selectedConfig.value = JSON.parse(JSON.stringify(config))
+      editorStep.value = 6
+      testResult.value = ''
       paymentSettingsSaved.value = true
       setTimeout(() => { paymentSettingsSaved.value = false }, 3000)
-      closePaymentEditor()
     } catch (err) { error.value = displayError(err) }
   }
   const duplicatePaymentConfig = config => { selectedConfig.value = { ...JSON.parse(JSON.stringify(config)), id: `config-${Date.now()}`, name: `${config.name}（副本）`, status: 'draft', connection: 'untested' }; editorStep.value = 1; editorOpen.value = true }

@@ -9,6 +9,17 @@ export const PaymentScopeTabs = {
   </nav>`
 }
 
+export const PaymentCurrencyTabs = {
+  name: 'PaymentCurrencyTabs',
+  props: { currency: { type: String, required: true }, counts: { type: Object, required: true } },
+  emits: ['update:currency'],
+  template: String.raw`<nav class="payment-currency-groups" aria-label="結算貨幣分類">
+    <button type="button" :class="{active: currency === 'HKD'}" @click="$emit('update:currency', 'HKD')"><span>港幣</span><b>HKD</b><small>{{counts.HKD || 0}} 項配置</small></button>
+    <button type="button" :class="{active: currency === 'RMB'}" @click="$emit('update:currency', 'RMB')"><span>人民幣</span><b>RMB</b><small>{{counts.RMB || 0}} 項配置</small></button>
+    <button type="button" :class="{active: currency === 'all'}" @click="$emit('update:currency', 'all')"><span>全部貨幣</span><b>HKD / RMB</b><small>{{counts.all || 0}} 項配置</small></button>
+  </nav>`
+}
+
 export const PaymentConfigCard = {
   name: 'PaymentConfigCard',
   props: { config: { type: Object, required: true }, canWrite: { type: Boolean, default: true } },
