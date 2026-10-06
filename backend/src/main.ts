@@ -4504,9 +4504,6 @@ class ClientAuthController {
     return {
       challengeId,
       expiresAt: new Date(exp).toISOString(),
-      ...(process.env.NODE_ENV !== "production"
-        ? { developmentCode: code }
-        : {}),
     };
   }
 
@@ -5231,9 +5228,6 @@ class DriverAuthController {
     return {
       challengeId,
       expiresAt: expiresAt.toISOString(),
-      ...(process.env.NODE_ENV !== "production"
-        ? { developmentCode: code }
-        : {}),
     };
   }
 
@@ -5243,7 +5237,6 @@ class DriverAuthController {
     body: {
       challengeId?: string;
       code?: string;
-      developmentCode?: string;
     },
   ) {
     await requireLoginMethodEnabled("phone", "driver");

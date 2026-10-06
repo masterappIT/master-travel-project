@@ -163,9 +163,7 @@ class _OrderInvitePageState extends State<OrderInvitePage> {
       final result = await _api.requestCode(_token,
           countryCode: _countryCode, phoneNumber: _phone.text);
       _challengeId = result['challengeId']?.toString();
-      final developmentCode = result['developmentCode']?.toString();
-      if (developmentCode != null) _code.text = developmentCode;
-      _notice(developmentCode == null ? '驗證碼已發送' : '開發環境驗證碼：$developmentCode');
+      _notice('驗證碼已發送');
     });
   }
 

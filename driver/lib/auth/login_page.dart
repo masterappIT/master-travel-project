@@ -248,12 +248,10 @@ class _LoginPageState extends State<LoginPage> {
         isRegistration = true;
       }
       if (!mounted) return;
-      final developmentCode = result['developmentCode'] as String?;
       setState(() {
         _challengeId = result['challengeId'] as String?;
         _isRegistration = isRegistration;
         _resendSeconds = 60;
-        if (developmentCode != null) _codeController.text = developmentCode;
       });
       _resendTimer?.cancel();
       _resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
@@ -261,10 +259,8 @@ class _LoginPageState extends State<LoginPage> {
         if (!mounted || remaining == 0) timer.cancel();
         if (mounted) setState(() => _resendSeconds = remaining);
       });
-      final message =
-          developmentCode == null ? '驗證碼已發送' : '開發環境驗證碼：$developmentCode';
       _dismissCodeNotice?.call();
-      _dismissCodeNotice = showDriverNotice(context, message,
+      _dismissCodeNotice = showDriverNotice(context, '驗證碼已發送',
           duration: const Duration(seconds: 2));
     } on DriverApiException catch (error) {
       if (mounted) setState(() => _error = error.message);

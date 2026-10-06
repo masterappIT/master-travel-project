@@ -264,7 +264,6 @@ export async function updateClientSecurity(security: { email: string; password?:
 export type PhoneChangeChallenge = {
   challengeId: string
   expiresAt: string
-  developmentCode?: string
 }
 
 export async function requestClientPhoneChange(countryCode: string, phoneNumber: string): Promise<PhoneChangeChallenge> {
