@@ -10059,7 +10059,8 @@ class AdminController {
     @Req() req: RequestLike,
     @Body() body: Partial<Prisma.TripUncheckedCreateInput>,
   ) {
-    requireRole(req, ["SUPER_ADMIN", "OPERATOR"]);
+    return withDomainTelemetry("admin/trips.create", async () => {
+      requireRole(req, ["SUPER_ADMIN", "OPERATOR"]);
     const userId = body.userId?.trim();
     const origin = body.origin?.trim();
     const destination = body.destination?.trim();
@@ -10114,7 +10115,7 @@ class AdminController {
       }))
     )
       throw new HttpException("User not found", HttpStatus.BAD_REQUEST);
-    const trip = await withDomainTelemetry("admin/trips.create", () => prisma.trip.create({
+    const trip = await prisma.trip.create({
       data: {
         userId,
         origin,
@@ -10132,14 +10133,15 @@ class AdminController {
         vehiclePlate: body.vehiclePlate || null,
       },
       include: { user: true },
-    }));
-    return {
-      ...trip,
-      scheduledAt: trip.scheduledAt.toISOString(),
-      createdAt: trip.createdAt.toISOString(),
-      updatedAt: trip.updatedAt.toISOString(),
-      user: userResponse(trip.user),
-    };
+    });
+      return {
+        ...trip,
+        scheduledAt: trip.scheduledAt.toISOString(),
+        createdAt: trip.createdAt.toISOString(),
+        updatedAt: trip.updatedAt.toISOString(),
+        user: userResponse(trip.user),
+      };
+    });
   }
   @Get("trips/:id") async getTrip(
     @Req() req: RequestLike,
