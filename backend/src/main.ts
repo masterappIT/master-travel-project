@@ -401,27 +401,53 @@ function normalizeObservabilityIp(value: string | undefined) {
   return candidate.startsWith("::ffff:") ? candidate.slice(7) : candidate;
 }
 function observabilityRequestIp(req: RequestLike, preferForwarded = false) {
-  const forwardedIp = normalizeObservabilityIp(req.headers["x-real-ip"] || req.headers["x-forwarded-for"]);
+  const requestIp = normalizeObservabilityIp(req.ip);
+  const realIp = normalizeObservabilityIp(req.headers["x-real-ip"]);
+  const forwardedIp = normalizeObservabilityIp(req.headers["x-forwarded-for"]);
+  const socketIp = normalizeObservabilityIp(req.socket?.remoteAddress);
   return preferForwarded
-    ? forwardedIp || normalizeObservabilityIp(req.ip || req.socket?.remoteAddress)
-    : normalizeObservabilityIp(req.ip) || forwardedIp || normalizeObservabilityIp(req.socket?.remoteAddress);
+    ? realIp || forwardedIp || requestIp || socketIp
+    : requestIp || realIp || forwardedIp || socketIp;
 }
 function isPrivateObservabilityIp(ip: string) {
   return !ip || ip === "::1" || ip === "127.0.0.1" || ip.startsWith("10.") || ip.startsWith("192.168.") || /^(172\.(1[6-9]|2\d|3[0-1])\.)/.test(ip) || ip.startsWith("fc") || ip.startsWith("fd") || /^fe[89ab]/i.test(ip);
 }
+const observabilityRegionFailureLog = new Map<string, number>();
+function logObservabilityRegionFailure(reason: string, status?: number) {
+  const now = Date.now();
+  const lastLoggedAt = observabilityRegionFailureLog.get(reason) || 0;
+  if (now - lastLoggedAt < 60_000) return;
+  observabilityRegionFailureLog.set(reason, now);
+  console.warn("[observability] region resolution failed", { reason, ...(status ? { status } : {}) });
+}
 async function resolveObservabilityRegion(ip: string | undefined) {
   const normalizedIp = normalizeObservabilityIp(ip);
-  if (isPrivateObservabilityIp(normalizedIp || "")) return "本機／內網";
+  if (isPrivateObservabilityIp(normalizedIp || "")) {
+    if (!normalizedIp) logObservabilityRegionFailure("missing_public_ip");
+    return "本機／內網";
+  }
   const cached = observabilityRegionCache.get(normalizedIp!);
   if (cached && cached.expiresAt > Date.now()) return cached.region;
   try {
     const response = await fetch(`https://ipapi.co/${encodeURIComponent(normalizedIp!)}/json/`, { signal: AbortSignal.timeout(3000) });
-    if (!response.ok) throw new Error(`geolocation_${response.status}`);
+    if (!response.ok) {
+      logObservabilityRegionFailure("provider_http_error", response.status);
+      throw new Error(`geolocation_${response.status}`);
+    }
     const payload = await response.json() as { country_name?: string; region?: string; city?: string };
     const region = [payload.country_name, payload.region || payload.city].filter(Boolean).join(" · ") || "未知地區";
+    if (region === "未知地區") logObservabilityRegionFailure("provider_missing_region");
     observabilityRegionCache.set(normalizedIp!, { region, expiresAt: Date.now() + observabilityRegionCacheTtlMs });
     return region;
-  } catch {
+  } catch (error: unknown) {
+    const reason = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")
+      ? "provider_timeout"
+      : error instanceof SyntaxError
+        ? "provider_invalid_json"
+        : error instanceof TypeError
+          ? "provider_network_error"
+          : "provider_request_failed";
+    logObservabilityRegionFailure(reason);
     observabilityRegionCache.set(normalizedIp!, { region: "未知地區", expiresAt: Date.now() + 60_000 });
     return "未知地區";
   }
@@ -496,7 +522,7 @@ function presenceSnapshot() {
 }
 function publishRequestObservabilityEvent(event: Record<string, unknown>, req: RequestLike) {
   const platform = observabilityClientPlatform(req);
-  void resolveObservabilityRegion(req.ip).then(region => publishObservabilityEvent({ ...event, region, ...(platform ? { platform } : {}) }));
+  void resolveObservabilityRegion(observabilityRequestIp(req)).then(region => publishObservabilityEvent({ ...event, region, ...(platform ? { platform } : {}) }));
 }
 
 async function withDataTelemetry<T>(operation: string, action: () => Promise<T>) {
@@ -15974,7 +16000,7 @@ async function bootstrap() {
     origin: (origin, callback) =>
       callback(null, !origin || allowedOrigins.has(origin) || isDevelopmentLanOrigin(origin)),
     methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-CSRF-Token"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-CSRF-Token", "X-Client-Platform"],
     credentials: true,
   });
   app.enableShutdownHooks();
