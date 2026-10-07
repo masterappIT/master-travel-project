@@ -8,6 +8,17 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model ObservabilityRegionStat {
+  day        DateTime @db.Date
+  region     String
+  source     String
+  platform   String   @default("")
+  eventCount Int      @default(0)
+  updatedAt  DateTime @updatedAt
+
+  @@id([day, region, source, platform])
+}
+
 model Administrator {
   id                  String          @id @default(cuid())
   username            String

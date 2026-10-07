@@ -14,6 +14,7 @@ export const ProjectObservabilityPage = {
     const activeSource = ref('')
     const flowMolecules = ref([])
     const presence = ref({ activity: {}, connections: {}, windowMs: 300000 })
+    const persistedRegionStats = ref([])
     const presenceGroups = computed(() => [
       { key: 'driver', label: '司機端在線用戶' },
       { key: 'passenger:web', label: '乘客端 Web 在線用戶' },
@@ -62,6 +63,10 @@ export const ProjectObservabilityPage = {
         try {
           const item = JSON.parse(event.data)
           updatePresence(item)
+          if (item.type === 'region:snapshot') {
+            persistedRegionStats.value = Array.isArray(item.stats) ? item.stats : []
+            return
+          }
           detectAnomaly(item)
           if (item.source && item.source in nodeStats.value) {
             nodeStats.value[item.source] += 1
@@ -76,6 +81,7 @@ export const ProjectObservabilityPage = {
       }
       stream.onerror = () => {
         connected.value = false
+        persistedRegionStats.value = []
         error.value = '即時串流暫時中斷，正在重試'
         stream?.close()
         stream = undefined
@@ -90,15 +96,13 @@ export const ProjectObservabilityPage = {
     const passengerPlatformLabels = { web: '乘客端 Web', app: '乘客端 App', 'mini-program': '乘客端小程序' }
     const regionStats = computed(() => {
       const counts = new Map()
-      events.value.forEach(event => {
+      persistedRegionStats.value.forEach(event => {
         if (!event.region) return
-        const region = event.region
-        const current = counts.get(region) || { region, count: 0, sources: new Set() }
-        current.count += 1
-        if (event.source === 'passenger') {
-          current.sources.add(passengerPlatformLabels[event.platform] || '乘客端 未分類')
-        } else if (event.source) current.sources.add(regionSourceLabels[event.source] || event.source)
-        counts.set(region, current)
+        const current = counts.get(event.region) || { region: event.region, count: 0, sources: new Set() }
+        current.count += Number(event.eventCount) || 0
+        if (event.source === 'passenger') current.sources.add(passengerPlatformLabels[event.platform] || '乘客端 未分類')
+        else if (event.source) current.sources.add(regionSourceLabels[event.source] || event.source)
+        counts.set(event.region, current)
       })
       return [...counts.values()].map(item => ({ ...item, sources: [...item.sources] })).sort((a, b) => b.count - a.count)
     })

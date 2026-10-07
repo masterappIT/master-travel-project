@@ -389,7 +389,28 @@ function publishObservabilityEvent(event: Record<string, unknown>) {
   observabilityEvents.next({ ...event, timestamp: new Date().toISOString() });
 }
 const observabilityRegionCache = new Map<string, { region: string; expiresAt: number }>();
+const observabilityRegionPending = new Map<string, Promise<string>>();
+let observabilityRegionProviderCooldownUntil = 0;
 const observabilityRegionCacheTtlMs = 15 * 60 * 1000;
+const observabilityDay = (date = new Date()) => new Date(`${new Date(date.getTime() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10)}T00:00:00.000Z`);
+async function observabilityRegionSnapshot() {
+  const day = observabilityDay();
+  const rows = await prisma.observabilityRegionStat.findMany({ where: { day }, select: { region: true, source: true, platform: true, eventCount: true } });
+  return { type: "region:snapshot", day: day.toISOString().slice(0, 10), stats: rows };
+}
+async function recordObservabilityRegion(event: Record<string, unknown>) {
+  if (event.type !== "request:end" || typeof event.region !== "string" || typeof event.source !== "string") return;
+  const day = observabilityDay();
+  const region = event.region;
+  const source = event.source;
+  const platform = typeof event.platform === "string" ? event.platform : "";
+  await prisma.observabilityRegionStat.upsert({
+    where: { day_region_source_platform: { day, region, source, platform } },
+    create: { day, region, source, platform, eventCount: 1 },
+    update: { eventCount: { increment: 1 } },
+  });
+  await prisma.observabilityRegionStat.deleteMany({ where: { day: { lt: day } } });
+}
 function normalizeObservabilityIp(value: string | undefined) {
   const raw = value?.split(",", 1)[0]?.trim();
   const candidate = raw?.startsWith("[") && raw.includes("]")
@@ -428,28 +449,44 @@ async function resolveObservabilityRegion(ip: string | undefined) {
   }
   const cached = observabilityRegionCache.get(normalizedIp!);
   if (cached && cached.expiresAt > Date.now()) return cached.region;
-  try {
-    const response = await fetch(`https://ipapi.co/${encodeURIComponent(normalizedIp!)}/json/`, { signal: AbortSignal.timeout(3000) });
-    if (!response.ok) {
-      logObservabilityRegionFailure("provider_http_error", response.status);
-      throw new Error(`geolocation_${response.status}`);
+  const pending = observabilityRegionPending.get(normalizedIp!);
+  if (pending) return pending;
+  if (Date.now() < observabilityRegionProviderCooldownUntil) return "未知地區";
+  const lookup = (async () => {
+    try {
+      const response = await fetch(`https://ipwho.is/${encodeURIComponent(normalizedIp!)}`, { signal: AbortSignal.timeout(3000) });
+      if (!response.ok) {
+        logObservabilityRegionFailure("provider_http_error", response.status);
+        if (response.status === 429) observabilityRegionProviderCooldownUntil = Date.now() + 60_000;
+        return "未知地區";
+      }
+      const payload = await response.json() as { success?: boolean; country?: string; region?: string; city?: string; message?: string };
+      if (payload.success === false) {
+        logObservabilityRegionFailure("provider_rejected");
+        return "未知地區";
+      }
+      const region = [payload.country, payload.region || payload.city].filter(Boolean).join(" · ") || "未知地區";
+      if (region === "未知地區") logObservabilityRegionFailure("provider_missing_region");
+      return region;
+    } catch (error: unknown) {
+      const reason = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")
+        ? "provider_timeout"
+        : error instanceof SyntaxError
+          ? "provider_invalid_json"
+          : error instanceof TypeError
+            ? "provider_network_error"
+            : "provider_request_failed";
+      logObservabilityRegionFailure(reason);
+      return "未知地區";
     }
-    const payload = await response.json() as { country_name?: string; region?: string; city?: string };
-    const region = [payload.country_name, payload.region || payload.city].filter(Boolean).join(" · ") || "未知地區";
-    if (region === "未知地區") logObservabilityRegionFailure("provider_missing_region");
-    observabilityRegionCache.set(normalizedIp!, { region, expiresAt: Date.now() + observabilityRegionCacheTtlMs });
+  })();
+  observabilityRegionPending.set(normalizedIp!, lookup);
+  try {
+    const region = await lookup;
+    observabilityRegionCache.set(normalizedIp!, { region, expiresAt: Date.now() + (region === "未知地區" ? 60_000 : observabilityRegionCacheTtlMs) });
     return region;
-  } catch (error: unknown) {
-    const reason = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")
-      ? "provider_timeout"
-      : error instanceof SyntaxError
-        ? "provider_invalid_json"
-        : error instanceof TypeError
-          ? "provider_network_error"
-          : "provider_request_failed";
-    logObservabilityRegionFailure(reason);
-    observabilityRegionCache.set(normalizedIp!, { region: "未知地區", expiresAt: Date.now() + 60_000 });
-    return "未知地區";
+  } finally {
+    observabilityRegionPending.delete(normalizedIp!);
   }
 }
 function observabilityClientPlatform(req: RequestLike) {
@@ -522,7 +559,11 @@ function presenceSnapshot() {
 }
 function publishRequestObservabilityEvent(event: Record<string, unknown>, req: RequestLike) {
   const platform = observabilityClientPlatform(req);
-  void resolveObservabilityRegion(observabilityRequestIp(req)).then(region => publishObservabilityEvent({ ...event, region, ...(platform ? { platform } : {}) }));
+  void resolveObservabilityRegion(observabilityRequestIp(req)).then(region => {
+    const resolvedEvent = { ...event, region, ...(platform ? { platform } : {}) };
+    publishObservabilityEvent(resolvedEvent);
+    void recordObservabilityRegion(resolvedEvent).catch(() => console.warn("[observability] region statistics write failed"));
+  });
 }
 
 async function withDataTelemetry<T>(operation: string, action: () => Promise<T>) {
@@ -7918,11 +7959,18 @@ class AdminController {
     requireAuth(req);
     return new Observable<Record<string, unknown>>(subscriber => {
       const subscription = observabilityEvents.subscribe(event => subscriber.next({ data: event }));
+      const sendRegionSnapshot = () => {
+        void observabilityRegionSnapshot()
+          .then(snapshot => { if (!subscriber.closed) subscriber.next({ data: snapshot }); })
+          .catch(() => console.warn("[observability] region statistics read failed"));
+      };
       const heartbeat = setInterval(() => {
         subscriber.next({ data: { ...observabilityHeartbeat(), timestamp: new Date().toISOString() } });
         subscriber.next({ data: { type: "presence:snapshot", source: "presence", presence: presenceSnapshot(), timestamp: new Date().toISOString() } });
+        sendRegionSnapshot();
       }, 15000);
       subscriber.next({ data: { type: "stream:connected", source: "admin", presence: presenceSnapshot(), timestamp: new Date().toISOString() } });
+      sendRegionSnapshot();
       return () => {
         clearInterval(heartbeat);
         subscription.unsubscribe();
