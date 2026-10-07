@@ -33,6 +33,7 @@ import { createAdminResourceLoader } from './utils/admin-load-orchestrator.js'
 import { registerAdminComponents } from './utils/register-admin-components.js'
 import { primaryNavigation, operationsNavigation, createNavigationController, createOverlayController } from './layout/index.js'
 const DashboardPage = defineAsyncComponent(() => import('./pages/dashboard/DashboardPage.js').then(module => module.DashboardPage))
+const ProjectObservabilityPage = defineAsyncComponent(() => import('./pages/project-observability/ProjectObservabilityPage.js').then(module => module.ProjectObservabilityPage))
 const UsersPage = defineAsyncComponent(() => import('./pages/users/UsersPage.js').then(module => module.UsersPage))
 const DriversPage = defineAsyncComponent(() => import('./pages/drivers/DriversPage.js').then(module => module.DriversPage))
 const DriverVehiclesPage = defineAsyncComponent(() => import('./pages/drivers/DriverVehiclesPage.js').then(module => module.DriverVehiclesPage))
@@ -72,6 +73,7 @@ import { loadAllOptions, retainSelectedOptions } from './utils/admin-remote-opti
 import { createOperationsActions } from './pages/operations/operations.actions.js'
 import { createCharterActions } from './pages/charters/charters.actions.js'
 import './style.css'
+import './styles/project-observability.css'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 const { token, locale, username, password, currentAdministrator } = createAdminSessionState()
@@ -287,6 +289,7 @@ const App = { setup() {
   const visibleOperationsNavigation = operationsNavigation
   const activePageComponent = computed(() => ({
     dashboard: 'DashboardPage',
+    'project-observability': 'ProjectObservabilityPage',
     charters: 'ChartersPage',
     users: 'UsersPage',
     drivers: 'DriversPage',
@@ -727,6 +730,10 @@ const App = { setup() {
       openDriver: driverId => { view.value = 'drivers'; const driver = drivers.value.find(item => item.id === driverId); if (driver) openDriverDetail(driver) }
     })
 
+   provide('adminProjectObservabilityContext', {
+     view,
+     baseUrl: API
+   })
    provide('adminDashboardContext', {
      view,
      isSuperAdministrator,
@@ -934,6 +941,7 @@ const App = { setup() {
     }
  }, template: `<ToastHost :items="toasts" @dismiss="dismissToast" /><ConfirmDialog v-bind="confirmDialog" @confirm="resolveConfirmation(true)" @cancel="resolveConfirmation(false)" /><div v-if="!token" class="login"><button type="button" class="login-language" @click="toggleLocale" :aria-label="t('languageLabel')">中 / EN</button><div class="login-orb login-orb-one"></div><div class="login-orb login-orb-two"></div><form @submit.prevent="apiLogin"><div class="brand"><img v-if="adminLogo" :src="adminLogo" width="180" height="56" alt="Admin logo"/><span v-else>{{t('brand')}}</span></div><h1>{{t('welcome')}}</h1><p>{{t('signInPrompt')}}</p><input v-model="username" :placeholder="t('adminUsername')" autocomplete="username" required/><input v-model="password" type="password" :placeholder="t('password')" autocomplete="current-password" required/><button type="submit">{{t('signIn')}}</button><small v-if="error">{{error}}</small></form><footer class="login-footer">© 2026 IM MASTER INC. LIMITED All Rights Reserved.</footer></div><div v-else class="shell"><aside :class="{ 'mobile-nav-open': mobileNavOpen }"><div class="brand"><img v-if="adminLogo" :src="adminLogo" width="180" height="56" alt="Admin logo"/><span v-else>{{t('brand')}}</span></div><button type="button" class="mobile-nav-toggle" :aria-expanded="mobileNavOpen ? 'true' : 'false'" aria-controls="admin-navigation" @click="mobileNavOpen = !mobileNavOpen"><span aria-hidden="true">☰</span><span>{{mobileNavOpen ? '關閉選單' : '開啟選單'}}</span></button><nav id="admin-navigation">
   <button type="button" :class="{active:view==='dashboard'}" @click="navigate('dashboard')">{{t('dashboard')}}</button>
+  <button type="button" :class="{active:view==='project-observability'}" @click="navigate('project-observability')">數據流監控</button>
   <button type="button" :class="{active:view==='users'}" @click="navigate('users')">{{t('users')}}</button>
   <div class="nav-group"><button class="nav-group-toggle" type="button">{{t('drivers')}} <span>⌄</span></button><div class="nav-group-items"><button type="button" :class="{active:view==='drivers'}" @click="navigate('drivers')">{{t('drivers')}}</button><button type="button" :class="{active:view==='driver-vehicles'}" @click="navigate('driver-vehicles')">車輛管理</button></div></div>
   <button type="button" :class="{active:view==='trips'}" @click="navigate('trips')">{{t('trips')}}</button>
@@ -972,6 +980,7 @@ registerAdminComponents(app, {
   ChartersPage,
   DashboardPage,
   AddressesPage,
+  ProjectObservabilityPage,
   PromotionsPage,
   MembershipPage,
   RoutePricingPage,

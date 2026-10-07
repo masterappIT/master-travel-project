@@ -1,5 +1,6 @@
 export const primaryNavigation = Object.freeze([
   { id: 'dashboard', label: 'dashboard' },
+  { id: 'project-observability', label: '數據流監控' },
   { id: 'users', label: 'users' },
   { id: 'drivers', label: 'drivers' },
   { id: 'trips', label: 'trips' },

@@ -19,6 +19,7 @@ import {
   Query,
   Req,
   Res,
+  Sse,
   UnauthorizedException,
   UploadedFile,
   UploadedFiles,
@@ -43,7 +44,7 @@ import {
 } from "node:crypto";
 import { loadEnvFile } from "node:process";
 import sharp from "sharp";
-import { Observable, Subject, tap } from "rxjs";
+import { Observable, Subject, tap, finalize } from "rxjs";
 import { Client as PgClient } from "pg";
 import { WebSocket, WebSocketServer } from "ws";
 import type { IncomingMessage } from "node:http";
@@ -377,6 +378,28 @@ interface MembershipPlan {
   order: number;
 }
 const prisma = new PrismaClient();
+
+const observabilityEvents = new Subject<Record<string, unknown>>();
+function publishObservabilityEvent(event: Record<string, unknown>) {
+  observabilityEvents.next({ ...event, timestamp: new Date().toISOString() });
+}
+
+function observabilityHeartbeat() {
+  return { type: "stream:heartbeat", source: "system" };
+}
+
+async function withDomainTelemetry<T>(operation: string, action: () => Promise<T>) {
+  const startedAt = Date.now();
+  publishObservabilityEvent({ type: "domain:start", source: "service", operation });
+  try {
+    const result = await action();
+    publishObservabilityEvent({ type: "domain:end", source: "service", operation, status: "success", durationMs: Date.now() - startedAt });
+    return result;
+  } catch (error) {
+    publishObservabilityEvent({ type: "domain:end", source: "service", operation, status: "error", error: "operation_failed", durationMs: Date.now() - startedAt });
+    throw error;
+  }
+}
 
 async function primaryDriverVehicle(
   client: Pick<Prisma.TransactionClient, "driverVehicleAssignment">,
@@ -4192,12 +4215,41 @@ function addAudit(
   });
 }
 
+function observabilitySource(path: string) {
+  if (path.startsWith("/admin/")) return "admin";
+  if (path.startsWith("/driver/") || path.startsWith("/drivers/")) return "driver";
+  if (path.startsWith("/auth/") || path.startsWith("/trips/") || path.startsWith("/orders/")) return "passenger";
+  return "backend";
+}
+
+function shouldObserveRequest(path: string) {
+  return path !== "/admin/project-observability/stream" &&
+    path !== "/admin/auth/login" &&
+    !/^\/auth\/(phone|wechat|apple)/.test(path);
+}
+
 @Injectable()
 class AdminAccessInterceptor implements NestInterceptor {
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const req = context.switchToHttp().getRequest<RequestLike>();
-    if (!req.url?.startsWith("/admin/") || req.url === "/admin/auth/login")
-      return next.handle();
+    const isAdminRequest = req.url?.startsWith("/admin/") && req.url !== "/admin/auth/login";
+    const startedAt = Date.now();
+    const method = req.method || "UNKNOWN";
+    const path = (req.url || "").split("?")[0];
+    const observed = shouldObserveRequest(path);
+    const source = observabilitySource(path);
+    const handler = next.handle();
+    const result = observed
+      ? handler.pipe(
+          tap({
+            next: () => publishObservabilityEvent({ type: "request:end", source, method, path, status: "success", durationMs: Date.now() - startedAt }),
+            error: () => publishObservabilityEvent({ type: "request:end", source, method, path, status: "error", durationMs: Date.now() - startedAt, error: "request_failed" }),
+          }),
+          finalize(() => undefined),
+        )
+      : handler;
+    if (observed) publishObservabilityEvent({ type: "request:start", source, method, path });
+    if (!isAdminRequest) return result;
     const session = requireAuth(req);
     const developmentBypass =
       process.env.NODE_ENV !== "production" &&
@@ -4218,7 +4270,7 @@ class AdminAccessInterceptor implements NestInterceptor {
       addAudit(req, "FAILED", session);
       throw new ForbiddenException("Viewer accounts are read-only");
     }
-    return next.handle().pipe(
+    return result.pipe(
       tap({
         next: () => {
           if (req.method !== "GET") addAudit(req, "SUCCESS", session);
@@ -7676,6 +7728,20 @@ class AdminAuthController {
 }
 @Controller("admin")
 class AdminController {
+  @Sse("project-observability/stream")
+  projectObservabilityStream(@Req() req: RequestLike) {
+    requireAuth(req);
+    return new Observable<Record<string, unknown>>(subscriber => {
+      const subscription = observabilityEvents.subscribe(event => subscriber.next(event));
+      const heartbeat = setInterval(() => subscriber.next({ ...observabilityHeartbeat(), timestamp: new Date().toISOString() }), 15000);
+      subscriber.next({ type: "stream:connected", source: "admin", timestamp: new Date().toISOString() });
+      return () => {
+        clearInterval(heartbeat);
+        subscription.unsubscribe();
+      };
+    });
+  }
+
   @Get("drivers") async listDrivers(@Req() req: RequestLike) {
     requireAuth(req);
     const query = parseAdminListQuery(req);
@@ -10048,7 +10114,7 @@ class AdminController {
       }))
     )
       throw new HttpException("User not found", HttpStatus.BAD_REQUEST);
-    const trip = await prisma.trip.create({
+    const trip = await withDomainTelemetry("admin/trips.create", () => prisma.trip.create({
       data: {
         userId,
         origin,
@@ -10066,7 +10132,7 @@ class AdminController {
         vehiclePlate: body.vehiclePlate || null,
       },
       include: { user: true },
-    });
+    }));
     return {
       ...trip,
       scheduledAt: trip.scheduledAt.toISOString(),
