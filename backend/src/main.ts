@@ -88,6 +88,7 @@ type RequestLike = {
     cookie?: string;
     ["x-csrf-token"]?: string;
     ["user-agent"]?: string;
+    ["x-client-platform"]?: string;
     host?: string;
     origin?: string;
     ["x-forwarded-proto"]?: string;
@@ -382,6 +383,99 @@ const prisma = new PrismaClient();
 const observabilityEvents = new Subject<Record<string, unknown>>();
 function publishObservabilityEvent(event: Record<string, unknown>) {
   observabilityEvents.next({ ...event, timestamp: new Date().toISOString() });
+}
+const observabilityRegionCache = new Map<string, { region: string; expiresAt: number }>();
+const observabilityRegionCacheTtlMs = 15 * 60 * 1000;
+function isPrivateObservabilityIp(ip: string) {
+  return !ip || ip === "::1" || ip === "127.0.0.1" || ip.startsWith("10.") || ip.startsWith("192.168.") || /^(172\.(1[6-9]|2\d|3[0-1])\.)/.test(ip);
+}
+async function resolveObservabilityRegion(ip: string | undefined) {
+  if (isPrivateObservabilityIp(ip || "")) return "本機／內網";
+  const cached = observabilityRegionCache.get(ip!);
+  if (cached && cached.expiresAt > Date.now()) return cached.region;
+  try {
+    const response = await fetch(`https://ipapi.co/${encodeURIComponent(ip!)}/json/`, { signal: AbortSignal.timeout(1500) });
+    if (!response.ok) throw new Error(`geolocation_${response.status}`);
+    const payload = await response.json() as { country_name?: string; region?: string; city?: string };
+    const region = [payload.country_name, payload.region || payload.city].filter(Boolean).join(" · ") || "未知地區";
+    observabilityRegionCache.set(ip!, { region, expiresAt: Date.now() + observabilityRegionCacheTtlMs });
+    return region;
+  } catch {
+    observabilityRegionCache.set(ip!, { region: "未知地區", expiresAt: Date.now() + 60_000 });
+    return "未知地區";
+  }
+}
+function observabilityClientPlatform(req: RequestLike) {
+  const value = req.headers["x-client-platform"]?.toLowerCase();
+  return value === "web" || value === "app" || value === "mini-program" ? value : undefined;
+}
+const presenceActivity = new Map<string, { role: "passenger" | "driver"; userId: string; platform?: string; region: string; lastActivityAt: number; sequence: number }>();
+const presenceConnections = new Map<string, { role: "passenger" | "driver"; userId: string; platform?: string; region: string; connectedAt: number }>();
+const presenceActivityWindowMs = 5 * 60 * 1000;
+let presenceActivitySequence = 0;
+
+function touchPresence(req: RequestLike, role: "passenger" | "driver", userId: string) {
+  const platform = role === "passenger" ? observabilityClientPlatform(req) : undefined;
+  const activityKey = `${role}:${userId}`;
+  const activityAt = Date.now();
+  const sequence = ++presenceActivitySequence;
+  presenceActivity.set(activityKey, { role, userId, platform, region: "未知地區", lastActivityAt: activityAt, sequence });
+  void resolveObservabilityRegion(req.ip).then(region => {
+    const current = presenceActivity.get(activityKey);
+    if (current?.sequence !== sequence) return;
+    presenceActivity.set(activityKey, { ...current, region });
+  });
+}
+
+function addPresenceConnection(req: RequestLike, role: "passenger" | "driver", userId: string) {
+  const connectionId = randomBytes(16).toString("base64url");
+  const platform = role === "passenger" ? observabilityClientPlatform(req) : undefined;
+  let active = true;
+  void resolveObservabilityRegion(req.ip).then(region => {
+    if (!active) return;
+    presenceConnections.set(connectionId, { role, userId, platform, region, connectedAt: Date.now() });
+  });
+  return () => {
+    active = false;
+    presenceConnections.delete(connectionId);
+  };
+}
+
+function presenceGroupKey(item: { role: string; platform?: string }) {
+  return item.role === "driver" ? "driver" : `passenger:${item.platform || "unknown"}`;
+}
+
+function presenceSnapshot() {
+  const now = Date.now();
+  const activity = new Map<string, { count: number; regions: Map<string, number> }>();
+  for (const item of presenceActivity.values()) {
+    if (item.lastActivityAt + presenceActivityWindowMs <= now) continue;
+    const key = presenceGroupKey(item);
+    const group = activity.get(key) || { count: 0, regions: new Map() };
+    group.count += 1;
+    group.regions.set(item.region, (group.regions.get(item.region) || 0) + 1);
+    activity.set(key, group);
+  }
+  const connections = new Map<string, { count: number; regions: Map<string, number> }>();
+  const connectedUsers = new Set<string>();
+  for (const item of presenceConnections.values()) {
+    const key = presenceGroupKey(item);
+    const userKey = `${key}:${item.userId}`;
+    if (connectedUsers.has(userKey)) continue;
+    connectedUsers.add(userKey);
+    const group = connections.get(key) || { count: 0, regions: new Map() };
+    group.count += 1;
+    group.regions.set(item.region, (group.regions.get(item.region) || 0) + 1);
+    connections.set(key, group);
+  }
+  const serialize = (groups: Map<string, { count: number; regions: Map<string, number> }>) => Object.fromEntries(
+    [...groups.entries()].map(([key, value]) => [key, { count: value.count, regions: Object.fromEntries(value.regions) }]),
+  );
+  return { activity: serialize(activity), connections: serialize(connections), windowMs: presenceActivityWindowMs };
+}
+function publishRequestObservabilityEvent(event: Record<string, unknown>, req: RequestLike) {
+  const platform = observabilityClientPlatform(req);
+  void resolveObservabilityRegion(req.ip).then(region => publishObservabilityEvent({ ...event, region, ...(platform ? { platform } : {}) }));
 }
 
 async function withDataTelemetry<T>(operation: string, action: () => Promise<T>) {
@@ -691,13 +785,14 @@ function startNotificationWebSocketServer(server: ReturnType<NestExpressApplicat
       socketServer.emit("connection", client, request, entry);
     });
   });
-  socketServer.on("connection", (client: WebSocket, _request: IncomingMessage, entry: { recipientId: string }) => {
+  socketServer.on("connection", (client: WebSocket, request: IncomingMessage, entry: { recipientId: string }) => {
+    const cleanupPresence = addPresenceConnection({ headers: { "x-client-platform": typeof request.headers["x-client-platform"] === "string" ? request.headers["x-client-platform"] : undefined }, ip: request.socket.remoteAddress }, "passenger", entry.recipientId);
     const subscription = notificationEvents.subscribe((event) => {
       if (event.recipientType !== "user" || !event.recipientIds.includes(entry.recipientId) || client.readyState !== WebSocket.OPEN) return;
       client.send(JSON.stringify(event));
     });
-    client.on("close", () => subscription.unsubscribe());
-    client.on("error", () => subscription.unsubscribe());
+    client.on("close", () => { cleanupPresence(); subscription.unsubscribe(); });
+    client.on("error", () => { cleanupPresence(); subscription.unsubscribe(); });
   });
   return socketServer;
 }
@@ -2669,6 +2764,7 @@ async function driverSessionFrom(
       !stored.driver.enabled
     )
       throw new Error("revoked session");
+    touchPresence(req, "driver", session.sub);
     return session;
   } catch {
     throw new UnauthorizedException("Valid driver session required");
@@ -2804,6 +2900,7 @@ async function clientSessionFrom(req: RequestLike): Promise<ClientSession> {
       !stored.user.enabled
     )
       throw new Error("revoked session");
+    touchPresence(req, "passenger", session.sub);
     return session;
   } catch {
     throw new UnauthorizedException("Valid client session required");
@@ -4268,13 +4365,13 @@ class AdminAccessInterceptor implements NestInterceptor {
     const result = observed
       ? handler.pipe(
           tap({
-            next: () => publishObservabilityEvent({ type: "request:end", source, method, path, status: "success", durationMs: Date.now() - startedAt }),
-            error: () => publishObservabilityEvent({ type: "request:end", source, method, path, status: "error", durationMs: Date.now() - startedAt, error: "request_failed" }),
+            next: () => publishRequestObservabilityEvent({ type: "request:end", source, method, path, status: "success", durationMs: Date.now() - startedAt }, req),
+            error: () => publishRequestObservabilityEvent({ type: "request:end", source, method, path, status: "error", durationMs: Date.now() - startedAt, error: "request_failed" }, req),
           }),
           finalize(() => undefined),
         )
       : handler;
-    if (observed) publishObservabilityEvent({ type: "request:start", source, method, path });
+    if (observed) publishRequestObservabilityEvent({ type: "request:start", source, method, path }, req);
     if (!isAdminRequest) return result;
     const session = requireAuth(req);
     const developmentBypass =
@@ -6639,6 +6736,7 @@ class DriverAuthController {
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
     res.flushHeaders();
+    const cleanupPresence = addPresenceConnection(req, "driver", entry.recipientId);
     const subscription = notificationEvents.subscribe((event) => {
       if (event.recipientType !== "driver" || !event.recipientIds.includes(entry.recipientId)) return;
       res.write(`data: ${JSON.stringify(event)}\n\n`);
@@ -6647,6 +6745,7 @@ class DriverAuthController {
       res.write(`event: heartbeat\ndata: ${JSON.stringify({ at: Date.now() })}\n\n`);
     }, 25_000);
     const cleanup = () => {
+      cleanupPresence();
       clearInterval(heartbeat);
       subscription.unsubscribe();
     };
@@ -6709,6 +6808,7 @@ class DriverAuthController {
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
     res.flushHeaders();
+    const cleanupPresence = addPresenceConnection(req, "driver", entry.driverId);
     const subscription = driverOrderEvents.subscribe((event) => {
       if (event.driverId != null && event.driverId !== entry.driverId) return;
       res.write(`data: ${JSON.stringify(event)}\n\n`);
@@ -6717,6 +6817,7 @@ class DriverAuthController {
       res.write(`event: heartbeat\ndata: ${JSON.stringify({ at: Date.now() })}\n\n`);
     }, 25_000);
     const cleanup = () => {
+      cleanupPresence();
       clearInterval(heartbeat);
       subscription.unsubscribe();
     };
@@ -7759,8 +7860,11 @@ class AdminController {
     requireAuth(req);
     return new Observable<Record<string, unknown>>(subscriber => {
       const subscription = observabilityEvents.subscribe(event => subscriber.next({ data: event }));
-      const heartbeat = setInterval(() => subscriber.next({ data: { ...observabilityHeartbeat(), timestamp: new Date().toISOString() } }), 15000);
-      subscriber.next({ data: { type: "stream:connected", source: "admin", timestamp: new Date().toISOString() } });
+      const heartbeat = setInterval(() => {
+        subscriber.next({ data: { ...observabilityHeartbeat(), timestamp: new Date().toISOString() } });
+        subscriber.next({ data: { type: "presence:snapshot", source: "presence", presence: presenceSnapshot(), timestamp: new Date().toISOString() } });
+      }, 15000);
+      subscriber.next({ data: { type: "stream:connected", source: "admin", presence: presenceSnapshot(), timestamp: new Date().toISOString() } });
       return () => {
         clearInterval(heartbeat);
         subscription.unsubscribe();
@@ -11680,6 +11784,7 @@ class NotificationsController {
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
     res.flushHeaders();
+    const cleanupPresence = addPresenceConnection(req, "passenger", entry.recipientId);
     const subscription = notificationEvents.subscribe((event) => {
       if (event.recipientType !== "user" || !event.recipientIds.includes(entry.recipientId)) return;
       res.write(`data: ${JSON.stringify(event)}\n\n`);
@@ -11688,6 +11793,7 @@ class NotificationsController {
       res.write(`event: heartbeat\ndata: ${JSON.stringify({ at: Date.now() })}\n\n`);
     }, 25_000);
     const cleanup = () => {
+      cleanupPresence();
       clearInterval(heartbeat);
       subscription.unsubscribe();
     };

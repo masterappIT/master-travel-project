@@ -1,5 +1,17 @@
 import type { CrossBorderTrip } from '../../shared/types/trip'
 import { clearAuthentication, getAuthToken, type AuthUser } from '../utils/auth'
+import { getClientPlatform } from '../platform'
+
+const observabilityClientPlatform = () => getClientPlatform()
+const baseRequestHeader = () => ({ 'X-Client-Platform': observabilityClientPlatform() })
+if (typeof uni !== 'undefined' && typeof uni.addInterceptor === 'function') {
+  uni.addInterceptor('request', {
+    invoke(options) {
+      options.header = { ...baseRequestHeader(), ...(options.header || {}) }
+      return options
+    },
+  })
+}
 
 export let API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://192.168.0.185:3010'
 // #ifdef H5

@@ -16,6 +16,17 @@ export function getPlatform(): Platform {
   return platform === 'mp-weixin' ? 'weixin' : platform === 'mp-alipay' ? 'alipay' : platform === 'mp-toutiao' ? 'toutiao' : platform === 'mp-xhs' ? 'xhs' : 'app'
 }
 
+export function getClientPlatform(): 'web' | 'app' | 'mini-program' {
+  try {
+    const uniPlatform = getUniPlatform()
+    if (uniPlatform === 'h5') return 'web'
+    if (uniPlatform?.startsWith('mp-')) return 'mini-program'
+    return 'app'
+  } catch {
+    return 'web'
+  }
+}
+
 export function isIosApp(): boolean {
   try {
     if (typeof uni === 'undefined' || typeof uni.getSystemInfoSync !== 'function') return false
