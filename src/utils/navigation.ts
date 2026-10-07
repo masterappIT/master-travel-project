@@ -140,8 +140,14 @@ export const openCachedPage = (url: string) => {
 
   const targetPath = pagePath(url)
   const pages = getCurrentPages()
-  const targetIndex = pages.findIndex((page) => `/${page.route}` === targetPath)
 
+  // H5 profile navigation returns to the existing home page instead of
+  // resolving the home route as a new page, which prevents a brief remount.
+  if (targetPath === HOME_PATH && pages.length > 1) {
+    return uni.navigateBack({ delta: 1, animationType: 'none', animationDuration: 0 })
+  }
+
+  const targetIndex = pages.findIndex((page) => `/${page.route}` === targetPath)
   if (targetIndex >= 0) {
     const delta = pages.length - 1 - targetIndex
     if (delta > 0) return uni.navigateBack({ delta, animationType: 'none', animationDuration: 0 })

@@ -562,6 +562,7 @@ model Trip {
   provisionalSessions          ProvisionalDriverSession[]
 
   @@index([userId, status])
+  @@index([userId, createdAt])
   @@index([scheduledAt])
   @@index([driverId, status])
 }

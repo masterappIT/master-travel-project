@@ -4231,7 +4231,20 @@ function addAudit(
 function observabilitySource(path: string) {
   if (path.startsWith("/admin/")) return "admin";
   if (path.startsWith("/driver/") || path.startsWith("/drivers/")) return "driver";
-  if (path.startsWith("/auth/") || path.startsWith("/trips/") || path.startsWith("/orders/")) return "passenger";
+  if (
+    path.startsWith("/auth/") ||
+    path.startsWith("/trips/") ||
+    path.startsWith("/orders/") ||
+    path.startsWith("/quotes") ||
+    path.startsWith("/client/") ||
+    path.startsWith("/payments/") ||
+    path.startsWith("/wallet/") ||
+    path.startsWith("/membership-plans") ||
+    path.startsWith("/promotions") ||
+    path.startsWith("/vehicles/") ||
+    path.startsWith("/recommended-addresses/") ||
+    path.startsWith("/location/")
+  ) return "passenger";
   return "backend";
 }
 
@@ -11772,7 +11785,9 @@ class ClientMembershipController {
     const pending = await prisma.membershipOrder.findFirst({ where: { userId: session.sub, status: "PENDING" } });
     if (pending) throw new HttpException("已有待確認的會員訂單", HttpStatus.CONFLICT);
     const amount = billingPeriod === "MONTHLY" ? plan.monthlyPrice : plan.yearlyPrice;
-    const order = await prisma.membershipOrder.create({ data: { userId: session.sub, planId, billingPeriod, amount, currency: plan.currency, idempotencyKey, planSnapshot: membershipPlanResponse(plan), events: { create: { userId: session.sub, type: "ORDER_CREATED", title: `已建立${plan.name}訂單`, details: { billingPeriod, amount, currency: plan.currency } } } }, include: { plan: true } });
+    const order = await withDomainTelemetry("passenger/membership.createOrder", () =>
+      withDataTelemetry("membershipOrder.create", () => prisma.membershipOrder.create({ data: { userId: session.sub, planId, billingPeriod, amount, currency: plan.currency, idempotencyKey, planSnapshot: membershipPlanResponse(plan), events: { create: { userId: session.sub, type: "ORDER_CREATED", title: `已建立${plan.name}訂單`, details: { billingPeriod, amount, currency: plan.currency } } } }, include: { plan: true } })),
+    );
     return { data: { ...order, plan: membershipPlanResponse(order.plan) }, message: "會員訂單已建立，等待確認" };
   }
 
@@ -12065,9 +12080,7 @@ class PublicQuotesController {
         HttpStatus.BAD_REQUEST,
       );
     const requestedExtras = parseQuoteExtras(body);
-    let quote;
-    try {
-      quote = await prisma.$transaction(async (tx) => {
+    const createQuoteTransaction = () => prisma.$transaction(async (tx) => {
       const [settings, category, vehicle, extras, routeMinimumFares] =
         await Promise.all([
           tx.appSetting.findUniqueOrThrow({
@@ -12516,7 +12529,7 @@ class PublicQuotesController {
           )
         : [];
       const total = roundMoney(subtotal - (applied?.discount || 0));
-      const createdQuote = await tx.fareQuote.create({
+      const createFareQuote = () => tx.fareQuote.create({
         data: {
           distanceKm,
           durationSeconds,
@@ -12587,9 +12600,22 @@ class PublicQuotesController {
           lines: { orderBy: { order: "asc" } },
         },
       });
+      const createdQuote = await (adminPreview
+        ? createFareQuote()
+        : withDataTelemetry("fareQuote.create", createFareQuote));
       if (adminPreview) throw new AdminQuotePreviewRollback(createdQuote);
       return createdQuote;
     });
+    let quote;
+    try {
+      if (adminPreview) {
+        quote = await createQuoteTransaction();
+      } else {
+        quote = await withDomainTelemetry(
+          "passenger/quotes.create",
+          createQuoteTransaction,
+        );
+      }
     } catch (error) {
       if (error instanceof AdminQuotePreviewRollback) return quoteResponse(error.quote);
       throw error;
@@ -14008,7 +14034,9 @@ class PaymentsController {
               body.passenger.passportCountry?.trim() || null,
           }
         : {};
-    const trip = await prisma.trip.create({
+    const trip = await withDomainTelemetry(
+      "passenger/payments.tripPending",
+      () => withDataTelemetry("trip.create", () => prisma.trip.create({
       data: {
         userId: session.sub,
         quoteId,
@@ -14041,8 +14069,8 @@ class PaymentsController {
         ),
         status: "PENDING",
         ...passengerData,
-      },
-    });
+      }})),
+    );
     return { ok: true, tripId: trip.id, quoteId, status: trip.status };
   }
 
@@ -15326,8 +15354,16 @@ class ClientOrdersController {
     );
   }
   @Get("trips")
-  async listTrips(@Req() req: RequestLike) {
+  async listTrips(
+    @Req() req: RequestLike,
+    @Query("page") pageValue?: string,
+    @Query("pageSize") pageSizeValue?: string,
+  ) {
     const session = await clientSessionFrom(req);
+    const page = pageValue ? Math.max(1, Number.parseInt(pageValue, 10) || 1) : null;
+    const pageSize = pageSizeValue
+      ? Math.min(50, Math.max(1, Number.parseInt(pageSizeValue, 10) || 20))
+      : null;
     const trips = await prisma.trip.findMany({
       where: { userId: session.sub },
       include: {
@@ -15353,8 +15389,12 @@ class ClientOrdersController {
         },
       },
       orderBy: { createdAt: "desc" },
+      ...(page && pageSize ? { skip: (page - 1) * pageSize, take: pageSize } : {}),
     });
-    return { data: trips.map(clientTripResponse) };
+    const data = trips.map(clientTripResponse);
+    return page && pageSize
+      ? { data, page, pageSize, hasMore: data.length === pageSize }
+      : { data };
   }
 
   @Get("trips/:id")

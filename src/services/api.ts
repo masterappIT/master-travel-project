@@ -968,6 +968,13 @@ export async function listClientTrips(): Promise<ClientTrip[]> {
   return (response.data as { data: ClientTrip[] }).data.map(normalizeClientTrip)
 }
 
+export async function listClientTripsPage(page: number, pageSize: number): Promise<ClientTripsPage> {
+  const response = await uni.request({ url: `${API_BASE_URL}/client/trips?page=${page}&pageSize=${pageSize}`, header: authHeaders() })
+  if (response.statusCode >= 400) throw apiError(response, '無法載入訂單')
+  const payload = response.data as { data: ClientTrip[]; page?: number; pageSize?: number; hasMore?: boolean }
+  return { data: payload.data.map(normalizeClientTrip), page: payload.page || page, pageSize: payload.pageSize || pageSize, hasMore: payload.hasMore ?? payload.data.length === pageSize }
+}
+
 export async function getClientTrip(id: string): Promise<ClientTrip> {
   const response = await uni.request({ url: `${API_BASE_URL}/client/trips/${encodeURIComponent(id)}`, header: authHeaders() })
   if (response.statusCode === 404) throw new Error('訂單不存在或無權查看')

@@ -4,12 +4,12 @@
       <OrdersBackButton @tap="goBack" />
       <text class="title">全部訂單</text>
       <view class="tabs">
-        <view v-for="tab in tabs" :key="tab.value" :class="['tab', { active: activeTab === tab.value }]" @tap="activeTab = tab.value">
+        <view v-for="tab in tabs" :key="tab.value" :class="['tab', { active: activeTab === tab.value }]" @tap="selectTab(tab.value)">
           <text>{{ tab.label }}</text><image v-if="activeTab === tab.value" src="/static/orders/tab-line.svg" mode="fill" />
         </view>
       </view>
     </view>
-    <scroll-view class="content" scroll-y :show-scrollbar="false">
+    <scroll-view class="content" scroll-y :show-scrollbar="false" @scrolltolower="loadMoreOrders">
       <view v-if="orderGroups.length" class="order-groups">
         <view v-for="group in orderGroups" :key="group.key" class="order-group">
           <text class="date">{{ group.label }}</text>
@@ -36,7 +36,7 @@ import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { openCachedPage, cachedPagePath, setOrderReturnTarget } from '../../utils/navigation'
-import { listClientTrips, type ClientTrip } from '../../services/api'
+import { listClientTripsPage, type ClientTrip } from '../../services/api'
 import { listStoredOrders, type StoredTripOrder } from '../../utils/orderStore'
 import { formatOrderCardAddress } from '../../utils/orderAddress'
 import OrdersBackButton from '../../components/orders/OrdersBackButton.vue'
@@ -46,6 +46,14 @@ interface Order { id: string; status: OrderStatus; kind: '加急訂單' | '預�
 const { responsiveStyle } = useResponsiveCanvas()
 const orders = ref<Order[]>([])
 let loadingOrders: Promise<void> | null = null
+let loadingMoreOrders: Promise<void> | null = null
+let ordersPage = 0
+let hasMoreOrders = true
+let lastLoadedAt = 0
+let lastResetRequestAt = 0
+const ORDER_PAGE_SIZE = 20
+const ORDER_CACHE_TTL_MS = 15_000
+const ORDER_DUPLICATE_WINDOW_MS = 1_000
 
 let countdownTimer: ReturnType<typeof setInterval> | null = null
 const addressLabel = (value: Parameters<typeof formatOrderCardAddress>[0], fallback: string) => formatOrderCardAddress(value, fallback)
@@ -82,12 +90,18 @@ const storedOrderToView = (order: StoredTripOrder): Order => ({
   total: order.total,
   currency: order.currency
 })
-const loadOrders = async () => {
-  if (loadingOrders) return loadingOrders
-  loadingOrders = (async () => {
+const loadOrders = async (reset = true, force = false) => {
+  const now = Date.now()
+  if (reset && now - lastResetRequestAt < ORDER_DUPLICATE_WINDOW_MS) return loadingOrders
+  if (!force && reset && now - lastLoadedAt < ORDER_CACHE_TTL_MS && orders.value.length) return
+  if (reset && loadingOrders) return loadingOrders
+  if (!reset && (loadingMoreOrders || !hasMoreOrders)) return loadingMoreOrders
+  if (reset) lastResetRequestAt = now
+  const request = (async () => {
     try {
-      const trips = await listClientTrips()
-      orders.value = trips.map((trip) => ({
+      const nextPage = reset ? 1 : ordersPage + 1
+      const result = await listClientTripsPage(nextPage, ORDER_PAGE_SIZE)
+      const mappedOrders = result.data.map((trip) => ({
       id: trip.id,
       status: statusText(trip),
       kind: '預約訂單',
@@ -102,24 +116,45 @@ const loadOrders = async () => {
       vehicleTitle: trip.vehicle?.categoryName || '跨境商務車',
       seats: trip.vehicle?.seats || 0,
       total: trip.quote?.total || trip.payment?.total || 0,
-    currency: trip.quote?.currency || trip.payment?.currency || 'RMB¥'    }))
-    startCountdownRefresh()
-    } catch (error) {
-      orders.value = listStoredOrders().map(storedOrderToView)
+      currency: trip.quote?.currency || trip.payment?.currency || 'RMB¥' }))
+      orders.value = reset ? mappedOrders : [...orders.value, ...mappedOrders]
+      ordersPage = result.page
+      hasMoreOrders = result.hasMore
+      lastLoadedAt = Date.now()
       startCountdownRefresh()
-      if (!orders.value.length) {
-        uni.showToast({ title: error instanceof Error ? error.message : '訂單載入失敗', icon: 'none' })
+    } catch (error) {
+      if (reset) {
+        orders.value = listStoredOrders().map(storedOrderToView)
+        startCountdownRefresh()
+        if (!orders.value.length) uni.showToast({ title: error instanceof Error ? error.message : '訂單載入失敗', icon: 'none' })
       }
     } finally {
-      loadingOrders = null
+      if (reset) loadingOrders = null
+      else loadingMoreOrders = null
     }
   })()
-  return loadingOrders
+  if (reset) loadingOrders = request
+  else loadingMoreOrders = request
+  return request
 }
-onShow(() => { void loadOrders() })
+const loadMoreOrders = () => { void loadOrders(false) }
+const selectTab = async (tab: Tab) => {
+  if (tab === 'all' || !hasMoreOrders) {
+    activeTab.value = tab
+    return
+  }
+  while (hasMoreOrders) {
+    const previousPage = ordersPage
+    await loadOrders(false)
+    if (ordersPage === previousPage) break
+  }
+  activeTab.value = tab
+}
+
+onShow(() => { void loadOrders(true, true) })
 onMounted(() => { void loadOrders() })
 watch(cachedPagePath, (path, previousPath) => {
-  if (path === '/pages/orders/orders' && previousPath !== path) void loadOrders()
+  if (path === '/pages/orders/orders' && previousPath !== path) void loadOrders(true, true)
 })
 onUnmounted(() => { if (countdownTimer) clearInterval(countdownTimer) })
 const activeTab = ref<Tab>('all')
