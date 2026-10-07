@@ -7745,9 +7745,9 @@ class AdminController {
   projectObservabilityStream(@Req() req: RequestLike) {
     requireAuth(req);
     return new Observable<Record<string, unknown>>(subscriber => {
-      const subscription = observabilityEvents.subscribe(event => subscriber.next(event));
-      const heartbeat = setInterval(() => subscriber.next({ ...observabilityHeartbeat(), timestamp: new Date().toISOString() }), 15000);
-      subscriber.next({ type: "stream:connected", source: "admin", timestamp: new Date().toISOString() });
+      const subscription = observabilityEvents.subscribe(event => subscriber.next({ data: event }));
+      const heartbeat = setInterval(() => subscriber.next({ data: { ...observabilityHeartbeat(), timestamp: new Date().toISOString() } }), 15000);
+      subscriber.next({ data: { type: "stream:connected", source: "admin", timestamp: new Date().toISOString() } });
       return () => {
         clearInterval(heartbeat);
         subscription.unsubscribe();
