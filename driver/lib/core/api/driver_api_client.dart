@@ -43,11 +43,16 @@ class DriverSession {
       );
 }
 
+String _defaultDriverApiBaseUrl() {
+  const configured = String.fromEnvironment('DRIVER_API_BASE_URL');
+  if (configured.trim().isNotEmpty) return configured;
+  if (kIsWeb && Uri.base.host.isNotEmpty) return 'http://${Uri.base.host}:3010';
+  return 'http://127.0.0.1:3010';
+}
+
 class DriverApiClient {
   DriverApiClient({String? baseUrl, http.Client? client})
-      : baseUrl = (baseUrl ??
-                const String.fromEnvironment('DRIVER_API_BASE_URL',
-                    defaultValue: 'http://127.0.0.1:3010'))
+      : baseUrl = (baseUrl ?? _defaultDriverApiBaseUrl())
             .replaceAll(RegExp(r'/$'), ''),
         _client = client ?? http.Client();
 

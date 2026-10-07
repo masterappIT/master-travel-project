@@ -13,9 +13,10 @@ if (typeof uni !== 'undefined' && typeof uni.addInterceptor === 'function') {
   })
 }
 
-export let API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://192.168.0.185:3010'
+const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim()
+export let API_BASE_URL = configuredApiBaseUrl || 'http://127.0.0.1:3010'
 // #ifdef H5
-API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api'
+API_BASE_URL = configuredApiBaseUrl || '/api'
 // #endif
 const REQUEST_TIMEOUT_MS = 10000
 const requestWithTimeout = (options: UniApp.RequestOptions): Promise<UniApp.RequestSuccessCallbackResult> => new Promise((resolve, reject) => {

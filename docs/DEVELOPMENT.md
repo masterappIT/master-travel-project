@@ -41,7 +41,7 @@ npm --prefix brand run dev
 | Admin | `http://127.0.0.1:5174` |
 | Brand | `http://localhost:4173` |
 
-H5 與 Admin 的瀏覽器請求使用同源 `/api` proxy；小程序、原生 App 與 Driver Web 使用 `VITE_API_BASE_URL` 或 `DRIVER_API_BASE_URL`。
+H5 與 Admin 的瀏覽器請求使用同源 `/api` proxy；在同一區域網路中可用目前電腦的 IP 連接 `:5173` 與 `:5174`。Driver Web 未設定 `DRIVER_API_BASE_URL` 時，以頁面所在主機的 `:3010` 作為 API；從其他裝置開啟 Driver Web 時，啟動 Flutter Web 必須使用 `--web-hostname 0.0.0.0`，且瀏覽器須能連接 API 的 `:3010`。後端未設定 `DRIVER_ORDER_URL_BASE` 時，以本機第一個非 loopback IPv4 組成 `:8085/order-invite`；多網卡時應明確設定可達的 URL。小程序與原生 App 不會自動知道開發電腦 IP，須於建置時明確設定 `VITE_API_BASE_URL` 或 `DRIVER_API_BASE_URL`。
 
 ## 固定開發登入
 

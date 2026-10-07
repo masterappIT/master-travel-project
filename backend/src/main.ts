@@ -813,7 +813,12 @@ function startNotificationWebSocketServer(server: ReturnType<NestExpressApplicat
         "x-real-ip": typeof request.headers["x-real-ip"] === "string" ? request.headers["x-real-ip"] : undefined,
         "x-forwarded-for": typeof request.headers["x-forwarded-for"] === "string" ? request.headers["x-forwarded-for"] : undefined,
       },
-      ip: request.headers["x-real-ip"] || request.headers["x-forwarded-for"] || request.socket.remoteAddress,
+      ip:
+        typeof request.headers["x-real-ip"] === "string"
+          ? request.headers["x-real-ip"]
+          : typeof request.headers["x-forwarded-for"] === "string"
+            ? request.headers["x-forwarded-for"]
+            : request.socket.remoteAddress,
       socket: request.socket,
     }, "passenger", entry.recipientId);
     const subscription = notificationEvents.subscribe((event) => {
