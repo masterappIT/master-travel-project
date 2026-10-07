@@ -42,6 +42,7 @@ import {
   verify as verifySignature,
   X509Certificate,
 } from "node:crypto";
+import { isIP } from "node:net";
 import { loadEnvFile } from "node:process";
 import sharp from "sharp";
 import { Observable, Subject, tap, finalize } from "rxjs";
@@ -63,7 +64,7 @@ import {
   type TripDriverSummary,
 } from "./trip-payload";
 import { matchesSearchCity } from "./location-search";
-import { buildDriverOrderUrl } from "./order-url";
+import { buildDriverOrderUrl, resolveDriverOrderBase } from "./order-url";
 import { inviteShareHtml } from "./order-invite-share";
 import { publicDriverOrderChannelFilter } from "./driver-order-channel";
 import { billableExtraSelections, withinImmediateWindow } from "./quote-extras";
@@ -92,12 +93,15 @@ type RequestLike = {
     host?: string;
     origin?: string;
     ["x-forwarded-proto"]?: string;
+    ["x-forwarded-for"]?: string;
+    ["x-real-ip"]?: string;
     ["if-none-match"]?: string;
   };
   query?: Record<string, string | undefined>;
   method?: string;
   url?: string;
   ip?: string;
+  socket?: { remoteAddress?: string };
   protocol?: string;
   on?: (event: string, listener: () => void) => void;
 };
@@ -386,22 +390,39 @@ function publishObservabilityEvent(event: Record<string, unknown>) {
 }
 const observabilityRegionCache = new Map<string, { region: string; expiresAt: number }>();
 const observabilityRegionCacheTtlMs = 15 * 60 * 1000;
+function normalizeObservabilityIp(value: string | undefined) {
+  const raw = value?.split(",", 1)[0]?.trim();
+  const candidate = raw?.startsWith("[") && raw.includes("]")
+    ? raw.slice(1, raw.indexOf("]"))
+    : raw && /^\d{1,3}(?:\.\d{1,3}){3}:\d+$/.test(raw)
+      ? raw.slice(0, raw.lastIndexOf(":"))
+      : raw;
+  if (!candidate || !isIP(candidate)) return undefined;
+  return candidate.startsWith("::ffff:") ? candidate.slice(7) : candidate;
+}
+function observabilityRequestIp(req: RequestLike, preferForwarded = false) {
+  const forwardedIp = normalizeObservabilityIp(req.headers["x-real-ip"] || req.headers["x-forwarded-for"]);
+  return preferForwarded
+    ? forwardedIp || normalizeObservabilityIp(req.ip || req.socket?.remoteAddress)
+    : normalizeObservabilityIp(req.ip) || forwardedIp || normalizeObservabilityIp(req.socket?.remoteAddress);
+}
 function isPrivateObservabilityIp(ip: string) {
-  return !ip || ip === "::1" || ip === "127.0.0.1" || ip.startsWith("10.") || ip.startsWith("192.168.") || /^(172\.(1[6-9]|2\d|3[0-1])\.)/.test(ip);
+  return !ip || ip === "::1" || ip === "127.0.0.1" || ip.startsWith("10.") || ip.startsWith("192.168.") || /^(172\.(1[6-9]|2\d|3[0-1])\.)/.test(ip) || ip.startsWith("fc") || ip.startsWith("fd") || /^fe[89ab]/i.test(ip);
 }
 async function resolveObservabilityRegion(ip: string | undefined) {
-  if (isPrivateObservabilityIp(ip || "")) return "本機／內網";
-  const cached = observabilityRegionCache.get(ip!);
+  const normalizedIp = normalizeObservabilityIp(ip);
+  if (isPrivateObservabilityIp(normalizedIp || "")) return "本機／內網";
+  const cached = observabilityRegionCache.get(normalizedIp!);
   if (cached && cached.expiresAt > Date.now()) return cached.region;
   try {
-    const response = await fetch(`https://ipapi.co/${encodeURIComponent(ip!)}/json/`, { signal: AbortSignal.timeout(1500) });
+    const response = await fetch(`https://ipapi.co/${encodeURIComponent(normalizedIp!)}/json/`, { signal: AbortSignal.timeout(3000) });
     if (!response.ok) throw new Error(`geolocation_${response.status}`);
     const payload = await response.json() as { country_name?: string; region?: string; city?: string };
     const region = [payload.country_name, payload.region || payload.city].filter(Boolean).join(" · ") || "未知地區";
-    observabilityRegionCache.set(ip!, { region, expiresAt: Date.now() + observabilityRegionCacheTtlMs });
+    observabilityRegionCache.set(normalizedIp!, { region, expiresAt: Date.now() + observabilityRegionCacheTtlMs });
     return region;
   } catch {
-    observabilityRegionCache.set(ip!, { region: "未知地區", expiresAt: Date.now() + 60_000 });
+    observabilityRegionCache.set(normalizedIp!, { region: "未知地區", expiresAt: Date.now() + 60_000 });
     return "未知地區";
   }
 }
@@ -420,7 +441,7 @@ function touchPresence(req: RequestLike, role: "passenger" | "driver", userId: s
   const activityAt = Date.now();
   const sequence = ++presenceActivitySequence;
   presenceActivity.set(activityKey, { role, userId, platform, region: "未知地區", lastActivityAt: activityAt, sequence });
-  void resolveObservabilityRegion(req.ip).then(region => {
+  void resolveObservabilityRegion(observabilityRequestIp(req)).then(region => {
     const current = presenceActivity.get(activityKey);
     if (current?.sequence !== sequence) return;
     presenceActivity.set(activityKey, { ...current, region });
@@ -431,7 +452,7 @@ function addPresenceConnection(req: RequestLike, role: "passenger" | "driver", u
   const connectionId = randomBytes(16).toString("base64url");
   const platform = role === "passenger" ? observabilityClientPlatform(req) : undefined;
   let active = true;
-  void resolveObservabilityRegion(req.ip).then(region => {
+  void resolveObservabilityRegion(observabilityRequestIp(req)).then(region => {
     if (!active) return;
     presenceConnections.set(connectionId, { role, userId, platform, region, connectedAt: Date.now() });
   });
@@ -786,7 +807,15 @@ function startNotificationWebSocketServer(server: ReturnType<NestExpressApplicat
     });
   });
   socketServer.on("connection", (client: WebSocket, request: IncomingMessage, entry: { recipientId: string }) => {
-    const cleanupPresence = addPresenceConnection({ headers: { "x-client-platform": typeof request.headers["x-client-platform"] === "string" ? request.headers["x-client-platform"] : undefined }, ip: request.socket.remoteAddress }, "passenger", entry.recipientId);
+    const cleanupPresence = addPresenceConnection({
+      headers: {
+        "x-client-platform": typeof request.headers["x-client-platform"] === "string" ? request.headers["x-client-platform"] : undefined,
+        "x-real-ip": typeof request.headers["x-real-ip"] === "string" ? request.headers["x-real-ip"] : undefined,
+        "x-forwarded-for": typeof request.headers["x-forwarded-for"] === "string" ? request.headers["x-forwarded-for"] : undefined,
+      },
+      ip: request.headers["x-real-ip"] || request.headers["x-forwarded-for"] || request.socket.remoteAddress,
+      socket: request.socket,
+    }, "passenger", entry.recipientId);
     const subscription = notificationEvents.subscribe((event) => {
       if (event.recipientType !== "user" || !event.recipientIds.includes(entry.recipientId) || client.readyState !== WebSocket.OPEN) return;
       client.send(JSON.stringify(event));
@@ -7034,7 +7063,7 @@ class DriverOrderInviteShareController {
     const token = typeof request.query?.token === "string" ? request.query.token : "";
     if (!token) throw new HttpException("Order invitation not found", HttpStatus.NOT_FOUND);
     const details = await this.invites.details(token);
-    const base = new URL(process.env.DRIVER_ORDER_URL_BASE || "http://localhost:8081/order-invite");
+    const base = resolveDriverOrderBase();
     const appPage = new URL("/order-invite-app", base);
     appPage.searchParams.set("token", token);
     const userAgent = String(request.headers?.["user-agent"] ?? "");
@@ -7067,9 +7096,7 @@ class DriverOrderInviteShareController {
       response.type("png").send(Buffer.from(await rendered.arrayBuffer()));
     } catch (error) {
       console.error("Failed to render order invitation preview", error);
-      const driverBase = new URL(
-        process.env.DRIVER_ORDER_URL_BASE || "http://localhost:8081/order-invite",
-      );
+      const driverBase = resolveDriverOrderBase();
       response.redirect(302, new URL("/favicon.svg", driverBase).href);
     }
   }
@@ -15878,6 +15905,7 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     bodyParser: false,
   });
+  app.set("trust proxy", (ip: string, index: number) => index === 0 && isPrivateObservabilityIp(normalizeObservabilityIp(ip) || ""));
   app.useBodyParser("json", { limit: "2mb" });
   const notificationWebSocketServer = startNotificationWebSocketServer(
     app.getHttpServer(),
@@ -15920,9 +15948,26 @@ async function bootstrap() {
           "http://127.0.0.1:9099",
         ];
   const allowedOrigins = new Set([...configuredOrigins, ...developmentOrigins]);
+  const isDevelopmentLanOrigin = (origin: string) => {
+    if (process.env.NODE_ENV === "production") return false;
+    try {
+      const url = new URL(origin);
+      if (url.protocol !== "http:" || !["5173", "5174", "8085"].includes(url.port)) return false;
+      const octets = url.hostname.split(".").map(Number);
+      return (
+        octets.length === 4 &&
+        octets.every((octet) => Number.isInteger(octet) && octet >= 0 && octet <= 255) &&
+        ((octets[0] === 10) ||
+          (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31) ||
+          (octets[0] === 192 && octets[1] === 168))
+      );
+    } catch {
+      return false;
+    }
+  };
   app.enableCors({
     origin: (origin, callback) =>
-      callback(null, !origin || allowedOrigins.has(origin)),
+      callback(null, !origin || allowedOrigins.has(origin) || isDevelopmentLanOrigin(origin)),
     methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "X-CSRF-Token"],
     credentials: true,
