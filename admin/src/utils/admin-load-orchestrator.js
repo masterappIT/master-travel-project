@@ -1,3 +1,23 @@
+export function loadAdminViewResource(resourceLoaders, requestedView) {
+  let viewPromise = Promise.resolve()
+  if (['users', 'charters'].includes(requestedView)) viewPromise = resourceLoaders.coreUsers()
+  if (['drivers', 'driver-vehicles'].includes(requestedView)) viewPromise = resourceLoaders.drivers()
+  if (requestedView === 'dispatch') viewPromise = resourceLoaders.dispatch()
+  if (requestedView === 'settlements') viewPromise = resourceLoaders.settlements()
+  if (requestedView === 'trips') viewPromise = viewPromise.then(() => resourceLoaders.trips())
+  if (requestedView === 'charters') viewPromise = viewPromise.then(() => resourceLoaders.charters())
+  if (requestedView === 'addresses') viewPromise = resourceLoaders.addresses()
+  if (requestedView === 'membership') viewPromise = resourceLoaders.membership()
+  if (requestedView === 'promotions') viewPromise = resourceLoaders.promotions()
+  if (requestedView === 'administrators') viewPromise = resourceLoaders.administrators()
+  if (requestedView === 'auditLogs') viewPromise = resourceLoaders.auditLogs()
+  if (requestedView === 'notifications') viewPromise = resourceLoaders.notifications()
+  if (requestedView === 'vehicles') viewPromise = resourceLoaders.vehicles()
+  if (requestedView === 'route-pricing') viewPromise = resourceLoaders.routePricing()
+  if (requestedView === 'payments') viewPromise = resourceLoaders.payments()
+  return viewPromise
+}
+
 export function createAdminResourceLoader({
   api,
   token,
@@ -34,23 +54,9 @@ export function createAdminResourceLoader({
       const administratorPromise = currentAdministrator.value
         ? Promise.resolve(currentAdministrator.value)
         : api('/admin/auth/me')
-      let viewPromise = Promise.resolve()
-      if (requestedView === 'dashboard') viewPromise = api('/admin/dashboard')
-      if (['users', 'charters'].includes(requestedView)) viewPromise = resourceLoaders.coreUsers()
-      if (['drivers', 'driver-vehicles'].includes(requestedView)) viewPromise = resourceLoaders.drivers()
-      if (requestedView === 'dispatch') viewPromise = resourceLoaders.dispatch()
-      if (requestedView === 'settlements') viewPromise = resourceLoaders.settlements()
-      if (requestedView === 'trips') viewPromise = viewPromise.then(() => resourceLoaders.trips())
-      if (requestedView === 'charters') viewPromise = viewPromise.then(() => resourceLoaders.charters())
-      if (requestedView === 'addresses') viewPromise = resourceLoaders.addresses()
-      if (requestedView === 'membership') viewPromise = resourceLoaders.membership()
-      if (requestedView === 'promotions') viewPromise = resourceLoaders.promotions()
-      if (requestedView === 'administrators') viewPromise = resourceLoaders.administrators()
-      if (requestedView === 'auditLogs') viewPromise = resourceLoaders.auditLogs()
-      if (requestedView === 'notifications') viewPromise = resourceLoaders.notifications()
-      if (requestedView === 'vehicles') viewPromise = resourceLoaders.vehicles()
-      if (requestedView === 'route-pricing') viewPromise = resourceLoaders.routePricing()
-      if (requestedView === 'payments') viewPromise = resourceLoaders.payments()
+      const viewPromise = requestedView === 'dashboard'
+        ? api('/admin/dashboard')
+        : loadAdminViewResource(resourceLoaders, requestedView)
 
       const [{ settings: settingsResponse }, administrator, viewResult] = await Promise.all([
         settingsPromise,

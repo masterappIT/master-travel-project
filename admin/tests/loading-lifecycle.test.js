@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createApiClient } from '../src/api/client.js'
-import { createAdminResourceLoader } from '../src/utils/admin-load-orchestrator.js'
+import { createAdminResourceLoader, loadAdminViewResource } from '../src/utils/admin-load-orchestrator.js'
 import { loadAddressResources } from '../src/utils/admin-resource-loader.js'
 
 const state = value => ({ value })
@@ -75,6 +75,22 @@ test('clears the session when the current request returns unauthorized', async (
   assert.equal(unauthorizedCount, 1)
 })
 
+test('routes each admin view to its existing loader without changing order', async () => {
+  const calls = []
+  const loaders = Object.fromEntries([
+    'coreUsers', 'drivers', 'dispatch', 'settlements', 'trips', 'charters', 'addresses',
+    'membership', 'promotions', 'administrators', 'auditLogs', 'notifications',
+    'vehicles', 'routePricing', 'payments'
+  ].map(name => [name, () => { calls.push(name); return Promise.resolve(name) }]))
+  await loadAdminViewResource(loaders, 'trips')
+  assert.deepEqual(calls, ['trips'])
+  calls.length = 0
+  await loadAdminViewResource(loaders, 'charters')
+  assert.deepEqual(calls, ['coreUsers', 'charters'])
+  calls.length = 0
+  await loadAdminViewResource(loaders, 'unknown')
+  assert.deepEqual(calls, [])
+})
 test('does not let an obsolete request overwrite the current page error', async () => {
   let rejectDashboard
   const api = path => {

@@ -19,6 +19,16 @@ test("preserves configured query parameters and replaces token", () => {
   );
 });
 
+test("preserves URL fragments and encodes token values", () => {
+  assert.equal(
+    buildDriverOrderUrl(
+      "token/with spaces?&",
+      "https://driver.example.com/order-invite#details",
+    ),
+    "https://driver.example.com/order-invite?token=token%2Fwith+spaces%3F%26#details",
+  );
+});
+
 test("rejects missing or non-HTTP bases", () => {
   assert.throws(() => buildDriverOrderUrl("token", ""), /must be configured/);
   assert.throws(

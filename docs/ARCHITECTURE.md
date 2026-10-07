@@ -26,7 +26,15 @@ API 是可信任邊界，負責：
 - 資料一致性與交易
 - 對前端傳入資料的再次驗證
 
+目前 NestJS API 仍由 [`backend/src/main.ts`](../backend/src/main.ts) 組裝主要路由與生命週期；已抽出的純責任 Admin query parsing/filter/response helpers 位於 [`backend/src/admin-query.ts`](../backend/src/admin-query.ts)。此類模組化只整理內部責任，不改變 endpoint、HTTP method、權限或 response contract。
+
 前端不可決定可信任的商業結果，也不可直接連線 PostgreSQL。
+
+## Admin 啟動與資源載入
+
+Admin 入口由 [`admin/src/main.js`](../admin/src/main.js) 組裝 API、狀態與頁面 Context；載入生命週期由 [`admin/src/utils/admin-load-orchestrator.js`](../admin/src/utils/admin-load-orchestrator.js) 協調，包含設定 hydration、目前管理員載入、依 view 載入資源、錯誤／session 處理及過期請求保護。`loadAdminViewResource()` 僅負責將既有 view 對應到既有 resource loader，不承載頁面模板、CSS 或業務規則。
+
+資源實作位於 [`admin/src/utils/admin-resource-loader.js`](../admin/src/utils/admin-resource-loader.js)；此分層是逐步模組化邊界，並不表示所有頁面已完成獨立拆分。任何後續拆分都必須維持既有導航、API contract、loading/error 狀態與 UI baseline。
 
 ## 資料流
 

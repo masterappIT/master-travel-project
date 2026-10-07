@@ -79,6 +79,10 @@ npm run verify:affected
 
 選擇與變更範圍最小但完整的驗證命令。跨模組或部署變更使用 `npm run verify:affected`，並額外驗證所有受影響產品。
 
+### 資料庫效能變更門檻
+
+目前不因查詢形狀或直覺直接新增 index、修改 schema 或建立 migration。任何資料庫效能優化須先取得具體證據，例如授權測試資料庫的 `EXPLAIN (ANALYZE, BUFFERS)`、查詢延遲／p95／p99、資料量與寫入成本，再提出最小 schema 變更並驗證讀寫影響。若資料庫權限或測試資料不足，狀態標為未驗證，不以 build 或 Prisma validate 代替效能證據。
+
 ## 建置命令
 
 ```bash
