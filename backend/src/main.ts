@@ -42,8 +42,8 @@ import {
   verify as verifySignature,
   X509Certificate,
 } from "node:crypto";
-import { isIP } from "node:net";
 import { loadEnvFile } from "node:process";
+import { normalizeObservabilityIp, isPrivateObservabilityIp, resolveLocalObservabilityRegion, createObservabilityRegionResolver } from "./observability-region";
 import sharp from "sharp";
 import { Observable, Subject, tap, finalize } from "rxjs";
 import { Client as PgClient } from "pg";
@@ -388,10 +388,6 @@ const observabilityEvents = new Subject<Record<string, unknown>>();
 function publishObservabilityEvent(event: Record<string, unknown>) {
   observabilityEvents.next({ ...event, timestamp: new Date().toISOString() });
 }
-const observabilityRegionCache = new Map<string, { region: string; expiresAt: number }>();
-const observabilityRegionPending = new Map<string, Promise<string>>();
-let observabilityRegionProviderCooldownUntil = 0;
-const observabilityRegionCacheTtlMs = 15 * 60 * 1000;
 const observabilityDay = (date = new Date()) => new Date(`${new Date(date.getTime() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10)}T00:00:00.000Z`);
 async function observabilityRegionSnapshot() {
   const day = observabilityDay();
@@ -411,16 +407,6 @@ async function recordObservabilityRegion(event: Record<string, unknown>) {
   });
   await prisma.observabilityRegionStat.deleteMany({ where: { day: { lt: day } } });
 }
-function normalizeObservabilityIp(value: string | undefined) {
-  const raw = value?.split(",", 1)[0]?.trim();
-  const candidate = raw?.startsWith("[") && raw.includes("]")
-    ? raw.slice(1, raw.indexOf("]"))
-    : raw && /^\d{1,3}(?:\.\d{1,3}){3}:\d+$/.test(raw)
-      ? raw.slice(0, raw.lastIndexOf(":"))
-      : raw;
-  if (!candidate || !isIP(candidate)) return undefined;
-  return candidate.startsWith("::ffff:") ? candidate.slice(7) : candidate;
-}
 function observabilityRequestIp(req: RequestLike, preferForwarded = false) {
   const requestIp = normalizeObservabilityIp(req.ip);
   const realIp = normalizeObservabilityIp(req.headers["x-real-ip"]);
@@ -430,9 +416,6 @@ function observabilityRequestIp(req: RequestLike, preferForwarded = false) {
     ? realIp || forwardedIp || requestIp || socketIp
     : requestIp || realIp || forwardedIp || socketIp;
 }
-function isPrivateObservabilityIp(ip: string) {
-  return !ip || ip === "::1" || ip === "127.0.0.1" || ip.startsWith("10.") || ip.startsWith("192.168.") || /^(172\.(1[6-9]|2\d|3[0-1])\.)/.test(ip) || ip.startsWith("fc") || ip.startsWith("fd") || /^fe[89ab]/i.test(ip);
-}
 const observabilityRegionFailureLog = new Map<string, number>();
 function logObservabilityRegionFailure(reason: string, status?: number) {
   const now = Date.now();
@@ -441,53 +424,12 @@ function logObservabilityRegionFailure(reason: string, status?: number) {
   observabilityRegionFailureLog.set(reason, now);
   console.warn("[observability] region resolution failed", { reason, ...(status ? { status } : {}) });
 }
+const resolveCachedObservabilityRegion = createObservabilityRegionResolver(resolveLocalObservabilityRegion, error => {
+  logObservabilityRegionFailure(error instanceof Error && error.message.includes("ENOENT") ? "local_database_missing" : "local_database_lookup_failed");
+});
 async function resolveObservabilityRegion(ip: string | undefined) {
-  const normalizedIp = normalizeObservabilityIp(ip);
-  if (isPrivateObservabilityIp(normalizedIp || "")) {
-    if (!normalizedIp) logObservabilityRegionFailure("missing_public_ip");
-    return "本機／內網";
-  }
-  const cached = observabilityRegionCache.get(normalizedIp!);
-  if (cached && cached.expiresAt > Date.now()) return cached.region;
-  const pending = observabilityRegionPending.get(normalizedIp!);
-  if (pending) return pending;
-  if (Date.now() < observabilityRegionProviderCooldownUntil) return "未知地區";
-  const lookup = (async () => {
-    try {
-      const response = await fetch(`https://ipwho.is/${encodeURIComponent(normalizedIp!)}`, { signal: AbortSignal.timeout(3000) });
-      if (!response.ok) {
-        logObservabilityRegionFailure("provider_http_error", response.status);
-        if (response.status === 429) observabilityRegionProviderCooldownUntil = Date.now() + 60_000;
-        return "未知地區";
-      }
-      const payload = await response.json() as { success?: boolean; country?: string; region?: string; city?: string; message?: string };
-      if (payload.success === false) {
-        logObservabilityRegionFailure("provider_rejected");
-        return "未知地區";
-      }
-      const region = [payload.country, payload.region || payload.city].filter(Boolean).join(" · ") || "未知地區";
-      if (region === "未知地區") logObservabilityRegionFailure("provider_missing_region");
-      return region;
-    } catch (error: unknown) {
-      const reason = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")
-        ? "provider_timeout"
-        : error instanceof SyntaxError
-          ? "provider_invalid_json"
-          : error instanceof TypeError
-            ? "provider_network_error"
-            : "provider_request_failed";
-      logObservabilityRegionFailure(reason);
-      return "未知地區";
-    }
-  })();
-  observabilityRegionPending.set(normalizedIp!, lookup);
-  try {
-    const region = await lookup;
-    observabilityRegionCache.set(normalizedIp!, { region, expiresAt: Date.now() + (region === "未知地區" ? 60_000 : observabilityRegionCacheTtlMs) });
-    return region;
-  } finally {
-    observabilityRegionPending.delete(normalizedIp!);
-  }
+  if (!normalizeObservabilityIp(ip)) logObservabilityRegionFailure("missing_public_ip");
+  return resolveCachedObservabilityRegion(ip);
 }
 function observabilityClientPlatform(req: RequestLike) {
   const value = req.headers["x-client-platform"]?.toLowerCase();

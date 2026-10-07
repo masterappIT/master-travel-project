@@ -230,6 +230,9 @@ Migration 必須遵循 expand/contract：先加入向後相容結構，再部署
 
 - push 至 `main`
 - GitHub Actions 手動執行 `workflow_dispatch`
+- 每月 2 日 03:00 UTC 排程重建（沿用完整正式發布流程）
+
+API image 建置時下載當月 DB-IP Lite City MMDB，檢查 gzip、MMDB 類型與公開 IP 查詢；下載或驗證失敗會中止建置，不會部署缺少地區資料的 image。資料庫在 image 內由後端本地讀取，不再呼叫 `ipwho.is`；每次 workflow run 的 API tag 包含 commit SHA、run ID 與 attempt，部署仍引用 digest。DB-IP Lite City 資料每月更新，依 [DB-IP 來源及授權](https://db-ip.com) 標示；地區查不到仍回傳「未知地區」。排程會重新發布整站、執行既有備份與 migration，不是僅更新 API；實際正式生效需依下述 Revision／流量證據確認。
 
 流程如下：
 

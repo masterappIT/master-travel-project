@@ -17,6 +17,7 @@
     "@nestjs/platform-express": "^10.4.22",
     "@prisma/client": "^6.19.3",
     "@types/multer": "^2.2.0",
+    "maxmind": "^5.0.7",
     "multer": "^2.4.0",
     "pg": "^8.23.0",
     "reflect-metadata": "^0.2.2",

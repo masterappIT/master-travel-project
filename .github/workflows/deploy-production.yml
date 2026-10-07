@@ -3,6 +3,8 @@ name: Deploy Production
 on:
   push:
     branches: [main]
+  schedule:
+    - cron: '0 3 2 * *'
   workflow_dispatch:
 
 permissions:
@@ -119,6 +121,10 @@ jobs:
           digest="$(gcloud artifacts docker images describe "$image" --format='value(image_summary.digest)')"
           printf 'image=%s@%s\n' "${image%:*}" "$digest" >> "$GITHUB_OUTPUT"
 
+      - name: Resolve GeoIP release
+        id: geoip
+        run: echo "release=$(date -u +%Y-%m)" >> "$GITHUB_OUTPUT"
+
       - name: Build and push immutable API image
         id: image
         env:
@@ -127,9 +133,10 @@ jobs:
           REPOSITORY: ${{ vars.GCP_ARTIFACT_REPOSITORY }}
         run: |
           set -euo pipefail
-          image="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/api:${GITHUB_SHA}"
+          image="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/api:${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           docker buildx build \
             --platform linux/amd64 \
+            --build-arg DBIP_RELEASE="${{ steps.geoip.outputs.release }}" \
             --file backend/Dockerfile \
             --tag "$image" \
             --push \
