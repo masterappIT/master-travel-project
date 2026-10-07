@@ -384,6 +384,19 @@ function publishObservabilityEvent(event: Record<string, unknown>) {
   observabilityEvents.next({ ...event, timestamp: new Date().toISOString() });
 }
 
+async function withDataTelemetry<T>(operation: string, action: () => Promise<T>) {
+  const startedAt = Date.now();
+  publishObservabilityEvent({ type: "data:start", source: "data", operation });
+  try {
+    const result = await action();
+    publishObservabilityEvent({ type: "data:end", source: "data", operation, status: "success", durationMs: Date.now() - startedAt });
+    return result;
+  } catch (error) {
+    publishObservabilityEvent({ type: "data:end", source: "data", operation, status: "error", error: "database_operation_failed", durationMs: Date.now() - startedAt });
+    throw error;
+  }
+}
+
 function observabilityHeartbeat() {
   return { type: "stream:heartbeat", source: "system" };
 }
@@ -10115,7 +10128,7 @@ class AdminController {
       }))
     )
       throw new HttpException("User not found", HttpStatus.BAD_REQUEST);
-    const trip = await prisma.trip.create({
+    const trip = await withDataTelemetry("trip.create", () => prisma.trip.create({
       data: {
         userId,
         origin,
@@ -10133,7 +10146,7 @@ class AdminController {
         vehiclePlate: body.vehiclePlate || null,
       },
       include: { user: true },
-    });
+    }));
       return {
         ...trip,
         scheduledAt: trip.scheduledAt.toISOString(),
