@@ -956,6 +956,9 @@ export type ClientTrip = {
   payment: Omit<ClientPayment, 'tripId' | 'refundedAt' | 'trip'> & { refundedAt?: string | null } | null
 }
 
+export type ClientTripsPage = { data: ClientTrip[]; page: number; pageSize: number; hasMore: boolean }
+export type ClientTripListStatus = 'COMPLETED' | 'CANCELLED'
+
 function normalizeClientTrip(trip: ClientTrip): ClientTrip {
   return trip.vehicle
     ? { ...trip, vehicle: { ...trip.vehicle, logo: resolvePublicAssetUrl(trip.vehicle.logo) || null } }
@@ -968,8 +971,9 @@ export async function listClientTrips(): Promise<ClientTrip[]> {
   return (response.data as { data: ClientTrip[] }).data.map(normalizeClientTrip)
 }
 
-export async function listClientTripsPage(page: number, pageSize: number): Promise<ClientTripsPage> {
-  const response = await uni.request({ url: `${API_BASE_URL}/client/trips?page=${page}&pageSize=${pageSize}`, header: authHeaders() })
+export async function listClientTripsPage(page: number, pageSize: number, status?: ClientTripListStatus): Promise<ClientTripsPage> {
+  const statusQuery = status ? `&status=${status}` : ''
+  const response = await uni.request({ url: `${API_BASE_URL}/client/trips?page=${page}&pageSize=${pageSize}${statusQuery}`, header: authHeaders() })
   if (response.statusCode >= 400) throw apiError(response, '無法載入訂單')
   const payload = response.data as { data: ClientTrip[]; page?: number; pageSize?: number; hasMore?: boolean }
   return { data: payload.data.map(normalizeClientTrip), page: payload.page || page, pageSize: payload.pageSize || pageSize, hasMore: payload.hasMore ?? payload.data.length === pageSize }

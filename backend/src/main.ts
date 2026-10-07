@@ -14832,8 +14832,85 @@ class ClientMileageController {
   }
 }
 
+const clientTripListSelect = {
+  id: true,
+  origin: true,
+  destination: true,
+  originRegion: true,
+  originCity: true,
+  originDistrict: true,
+  originPlace: true,
+  originDetail: true,
+  originLatitude: true,
+  originLongitude: true,
+  destinationRegion: true,
+  destinationCity: true,
+  destinationDistrict: true,
+  destinationPlace: true,
+  destinationDetail: true,
+  destinationLatitude: true,
+  destinationLongitude: true,
+  region: true,
+  scheduledAt: true,
+  estimatedArrivalAt: true,
+  status: true,
+  executionPhase: true,
+  createdAt: true,
+  quote: {
+    select: {
+      expiresAt: true,
+      total: true,
+      currency: true,
+      vehicle: { select: { seats: true } },
+      pricing: { select: { categoryName: true } },
+    },
+  },
+  payment: { select: { total: true, currency: true, status: true, refundedAt: true } },
+} satisfies Prisma.TripSelect;
+
+type ClientTripListRecord = Prisma.TripGetPayload<{ select: typeof clientTripListSelect }>;
+
+function clientTripListResponse(trip: ClientTripListRecord) {
+  const address = (prefix: "origin" | "destination") => {
+    const region = trip[`${prefix}Region`];
+    const city = trip[`${prefix}City`];
+    const district = trip[`${prefix}District`];
+    const place = trip[`${prefix}Place`];
+    const detail = trip[`${prefix}Detail`];
+    return region || city || district || place || detail
+      ? {
+          region,
+          city,
+          district,
+          place,
+          detail,
+          latitude: trip[`${prefix}Latitude`],
+          longitude: trip[`${prefix}Longitude`],
+        }
+      : null;
+  };
+  return {
+    id: trip.id,
+    origin: trip.origin,
+    destination: trip.destination,
+    originAddress: address("origin"),
+    destinationAddress: address("destination"),
+    region: trip.region,
+    scheduledAt: trip.scheduledAt.toISOString(),
+    estimatedArrivalAt: trip.estimatedArrivalAt?.toISOString() || null,
+    status: trip.status,
+    executionPhase: trip.executionPhase || null,
+    createdAt: trip.createdAt.toISOString(),
+    paymentExpiresAt: trip.status === "PENDING" ? trip.quote?.expiresAt?.toISOString() || null : null,
+    vehicle: trip.quote?.vehicle ? { categoryName: trip.quote.pricing?.categoryName || null, seats: trip.quote.vehicle.seats } : null,
+    quote: trip.quote ? { total: trip.quote.total, currency: trip.quote.currency } : null,
+    payment: trip.payment,
+  };
+}
+
 @Controller("client")
 class ClientOrdersController {
+
   @Get("invitations/me")
   async invitationDashboard(@Req() req: RequestLike) {
     const session = await clientSessionFrom(req);
@@ -15358,14 +15435,27 @@ class ClientOrdersController {
     @Req() req: RequestLike,
     @Query("page") pageValue?: string,
     @Query("pageSize") pageSizeValue?: string,
+    @Query("status") statusValue?: string,
   ) {
     const session = await clientSessionFrom(req);
     const page = pageValue ? Math.max(1, Number.parseInt(pageValue, 10) || 1) : null;
     const pageSize = pageSizeValue
       ? Math.min(50, Math.max(1, Number.parseInt(pageSizeValue, 10) || 20))
       : null;
-    const trips = await prisma.trip.findMany({
-      where: { userId: session.sub },
+    const status = statusValue?.trim().toUpperCase();
+    if (status && status !== "COMPLETED" && status !== "CANCELLED") {
+      throw new BadRequestException("status 必須是 COMPLETED 或 CANCELLED");
+    }
+    const trips = page && pageSize
+      ? await prisma.trip.findMany({
+          where: { userId: session.sub, ...(status ? { status: status as "COMPLETED" | "CANCELLED" } : {}) },
+          select: clientTripListSelect,
+          orderBy: { createdAt: "desc" },
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+        })
+      : await prisma.trip.findMany({
+          where: { userId: session.sub, ...(status ? { status: status as "COMPLETED" | "CANCELLED" } : {}) },
       include: {
         user: {
           select: {
@@ -15391,7 +15481,9 @@ class ClientOrdersController {
       orderBy: { createdAt: "desc" },
       ...(page && pageSize ? { skip: (page - 1) * pageSize, take: pageSize } : {}),
     });
-    const data = trips.map(clientTripResponse);
+    const data = page && pageSize
+      ? trips.map((trip) => clientTripListResponse(trip as ClientTripListRecord))
+      : trips.map((trip) => clientTripResponse(trip as Parameters<typeof clientTripResponse>[0]));
     return page && pageSize
       ? { data, page, pageSize, hasMore: data.length === pageSize }
       : { data };

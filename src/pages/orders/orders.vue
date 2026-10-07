@@ -36,7 +36,7 @@ import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { openCachedPage, cachedPagePath, setOrderReturnTarget } from '../../utils/navigation'
-import { listClientTripsPage, type ClientTrip } from '../../services/api'
+import { listClientTripsPage, type ClientTrip, type ClientTripListStatus } from '../../services/api'
 import { listStoredOrders, type StoredTripOrder } from '../../utils/orderStore'
 import { formatOrderCardAddress } from '../../utils/orderAddress'
 import OrdersBackButton from '../../components/orders/OrdersBackButton.vue'
@@ -44,16 +44,14 @@ type Tab = 'all' | 'completed' | 'cancelled'
 type OrderStatus = '已完成' | '待確認' | '待出行' | '取消' | '進行中'
 interface Order { id: string; status: OrderStatus; kind: '加急訂單' | '預約訂單'; countdown?: string; payment?: '已付款' | '已退款' | '退款申請中'; origin: string; destination: string; scheduledAt: string; estimatedArrivalAt?: string | null; paymentExpiresAt?: string | null; createdAt: string; vehicleTitle: string; seats: number; total: number; currency: string }
 const { responsiveStyle } = useResponsiveCanvas()
+type OrderTabKey = 'all' | ClientTripListStatus
+interface OrderTabCache { orders: Order[]; page: number; hasMore: boolean; lastLoadedAt: number; loading?: Promise<void>; loadingMore?: Promise<void> }
+const tabCaches = new Map<OrderTabKey, OrderTabCache>([['all', { orders: [], page: 0, hasMore: true, lastLoadedAt: 0 }], ['COMPLETED', { orders: [], page: 0, hasMore: true, lastLoadedAt: 0 }], ['CANCELLED', { orders: [], page: 0, hasMore: true, lastLoadedAt: 0 }]])
+let currentTabKey: OrderTabKey = 'all'
+const currentTabCache = () => tabCaches.get(currentTabKey)!
 const orders = ref<Order[]>([])
-let loadingOrders: Promise<void> | null = null
-let loadingMoreOrders: Promise<void> | null = null
-let ordersPage = 0
-let hasMoreOrders = true
-let lastLoadedAt = 0
-let lastResetRequestAt = 0
 const ORDER_PAGE_SIZE = 20
 const ORDER_CACHE_TTL_MS = 15_000
-const ORDER_DUPLICATE_WINDOW_MS = 1_000
 
 let countdownTimer: ReturnType<typeof setInterval> | null = null
 const addressLabel = (value: Parameters<typeof formatOrderCardAddress>[0], fallback: string) => formatOrderCardAddress(value, fallback)
@@ -91,16 +89,18 @@ const storedOrderToView = (order: StoredTripOrder): Order => ({
   currency: order.currency
 })
 const loadOrders = async (reset = true, force = false) => {
+  const cache = currentTabCache()
   const now = Date.now()
-  if (reset && now - lastResetRequestAt < ORDER_DUPLICATE_WINDOW_MS) return loadingOrders
-  if (!force && reset && now - lastLoadedAt < ORDER_CACHE_TTL_MS && orders.value.length) return
-  if (reset && loadingOrders) return loadingOrders
-  if (!reset && (loadingMoreOrders || !hasMoreOrders)) return loadingMoreOrders
-  if (reset) lastResetRequestAt = now
+  if (!force && reset && now - cache.lastLoadedAt < ORDER_CACHE_TTL_MS && cache.orders.length) {
+    orders.value = cache.orders
+    return
+  }
+  if (reset && cache.loading) return cache.loading
+  if (!reset && (cache.loadingMore || !cache.hasMore)) return cache.loadingMore
   const request = (async () => {
     try {
-      const nextPage = reset ? 1 : ordersPage + 1
-      const result = await listClientTripsPage(nextPage, ORDER_PAGE_SIZE)
+      const nextPage = reset ? 1 : cache.page + 1
+      const result = await listClientTripsPage(nextPage, ORDER_PAGE_SIZE, currentTabKey === 'all' ? undefined : currentTabKey)
       const mappedOrders = result.data.map((trip) => ({
       id: trip.id,
       status: statusText(trip),
@@ -117,10 +117,11 @@ const loadOrders = async (reset = true, force = false) => {
       seats: trip.vehicle?.seats || 0,
       total: trip.quote?.total || trip.payment?.total || 0,
       currency: trip.quote?.currency || trip.payment?.currency || 'RMB¥' }))
-      orders.value = reset ? mappedOrders : [...orders.value, ...mappedOrders]
-      ordersPage = result.page
-      hasMoreOrders = result.hasMore
-      lastLoadedAt = Date.now()
+      cache.orders = reset ? mappedOrders : [...cache.orders, ...mappedOrders]
+      orders.value = cache.orders
+      cache.page = result.page
+      cache.hasMore = result.hasMore
+      cache.lastLoadedAt = Date.now()
       startCountdownRefresh()
     } catch (error) {
       if (reset) {
@@ -129,26 +130,22 @@ const loadOrders = async (reset = true, force = false) => {
         if (!orders.value.length) uni.showToast({ title: error instanceof Error ? error.message : '訂單載入失敗', icon: 'none' })
       }
     } finally {
-      if (reset) loadingOrders = null
-      else loadingMoreOrders = null
+      if (reset) cache.loading = undefined
+      else cache.loadingMore = undefined
     }
   })()
-  if (reset) loadingOrders = request
-  else loadingMoreOrders = request
+  if (reset) cache.loading = request
+  else cache.loadingMore = request
   return request
 }
 const loadMoreOrders = () => { void loadOrders(false) }
-const selectTab = async (tab: Tab) => {
-  if (tab === 'all' || !hasMoreOrders) {
-    activeTab.value = tab
-    return
-  }
-  while (hasMoreOrders) {
-    const previousPage = ordersPage
-    await loadOrders(false)
-    if (ordersPage === previousPage) break
-  }
+const selectTab = (tab: Tab) => {
+  const nextKey: OrderTabKey = tab === 'completed' ? 'COMPLETED' : tab === 'cancelled' ? 'CANCELLED' : 'all'
+  currentTabKey = nextKey
   activeTab.value = tab
+  const cache = currentTabCache()
+  orders.value = cache.orders
+  if (!cache.orders.length || Date.now() - cache.lastLoadedAt >= ORDER_CACHE_TTL_MS) void loadOrders(true)
 }
 
 onShow(() => { void loadOrders(true, true) })
