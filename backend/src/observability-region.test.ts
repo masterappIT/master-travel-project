@@ -22,27 +22,40 @@ test("normalizes proxy address formats", () => {
   assert.equal(normalizeObservabilityIp("not-an-ip"), undefined);
 });
 
-test("diagnoses proxy selection without exposing addresses and preserves selection order", () => {
-  const request = {
-    ip: "::ffff:169.254.8.1",
+test("selects the first untrusted forwarded hop only behind a trusted socket", () => {
+  const trusted = {
+    ip: "169.254.8.1",
     headers: { "x-forwarded-for": "8.8.8.8, 10.0.0.2", "x-real-ip": "1.1.1.1" },
     socket: { remoteAddress: "10.0.0.3" },
   };
-  const selected = observabilityIpSelection(request);
-  assert.equal(selected.ip, "169.254.8.1");
-  assert.deepEqual(selected.diagnostic, {
-    source: "request",
-    selectedClass: "link_local",
-    forwardedClass: "public_candidate",
-    sameAsForwarded: false,
-    realClass: "public_candidate",
-    sameAsReal: false,
-  });
-  assert.equal(observabilityIpSelection(request, true).ip, "1.1.1.1");
-  assert.equal(observabilityIpSelection({ ip: "8.8.8.8", headers: { "x-forwarded-for": "8.8.8.8" } }).diagnostic.sameAsForwarded, true);
-  assert.equal(observabilityIpSelection({ headers: {}, socket: { remoteAddress: "10.0.0.3" } }).diagnostic.source, "socket");
-  assert.equal(observabilityIpSelection({ headers: {} }).diagnostic.selectedClass, "missing");
+  const selected = observabilityIpSelection(trusted);
+  assert.equal(selected.ip, "8.8.8.8");
+  assert.equal(selected.diagnostic.source, "forwarded");
   assert.equal(JSON.stringify(selected.diagnostic).includes("8.8.8.8"), false);
+
+  const forged = observabilityIpSelection({
+    ip: "8.8.8.8",
+    headers: { "x-forwarded-for": "1.1.1.1, 10.0.0.2" },
+    socket: { remoteAddress: "8.8.4.4" },
+  });
+  assert.equal(forged.ip, "8.8.4.4");
+  assert.equal(forged.diagnostic.source, "socket");
+  assert.equal(observabilityIpSelection({
+    ip: "1.1.1.1",
+    headers: { "x-forwarded-for": "9.9.9.9, 8.8.8.8, 10.0.0.2" },
+    socket: { remoteAddress: "169.254.3.4" },
+  }).ip, "8.8.8.8");
+  assert.equal(observabilityIpSelection({
+    ip: "1.1.1.1",
+    headers: { "x-forwarded-for": "9.9.9.9, 1.1.1.1, 10.0.0.2" },
+    socket: { remoteAddress: "fe80::1" },
+  }).ip, "1.1.1.1");
+});
+
+test("handles missing and malformed proxy chain values without trusting them", () => {
+  assert.equal(observabilityIpSelection({ headers: {}, socket: { remoteAddress: "10.0.0.3" } }).diagnostic.source, "socket");
+  assert.equal(observabilityIpSelection({ headers: { "x-forwarded-for": "not-an-ip" }, socket: { remoteAddress: "10.0.0.3" } }).diagnostic.source, "socket");
+  assert.equal(observabilityIpSelection({ headers: {} }).diagnostic.selectedClass, "missing");
 });
 
 test("looks up public IPs and preserves private and unknown fallbacks", () => {

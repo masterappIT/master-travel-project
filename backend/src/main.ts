@@ -407,8 +407,8 @@ async function recordObservabilityRegion(event: Record<string, unknown>) {
   });
   await prisma.observabilityRegionStat.deleteMany({ where: { day: { lt: day } } });
 }
-function observabilityRequestIp(req: RequestLike, preferForwarded = false) {
-  return observabilityIpSelection(req, preferForwarded).ip;
+function observabilityRequestIp(req: RequestLike) {
+  return observabilityIpSelection(req).ip;
 }
 const observabilityRegionFailureLog = new Map<string, number>();
 function logObservabilityRegionFailure(reason: string, status?: number) {

@@ -16,16 +16,33 @@ export function observabilityIpSelection(req: {
   ip?: string;
   headers: { ["x-real-ip"]?: string; ["x-forwarded-for"]?: string };
   socket?: { remoteAddress?: string };
-}, preferForwarded = false) {
+}) {
   const candidates = {
     request: normalizeObservabilityIp(req.ip),
     real: normalizeObservabilityIp(req.headers["x-real-ip"]),
     forwarded: normalizeObservabilityIp(req.headers["x-forwarded-for"]),
     socket: normalizeObservabilityIp(req.socket?.remoteAddress),
   };
-  const priority = preferForwarded ? ["real", "forwarded", "request", "socket"] as const : ["request", "real", "forwarded", "socket"] as const;
-  const source = priority.find(key => candidates[key]) || "none";
-  const ip = source === "none" ? undefined : candidates[source];
+  const forwardedHops = req.headers["x-forwarded-for"]?.split(",").map(hop => normalizeObservabilityIp(hop));
+  let source: "request" | "socket" | "forwarded" | "none" = "none";
+  let ip: string | undefined;
+  if (candidates.socket) {
+    source = "socket";
+    ip = candidates.socket;
+    if (isTrustedObservabilityProxyIp(ip) && forwardedHops?.length) {
+      // Only walk contiguous trusted hops from the socket; never skip a malformed boundary.
+      for (let index = forwardedHops.length - 1; index >= 0; index--) {
+        if (!isTrustedObservabilityProxyIp(ip)) break;
+        const hop = forwardedHops[index];
+        if (!hop) break;
+        source = "forwarded";
+        ip = hop;
+      }
+    }
+  } else if (candidates.request) {
+    source = "request";
+    ip = candidates.request;
+  }
   return {
     ip,
     diagnostic: {
@@ -47,6 +64,10 @@ function observabilityIpClass(ip: string | undefined) {
 
 export function isPrivateObservabilityIp(ip: string) {
   return !ip || ip === "::1" || /^127\./.test(ip) || ip.startsWith("10.") || ip.startsWith("192.168.") || /^(172\.(1[6-9]|2\d|3[0-1])\.)/.test(ip) || ip.startsWith("fc") || ip.startsWith("fd") || /^fe[89ab]/i.test(ip);
+}
+
+export function isTrustedObservabilityProxyIp(ip: string) {
+  return Boolean(ip) && (isPrivateObservabilityIp(ip) || /^169\.254\./.test(ip));
 }
 
 export function regionFromGeoIp(ip: string | undefined, lookup: (ip: string) => CityResponse | null) {
