@@ -44,6 +44,7 @@ import {
 } from "node:crypto";
 import { loadEnvFile } from "node:process";
 import { normalizeObservabilityIp, isPrivateObservabilityIp, observabilityIpSelection, resolveLocalObservabilityRegion, createObservabilityRegionResolver } from "./observability-region";
+import { ObservabilityRegionWriteTracker } from "./observability-region-write";
 import sharp from "sharp";
 import { Observable, Subject, tap, finalize } from "rxjs";
 import { Client as PgClient } from "pg";
@@ -385,6 +386,10 @@ interface MembershipPlan {
 const prisma = new PrismaClient();
 
 const observabilityEvents = new Subject<Record<string, unknown>>();
+const observabilityRegionWrites = new ObservabilityRegionWriteTracker();
+function publishRegionWriteStatus(sequence: number, status: "ok" | "error") {
+  if (observabilityRegionWrites.complete(sequence, status)) publishObservabilityEvent({ type: "region:write-status", status, checkedAt: observabilityRegionWrites.checkedAt, writeVersion: observabilityRegionWrites.version });
+}
 function publishObservabilityEvent(event: Record<string, unknown>) {
   observabilityEvents.next({ ...event, timestamp: new Date().toISOString() });
 }
@@ -509,7 +514,10 @@ function publishRequestObservabilityEvent(event: Record<string, unknown>, req: R
     if (event.type === "request:end" && event.path === "/health/ready") logObservabilityIpDiagnostic(req, region);
     const resolvedEvent = { ...event, region, ...(platform ? { platform } : {}) };
     publishObservabilityEvent(resolvedEvent);
-    void recordObservabilityRegion(resolvedEvent).catch(() => console.warn("[observability] region statistics write failed"));
+    const writeSequence = event.type === "request:end" ? observabilityRegionWrites.begin() : null;
+    void recordObservabilityRegion(resolvedEvent)
+      .then(() => { if (writeSequence !== null) publishRegionWriteStatus(writeSequence, "ok"); })
+      .catch(() => { console.warn("[observability] region statistics write failed"); if (writeSequence !== null) publishRegionWriteStatus(writeSequence, "error"); });
   });
 }
 
@@ -4409,12 +4417,13 @@ class AdminAccessInterceptor implements NestInterceptor {
     const path = (req.url || "").split("?")[0];
     const observed = shouldObserveRequest(path);
     const source = observabilitySource(path);
+    const category = path === "/health/live" || path === "/health/ready" ? "health" : "application";
     const handler = next.handle();
     const result = observed
       ? handler.pipe(
           tap({
-            next: () => publishRequestObservabilityEvent({ type: "request:end", source, method, path, status: "success", durationMs: Date.now() - startedAt }, req),
-            error: () => publishRequestObservabilityEvent({ type: "request:end", source, method, path, status: "error", durationMs: Date.now() - startedAt, error: "request_failed" }, req),
+            next: () => publishRequestObservabilityEvent({ type: "request:end", source, category, method, path, status: "success", httpStatus: context.switchToHttp().getResponse<{ statusCode?: number }>().statusCode, durationMs: Date.now() - startedAt }, req),
+            error: (err: unknown) => publishRequestObservabilityEvent({ type: "request:end", source, category, method, path, status: "error", httpStatus: err instanceof HttpException ? err.getStatus() : 500, durationMs: Date.now() - startedAt, error: "request_failed" }, req),
           }),
           finalize(() => undefined),
         )
@@ -7906,10 +7915,15 @@ class AdminController {
     requireAuth(req);
     return new Observable<Record<string, unknown>>(subscriber => {
       const subscription = observabilityEvents.subscribe(event => subscriber.next({ data: event }));
+      let snapshotSequence = 0;
       const sendRegionSnapshot = () => {
+        const sequence = ++snapshotSequence;
         void observabilityRegionSnapshot()
-          .then(snapshot => { if (!subscriber.closed) subscriber.next({ data: snapshot }); })
-          .catch(() => console.warn("[observability] region statistics read failed"));
+          .then(snapshot => { if (!subscriber.closed && sequence === snapshotSequence) subscriber.next({ data: { ...snapshot, checkedAt: new Date().toISOString(), writeStatus: observabilityRegionWrites.status, writeCheckedAt: observabilityRegionWrites.checkedAt, writeVersion: observabilityRegionWrites.version } }); })
+          .catch(() => {
+            console.warn("[observability] region statistics read failed");
+            if (!subscriber.closed && sequence === snapshotSequence) subscriber.next({ data: { type: "region:read-status", status: "error", day: observabilityDay().toISOString().slice(0, 10), checkedAt: new Date().toISOString(), writeStatus: observabilityRegionWrites.status, writeCheckedAt: observabilityRegionWrites.checkedAt, writeVersion: observabilityRegionWrites.version } });
+          });
       };
       const heartbeat = setInterval(() => {
         subscriber.next({ data: { ...observabilityHeartbeat(), timestamp: new Date().toISOString() } });
