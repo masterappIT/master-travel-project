@@ -912,8 +912,6 @@ const showComingSoon = (name: string) => uni.showToast({ title: `${name}功能�
 .canvas :deep(.native-map){width:430px;height:480px}
 .canvas :deep(.map-layer.full-screen){height:642px}
 .canvas :deep(.map-layer.full-screen .native-map){height:642px}
-.canvas :deep(.map-layer.booking-picker-open){height:466px!important}
-.canvas :deep(.map-layer.booking-picker-open .native-map){height:466px!important}
 .canvas :deep(.map-tool){top:538px;bottom:auto}
 .canvas :deep(.route-panel){top:586px;bottom:auto;width:430px;height:331px}
 .canvas :deep(.panel-surface){top:auto;bottom:0;width:430px;height:331px}
