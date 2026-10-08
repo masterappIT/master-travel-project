@@ -132,6 +132,9 @@ body,
   --trip-screen-radius: 0px;
 }
 
+uni-page-body > .page,
+uni-page-body > .login-page,
+uni-page-body > .verify-page,
 .app-shell > .page,
 .app-shell > .login-page,
 .app-shell > .verify-page,
