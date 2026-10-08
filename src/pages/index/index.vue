@@ -328,8 +328,8 @@ const mapLatitude = ref(22.3046)
 const mapLongitude = ref(114.1619)
 const mapScale = ref(13)
 const mapCenterTrigger = ref(0)
-const locationLabel = ref('香港 · 油尖旺區')
-const detailedAddress = ref('香港九龍站附近')
+const locationLabel = ref('位置獲取中')
+const detailedAddress = ref('')
 const headerRenderKey = ref(0)
 const bookingTimePicker = ref(false)
 const airportModeHintVisible = ref(false)
@@ -767,10 +767,15 @@ const handleMapLocation = () => {
   useCurrentLocation()
 }
 
+let locationRequestId = 0
 const useCurrentLocation = (closePicker = false, setAsOrigin = false, forceCenter = false) => {
+  const requestId = ++locationRequestId
+  locationLabel.value = '位置獲取中'
+  detailedAddress.value = ''
   const getLocation = () => uni.getLocation({
     type: 'gcj02',
     success: ({ latitude, longitude }) => {
+      if (requestId !== locationRequestId) return
       mapLatitude.value = latitude
       mapLongitude.value = longitude
       if (forceCenter || mapPolyline.value.length === 0) {
@@ -780,11 +785,16 @@ const useCurrentLocation = (closePicker = false, setAsOrigin = false, forceCente
       if (addressPicker.value) selectedCoordinates.value[addressPicker.value] = { latitude, longitude }
       const localRegion = findLocalRegion(latitude, longitude)
       if (!localRegion) {
+        // #ifdef MP-WEIXIN
+        if (import.meta.env.DEV) console.info('[location diagnostic] outside service area', { latitude, longitude })
+        // #endif
+        locationLabel.value = `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`
+        detailedAddress.value = locationLabel.value
         uni.showToast({ title: '未開通服務', icon: 'none' })
         return
       }
-      locationLabel.value = localRegion ? `${localRegion.region} · ${localRegion.district}` : '目前位置'
-      detailedAddress.value = localRegion ? `${locationLabel.value}附近` : `目前位置（${latitude.toFixed(5)}, ${longitude.toFixed(5)}）`
+      locationLabel.value = `${localRegion.region} · ${localRegion.district}`
+      detailedAddress.value = `${locationLabel.value}附近`
       const target = addressPicker.value
       if (target) {
         setRouteSelection(target, {
@@ -805,6 +815,7 @@ const useCurrentLocation = (closePicker = false, setAsOrigin = false, forceCente
       }
       reverseGeocode(latitude, longitude)
         .then((location) => {
+          if (requestId !== locationRequestId) return
           if (location.address) detailedAddress.value = location.address
           if (localRegion?.region === '澳門') {
             locationLabel.value = `澳門 · ${location.district || localRegion.district}`
@@ -841,11 +852,14 @@ const useCurrentLocation = (closePicker = false, setAsOrigin = false, forceCente
         })
         .catch(() => undefined)
         .finally(() => {
-          if (closePicker) selectCurrentLocation()
+          if (requestId === locationRequestId && closePicker) selectCurrentLocation()
         })
       uni.showToast({ title: '已定位到目前位置', icon: 'none' })
     },
-    fail: (error) => uni.showToast({ title: `無法取得位置：${error.errMsg || '請允許定位權限'}`, icon: 'none' })
+    fail: (error) => {
+      if (requestId !== locationRequestId) return
+      uni.showToast({ title: `無法取得位置：${error.errMsg || '請允許定位權限'}`, icon: 'none' })
+    }
   })
   const requestLocation = () => {
     // 微信小程序拒絕過定位後，不會再次自動彈出授權框。
