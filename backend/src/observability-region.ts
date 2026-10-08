@@ -12,6 +12,39 @@ export function normalizeObservabilityIp(value: string | undefined) {
   return candidate.startsWith("::ffff:") ? candidate.slice(7) : candidate;
 }
 
+export function observabilityIpSelection(req: {
+  ip?: string;
+  headers: { ["x-real-ip"]?: string; ["x-forwarded-for"]?: string };
+  socket?: { remoteAddress?: string };
+}, preferForwarded = false) {
+  const candidates = {
+    request: normalizeObservabilityIp(req.ip),
+    real: normalizeObservabilityIp(req.headers["x-real-ip"]),
+    forwarded: normalizeObservabilityIp(req.headers["x-forwarded-for"]),
+    socket: normalizeObservabilityIp(req.socket?.remoteAddress),
+  };
+  const priority = preferForwarded ? ["real", "forwarded", "request", "socket"] as const : ["request", "real", "forwarded", "socket"] as const;
+  const source = priority.find(key => candidates[key]) || "none";
+  const ip = source === "none" ? undefined : candidates[source];
+  return {
+    ip,
+    diagnostic: {
+      source,
+      selectedClass: observabilityIpClass(ip),
+      forwardedClass: observabilityIpClass(candidates.forwarded),
+      sameAsForwarded: Boolean(ip && candidates.forwarded && ip === candidates.forwarded),
+      realClass: observabilityIpClass(candidates.real),
+      sameAsReal: Boolean(ip && candidates.real && ip === candidates.real),
+    },
+  };
+}
+
+function observabilityIpClass(ip: string | undefined) {
+  if (!ip) return "missing";
+  if (/^169\.254\./.test(ip) || /^fe[89ab]/i.test(ip)) return "link_local";
+  return isPrivateObservabilityIp(ip) ? "private_or_loopback" : "public_candidate";
+}
+
 export function isPrivateObservabilityIp(ip: string) {
   return !ip || ip === "::1" || /^127\./.test(ip) || ip.startsWith("10.") || ip.startsWith("192.168.") || /^(172\.(1[6-9]|2\d|3[0-1])\.)/.test(ip) || ip.startsWith("fc") || ip.startsWith("fd") || /^fe[89ab]/i.test(ip);
 }

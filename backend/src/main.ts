@@ -43,7 +43,7 @@ import {
   X509Certificate,
 } from "node:crypto";
 import { loadEnvFile } from "node:process";
-import { normalizeObservabilityIp, isPrivateObservabilityIp, resolveLocalObservabilityRegion, createObservabilityRegionResolver } from "./observability-region";
+import { normalizeObservabilityIp, isPrivateObservabilityIp, observabilityIpSelection, resolveLocalObservabilityRegion, createObservabilityRegionResolver } from "./observability-region";
 import sharp from "sharp";
 import { Observable, Subject, tap, finalize } from "rxjs";
 import { Client as PgClient } from "pg";
@@ -408,13 +408,7 @@ async function recordObservabilityRegion(event: Record<string, unknown>) {
   await prisma.observabilityRegionStat.deleteMany({ where: { day: { lt: day } } });
 }
 function observabilityRequestIp(req: RequestLike, preferForwarded = false) {
-  const requestIp = normalizeObservabilityIp(req.ip);
-  const realIp = normalizeObservabilityIp(req.headers["x-real-ip"]);
-  const forwardedIp = normalizeObservabilityIp(req.headers["x-forwarded-for"]);
-  const socketIp = normalizeObservabilityIp(req.socket?.remoteAddress);
-  return preferForwarded
-    ? realIp || forwardedIp || requestIp || socketIp
-    : requestIp || realIp || forwardedIp || socketIp;
+  return observabilityIpSelection(req, preferForwarded).ip;
 }
 const observabilityRegionFailureLog = new Map<string, number>();
 function logObservabilityRegionFailure(reason: string, status?: number) {
@@ -423,6 +417,16 @@ function logObservabilityRegionFailure(reason: string, status?: number) {
   if (now - lastLoggedAt < 60_000) return;
   observabilityRegionFailureLog.set(reason, now);
   console.warn("[observability] region resolution failed", { reason, ...(status ? { status } : {}) });
+}
+const observabilityIpDiagnosticLog = new Map<string, number>();
+function logObservabilityIpDiagnostic(req: RequestLike, region: string) {
+  const diagnostic = { ...observabilityIpSelection(req).diagnostic, result: region === "未知地區" ? "unknown" : region === "本機／內網" ? "internal" : "resolved" };
+  const key = JSON.stringify(diagnostic);
+  const now = Date.now();
+  const lastLoggedAt = observabilityIpDiagnosticLog.get(key) || 0;
+  if (now - lastLoggedAt < 60_000) return;
+  observabilityIpDiagnosticLog.set(key, now);
+  console.info("[observability] ip selection", diagnostic);
 }
 const resolveCachedObservabilityRegion = createObservabilityRegionResolver(resolveLocalObservabilityRegion, error => {
   logObservabilityRegionFailure(error instanceof Error && error.message.includes("ENOENT") ? "local_database_missing" : "local_database_lookup_failed");
@@ -502,6 +506,7 @@ function presenceSnapshot() {
 function publishRequestObservabilityEvent(event: Record<string, unknown>, req: RequestLike) {
   const platform = observabilityClientPlatform(req);
   void resolveObservabilityRegion(observabilityRequestIp(req)).then(region => {
+    if (event.type === "request:end" && event.path === "/health/ready") logObservabilityIpDiagnostic(req, region);
     const resolvedEvent = { ...event, region, ...(platform ? { platform } : {}) };
     publishObservabilityEvent(resolvedEvent);
     void recordObservabilityRegion(resolvedEvent).catch(() => console.warn("[observability] region statistics write failed"));

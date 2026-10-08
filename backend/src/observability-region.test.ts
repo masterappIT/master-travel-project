@@ -4,6 +4,7 @@ import type { CityResponse } from "maxmind";
 import {
   createObservabilityRegionResolver,
   normalizeObservabilityIp,
+  observabilityIpSelection,
   regionFromGeoIp,
   resolveLocalObservabilityRegion,
 } from "./observability-region";
@@ -19,6 +20,29 @@ test("normalizes proxy address formats", () => {
   assert.equal(normalizeObservabilityIp("[2001:4860:4860::8888]:443"), "2001:4860:4860::8888");
   assert.equal(normalizeObservabilityIp("8.8.8.8:443, 10.0.0.1"), "8.8.8.8");
   assert.equal(normalizeObservabilityIp("not-an-ip"), undefined);
+});
+
+test("diagnoses proxy selection without exposing addresses and preserves selection order", () => {
+  const request = {
+    ip: "::ffff:169.254.8.1",
+    headers: { "x-forwarded-for": "8.8.8.8, 10.0.0.2", "x-real-ip": "1.1.1.1" },
+    socket: { remoteAddress: "10.0.0.3" },
+  };
+  const selected = observabilityIpSelection(request);
+  assert.equal(selected.ip, "169.254.8.1");
+  assert.deepEqual(selected.diagnostic, {
+    source: "request",
+    selectedClass: "link_local",
+    forwardedClass: "public_candidate",
+    sameAsForwarded: false,
+    realClass: "public_candidate",
+    sameAsReal: false,
+  });
+  assert.equal(observabilityIpSelection(request, true).ip, "1.1.1.1");
+  assert.equal(observabilityIpSelection({ ip: "8.8.8.8", headers: { "x-forwarded-for": "8.8.8.8" } }).diagnostic.sameAsForwarded, true);
+  assert.equal(observabilityIpSelection({ headers: {}, socket: { remoteAddress: "10.0.0.3" } }).diagnostic.source, "socket");
+  assert.equal(observabilityIpSelection({ headers: {} }).diagnostic.selectedClass, "missing");
+  assert.equal(JSON.stringify(selected.diagnostic).includes("8.8.8.8"), false);
 });
 
 test("looks up public IPs and preserves private and unknown fallbacks", () => {
