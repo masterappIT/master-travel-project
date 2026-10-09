@@ -6,7 +6,7 @@
       class="native-map"
       :latitude="latitude"
       :longitude="longitude"
-      :scale="nativeScale"
+      :scale="scale"
       :markers="nativeMarkers"
       :polyline="nativePolyline"
       :style="nativeMapStyle"
@@ -22,9 +22,9 @@
       </svg>
       <view v-if="routeBounds" class="map-pin pickup-pin" :style="pinStyle(routeBounds.origin)" aria-label="上車位置"></view>
       <view v-if="routeBounds" class="map-pin destination-pin" :style="pinStyle(routeBounds.destination)" aria-label="目的地"></view>
-      <view v-if="routeBounds" class="map-callout pickup-callout" :style="markerStyle(routeBounds.origin)"><text class="callout-title">上車位置</text><text class="callout-value">{{ props.pickupLabel || '目前定位' }}</text></view>
-      <view v-else-if="nativeMarkers.length" class="map-callout pickup-callout pickup-callout--center"><text class="callout-title">上車位置</text><text class="callout-value">{{ props.pickupLabel || '目前定位' }}</text></view>
-      <view v-if="routeBounds && props.routeSummary" class="map-callout destination-callout" :style="markerStyle(routeBounds.destination)"><text class="callout-title">目的地 · 行程資訊</text><text class="callout-value">{{ props.destinationLabel || '目的地' }}</text><text class="callout-summary">{{ props.routeSummary }}</text></view>
+      <view v-if="routeBounds" class="map-callout pickup-callout" :style="markerStyle(routeBounds.origin)"><text class="callout-title">上車位置</text><text class="callout-value">{{ pickupCalloutLabel }}</text></view>
+      <view v-else-if="nativeMarkers.length" class="map-callout pickup-callout pickup-callout--center"><text class="callout-title">上車位置</text><text class="callout-value">{{ pickupCalloutLabel }}</text></view>
+      <view v-if="routeBounds && props.routeSummary" class="map-callout destination-callout" :style="markerStyle(routeBounds.destination)"><text class="callout-title">目的地 · 行程資訊</text><text class="callout-value">{{ destinationCalloutLabel }}</text><text class="callout-summary">{{ routeSummaryLabel }}</text></view>
       <text v-if="!projectedRoute">{{ props.pickupLabel || '目前定位' }}</text>
     </view>
     <!-- #endif -->
@@ -32,7 +32,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, getCurrentInstance, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, getCurrentInstance, nextTick, watch } from 'vue'
 
 type MapMarker = { id: number; latitude: number; longitude: number; title?: string; iconPath?: string; width?: number; height?: number; callout?: { content: string; display?: 'ALWAYS' | 'BYCLICK'; color?: string; fontSize?: number; borderRadius?: number; bgColor?: string; padding?: number; textAlign?: 'left' | 'center' } }
 type MapPoint = { latitude: number; longitude: number }
@@ -45,6 +45,7 @@ const props = withDefaults(defineProps<{
   markers?: MapMarker[]
   polyline?: MapPolyline[]
   centerTrigger?: number
+  routeFitTrigger?: number
   fullScreen?: boolean
   bookingPickerOpen?: boolean
   pickupLabel?: string
@@ -53,19 +54,39 @@ const props = withDefaults(defineProps<{
   nativeHeight?: number
   mapTop?: number
   mapId?: string
-  fitPadding?: [number, number, number, number]
 }>(), {
   scale: 13,
   mapId: 'home-route-map'
 })
 
+const wrapCalloutText = (value: string) => {
+  const characters = Array.from(value || '')
+  const lines: string[] = []
+  let line = ''
+  let countedCharacters = 0
+  for (const character of characters) {
+    if (!/\s/.test(character) && countedCharacters >= 13) {
+      lines.push(line)
+      line = ''
+      countedCharacters = 0
+    }
+    line += character
+    if (!/\s/.test(character)) countedCharacters += 1
+  }
+  if (line || !lines.length) lines.push(line)
+  return lines.join('\n')
+}
+const pickupCalloutLabel = computed(() => wrapCalloutText(props.pickupLabel || '目前定位'))
+const destinationCalloutLabel = computed(() => wrapCalloutText(props.destinationLabel || '目的地'))
+const routeSummaryLabel = computed(() => wrapCalloutText(props.routeSummary || ''))
+
 const nativeMarkers = computed<MapMarker[]>(() => (props.markers || [])
   .filter(marker => Number.isFinite(marker?.latitude) && Number.isFinite(marker?.longitude))
   .map(marker => {
   const content = marker.id === 1
-    ? `【上車位置】\n${props.pickupLabel || '目前定位'}`
+    ? `【上車位置】\n${pickupCalloutLabel.value}`
     : marker.id === 2 && props.routeSummary
-      ? `【目的地 · 行程資訊】\n${props.destinationLabel || marker.title || '目的地'}\n${props.routeSummary}`
+      ? `【目的地 · 行程資訊】\n${destinationCalloutLabel.value}\n${routeSummaryLabel.value}`
       : ''
   const sizedMarker = {
     ...marker,
@@ -118,42 +139,89 @@ const projectedRoute = computed(() => {
 const pinStyle = (point: { x: number; y: number }) => ({ left: `${point.x}px`, top: `${point.y}px` })
 const markerStyle = (point: { x: number; y: number }) => ({ left: `${Math.min(320, Math.max(110, point.x))}px`, top: `${Math.min(390, Math.max(100, point.y + 14))}px` })
 
+const MAP_WIDTH = 430
+const TILE_SIZE = 256
+const MAX_SCALE = 18
+const worldX = (longitude: number) => (longitude + 180) / 360
+const worldY = (latitude: number) => {
+  const radians = Math.max(-85.05112878, Math.min(85.05112878, latitude)) * Math.PI / 180
+  return (1 - Math.log(Math.tan(radians) + 1 / Math.cos(radians)) / Math.PI) / 2
+}
+const latitudeFromWorldY = (y: number) => Math.atan(Math.sinh(Math.PI * (1 - 2 * y))) * 180 / Math.PI
+const calloutLines = (value: string) => Math.max(1, value.split('\n').length)
+const routeFitPoints = computed<MapPoint[]>(() => {
+  const routePoints = nativePolyline.value[0]?.points || []
+  if (routePoints.length < 2) return []
+  const endpointPoints = nativeMarkers.value
+    .filter(marker => marker.id === 1 || marker.id === 2)
+    .map(marker => ({ latitude: marker.latitude, longitude: marker.longitude }))
+  return [...routePoints, ...endpointPoints]
+})
+const routeFitRegion = computed<MapPoint[]>(() => {
+  const points = routeFitPoints.value
+  if (points.length < 2) return []
+  let mapHeight = props.nativeHeight || (props.fullScreen ? 642 : 519)
+  // #ifdef APP-PLUS
+  if (!props.nativeHeight && !props.fullScreen) mapHeight = 397
+  // #endif
+  const visible = { left: 22, right: MAP_WIDTH - 22, top: props.nativeHeight || props.fullScreen ? 26 : Math.min(135, mapHeight / 3), bottom: mapHeight - 36 }
+  const originHeight = 42 + 20 * calloutLines(pickupCalloutLabel.value)
+  const destinationHeight = 42 + 20 * (calloutLines(destinationCalloutLabel.value) + calloutLines(routeSummaryLabel.value))
+  const markers = nativeMarkers.value.filter(marker => marker.id === 1 || marker.id === 2)
+  const boundsAt = (scale: number) => {
+    const size = TILE_SIZE * 2 ** scale
+    const xs = points.map(point => worldX(point.longitude) * size)
+    const ys = points.map(point => worldY(point.latitude) * size)
+    let left = Math.min(...xs), right = Math.max(...xs), top = Math.min(...ys), bottom = Math.max(...ys)
+    for (const marker of markers) {
+      const x = worldX(marker.longitude) * size
+      const y = worldY(marker.latitude) * size
+      const height = marker.id === 1 ? originHeight : destinationHeight
+      left = Math.min(left, x - 120)
+      right = Math.max(right, x + 120)
+      top = Math.min(top, y - height - 12)
+      bottom = Math.max(bottom, y + 20)
+    }
+    return { left, right, top, bottom, size }
+  }
+  let bounds = boundsAt(1)
+  for (let scale = 2; scale <= MAX_SCALE; scale += 1) {
+    const candidate = boundsAt(scale)
+    if (candidate.right - candidate.left > visible.right - visible.left || candidate.bottom - candidate.top > visible.bottom - visible.top) break
+    bounds = candidate
+  }
+  const centerX = (bounds.left + bounds.right - visible.left - visible.right + MAP_WIDTH) / 2
+  const centerY = (bounds.top + bounds.bottom - visible.top - visible.bottom + mapHeight) / 2
+  const x0 = (centerX - MAP_WIDTH / 2) / bounds.size
+  const x1 = (centerX + MAP_WIDTH / 2) / bounds.size
+  const y0 = (centerY - mapHeight / 2) / bounds.size
+  const y1 = (centerY + mapHeight / 2) / bounds.size
+  return [
+    { latitude: latitudeFromWorldY(y0), longitude: x0 * 360 - 180 },
+    { latitude: latitudeFromWorldY(y1), longitude: x1 * 360 - 180 }
+  ]
+})
 const instance = getCurrentInstance()
-const nativeScale = ref(props.scale)
-let centerTimer: ReturnType<typeof setTimeout> | undefined
+const fitRoute = async () => {
+  // #ifdef APP-PLUS || MP-WEIXIN || MP-TOUTIAO
+  await nextTick()
+  const points = routeFitRegion.value
+  if (points.length < 2) return
+  uni.createMapContext(props.mapId, instance?.proxy).includePoints({ points })
+  // #endif
+}
+watch([routeFitRegion, () => props.routeFitTrigger], () => { void fitRoute() }, { immediate: true, flush: 'post' })
+watch(() => props.centerTrigger, () => { void centerMap() })
 
 const centerMap = async () => {
   // #ifdef APP-PLUS || MP-WEIXIN || MP-TOUTIAO
-  nativeScale.value = props.scale
   await nextTick()
-  const moveToCenter = () => {
-    uni.createMapContext(props.mapId, instance?.proxy).moveToLocation({
-      latitude: props.latitude,
-      longitude: props.longitude
-    })
-  }
-  moveToCenter()
-  if (centerTimer) clearTimeout(centerTimer)
-  centerTimer = setTimeout(moveToCenter, 350)
+  uni.createMapContext(props.mapId, instance?.proxy).moveToLocation({
+    latitude: props.latitude,
+    longitude: props.longitude
+  })
   // #endif
 }
-
-onBeforeUnmount(() => {
-  if (centerTimer) clearTimeout(centerTimer)
-})
-
-watch(
-  () => props.scale,
-  scale => { nativeScale.value = scale }
-)
-
-watch(
-  () => props.centerTrigger,
-  async () => {
-    await nextTick()
-    await centerMap()
-  }
-)
 
 </script>
 
@@ -166,6 +234,6 @@ watch(
 .map-layer:not(.full-screen){top:189px;height:397px}.map-layer:not(.full-screen) .native-map{height:397px}
 /* #endif */
 /* #ifdef H5 */
-.map-fallback{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(145deg,#e6edf0,#cbd8dc);color:#53636b;font-size:18px;font-weight:600;pointer-events:none}.route-preview{position:absolute;inset:0;width:430px;height:519px}.map-pin{position:absolute;z-index:1;width:18px;height:18px;box-sizing:border-box;border:4px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(40,67,88,.35);transform:translate(-50%,-50%)}.pickup-pin{background:#10a64a}.destination-pin{background:#ffc44f}.map-callout{position:absolute;z-index:2;display:flex;width:max-content;min-width:118px;max-width:220px;padding:8px 10px;box-sizing:border-box;flex-direction:column;border-radius:9px;background:#fff;box-shadow:0 3px 12px rgba(40,67,88,.24);color:#38434a;transform:translate(-50%,12px)}.map-callout::after{position:absolute;top:-7px;left:50%;width:0;height:0;border-top:0;border-right:7px solid transparent;border-bottom:8px solid #fff;border-left:7px solid transparent;content:'';transform:translateX(-50%)}.callout-title{font-size:11px;font-weight:500;line-height:16px}.callout-value{font-size:13px;font-weight:700;line-height:18px;text-align:center;white-space:normal;overflow-wrap:anywhere}.callout-summary{margin-top:2px;font-size:12px;font-weight:500;line-height:17px;text-align:center;white-space:normal}.destination-callout{transform:translate(-50%,12px)}.pickup-callout--center{left:50%;top:42%;transform:translate(-50%,12px)}.destination-callout::after{top:-7px;bottom:auto;border-top:0;border-right:7px solid transparent;border-bottom:8px solid #fff;border-left:7px solid transparent}.map-layer.full-screen .map-fallback,.map-layer.full-screen .route-preview{height:642px}
+.map-fallback{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(145deg,#e6edf0,#cbd8dc);color:#53636b;font-size:18px;font-weight:600;pointer-events:none}.route-preview{position:absolute;inset:0;width:430px;height:519px}.map-pin{position:absolute;z-index:1;width:18px;height:18px;box-sizing:border-box;border:4px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(40,67,88,.35);transform:translate(-50%,-50%)}.pickup-pin{background:#10a64a}.destination-pin{background:#ffc44f}.map-callout{position:absolute;z-index:2;display:flex;width:max-content;min-width:118px;max-width:220px;padding:8px 10px;box-sizing:border-box;flex-direction:column;border-radius:9px;background:#fff;box-shadow:0 3px 12px rgba(40,67,88,.24);color:#38434a;transform:translate(-50%,12px)}.map-callout::after{position:absolute;top:-7px;left:50%;width:0;height:0;border-top:0;border-right:7px solid transparent;border-bottom:8px solid #fff;border-left:7px solid transparent;content:'';transform:translateX(-50%)}.callout-title{font-size:11px;font-weight:500;line-height:16px}.callout-value{font-size:13px;font-weight:700;line-height:18px;text-align:center;white-space:pre-wrap;overflow-wrap:anywhere}.callout-summary{margin-top:2px;font-size:12px;font-weight:500;line-height:17px;text-align:center;white-space:normal}.destination-callout{transform:translate(-50%,12px)}.pickup-callout--center{left:50%;top:42%;transform:translate(-50%,12px)}.destination-callout::after{top:-7px;bottom:auto;border-top:0;border-right:7px solid transparent;border-bottom:8px solid #fff;border-left:7px solid transparent}.map-layer.full-screen .map-fallback,.map-layer.full-screen .route-preview{height:642px}
 /* #endif */
 </style>

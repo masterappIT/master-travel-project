@@ -3,7 +3,7 @@
     <view v-if="rideMode === 'cross-border'" class="page-content">
       <view class="canvas">
         <!-- #ifdef H5 || MP-WEIXIN || MP-TOUTIAO || MP-ALIPAY || MP-XHS -->
-        <HomeMap v-if="activePagePath === '/pages/index/index'" map-id="home-main-map" :latitude="mapLatitude" :longitude="mapLongitude" :scale="mapScale" :markers="mapMarkers" :polyline="mapPolyline" :center-trigger="mapCenterTrigger" :booking-picker-open="bookingTimePicker" :pickup-label="origin" :destination-label="destination" :route-summary="routeSummary" />
+        <HomeMap v-if="activePagePath === '/pages/index/index'" map-id="home-main-map" :latitude="mapLatitude" :longitude="mapLongitude" :scale="mapScale" :markers="mapMarkers" :polyline="mapPolyline" :center-trigger="mapCenterTrigger" :route-fit-trigger="routeFitTrigger" :booking-picker-open="bookingTimePicker" :pickup-label="pickupMapLabel" :destination-label="destination" :route-summary="routeSummary" />
         <!-- #endif -->
         <HomeHeader :key="headerRenderKey" :location-label="locationLabel" />
         <HomeTravelModeSwitch :mode="rideMode" @update:mode="switchRideMode" />
@@ -314,6 +314,8 @@ const selectedCoordinates = ref<{ origin?: Coordinate; destination?: Coordinate 
 type MapMarker = Coordinate & { id: number; title?: string; iconPath?: string; width?: number; height?: number }
 const mapMarkers = ref<MapMarker[]>([])
 const mapPolyline = ref<Array<{ points: Coordinate[]; color: string; width: number; arrowLine: boolean }>>([])
+const hasValidRoute = computed(() => mapPolyline.value.some(line => line.points.length > 1))
+const pickupMapLabel = computed(() => hasValidRoute.value || mapMarkers.value.find(marker => marker.id === 1)?.title === '出發地' ? origin.value : locationLabel.value)
 const routeSummary = ref('')
 const businessOrigin = ref<BusinessLocation>({ region: '香港', place: '香港國際機場' })
 const businessDestination = ref<BusinessLocation>({ region: '大陸', place: '' })
@@ -328,6 +330,7 @@ const mapLatitude = ref(22.3046)
 const mapLongitude = ref(114.1619)
 const mapScale = ref(13)
 const mapCenterTrigger = ref(0)
+const routeFitTrigger = ref(0)
 const locationLabel = ref('位置獲取中')
 const detailedAddress = ref('')
 const headerRenderKey = ref(0)
@@ -350,6 +353,7 @@ const switchRideMode = (mode: RideMode) => {
     selectedCoordinates.value.origin = undefined
     selectedCoordinates.value.destination = undefined
     mapMarkers.value = []
+    routeRequestId += 1
     mapPolyline.value = []
     routeSummary.value = ''
     departureTime.value = ''
@@ -476,19 +480,29 @@ const formatSelectedAddressSummary = (selection: AddressSelection) => {
   const location = `${district}${placeName}`.trim()
   return [region, location].filter(Boolean).join(' · ')
 }
+let routeRequestId = 0
+const clearRoutePresentation = () => {
+  mapPolyline.value = []
+  routeSummary.value = ''
+  tripStore.clearRouteDistance()
+}
 const updateRoute = async () => {
+  const requestId = ++routeRequestId
   const { origin: originCoordinate, destination: destinationCoordinate } = selectedCoordinates.value
+  clearRoutePresentation()
   if (!originCoordinate || !destinationCoordinate) return
   try {
     const route = await planDrivingRoute(originCoordinate, destinationCoordinate)
+    if (requestId !== routeRequestId) return
     mapMarkers.value = [
       { id: 1, ...originCoordinate, title: '出發地', iconPath: '/static/home/route/origin.svg', width: 10, height: 18 },
       { id: 2, ...destinationCoordinate, title: '目的地', iconPath: '/static/home/route/destination.svg', width: 10, height: 15 }
     ]
     mapPolyline.value = [{ points: route.points, color: '#285CFC', width: 6, arrowLine: true }]
-      const distanceKm = route.distance / 1000
+    const distanceKm = route.distance / 1000
     const durationMinutes = Math.max(1, Math.round(route.duration / 60))
     routeSummary.value = `共 ${distanceKm < 10 ? distanceKm.toFixed(1) : Math.round(distanceKm)} 公里 · 約 ${durationMinutes >= 60 ? `${Math.floor(durationMinutes / 60)} 小時${durationMinutes % 60 ? ` ${durationMinutes % 60} 分鐘` : ''}` : `${durationMinutes} 分鐘`}`
+    if (route.points.length > 1) routeFitTrigger.value += 1
     tripStore.setRoute(origin.value, destination.value, {
       ...routeAddressFields(),
       originLatitude: originCoordinate.latitude,
@@ -498,13 +512,13 @@ const updateRoute = async () => {
     })
     tripStore.setRouteDistance(route.distance, route.duration)
   } catch {
-    mapPolyline.value = []
-    routeSummary.value = ''
-    tripStore.clearRouteDistance()
+    if (requestId !== routeRequestId) return
+    clearRoutePresentation()
     uni.showToast({ title: '路線規劃失敗，請稍後再試', icon: 'none' })
   }
 }
 const selectAddress = (value: string, selection?: AddressSelection) => {
+  locationRequestId += 1
   const target = addressPicker.value
   if (addressPickerContext.value === 'business') {
     const location = selection ? formatBusinessLocation(selection) : parseBusinessLocation(value)
@@ -525,8 +539,24 @@ const selectAddress = (value: string, selection?: AddressSelection) => {
       ...routeAddressFields()
     })
   }
+  if (addressPickerContext.value === 'cross-border' && target) {
+    selectedCoordinates.value[target] = selection?.latitude !== undefined && selection.longitude !== undefined
+      ? { latitude: selection.latitude, longitude: selection.longitude }
+      : undefined
+  }
   if (target && selection?.latitude !== undefined && selection.longitude !== undefined) {
-    selectedCoordinates.value[target] = { latitude: selection.latitude, longitude: selection.longitude }
+    if (addressPickerContext.value === 'cross-border' && target === 'origin') {
+      mapLatitude.value = selection.latitude
+      mapLongitude.value = selection.longitude
+      mapScale.value = 17
+      mapMarkers.value = [
+        { id: 1, latitude: selection.latitude, longitude: selection.longitude, title: '出發地', iconPath: '/static/home/route/origin.svg', width: 10, height: 18 },
+        ...mapMarkers.value.filter(marker => marker.id !== 1)
+      ]
+      mapCenterTrigger.value += 1
+    }
+    void updateRoute()
+  } else if (addressPickerContext.value === 'cross-border') {
     void updateRoute()
   }
   addressPicker.value = null
@@ -540,6 +570,7 @@ const formatCurrentBusinessLocation = (): BusinessLocation => {
   return { region: city || '目前位置', place: placeParts.join(' · ') || '目前位置' }
 }
 const selectCurrentLocation = () => {
+  locationRequestId += 1
   if (addressPickerContext.value === 'business') {
     const location = formatCurrentBusinessLocation()
     if (addressPicker.value === 'origin') businessOrigin.value = location
@@ -558,7 +589,7 @@ const selectCurrentLocation = () => {
   }
   if (addressPickerContext.value === 'cross-border') {
     tripStore.setRoute(origin.value, destination.value)
-    if (selectedCoordinates.value.origin && selectedCoordinates.value.destination) void updateRoute()
+    void updateRoute()
   }
   addressPicker.value = null
 }
@@ -764,21 +795,32 @@ const handleMapLocation = () => {
     mapCenterTrigger.value += 1
     return
   }
-  useCurrentLocation()
+  useCurrentLocation(false, true)
 }
 
 let locationRequestId = 0
 const useCurrentLocation = (closePicker = false, setAsOrigin = false, forceCenter = false) => {
   const requestId = ++locationRequestId
+  const previousLocationLabel = locationLabel.value
+  const previousDetailedAddress = detailedAddress.value
   locationLabel.value = '位置獲取中'
   detailedAddress.value = ''
+  const restoreLocation = () => {
+    if (requestId !== locationRequestId) return
+    locationLabel.value = previousLocationLabel
+    detailedAddress.value = previousDetailedAddress
+  }
   const getLocation = () => uni.getLocation({
     type: 'gcj02',
     success: ({ latitude, longitude }) => {
       if (requestId !== locationRequestId) return
-      mapLatitude.value = latitude
-      mapLongitude.value = longitude
-      if (forceCenter || mapPolyline.value.length === 0) {
+      const routeIsActive = hasValidRoute.value
+      if (!routeIsActive) {
+        mapLatitude.value = latitude
+        mapLongitude.value = longitude
+        if (forceCenter && !addressPicker.value) {
+          mapMarkers.value = [{ id: 1, latitude, longitude, title: '上車位置', iconPath: '/static/home/route/origin.svg', width: 10, height: 18 }]
+        }
         mapScale.value = 17
         mapCenterTrigger.value += 1
       }
@@ -811,7 +853,7 @@ const useCurrentLocation = (closePicker = false, setAsOrigin = false, forceCente
         selectedCoordinates.value.origin = { latitude, longitude }
         origin.value = formatRouteAddress(detailedAddress.value, localRegion?.region || null)
         originIsCurrent.value = true
-        mapMarkers.value = [{ id: 1, latitude, longitude, title: '出發地' }]
+        mapMarkers.value = [{ id: 1, latitude, longitude, title: '出發地', iconPath: '/static/home/route/origin.svg', width: 10, height: 18 }]
       }
       reverseGeocode(latitude, longitude)
         .then((location) => {
@@ -858,6 +900,7 @@ const useCurrentLocation = (closePicker = false, setAsOrigin = false, forceCente
     },
     fail: (error) => {
       if (requestId !== locationRequestId) return
+      restoreLocation()
       uni.showToast({ title: `無法取得位置：${error.errMsg || '請允許定位權限'}`, icon: 'none' })
     }
   })
@@ -867,6 +910,7 @@ const useCurrentLocation = (closePicker = false, setAsOrigin = false, forceCente
     uni.getSetting({
       success: (settings) => {
        if (settings.authSetting?.['scope.userLocation'] === false) {
+         restoreLocation()
          uni.showModal({
            title: '需要定位權限',
            content: '請在微信設定中允許定位，才能取得出發地座標。',
@@ -891,7 +935,13 @@ const useCurrentLocation = (closePicker = false, setAsOrigin = false, forceCente
   // #ifdef MP-WEIXIN
   const privacyApi = uni as typeof uni & { requirePrivacyAuthorize?: (options: { success: () => void; fail: () => void }) => void }
   if (typeof privacyApi.requirePrivacyAuthorize === 'function') {
-    privacyApi.requirePrivacyAuthorize({ success: requestLocation, fail: () => undefined })
+    privacyApi.requirePrivacyAuthorize({
+      success: requestLocation,
+      fail: () => {
+        restoreLocation()
+        uni.showToast({ title: '請先同意隱私協議以使用定位', icon: 'none' })
+      }
+    })
   } else {
     requestLocation()
   }
