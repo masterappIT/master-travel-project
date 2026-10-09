@@ -13,23 +13,7 @@
       show-location
       :enable-zoom="!bookingPickerOpen"
       :enable-scroll="!bookingPickerOpen"
-    >
-      <!-- #ifdef MP-WEIXIN -->
-      <cover-view v-if="nativeMarkers.some(marker => marker.customCallout)" slot="callout">
-        <cover-view v-if="nativeMarkers.some(marker => marker.id === 1 && marker.customCallout)" marker-id="1" class="map-custom-callout pickup-custom-callout">
-          <cover-view class="callout-title pickup-callout-title">【上車位置】</cover-view>
-          <cover-view v-for="(line, index) in pickupCalloutLabel.split('\n')" :key="`pickup-${index}`">{{ line }}</cover-view>
-          <cover-view class="callout-arrow callout-arrow-bottom"></cover-view>
-        </cover-view>
-        <cover-view v-if="nativeMarkers.some(marker => marker.id === 2 && marker.customCallout)" marker-id="2" class="map-custom-callout destination-custom-callout">
-          <cover-view class="callout-title destination-callout-title">【目的地 · 行程資訊】</cover-view>
-          <cover-view v-for="(line, index) in destinationCalloutLabel.split('\n')" :key="`destination-${index}`">{{ line }}</cover-view>
-          <cover-view v-for="(line, index) in routeSummaryLabel.split('\n')" :key="`summary-${index}`">{{ line }}</cover-view>
-          <cover-view class="callout-arrow" :class="calloutSeparationRequired ? 'callout-arrow-top' : 'callout-arrow-bottom'"></cover-view>
-        </cover-view>
-      </cover-view>
-      <!-- #endif -->
-    </map>
+    />
     <!-- #endif -->
     <!-- #ifdef H5 -->
     <view class="map-fallback" aria-label="地圖區域">
@@ -50,7 +34,7 @@
 <script setup lang="ts">
 import { computed, getCurrentInstance, nextTick, watch } from 'vue'
 
-type MapMarker = { id: number; latitude: number; longitude: number; title?: string; iconPath?: string; width?: number; height?: number; callout?: { content: string; display?: 'ALWAYS' | 'BYCLICK'; color?: string; fontSize?: number; borderRadius?: number; bgColor?: string; padding?: number; textAlign?: 'left' | 'center'; anchorY?: number }; customCallout?: { display: 'ALWAYS' | 'BYCLICK'; anchorY?: number } }
+type MapMarker = { id: number; latitude: number; longitude: number; title?: string; iconPath?: string; width?: number; height?: number; callout?: { content: string; display?: 'ALWAYS' | 'BYCLICK'; color?: string; fontSize?: number; borderRadius?: number; bgColor?: string; padding?: number; textAlign?: 'left' | 'center'; anchorY?: number } }
 type MapPoint = { latitude: number; longitude: number }
 type MapPolyline = { points: MapPoint[]; color: string; width: number; arrowLine?: boolean }
 
@@ -110,13 +94,9 @@ const nativeMarkers = computed<MapMarker[]>(() => (props.markers || [])
     width: marker.width || (marker.id === 2 ? 10 : 10),
     height: marker.height || (marker.id === 2 ? 15 : 18)
   }
-  if (!content) return sizedMarker
-  // #ifdef MP-WEIXIN
-  if ((marker.id === 1 && content) || (marker.id === 2 && props.routeSummary)) {
-    return { ...sizedMarker, customCallout: { display: 'ALWAYS', anchorY: marker.id === 2 && calloutSeparationRequired.value ? destinationCalloutHeight.value + (sizedMarker.height || 15) + 12 : 0 } }
-  }
-  // #endif
-  return { ...sizedMarker, callout: { content, display: 'ALWAYS', color: '#263238', fontSize: 14, borderRadius: 8, bgColor: '#FFFFFF', padding: 10, textAlign: 'center', ...(marker.id === 2 && calloutSeparationRequired.value ? { anchorY: destinationCalloutHeight.value + (sizedMarker.height || 15) + 12 } : {}) } }
+  return content
+    ? { ...sizedMarker, callout: { content, display: 'ALWAYS', color: '#263238', fontSize: 14, borderRadius: 8, bgColor: '#FFFFFF', padding: 10, textAlign: 'center', ...(marker.id === 2 && calloutSeparationRequired.value ? { anchorY: destinationCalloutHeight.value + (sizedMarker.height || 15) + 12 } : {}) } }
+    : sizedMarker
 }))
 const nativePolyline = computed<MapPolyline[]>(() => (props.polyline || [])
   .map(line => ({
@@ -279,9 +259,6 @@ const centerMap = async () => {
 /* #endif */
 /* #ifdef APP-PLUS */
 .map-layer:not(.full-screen){top:189px;height:397px}.map-layer:not(.full-screen) .native-map{height:397px}
-/* #endif */
-/* #ifdef MP-WEIXIN */
-.map-custom-callout{position:relative;box-sizing:border-box;min-width:150px;padding:8px 10px;border-radius:8px;background:#fff;color:#263238;font-size:14px;line-height:20px;text-align:center;white-space:nowrap}.pickup-custom-callout{min-width:150px}.destination-custom-callout{min-width:240px}.callout-title{font-size:11px;line-height:16px}.pickup-callout-title{color:#10a64a}.destination-callout-title{color:#e6a206}.callout-arrow{position:absolute;left:calc(50% - 5px);width:10px;height:10px;background:#fff;transform:rotate(45deg)}.callout-arrow-top{top:-5px}.callout-arrow-bottom{bottom:-5px}
 /* #endif */
 /* #ifdef H5 */
 .map-fallback{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(145deg,#e6edf0,#cbd8dc);color:#53636b;font-size:18px;font-weight:600;pointer-events:none}.route-preview{position:absolute;inset:0;width:430px;height:519px}.map-pin{position:absolute;z-index:1;width:18px;height:18px;box-sizing:border-box;border:4px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(40,67,88,.35);transform:translate(-50%,-50%)}.pickup-pin{background:#10a64a}.destination-pin{background:#ffc44f}.map-callout{position:absolute;z-index:2;display:flex;width:max-content;min-width:118px;max-width:220px;padding:8px 10px;box-sizing:border-box;flex-direction:column;border-radius:9px;background:#fff;box-shadow:0 3px 12px rgba(40,67,88,.24);color:#38434a;transform:translate(-50%,12px)}.map-callout::after{position:absolute;top:-7px;left:50%;width:0;height:0;border-top:0;border-right:7px solid transparent;border-bottom:8px solid #fff;border-left:7px solid transparent;content:'';transform:translateX(-50%)}.callout-title{font-size:11px;font-weight:500;line-height:16px}.callout-value{font-size:13px;font-weight:700;line-height:18px;text-align:center;white-space:pre-wrap;overflow-wrap:anywhere}.callout-summary{margin-top:2px;font-size:12px;font-weight:500;line-height:17px;text-align:center;white-space:normal}.destination-callout{transform:translate(-50%,12px)}.pickup-callout:not(.pickup-callout--center){transform:translate(-50%,-100%)}.pickup-callout:not(.pickup-callout--center)::after{top:auto;bottom:-7px;border-top:8px solid #fff;border-bottom:0}.pickup-callout--center{left:50%;top:42%;transform:translate(-50%,12px)}.destination-callout::after{top:-7px;bottom:auto;border-top:0;border-right:7px solid transparent;border-bottom:8px solid #fff;border-left:7px solid transparent}.map-layer.full-screen .map-fallback,.map-layer.full-screen .route-preview{height:642px}.map-callout.pickup-callout .callout-title{color:#10a64a}.map-callout.destination-callout .callout-title{color:#e6a206}
