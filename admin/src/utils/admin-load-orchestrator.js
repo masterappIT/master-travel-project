@@ -1,11 +1,10 @@
 export function loadAdminViewResource(resourceLoaders, requestedView) {
   let viewPromise = Promise.resolve()
-  if (['users', 'charters'].includes(requestedView)) viewPromise = resourceLoaders.coreUsers()
+  if (requestedView === 'users') viewPromise = resourceLoaders.coreUsers()
   if (['drivers', 'driver-vehicles'].includes(requestedView)) viewPromise = resourceLoaders.drivers()
   if (requestedView === 'dispatch') viewPromise = resourceLoaders.dispatch()
   if (requestedView === 'settlements') viewPromise = resourceLoaders.settlements()
   if (requestedView === 'trips') viewPromise = viewPromise.then(() => resourceLoaders.trips())
-  if (requestedView === 'charters') viewPromise = viewPromise.then(() => resourceLoaders.charters())
   if (requestedView === 'addresses') viewPromise = resourceLoaders.addresses()
   if (requestedView === 'membership') viewPromise = resourceLoaders.membership()
   if (requestedView === 'promotions') viewPromise = resourceLoaders.promotions()

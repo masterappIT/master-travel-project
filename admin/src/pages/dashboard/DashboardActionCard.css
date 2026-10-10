@@ -1,0 +1,8 @@
+.dashboard-action-card { position: relative; display: block; min-width: 0; min-height: 148px; overflow: hidden; box-sizing: border-box; padding: 25px; border: 1px solid #bcd6f7; border-radius: 20px; color: #12243b; background: #fafdff; box-shadow: 0 12px 32px rgba(39,72,111,.08); text-align: left; cursor: pointer; }
+.dashboard-action-card::after { position: absolute; right: -38px; bottom: -45px; width: 100px; height: 100px; border-radius: 50%; background: #e9f2ff; content: ''; pointer-events: none; }
+.dashboard-action-card span { display: block; color: #647892; font-size: 13px; font-weight: 650; }
+.dashboard-action-card strong { display: block; margin-top: 18px; font-size: 36px; letter-spacing: -.04em; }
+.dashboard-action-card small { display: block; position: relative; z-index: 1; margin-top: 8px; color: #1769e0; font-size: 12px; font-weight: 750; }
+.dashboard-action-card:hover { border-color: #1769e0; }
+.dashboard-action-card:focus-visible { outline: 3px solid rgba(74,141,240,.35); outline-offset: 2px; }
+@media (max-width: 700px) { .dashboard-action-card { min-height: 96px; padding: 13px; border-radius: 13px; } .dashboard-action-card span, .dashboard-action-card strong { overflow-wrap: anywhere; } .dashboard-action-card strong { margin-top: 7px; font-size: 26px; } }

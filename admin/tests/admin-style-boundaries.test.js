@@ -7,6 +7,7 @@ import postcss from 'postcss'
 const stylesDir = path.resolve(import.meta.dirname, '../src/styles')
 
 const moduleScopes = {
+  'dashboard.css': '.admin-dashboard',
   'finance.css': '.finance-center',
   'login-settings.css': '.login-settings-admin',
   'notifications.css': '.notifications-page',
@@ -15,6 +16,10 @@ const moduleScopes = {
   'audit-logs.css': '.audit-log-page',
   'payments.css': '.payment-settings-admin',
   'promotions.css': '.promotion-admin'
+}
+
+const componentScopes = {
+  '../pages/dashboard/DashboardActionCard.css': '.dashboard-action-card'
 }
 
 function isKeyframesRule(rule) {
@@ -37,13 +42,19 @@ function selectorsOutsideScope(css, scope, file) {
   return selectors.filter(selector => selector && !scopePatterns.some(pattern => pattern.test(selector)))
 }
 
+function hasDuplicatedRoot(css, scope) {
+  const escaped = scope.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp(`${escaped}\\s+${escaped}(?![\\w-])`).test(css)
+}
+
 test('admin module styles remain scoped to their page roots', () => {
-  for (const [file, root] of Object.entries(moduleScopes)) {
+  for (const [file, root] of Object.entries({ ...moduleScopes, ...componentScopes })) {
     const css = fs.readFileSync(path.join(stylesDir, file), 'utf8')
     assert.equal(css.includes(':root'), false, `${file} must not define :root`)
     assert.deepEqual(selectorsOutsideScope(css, root, file), [], `${file} has unscoped selectors`)
-    assert.equal(css.includes(`${root} ${root}`), false, `${file} must not duplicate its module root scope`)
-    if (Array.isArray(root)) for (const value of root) assert.equal(css.includes(`${value} ${value}`), false, `${file} must not duplicate its module root scope`)
+    for (const value of Array.isArray(root) ? root : [root]) {
+      assert.equal(hasDuplicatedRoot(css, value), false, `${file} must not duplicate its module root scope`)
+    }
   }
 })
 

@@ -78,7 +78,7 @@ test('clears the session when the current request returns unauthorized', async (
 test('routes each admin view to its existing loader without changing order', async () => {
   const calls = []
   const loaders = Object.fromEntries([
-    'coreUsers', 'drivers', 'dispatch', 'settlements', 'trips', 'charters', 'addresses',
+    'coreUsers', 'drivers', 'dispatch', 'settlements', 'trips', 'addresses',
     'membership', 'promotions', 'administrators', 'auditLogs', 'notifications',
     'vehicles', 'routePricing', 'payments'
   ].map(name => [name, () => { calls.push(name); return Promise.resolve(name) }]))
@@ -86,7 +86,7 @@ test('routes each admin view to its existing loader without changing order', asy
   assert.deepEqual(calls, ['trips'])
   calls.length = 0
   await loadAdminViewResource(loaders, 'charters')
-  assert.deepEqual(calls, ['coreUsers', 'charters'])
+  assert.deepEqual(calls, [])
   calls.length = 0
   await loadAdminViewResource(loaders, 'unknown')
   assert.deepEqual(calls, [])

@@ -1,7 +1,9 @@
 import { inject } from 'vue'
+import { DashboardActionCard } from './DashboardActionCard.js'
 
 export const DashboardPage = {
   name: 'DashboardPage',
+  components: { DashboardActionCard },
   setup() { return inject('adminDashboardContext') },
   template: String.raw`
     <div v-if="view === 'dashboard'" class="admin-dashboard">
@@ -33,10 +35,7 @@ export const DashboardPage = {
 
       <template v-if="dashboard">
         <div class="admin-dashboard-metrics admin-dashboard-metrics-priority">
-          <button type="button" class="admin-dashboard-card admin-dashboard-card-action" @click="navigate('trips')">
-            <span>{{ t('pendingTrips') }}</span><strong>{{ dashboard.pendingTrips }}</strong>
-            <small>{{ t('dashboardViewTrips') }} →</small>
-          </button>
+          <DashboardActionCard :label="t('pendingTrips')" :value="dashboard.pendingTrips" :action-label="t('dashboardViewTrips')" @activate="navigate('trips')" />
         </div>
 
         <div class="admin-dashboard-heading admin-dashboard-secondary-heading">
