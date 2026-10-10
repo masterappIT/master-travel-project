@@ -21,21 +21,21 @@
 .support-management .support-control-button--tab-active { color: #1769e0; box-shadow: inset 0 -3px #1769e0; }
 .support-management .support-control-button--filter, .support-management .support-control-button--filter-active { min-height: 34px; border-radius: 999px; padding: 7px 13px; }
 .support-management .support-control-button--filter-active { border-color: #acd0fb; color: #1769e0; background: #edf5ff; }
-.support-management .support-conversation-list { display: grid; gap: 8px; margin-top: 14px; }
-.support-management .support-control-button--conversation { display: grid; justify-content: stretch; gap: 3px; width: 100%; min-height: 56px; padding: 9px 12px; text-align: left; overflow-wrap: anywhere; }
-.support-management .support-control-button--conversation strong { font-size: 12px; }
-.support-management .support-control-button--conversation small, .support-management .support-conversation-id { color: #71839a; font-size: 11px; font-weight: 500; }
+.support-management .support-conversation-list { display: grid; gap: 8px; min-height: 0; margin-top: 14px; overflow-y: auto; padding: 2px 4px 2px 0; overscroll-behavior: contain; }
+.support-management .support-control-button--conversation { display: grid; align-content: start; justify-content: stretch; gap: 7px; width: 100%; min-height: 72px; height: auto; padding: 12px 14px; text-align: left; overflow-wrap: anywhere; }
+.support-management .support-control-button--conversation strong { min-width: 0; font-size: 12px; line-height: 1.45; }
+.support-management .support-control-button--conversation small, .support-management .support-conversation-id { color: #71839a; font-size: 11px; font-weight: 500; line-height: 1.4; }
 .support-management .support-control-button--conversation[aria-current="true"] { border-color: #a8c9f3; background: #edf5ff; color: #1769e0; }
 .support-management .support-error { margin: 10px 0 0; padding: 12px 14px; border: 1px solid #f2c8cf; border-radius: 10px; color: #912b42; background: #fff3f5; font-size: 12px; line-height: 1.5; }
 .support-management .support-list-state { margin: 16px 0; color: #62758f; font-size: 13px; }
-.support-management .support-workspace { display: grid; grid-template-columns: minmax(280px, 340px) minmax(0, 1fr); gap: 16px; min-height: 560px; }
+.support-management .support-workspace { display: grid; grid-template-columns: minmax(360px, 31%) minmax(0, 1fr); gap: 20px; height: min(780px, calc(100vh - 250px)); min-height: 560px; }
 .support-management .support-conversation-panel, .support-management .support-detail-panel, .support-management .support-outbound { min-width: 0; border: 1px solid #dce5f1; border-radius: 15px; background: #fff; box-shadow: 0 10px 25px rgba(21, 54, 92, .04); }
-.support-management .support-conversation-panel { display: flex; flex-direction: column; padding: 20px; }
+.support-management .support-conversation-panel { display: flex; flex-direction: column; min-height: 0; padding: 22px; overflow: hidden; }
 .support-management .support-panel-heading, .support-management .support-detail-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .support-management .support-panel-heading h3, .support-management .support-detail-header h3, .support-management .support-outbound-heading h3 { margin: 5px 0 0; color: #172d49; font-size: 18px; letter-spacing: -.02em; }
 .support-management .support-count { display: inline-flex; align-items: center; justify-content: center; min-width: 26px; min-height: 26px; border-radius: 50%; color: #59728f; background: #edf2f8; font-size: 12px; font-weight: 800; }
 .support-management .support-search, .support-management .support-recipient-id { display: grid; gap: 7px; color: #4b6280; font-size: 12px; font-weight: 750; }
-.support-management .support-search { margin-top: 22px; }
+.support-management .support-search { margin-top: 18px; }
 .support-management .support-control-input, .support-management .support-control-textarea { box-sizing: border-box; width: 100%; border: 1px solid #ccd8e7; border-radius: 10px; padding: 10px 12px; color: #1b3556; background: #fff; font: inherit; font-size: 13px; }
 .support-management .support-control-input { height: 42px; }
 .support-management .support-control-textarea { min-height: 86px; font-size: 13px; font-weight: 400; line-height: 1.5; resize: vertical; }
@@ -43,18 +43,19 @@
 .support-management .support-control-textarea:focus-visible { border-color: #4a8df0; outline: 2px solid #9dc4f5; outline-offset: 1px; }
 .support-management .support-control-input:disabled, .support-management .support-control-textarea:disabled { color: #8294ab; background: #f5f7fa; cursor: not-allowed; }
 .support-management .support-field-hint { margin: 6px 0 0; color: #7d8da2; font-size: 11px; }
-.support-management .support-filter { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; }
+.support-management .support-filter { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
 .support-management .support-list-empty, .support-management .support-detail-empty { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; min-height: 250px; padding: 24px; text-align: center; }
 .support-management .support-empty-icon { display: flex; align-items: center; justify-content: center; width: 52px; height: 52px; margin-bottom: 13px; border-radius: 15px; color: #6188ba; background: #edf5ff; font-size: 28px; }
 .support-management .support-list-empty strong, .support-management .support-detail-empty strong { font-size: 14px; }
 .support-management .support-list-empty p, .support-management .support-detail-empty p { max-width: 280px; margin: 6px 0 0; color: #7a8ca4; font-size: 12px; line-height: 1.5; }
-.support-management .support-detail-panel { display: flex; flex-direction: column; }
-.support-management .support-message-list { flex: 1; min-height: 250px; max-height: 470px; overflow-y: auto; padding: 18px 22px; }
-.support-management .support-message { max-width: 85%; margin-bottom: 12px; padding: 12px; border-radius: 10px; background: #f3f8ff; overflow-wrap: anywhere; }
-.support-management .support-message.is-staff { margin-left: auto; background: #e8f1ff; }
-.support-management .support-message-meta { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; }
-.support-management .support-message-meta time { color: #71839a; font-size: 11px; }
-.support-management .support-message p { margin: 5px 0; white-space: pre-wrap; }
+.support-management .support-detail-panel { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.support-management .support-message-list { flex: 1 1 auto; min-height: 0; max-height: none; overflow-y: auto; padding: 18px 20px 20px; background: #fbfdff; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.support-management .support-message { width: fit-content; max-width: 86%; margin-right: auto; margin-bottom: 10px; padding: 10px 12px; border: 1px solid #e1eaf4; border-radius: 12px; color: #203b5d; background: #f3f8ff; font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
+.support-management .support-message.is-staff { margin-right: 0; margin-left: auto; background: #e8f1ff; }
+.support-management .support-message-meta { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: nowrap; gap: 12px; }
+.support-management .support-message-meta strong { font-size: 12px; }
+.support-management .support-message-meta time { color: #71839a; font-size: 10px; white-space: nowrap; }
+.support-management .support-message p { margin: 4px 0; white-space: pre-wrap; }
 .support-management .support-message small { color: #71839a; }
 .support-management .support-agent-management { display: grid; gap: 12px; border-top: 1px solid #e5ebf3; padding-top: 18px; }
 .support-management .support-agent-form { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; }
@@ -62,23 +63,45 @@
 .support-management .support-agent-form .support-control-input { min-width: 0; }
 .support-management .support-agent-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px; border: 1px solid #dce5f1; border-radius: 10px; }
 .support-management .support-agent-row span { min-width: 0; overflow-wrap: anywhere; }
-.support-management .support-detail-header { padding: 20px 22px; border-bottom: 1px solid #e5ebf3; }
+.support-management .support-detail-header { padding: 20px 24px; border-bottom: 1px solid #e5ebf3; }
+.support-management .support-mobile-back { display: none; }
 .support-management .support-detail-placeholder { color: #8294ab; font-size: 12px; }
-.support-management .support-composer { display: grid; gap: 9px; padding: 17px 22px 20px; border-top: 1px solid #e5ebf3; color: #4b6280; font-size: 12px; font-weight: 750; }
-.support-management .support-composer-actions { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
-.support-management .support-composer-actions > span { color: #8294ab; font-size: 11px; font-weight: 500; }
-.support-management .support-composer-actions > div { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.support-management .support-participant-card { flex: none; margin: 12px 18px 0; padding: 12px 14px; border: 1px solid #dbe7f5; border-radius: 12px; background: #f8fbff; }
+.support-management .support-participant-card-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.support-management .support-participant-card h4 { margin: 4px 0 0; color: #203b5d; font-size: 14px; }
+.support-management .support-participant-status { flex: none; color: #5e7899; font-size: 10px; }
+.support-management .support-participant-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 10px; }
+.support-management .support-participant-grid div { display: grid; gap: 3px; min-width: 0; }
+.support-management .support-participant-grid span { color: #71839a; font-size: 10px; }
+.support-management .support-participant-grid strong { min-width: 0; overflow-wrap: anywhere; color: #203b5d; font-size: 11px; }
+.support-management .support-composer { flex: none; display: grid; gap: 6px; padding: 10px 18px 12px; border-top: 1px solid #e5ebf3; color: #4b6280; background: #fff; font-size: 11px; font-weight: 750; }
+.support-management .support-composer-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.support-management .support-composer-heading span, .support-management .support-composer-note { color: #8294ab; font-size: 11px; font-weight: 500; }
+.support-management .support-composer-row { display: flex; align-items: center; gap: 10px; }
+.support-management .support-composer-row .support-control-input { min-width: 0; height: 40px; font-size: 12px; }
+.support-management .support-composer-row .support-send-button { flex: none; min-width: 78px; min-height: 40px; font-size: 12px; }
 .support-management .support-outbound { padding: 24px; }
 .support-management .support-outbound-heading p { max-width: 620px; margin: 7px 0 0; color: #62758f; font-size: 12px; line-height: 1.6; }
 .support-management .support-outbound-form { display: grid; gap: 18px; max-width: 610px; margin-top: 25px; }
 .support-management .support-recipient-types { display: flex; gap: 8px; }
+.support-management .support-recipient-mode { display: flex; flex-wrap: wrap; gap: 8px; }
+.support-management .support-recipient-phone-field { display: grid; gap: 7px; color: #4b6280; font-size: 12px; font-weight: 750; }
+.support-management .support-recipient-phone-input { display: grid; grid-template-columns: minmax(150px, .38fr) minmax(0, 1fr); gap: 8px; }
+.support-management .support-recipient-phone-input .support-recipient-country { min-width: 0; }
 .support-management .support-outbound-actions { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding-top: 14px; border-top: 1px solid #e5ebf3; }
 .support-management .support-outbound-actions span { color: #8294ab; font-size: 12px; }
+.support-management .support-outbound-actions--confirm { margin-top: 2px; }
+.support-management .support-recipient-results { display: grid; gap: 8px; max-width: 610px; }
+.support-management .support-recipient-results-heading { margin: 0; color: #4b6280; font-size: 12px; font-weight: 750; }
+.support-management .support-recipient-results .support-control-button--conversation { background: #fbfdff; }
+.support-management .support-recipient-results .support-control-button--conversation[aria-current="true"] { border-color: #8bb8ed; background: #edf5ff; box-shadow: 0 0 0 2px rgba(23, 105, 224, .08); }
+.support-management .support-recipient-results .support-list-empty { display: grid; gap: 5px; justify-content: start; padding: 18px; }
+.support-management .support-recipient-results .support-list-empty span { color: #71839a; font-size: 12px; }
 .support-management .support-outbound-note { max-width: 610px; margin-top: 30px; padding: 15px 18px; border: 1px solid #dbe7f5; border-radius: 11px; background: #f8fbff; }
 .support-management .support-outbound-note strong { color: #315c92; font-size: 12px; }
 .support-management .support-outbound-note p { margin: 5px 0 0; color: #617995; font-size: 12px; line-height: 1.6; }
-@media (max-width: 900px) { .support-management .support-workspace { grid-template-columns: 1fr; } .support-management .support-conversation-panel { min-height: 350px; } .support-management .support-detail-panel { min-height: 460px; } }
-@media (max-width: 620px) { .support-management .support-heading, .support-management .support-composer-actions, .support-management .support-outbound-actions { align-items: flex-start; flex-direction: column; } .support-management .support-connection-status { align-self: flex-start; } .support-management .support-conversation-panel, .support-management .support-outbound { padding: 17px; } .support-management .support-composer-actions > div { justify-content: flex-start; } .support-management .support-control-button--filter, .support-management .support-control-button--filter-active, .support-management .support-control-button--compact { min-height: 44px; } }
+@media (max-width: 900px) { .support-management .support-workspace { grid-template-columns: 1fr; height: auto; } .support-management .support-conversation-panel { height: min(620px, calc(100dvh - 190px)); min-height: 0; } .support-management .support-detail-panel { min-height: min(620px, calc(100dvh - 190px)); max-height: calc(100dvh - 190px); } .support-management .support-workspace { display: block; min-height: 0; } .support-management .support-workspace:not(.is-detail) .support-detail-panel, .support-management .support-workspace.is-detail .support-conversation-panel { display: none; } .support-management .support-workspace.is-detail .support-mobile-back { display: inline-flex; } .support-management .support-detail-header { display: grid; grid-template-columns: auto 1fr auto; align-items: center; } .support-management .support-detail-header > div { min-width: 0; } .support-management .support-detail-header h3 { font-size: 16px; } .support-management .support-detail-placeholder { overflow-wrap: anywhere; text-align: right; } .support-management .support-message-list { min-height: 0; max-height: none; flex: 1; } }
+@media (max-width: 620px) { .support-management .support-heading, .support-management .support-outbound-actions { align-items: flex-start; flex-direction: column; } .support-management .support-connection-status { align-self: flex-start; } .support-management .support-conversation-panel, .support-management .support-outbound { padding: 17px; } .support-management .support-control-button--filter, .support-management .support-control-button--filter-active, .support-management .support-control-button--compact { min-height: 44px; } .support-management .support-recipient-phone-input { grid-template-columns: 1fr; } .support-management .support-detail-header { padding: 13px 15px; } .support-management .support-participant-card { margin: 10px 15px 0; } .support-management .support-participant-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .support-management .support-message-list { padding: 14px 15px 16px; } .support-management .support-composer { padding: 10px 15px 12px; } .support-management .support-composer-row { gap: 8px; } .support-management .support-composer-row .support-send-button { min-width: 72px; } .support-management .support-message { width: 100%; max-width: none; } }
 .support-management .support-settings { display: grid; gap: 20px; padding: 24px; border: 1px solid #dce5f1; border-radius: 15px; background: #fff; box-shadow: 0 10px 25px rgba(21, 54, 92, .04); }
 .support-management .support-settings-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
 .support-management .support-settings-heading h3 { margin: 5px 0 0; color: #172d49; font-size: 20px; }

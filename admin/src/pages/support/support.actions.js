@@ -1,5 +1,5 @@
 export function createSupportActions(context) {
-  const { supportApi, canWrite, isSuperAdministrator, supportSettings, settingsLoader, notify, requestConfirmation, displayError, section, recipientType, recipientId, draft, conversations, messages, selectedId, busy, inboxLoading, inboxLoaded, inboxError, messagesLoading, messagesLoaded, messagesError, actionError, agentActionId, agentsLoading, agentsLoaded, agentsError, agents, agentForm, savingSettings, settingsSaved, settingsDraft, serviceEnabled, requests } = context
+  const { supportApi, canWrite, isSuperAdministrator, supportSettings, settingsLoader, notify, requestConfirmation, displayError, section, recipientType, recipientId, recipientCountryCode, recipientPhone, recipientLookupMode, recipientOptions, recipientSearching, recipientSearchPerformed, recipientSearchError, draft, conversations, messages, selectedId, busy, inboxLoading, inboxLoaded, inboxError, messagesLoading, messagesLoaded, messagesError, actionError, participantProfile, participantProfileLoading, participantProfileError, agentActionId, agentsLoading, agentsLoaded, agentsError, agents, agentForm, savingSettings, settingsSaved, settingsDraft, serviceEnabled, requests, scrollMessagesToEnd } = context
   const loadInbox = async () => {
     const request = ++requests.inbox
       if (!inboxLoaded.value) inboxError.value = ''
@@ -11,7 +11,7 @@ export function createSupportActions(context) {
       inboxLoaded.value = true
       inboxError.value = ''
       if (selectedId.value && section.value === 'inbox' && !conversations.value.some(item => item.id === selectedId.value)) {
-        selectedId.value = ''; messages.value = []; messagesLoaded.value = false; requests.messages += 1
+        selectedId.value = ''; messages.value = []; messagesLoaded.value = false; participantProfile.value = null; requests.messages += 1; requests.profile += 1
       }
     } catch (cause) { if (request === requests.inbox) inboxError.value = displayError(cause) }
     finally { if (request === requests.inbox) inboxLoading.value = false }
@@ -19,15 +19,40 @@ export function createSupportActions(context) {
   }
   const selectConversation = async (id, clear = true) => {
     const request = ++requests.messages
+    const profileRequest = ++requests.profile
     if (selectedId.value !== id) { draft.value = ''; requests.pendingReply = null }
     selectedId.value = id
-      if (clear) { messages.value = []; messagesLoaded.value = false; messagesError.value = '' }
+      if (clear) { messages.value = []; messagesLoaded.value = false; messagesError.value = ''; participantProfile.value = null; participantProfileError.value = '' }
     messagesLoading.value = true
     try {
       const response = await supportApi.listMessages(id)
-      if (request === requests.messages && selectedId.value === id) { messages.value = response.data || []; messagesLoaded.value = true; messagesError.value = '' }
+      if (request === requests.messages && selectedId.value === id) { messages.value = response.data || []; messagesLoaded.value = true; messagesError.value = ''; await scrollMessagesToEnd(); await loadParticipantProfile(response.conversation || conversations.value.find(item => item.id === id), profileRequest) }
     } catch (cause) { if (request === requests.messages && selectedId.value === id) messagesError.value = displayError(cause) }
     finally { if (request === requests.messages) messagesLoading.value = false }
+  }
+  const loadParticipantProfile = async (conversation, request = ++requests.profile) => {
+    if (!conversation?.participantId || !conversation.participantType) { participantProfile.value = null; participantProfileLoading.value = false; return }
+    participantProfileLoading.value = true
+    participantProfileError.value = ''
+    try {
+      const profile = await supportApi.participantProfile(conversation)
+      if (request === requests.profile && selectedId.value === conversation.id) participantProfile.value = profile
+    } catch (cause) {
+      if (request === requests.profile && selectedId.value === conversation.id) participantProfileError.value = displayError(cause)
+    } finally {
+      if (request === requests.profile) participantProfileLoading.value = false
+    }
+  }
+  const backToInbox = () => {
+    selectedId.value = ''
+    messages.value = []
+    messagesLoaded.value = false
+    messagesError.value = ''
+    participantProfile.value = null
+    participantProfileError.value = ''
+    participantProfileLoading.value = false
+    requests.messages += 1
+    requests.profile += 1
   }
   const sendReply = async () => {
     if (!canWrite.value || !serviceEnabled.value || !selectedId.value || !draft.value.trim() || busy.value) return
@@ -45,6 +70,44 @@ export function createSupportActions(context) {
     } catch (cause) { actionError.value = displayError(cause) }
     finally { busy.value = false }
     if (sent) { notify('回覆已發送'); await loadInbox() }
+  }
+  const normalizePhoneSearch = value => {
+    const digits = String(value || '').replace(/\D/g, '')
+    for (const prefix of ['852', '853', '86']) {
+      if (digits.startsWith(prefix) && digits.length > prefix.length + 4) return digits.slice(prefix.length)
+    }
+    return digits
+  }
+  const resetRecipientSearch = () => {
+    recipientId.value = ''
+    recipientOptions.value = []
+    recipientSearchPerformed.value = false
+    recipientSearchError.value = ''
+  }
+  const searchRecipients = async () => {
+    if (!canWrite.value || !serviceEnabled.value || recipientSearching.value) return
+    const phone = normalizePhoneSearch(`${recipientCountryCode.value}${recipientPhone.value}`)
+    recipientSearchPerformed.value = true
+    recipientSearchError.value = ''
+    recipientOptions.value = []
+    recipientId.value = ''
+    if (phone.length < 4) {
+      recipientSearchError.value = '請輸入至少 4 位電話號碼'
+      return
+    }
+    recipientSearching.value = true
+    try {
+      const response = await supportApi.searchRecipients(recipientType.value, phone)
+      recipientOptions.value = response.data || []
+    } catch (cause) {
+      recipientSearchError.value = displayError(cause)
+    } finally {
+      recipientSearching.value = false
+    }
+  }
+  const selectRecipient = item => {
+    recipientId.value = item.id || ''
+    recipientSearchError.value = ''
   }
   const openRecipient = async () => {
     if (!canWrite.value || !serviceEnabled.value || !recipientId.value.trim() || busy.value) return
@@ -117,5 +180,5 @@ export function createSupportActions(context) {
     section.value = tabs[next]
     event.currentTarget.querySelectorAll('[role="tab"]')[next]?.focus()
   }
-  return { loadInbox, selectConversation, sendReply, openRecipient, loadAgents, createAgent, setAgentEnabled, saveSettings, onTabKeydown }
+  return { loadInbox, selectConversation, backToInbox, sendReply, searchRecipients, resetRecipientSearch, selectRecipient, openRecipient, loadAgents, createAgent, setAgentEnabled, saveSettings, onTabKeydown }
 }

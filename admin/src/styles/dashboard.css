@@ -6,7 +6,7 @@
 .admin-dashboard .admin-dashboard-updated span { color: #a52b2b; }
 .admin-dashboard .admin-dashboard-state { margin: 0; padding: 22px; border: 1px solid #e1e8f2; border-radius: 16px; color: #647892; background: #fff; }
 .admin-dashboard .admin-dashboard-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; }
-.admin-dashboard .admin-dashboard-metrics-priority { grid-template-columns: minmax(0, 1fr); max-width: 620px; }
+.admin-dashboard .admin-dashboard-metrics-priority { grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 920px; }
 .admin-dashboard .admin-dashboard-card { position: relative; display: block; min-width: 0; min-height: 148px; overflow: hidden; box-sizing: border-box; padding: 25px; border: 1px solid #e1e8f2; border-radius: 20px; color: #12243b; background: rgba(255,255,255,.94); box-shadow: 0 12px 32px rgba(39,72,111,.08); text-align: left; }
 .admin-dashboard .admin-dashboard-card::after { position: absolute; right: -38px; bottom: -45px; width: 100px; height: 100px; border-radius: 50%; background: #e9f2ff; content: ''; pointer-events: none; }
 .admin-dashboard .admin-dashboard-card span { display: block; color: #647892; font-size: 13px; font-weight: 650; }

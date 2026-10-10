@@ -19,7 +19,7 @@ API 包含管理員、乘客與司機等不同 session/token 流程。管理員 
 
 內置客服文字對話使用 `SupportConversation`、`SupportMessage`、`SupportAuditLog`。乘客與司機分別透過 `POST /support/conversations/mine`、`POST /driver/support/conversations/mine` 開啟自己的對話，並以 `GET/POST /.../:id/messages` 收發文字；後端從既有 session 確認身份，跨帳戶對話讀寫回傳 404。未登入乘客可由 `POST /support/guest/conversation` 取得隨機憑證，以 Bearer token 使用 `/support/guest/conversation/:id/messages`；憑證遺失無法找回舊對話。文字長度 1–4000 字，發送須提供 8–80 字元的 `clientMessageId`，同一發送者重送相同內容會去重，重用 ID 傳不同內容回傳 409。訊息列表目前只回傳最新 100 則。
 
-管理員 `SUPER_ADMIN`、`OPERATOR` 可使用 `/admin/support/conversations` 共用收件匣、主動聯繫及回覆；管理員 session、CSRF 與稽核沿用後台機制。`SUPER_ADMIN` 可在 `/admin/support/agents` 建立、列出、啟停獨立客服帳戶。獨立客服以 `/support-agent/auth/login` 登入，使用 HttpOnly session cookie、CSRF cookie 與 `/support-agent/conversations` 操作同一收件匣；停用帳戶即令 session 失效。訪客、乘客、司機與客服操作者身份分別記錄。第一版暫無指派、關閉／重開、未讀與通知。
+管理員 `SUPER_ADMIN`、`OPERATOR` 可使用 `/admin/support/conversations` 共用收件匣、主動聯繫及回覆；管理員 session、CSRF 與稽核沿用後台機制。`GET /admin/dashboard` 另回傳 `unreadSupportMessages`，以尚未有客服／管理員回覆的乘客、司機或訪客訊息數量作為儀表盤待處理提示；目前仍沒有逐則已讀標記。`SUPER_ADMIN` 可在 `/admin/support/agents` 建立、列出、啟停獨立客服帳戶。獨立客服以 `/support-agent/auth/login` 登入，使用 HttpOnly session cookie、CSRF cookie 與 `/support-agent/conversations` 操作同一收件匣；停用帳戶即令 session 失效。訪客、乘客、司機與客服操作者身份分別記錄。第一版暫無指派、關閉／重開、逐則已讀狀態與通知；儀表盤的 `unreadSupportMessages` 是依最近客服回覆推算的待回覆消息數。
 
 圖片媒體基礎保留 `POST /admin/support/media`、`GET /admin/support/media/:id/:variant`、`DELETE /admin/support/media/:id`。上傳現在須提供已存在的對話 ID，且客服與圖片設定須啟用；仍只供管理員操作。它尚未形成圖片訊息，也尚未提供乘客、司機、訪客及獨立客服讀取權限。JPEG、PNG、WebP 會壓縮成 display／thumbnail WebP，原始檔不保存；正式 Cloud Run 仍需私有 Cloud Storage adapter、短效 signed URL 與清理工作。
 

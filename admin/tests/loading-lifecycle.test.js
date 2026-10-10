@@ -157,9 +157,10 @@ test('dashboard update time changes only after a successful current response', a
 
   const pending = loader.load()
   assert.equal(dashboardUpdatedAt.value, null)
-  resolveDashboard({ pendingTrips: 2 })
+  resolveDashboard({ pendingTrips: 2, unreadSupportMessages: 3 })
   await pending
   assert.equal(dashboard.value.pendingTrips, 2)
+  assert.equal(dashboard.value.unreadSupportMessages, 3)
   assert.ok(dashboardUpdatedAt.value instanceof Date)
   assert.equal(dashboardRefreshFailed.value, false)
 

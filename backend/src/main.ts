@@ -8231,6 +8231,65 @@ class AdminSupportConversationController {
 class AgentSupportConversationController {
   @Get()
   async list(@Req() req: RequestLike) { await supportActor(req, true); return supportInbox(); }
+  @Get("recipients")
+  async recipients(@Req() req: RequestLike) {
+    await supportActor(req, true);
+    const settings = await supportSettings();
+    if (!settings.supportDirectContactEnabled) throw new ForbiddenException("Direct contact is disabled");
+    const type = req.query?.type;
+    const countryCode = req.query?.countryCode;
+    const phone = req.query?.phone?.replace(/[\s-]/g, "");
+    if ((type !== "PASSENGER" && type !== "DRIVER") || !["+852", "+853", "+86"].includes(countryCode || "") || !phone || !/^\d{4,15}$/.test(phone))
+      throw new BadRequestException("Valid participant type and phone required");
+    if (type === "PASSENGER") {
+      const data = await prisma.user.findMany({
+        where: { enabled: true, countryCode, phoneNumber: phone },
+        select: { id: true, name: true, displayName: true, countryCode: true, phoneNumber: true },
+        orderBy: [{ name: "asc" }, { id: "asc" }], take: 20,
+      });
+      return { data: data.map(({ countryCode: code, phoneNumber, ...item }) => ({ ...item, phone: `${code} ${phoneNumber}` })) };
+    }
+    const data = await prisma.driver.findMany({
+      where: { enabled: true, OR: [
+        { phoneCountryCode: countryCode, phone },
+        ...(countryCode === "+86" ? [{ mainlandPhone: phone }] : []),
+      ] },
+      select: { id: true, name: true, phoneCountryCode: true, phone: true, mainlandPhone: true },
+      orderBy: [{ name: "asc" }, { id: "asc" }], take: 20,
+    });
+    return { data: data.map(item => ({
+      id: item.id,
+      name: item.name,
+      phone: countryCode === "+86" && item.mainlandPhone === phone
+        ? `+86 ${item.mainlandPhone}`
+        : `${item.phoneCountryCode} ${item.phone}`,
+    })) };
+  }
+  @Get(":id/participant")
+  async participant(@Req() req: RequestLike, @Param("id") id: string) {
+    await supportActor(req, true);
+    await supportSettings();
+    const conversation = await prisma.supportConversation.findUnique({
+      where: { id }, select: { participantType: true, participantId: true },
+    });
+    if (!conversation) throw new HttpException("Conversation not found", HttpStatus.NOT_FOUND);
+    if (!conversation.participantId) return { profile: null };
+    if (conversation.participantType === "PASSENGER") {
+      const profile = await prisma.user.findUnique({
+        where: { id: conversation.participantId },
+        select: { id: true, name: true, displayName: true, countryCode: true, phoneNumber: true },
+      });
+      return { profile };
+    }
+    if (conversation.participantType === "DRIVER") {
+      const profile = await prisma.driver.findUnique({
+        where: { id: conversation.participantId },
+        select: { id: true, name: true, phoneCountryCode: true, phone: true, hongKongMacauCountryCode: true, hongKongMacauPhone: true, mainlandPhone: true, isOnline: true, enabled: true },
+      });
+      return { profile };
+    }
+    return { profile: null };
+  }
   @Post()
   async open(@Req() req: RequestLike, @Body() body: { participantType?: string; participantId?: string }) {
     const actor = await supportActor(req, true);
@@ -10214,6 +10273,7 @@ class AdminController {
       pendingTrips,
       completedTrips,
       recommendedAddresses,
+      unreadSupportMessages,
     ] = await Promise.all([
       prisma.user.count(),
       prisma.driver.count({ where: { isOnline: true, enabled: true } }),
@@ -10229,6 +10289,19 @@ class AdminController {
       prisma.trip.count({ where: { status: "PENDING" } }),
       prisma.trip.count({ where: { status: "COMPLETED" } }),
       prisma.recommendedAddress.count({ where: { enabled: true } }),
+      prisma.$queryRaw<Array<{ count: bigint }>>`
+        SELECT COUNT(*)::bigint AS count
+        FROM "SupportMessage" AS incoming
+        LEFT JOIN (
+          SELECT "conversationId", MAX("createdAt") AS "createdAt"
+          FROM "SupportMessage"
+          WHERE "senderType" IN ('ADMIN', 'AGENT')
+          GROUP BY "conversationId"
+        ) AS latest_staff
+          ON latest_staff."conversationId" = incoming."conversationId"
+        WHERE incoming."senderType" IN ('PASSENGER', 'DRIVER', 'GUEST')
+          AND (latest_staff."createdAt" IS NULL OR incoming."createdAt" > latest_staff."createdAt")
+      `.then(([result]) => Number(result?.count || 0)),
     ]);
     return {
       users,
@@ -10237,6 +10310,7 @@ class AdminController {
       trips: tripsCount,
       pendingTrips,
       completedTrips,
+      unreadSupportMessages,
       charterOrders: charterOrders.length,
       pendingCharters: charterOrders.filter(
         (order) => order.status === "PENDING",

@@ -36,6 +36,7 @@ export const DashboardPage = {
       <template v-if="dashboard">
         <div class="admin-dashboard-metrics admin-dashboard-metrics-priority">
           <DashboardActionCard :label="t('pendingTrips')" :value="dashboard.pendingTrips" :action-label="t('dashboardViewTrips')" @activate="navigate('trips')" />
+          <DashboardActionCard :label="t('unreadSupportMessages')" :value="dashboard.unreadSupportMessages ?? 0" :action-label="t('dashboardViewSupport')" @activate="navigate('support')" />
         </div>
 
         <div class="admin-dashboard-heading admin-dashboard-secondary-heading">
