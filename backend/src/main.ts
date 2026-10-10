@@ -899,6 +899,15 @@ const appSettingsDefaults = {
   alipayPayEnabled: true,
   bankCardPayEnabled: true,
   sandboxMode: false,
+  supportEnabled: false,
+  supportGuestEnabled: true,
+  supportDirectContactEnabled: true,
+  supportOrderContextEnabled: true,
+  supportImageUploadEnabled: true,
+  supportVideoUploadEnabled: true,
+  supportVoiceMessageEnabled: true,
+  supportVoiceCallEnabled: true,
+  supportMaxUploadSizeMb: 50,
   wechatMiniProgramEnabled: false,
   wechatMiniProgramLoginMode: "wechatOnly" as WechatMiniProgramLoginMode,
   wechatMiniProgramAppId: null as string | null,
@@ -2012,6 +2021,17 @@ function appSettingsResponse(settings: Omit<typeof appSettingsDefaults, "payment
     alipayPayEnabled: settings.alipayPayEnabled ?? true,
     bankCardPayEnabled: settings.bankCardPayEnabled ?? true,
     sandboxMode: settings.sandboxMode ?? false,
+    support: {
+      enabled: settings.supportEnabled ?? false,
+      guestEnabled: settings.supportGuestEnabled ?? true,
+      directContactEnabled: settings.supportDirectContactEnabled ?? true,
+      orderContextEnabled: settings.supportOrderContextEnabled ?? true,
+      imageUploadEnabled: settings.supportImageUploadEnabled ?? true,
+      videoUploadEnabled: settings.supportVideoUploadEnabled ?? true,
+      voiceMessageEnabled: settings.supportVoiceMessageEnabled ?? true,
+      voiceCallEnabled: settings.supportVoiceCallEnabled ?? true,
+      maxUploadSizeMb: settings.supportMaxUploadSizeMb ?? 50,
+    },
     wechatMiniProgram: {
       enabled: settings.wechatMiniProgramEnabled ?? false,
       loginMode: settings.wechatMiniProgramLoginMode && WECHAT_MINI_PROGRAM_LOGIN_MODES.includes(settings.wechatMiniProgramLoginMode as WechatMiniProgramLoginMode) ? settings.wechatMiniProgramLoginMode : "wechatOnly",
@@ -13181,6 +13201,7 @@ class SettingsController {
       alipayPayEnabled?: boolean;
       bankCardPayEnabled?: boolean;
       sandboxMode?: boolean;
+      support?: { enabled?: boolean; guestEnabled?: boolean; directContactEnabled?: boolean; orderContextEnabled?: boolean; imageUploadEnabled?: boolean; videoUploadEnabled?: boolean; voiceMessageEnabled?: boolean; voiceCallEnabled?: boolean; maxUploadSizeMb?: number };
       wechatMiniProgram?: { enabled?: boolean; loginMode?: "wechatOnly" | "wechatAndSms" | "smsOnly"; appId?: string; appSecret?: string; phoneCapability?: boolean; avatarCapability?: boolean; nicknameCapability?: boolean };
       wechatWeb?: { enabled?: boolean; appId?: string; appSecret?: string; redirectUri?: string };
       appleLogin?: { ios?: { enabled?: boolean; teamId?: string; keyId?: string; clientId?: string; privateKey?: string; bundleId?: string }; web?: { enabled?: boolean; teamId?: string; keyId?: string; clientId?: string; redirectUri?: string; privateKey?: string } };      sms253?: { enabled?: boolean; endpoint?: string; sendUrl?: string; variableUrl?: string; balanceUrl?: string; account?: string; password?: string; template?: string; report?: boolean; variableReport?: boolean; variableTemplate?: string; variableParams?: string; testPhone?: string; international?: { enabled?: boolean; endpoint?: string; sendUrl?: string; variableUrl?: string; balanceUrl?: string; account?: string; password?: string; template?: string; report?: boolean; variableReport?: boolean; variableTemplate?: string; variableParams?: string; testPhone?: string } };
@@ -13228,10 +13249,13 @@ class SettingsController {
     if (wechatWeb?.redirectUri !== undefined && wechatWeb.redirectUri.trim() && !/^https?:\/\//i.test(wechatWeb.redirectUri.trim())) throw new HttpException("WeChat Web redirect URI is invalid", HttpStatus.BAD_REQUEST);
     const apple = body.appleLogin;
     const sms = body.sms253;
+    const support = body.support;
     if (wechat && session.role !== "SUPER_ADMIN") throw new ForbiddenException("Only super administrators may update WeChat settings");
     if (wechatWeb && session.role !== "SUPER_ADMIN") throw new ForbiddenException("Only super administrators may update WeChat settings");
     if (apple && session.role !== "SUPER_ADMIN") throw new ForbiddenException("Only super administrators may update Apple settings");
     if (sms && session.role !== "SUPER_ADMIN") throw new ForbiddenException("Only super administrators may update SMS settings");
+    if (support && session.role !== "SUPER_ADMIN") throw new ForbiddenException("Only super administrators may update customer support settings");
+    if (support?.maxUploadSizeMb !== undefined && (!Number.isInteger(Number(support.maxUploadSizeMb)) || Number(support.maxUploadSizeMb) < 1 || Number(support.maxUploadSizeMb) > 500)) throw new HttpException("客服上傳大小必須介於 1 至 500 MB", HttpStatus.BAD_REQUEST);
     if (sms?.international?.endpoint !== undefined && sms.international.endpoint.trim() && !/^https?:\/\//i.test(sms.international.endpoint.trim())) throw new HttpException("International SMS endpoint is invalid", HttpStatus.BAD_REQUEST);
     const validateSmsUrl = (value: unknown, label: string) => {
       if (value !== undefined && value !== null && String(value).trim() && !/^https?:\/\//i.test(String(value).trim())) throw new HttpException(`${label} is invalid`, HttpStatus.BAD_REQUEST);
@@ -13285,6 +13309,15 @@ class SettingsController {
       bankCardPayEnabled:
         body.bankCardPayEnabled ?? settings.bankCardPayEnabled,
       sandboxMode: body.sandboxMode ?? settings.sandboxMode,
+      supportEnabled: support?.enabled ?? settings.supportEnabled,
+      supportGuestEnabled: support?.guestEnabled ?? settings.supportGuestEnabled,
+      supportDirectContactEnabled: support?.directContactEnabled ?? settings.supportDirectContactEnabled,
+      supportOrderContextEnabled: support?.orderContextEnabled ?? settings.supportOrderContextEnabled,
+      supportImageUploadEnabled: support?.imageUploadEnabled ?? settings.supportImageUploadEnabled,
+      supportVideoUploadEnabled: support?.videoUploadEnabled ?? settings.supportVideoUploadEnabled,
+      supportVoiceMessageEnabled: support?.voiceMessageEnabled ?? settings.supportVoiceMessageEnabled,
+      supportVoiceCallEnabled: support?.voiceCallEnabled ?? settings.supportVoiceCallEnabled,
+      supportMaxUploadSizeMb: support?.maxUploadSizeMb === undefined ? settings.supportMaxUploadSizeMb : Math.trunc(Number(support.maxUploadSizeMb)),
       wechatMiniProgramEnabled: wechat?.enabled ?? settings.wechatMiniProgramEnabled,
       wechatMiniProgramLoginMode: wechat?.loginMode ?? settings.wechatMiniProgramLoginMode,
       wechatMiniProgramAppId: wechat?.appId === undefined ? settings.wechatMiniProgramAppId : wechat.appId.trim() || null,

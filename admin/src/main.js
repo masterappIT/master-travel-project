@@ -81,7 +81,7 @@ const vehiclesPageState = createVehiclesPageState()
 const vehicleTab = vehiclesPageState.tab
 const extraSortId = vehiclesPageState.extraSortId
 let loadRequestId = 0
-const { exchangeRate, pricingCurrency, settlementCurrency, passengerDefaultCurrency, driverDefaultCurrency, paymentCurrencies, severeWeatherEnabled, adminLogo, paymentSettings } = createAdminSettingsState()
+const { exchangeRate, pricingCurrency, settlementCurrency, passengerDefaultCurrency, driverDefaultCurrency, paymentCurrencies, severeWeatherEnabled, adminLogo, supportSettings, paymentSettings } = createAdminSettingsState()
 const { users, selectedUser, walletTransactions, topUpWithdrawalHistory, trips, addresses, mainlandCities, addressSearchKeyword, addressSearchResults, addressSearching, categories, vehicles, extras, distancePricing, routeMinimumFares, routeMinimumFareForm, membershipPlans, membershipOrders, promotions, promotionForm, promotionSaving, promotionDeletingId, promotionTogglingId, mileageRules, mileageRewards, mileageAccounts, mileageRewardForm, mileageLedger, mileageSelectedAccount, mileageSaving, invitationSettings, invitationWalletCurrency, invitationSummary, invitationRecords, invitationSaving } = createAdminResourceState()
 const { administrators, auditLogs, notifications, notificationTemplates, notificationUsers, notificationDrivers, drivers, selectedDriver } = createAdminAuxiliaryState()
 const allVehicles = ref([])
@@ -132,7 +132,7 @@ const resourceLoader = createAdminResourceLoader({
   displayError,
   applySettings: applyAdminSettings,
   loadSettings: settingsLoader.load,
-  settings: { exchangeRate, pricingCurrency, settlementCurrency, passengerDefaultCurrency, driverDefaultCurrency, paymentCurrencies, severeWeatherEnabled, adminLogo, paymentSettings },
+  settings: { exchangeRate, pricingCurrency, settlementCurrency, passengerDefaultCurrency, driverDefaultCurrency, paymentCurrencies, severeWeatherEnabled, adminLogo, supportSettings, paymentSettings },
   resourceLoaders: {
     coreUsers: () => import('./utils/admin-resource-loader.js').then(({ loadCoreUsers }) => loadCoreUsers({ usersApi, users, state: usersPageState })),
     drivers: () => import('./utils/admin-resource-loader.js').then(({ loadDriversResources }) => loadDriversResources({ driversApi, vehicleCategories, drivers, allVehicles, state: driversPageState })),
@@ -367,6 +367,17 @@ const App = { setup() {
      toggleNotificationRecipient,
      notificationRecipientChecked,
      saveNotification
+   })
+   provide('adminSupportContext', {
+     view,
+     api,
+     canWrite,
+     isSuperAdministrator,
+     supportSettings,
+     settingsLoader,
+     notify,
+     displayError,
+     load
    })
    provide('adminMembershipContext', {
      view,

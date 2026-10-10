@@ -9,6 +9,17 @@ export function createAdminSettingsState() {
   const paymentCurrencies = ref(['RMB', 'HKD'])
   const severeWeatherEnabled = ref(false)
   const adminLogo = ref('')
+  const supportSettings = ref({
+    enabled: false,
+    guestEnabled: true,
+    directContactEnabled: true,
+    orderContextEnabled: true,
+    imageUploadEnabled: true,
+    videoUploadEnabled: true,
+    voiceMessageEnabled: true,
+    voiceCallEnabled: true,
+    maxUploadSizeMb: 50
+  })
   const paymentSettings = ref({
     driverRaceEnabled: false,
     dispatchSchedulingEnabled: true,
@@ -20,5 +31,5 @@ export function createAdminSettingsState() {
     bankCardPayEnabled: true,
     sandboxMode: false
   })
-  return { exchangeRate, pricingCurrency, settlementCurrency, passengerDefaultCurrency, driverDefaultCurrency, paymentCurrencies, severeWeatherEnabled, adminLogo, paymentSettings }
+  return { exchangeRate, pricingCurrency, settlementCurrency, passengerDefaultCurrency, driverDefaultCurrency, paymentCurrencies, severeWeatherEnabled, adminLogo, supportSettings, paymentSettings }
 }
