@@ -508,6 +508,37 @@ function presenceSnapshot() {
   );
   return { activity: serialize(activity), connections: serialize(connections), windowMs: presenceActivityWindowMs };
 }
+async function presenceIdentitySnapshot() {
+  const now = Date.now();
+  const members = new Map<string, { role: "passenger" | "driver"; userId: string; platform?: string; region: string; lastActivityAt: number | null; connected: boolean }>();
+  for (const item of presenceActivity.values()) {
+    if (item.lastActivityAt + presenceActivityWindowMs <= now) continue;
+    members.set(`${item.role}:${item.userId}`, { role: item.role, userId: item.userId, platform: item.platform, region: item.region, lastActivityAt: item.lastActivityAt, connected: false });
+  }
+  for (const item of presenceConnections.values()) {
+    const key = `${item.role}:${item.userId}`;
+    const current = members.get(key);
+    members.set(key, {
+      role: item.role, userId: item.userId, platform: current?.platform || item.platform,
+      region: current?.region && current.region !== "未知地區" ? current.region : item.region,
+      lastActivityAt: current?.lastActivityAt ?? null, connected: true,
+    });
+  }
+  const entries = [...members.values()];
+  if (!entries.length) return [];
+  const [passengers, drivers] = await Promise.all([
+    prisma.user.findMany({ where: { id: { in: entries.filter(item => item.role === "passenger").map(item => item.userId) } }, select: { id: true, countryCode: true, phoneNumber: true } }),
+    prisma.driver.findMany({ where: { id: { in: entries.filter(item => item.role === "driver").map(item => item.userId) } }, select: { id: true, phoneCountryCode: true, phone: true } }),
+  ]);
+  const phones = new Map([
+    ...passengers.map(item => [`passenger:${item.id}`, `${item.countryCode} ${item.phoneNumber}`] as const),
+    ...drivers.map(item => [`driver:${item.id}`, `${item.phoneCountryCode} ${item.phone}`] as const),
+  ]);
+  return entries.flatMap(item => {
+    const phone = phones.get(`${item.role}:${item.userId}`);
+    return phone ? [{ role: item.role, userId: item.userId, platform: item.platform || null, phone, region: item.region, active: item.lastActivityAt !== null, connected: item.connected, lastActivityAt: item.lastActivityAt ? new Date(item.lastActivityAt).toISOString() : null }] : [];
+  }).sort((a, b) => Number(b.connected) - Number(a.connected) || (b.lastActivityAt || "").localeCompare(a.lastActivityAt || ""));
+}
 function publishRequestObservabilityEvent(event: Record<string, unknown>, req: RequestLike) {
   const platform = observabilityClientPlatform(req);
   void resolveObservabilityRegion(observabilityRequestIp(req)).then(region => {
@@ -7910,6 +7941,13 @@ class AdminAuthController {
 }
 @Controller("admin")
 class AdminController {
+  @Get("project-observability/presence-identities")
+  async projectObservabilityPresenceIdentities(@Req() req: RequestLike, @Res({ passthrough: true }) response: Response) {
+    requireRole(req, ["SUPER_ADMIN"]);
+    response.setHeader("Cache-Control", "private, no-store");
+    return { users: await presenceIdentitySnapshot(), windowMs: presenceActivityWindowMs };
+  }
+
   @Sse("project-observability/stream")
   projectObservabilityStream(@Req() req: RequestLike) {
     requireAuth(req);

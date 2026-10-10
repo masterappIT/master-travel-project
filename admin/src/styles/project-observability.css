@@ -48,6 +48,15 @@
 .project-observability .presence-region-group li span { min-width: 0; overflow-wrap: anywhere; }
 .project-observability .presence-region-group li b { color: #1687aa; font-variant-numeric: tabular-nums; }
 .project-observability .presence-region-group .presence-region-empty { color: #8294a9; }
+.project-observability .presence-identity-panel { margin-top: 18px; border-top: 1px solid #dce5f0; padding-top: 18px; }
+.project-observability .presence-identity-group { margin-top: 16px; }
+.project-observability .presence-identity-group h4 { margin: 0 0 8px; color: #193b60; font-size: 13px; }
+.project-observability .presence-identity-scroll { overflow-x: auto; border: 1px solid #dce5f0; border-radius: 10px; background: #fff; }
+.project-observability .presence-identity-table { width: 100%; min-width: 650px; border-collapse: collapse; color: #31577e; font-size: 12px; text-align: left; }
+.project-observability .presence-identity-table th,.project-observability .presence-identity-table td { padding: 10px 12px; border-bottom: 1px solid #edf2f8; }
+.project-observability .presence-identity-table th { color: #54708d; background: #f7faff; font-weight: 700; }
+.project-observability .presence-identity-table tr:last-child td { border-bottom: 0; }
+.project-observability .presence-identity-table .presence-identity-empty { color: #8294a9; text-align: center; }
 @media (max-width: 900px) { .project-observability .presence-grid { grid-template-columns: 1fr; } }
 @media (max-width: 500px) { .project-observability .presence-panel { padding: 14px; }.project-observability .presence-card { padding: 14px; }.project-observability .presence-regions { grid-template-columns: 1fr; } }
 

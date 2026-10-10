@@ -732,7 +732,9 @@ const App = { setup() {
 
    provide('adminProjectObservabilityContext', {
      view,
-     baseUrl: API
+     baseUrl: API,
+     api,
+     isSuperAdministrator
    })
    provide('adminDashboardContext', {
      view,

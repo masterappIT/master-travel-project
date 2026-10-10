@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { createRenderer, h, nextTick, provide } from 'vue'
+import { createRenderer, h, nextTick, provide, ref } from 'vue'
 import { ProjectObservabilityPage } from '../src/pages/project-observability/ProjectObservabilityPage.js'
 
 const renderer = createRenderer({
@@ -17,7 +17,7 @@ const renderer = createRenderer({
   insertStaticContent: (content, parent) => { const node = { content, parent }; parent.children.push(node); return [node, node] }
 })
 
-function mountTelemetry() {
+function mountTelemetry({ superAdmin = false, api = async () => ({ users: [] }) } = {}) {
   const original = globalThis.EventSource
   const streams = []
   globalThis.EventSource = class {
@@ -26,15 +26,35 @@ function mountTelemetry() {
     emit(data) { this.onmessage({ data: JSON.stringify(data) }) }
   }
   let page
+  const view = ref('project-observability')
+  const isSuperAdministrator = ref(superAdmin)
   const app = renderer.createApp({
     setup() {
-      provide('adminProjectObservabilityContext', { baseUrl: '/api', view: 'project-observability' })
+      provide('adminProjectObservabilityContext', { baseUrl: '/api', view, isSuperAdministrator, api })
       return () => h(ProjectObservabilityPage, { ref: value => { page = value } })
     }
   })
   app.mount({ children: [] })
-  return { streams, get page() { return page }, close() { app.unmount(); globalThis.EventSource = original } }
+  return { streams, view, isSuperAdministrator, get page() { return page }, close() { app.unmount(); globalThis.EventSource = original } }
 }
+
+test('identity detail is requested only for super administrators and clears after navigation', async () => {
+  let calls = 0
+  const user = { role: 'passenger', userId: 'u1', phone: '+852 12345678', region: '香港', active: true, connected: false }
+  const view = mountTelemetry({ api: async () => { calls += 1; return { users: [user] } } })
+  try {
+    await nextTick()
+    assert.equal(calls, 0)
+    view.isSuperAdministrator.value = true
+    await nextTick()
+    await nextTick()
+    assert.equal(calls, 1)
+    assert.equal(view.page.identityGroups[0].users[0].phone, user.phone)
+    view.view.value = 'dashboard'
+    await nextTick()
+    assert.equal(view.page.identityGroups[0].users.length, 0)
+  } finally { view.close() }
+})
 
 test('health requests stay out of the live feed while region snapshot retains their counts', async () => {
   const view = mountTelemetry()
