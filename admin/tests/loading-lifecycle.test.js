@@ -108,6 +108,8 @@ test('does not let an obsolete request overwrite the current page error', async 
     loading: state(false),
     error,
     dashboard: state(null),
+    dashboardUpdatedAt: state(null),
+    dashboardRefreshFailed: state(false),
     loadRequestId: state(0),
     displayError: requestError => requestError.message,
     applySettings: () => {},
@@ -123,6 +125,48 @@ test('does not let an obsolete request overwrite the current page error', async 
   await obsoleteLoad
 
   assert.equal(error.value, '')
+})
+
+test('dashboard update time changes only after a successful current response', async () => {
+  let resolveDashboard
+  const api = path => path === '/admin/dashboard'
+    ? new Promise(resolve => { resolveDashboard = resolve })
+    : Promise.resolve({})
+  api.beginReadScope = () => {}
+  const view = state('dashboard')
+  const dashboard = state(null)
+  const dashboardUpdatedAt = state(null)
+  const dashboardRefreshFailed = state(false)
+  const loader = createAdminResourceLoader({
+    api,
+    token: state('session'),
+    currentAdministrator: state({ id: 'admin' }),
+    view,
+    loading: state(false),
+    error: state(''),
+    dashboard,
+    dashboardUpdatedAt,
+    dashboardRefreshFailed,
+    loadRequestId: state(0),
+    displayError: requestError => requestError.message,
+    applySettings: () => {},
+    loadSettings: () => Promise.resolve({ settings: {} }),
+    settings: {},
+    resourceLoaders: { coreUsers: () => Promise.resolve() }
+  })
+
+  const pending = loader.load()
+  assert.equal(dashboardUpdatedAt.value, null)
+  resolveDashboard({ pendingTrips: 2 })
+  await pending
+  assert.equal(dashboard.value.pendingTrips, 2)
+  assert.ok(dashboardUpdatedAt.value instanceof Date)
+  assert.equal(dashboardRefreshFailed.value, false)
+
+  const lastUpdatedAt = dashboardUpdatedAt.value
+  view.value = 'users'
+  await loader.load()
+  assert.equal(dashboardUpdatedAt.value, lastUpdatedAt)
 })
 
 test('preserves address data when navigation cancels its requests', async () => {

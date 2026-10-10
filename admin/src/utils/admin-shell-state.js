@@ -6,6 +6,8 @@ export function createAdminShellState() {
     mobileNavOpen: ref(true),
     loading: ref(false),
     error: ref(''),
-    dashboard: ref(null)
+    dashboard: ref(null),
+    dashboardUpdatedAt: ref(null),
+    dashboardRefreshFailed: ref(false)
   }
 }

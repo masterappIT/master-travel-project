@@ -20,11 +20,8 @@ export function createAdminFormState() {
   const categoryForm = ref(null)
   const vehicleForm = ref(null)
   const extraForm = ref(null)
-  const personnelForm = ref(null)
   const driverForm = ref(null)
   const settlementForm = ref(null)
-  const entryForm = ref(null)
-  const expenseForm = ref(null)
 
   return {
     addressForm,
@@ -46,10 +43,7 @@ export function createAdminFormState() {
     categoryForm,
     vehicleForm,
     extraForm,
-    personnelForm,
     driverForm,
-    settlementForm,
-    entryForm,
-    expenseForm
+    settlementForm
   }
 }

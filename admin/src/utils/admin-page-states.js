@@ -4,16 +4,14 @@ import { createPromotionsPageState } from '../pages/promotions/promotions.state.
 import { createTripsPageState } from '../pages/trips/trips.state.js'
 import { createSettlementsPageState } from '../pages/settlements/settlements.state.js'
 import { createDriversPageState } from '../pages/drivers/drivers.state.js'
-import { createOperationsPageState } from '../pages/operations/operations.state.js'
 
-export function createAdminPageStates({ users, addresses, promotions, trips, drivers, personnel, entryItems, expenseItems }) {
+export function createAdminPageStates({ users, addresses, promotions, trips, drivers }) {
   const usersPageState = createUsersPageState(users, 10)
   const addressesPageState = createAddressesPageState(addresses)
   const promotionsPageState = createPromotionsPageState(promotions)
   const tripsPageState = createTripsPageState(trips, 10)
   const settlementsPageState = createSettlementsPageState(trips, drivers, 10)
   const driversPageState = createDriversPageState(drivers)
-  const operationsPageState = createOperationsPageState(personnel, entryItems, expenseItems)
 
   return {
     usersPageState,
@@ -22,7 +20,6 @@ export function createAdminPageStates({ users, addresses, promotions, trips, dri
     tripsPageState,
     settlementsPageState,
     driversPageState,
-    operationsPageState,
     addressRegionFilter: addressesPageState.regionFilter,
     addressCityFilter: addressesPageState.cityFilter,
     totalAddressCount: addressesPageState.totalCount,
@@ -56,9 +53,6 @@ export function createAdminPageStates({ users, addresses, promotions, trips, dri
     driverTypeFilter: driversPageState.typeFilter,
     driverSearch: driversPageState.searchQuery,
     driverFiltersActive: driversPageState.hasActiveFilters,
-    resetDriverFilters: driversPageState.resetFilters,
-    personnelFilter: operationsPageState.personnelFilter,
-    entryFilter: operationsPageState.entryFilter,
-    expenseFilter: operationsPageState.expenseFilter
+    resetDriverFilters: driversPageState.resetFilters
   }
 }

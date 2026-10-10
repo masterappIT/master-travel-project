@@ -6,7 +6,6 @@ export const primaryNavigation = Object.freeze([
   { id: 'trips', label: 'trips' },
   { id: 'dispatch', label: 'dispatch' },
   { id: 'settlements', label: 'settlements' },
-  { id: 'charters', label: 'charters' },
   { id: 'addresses', label: 'addresses' },
   { id: 'vehicles', label: 'vehicleManagement' },
   { id: 'membership', label: 'membership' },
@@ -17,14 +16,6 @@ export const primaryNavigation = Object.freeze([
   { id: 'notifications', label: 'notifications' },
   { id: 'administrators', label: 'administrators', superAdminOnly: true },
   { id: 'auditLogs', label: 'auditLogs', superAdminOnly: true }
-])
-
-export const operationsNavigation = Object.freeze([
-  { id: 'operations-personnel', label: 'personnelManagement' },
-  { id: 'drivers', label: 'drivers' },
-  { id: 'entries', label: 'entryItems' },
-  { id: 'income', label: 'incomeReport' },
-  { id: 'expenses', label: 'expenseDetails' }
 ])
 
 export function createNavigationController({ view, load }) {

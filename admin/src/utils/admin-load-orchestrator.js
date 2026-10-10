@@ -26,6 +26,8 @@ export function createAdminResourceLoader({
   loading,
   error,
   dashboard,
+  dashboardUpdatedAt,
+  dashboardRefreshFailed,
   loadRequestId,
   displayError,
   applySettings,
@@ -66,14 +68,22 @@ export function createAdminResourceLoader({
       if (requestId !== requestSequence.value) return
       applySettings(settingsResponse, settings)
       currentAdministrator.value = administrator
-      if (requestedView === 'dashboard') dashboard.value = viewResult
+      if (requestedView === 'dashboard') {
+        dashboard.value = viewResult
+        dashboardUpdatedAt.value = new Date()
+        dashboardRefreshFailed.value = false
+      }
       if (requestedView === 'addresses') error.value = viewResult
     } catch (requestError) {
       if (requestId !== requestSequence.value || requestError.kind === 'cancelled') return
       error.value = displayError(requestError)
+      if (requestedView === 'dashboard') dashboardRefreshFailed.value = true
       if (requestError.kind === 'unauthorized' || requestError.status === 401) {
         token.value = ''
         currentAdministrator.value = null
+        dashboard.value = null
+        dashboardUpdatedAt.value = null
+        dashboardRefreshFailed.value = false
       }
     } finally {
       if (requestId === requestSequence.value) loading.value = false

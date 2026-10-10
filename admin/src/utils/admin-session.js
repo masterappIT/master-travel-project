@@ -1,8 +1,11 @@
-export function createAdminSessionActions({ api, token, username, password, currentAdministrator, error, exchangeRate, adminLogo, view, load, displayError }) {
+export function createAdminSessionActions({ api, token, username, password, currentAdministrator, error, adminLogo, dashboard, dashboardUpdatedAt, dashboardRefreshFailed, view, load, displayError }) {
   async function apiLogin() {
     try {
       error.value = ''
       token.value = ''
+      dashboard.value = null
+      dashboardUpdatedAt.value = null
+      dashboardRefreshFailed.value = false
       const result = await api('/admin/auth/login', { method: 'POST', body: JSON.stringify({ username: username.value, password: password.value }) })
       token.value = 'cookie-session'
       currentAdministrator.value = result.administrator
@@ -19,21 +22,10 @@ export function createAdminSessionActions({ api, token, username, password, curr
     } catch {} finally {
       token.value = ''
       currentAdministrator.value = null
+      dashboard.value = null
+      dashboardUpdatedAt.value = null
+      dashboardRefreshFailed.value = false
       view.value = 'dashboard'
-    }
-  }
-
-  async function saveExchangeRate() {
-    const value = Number(exchangeRate.value)
-    if (!Number.isFinite(value) || value <= 0) {
-      error.value = 'Valid exchange rate required'
-      return
-    }
-    try {
-      await api('/settings', { method: 'POST', body: JSON.stringify({ exchangeRate: value }) })
-      exchangeRate.value = value
-    } catch (e) {
-      error.value = displayError(e)
     }
   }
 
@@ -73,5 +65,5 @@ export function createAdminSessionActions({ api, token, username, password, curr
     }
   }
 
-  return { apiLogin, logout, saveExchangeRate, uploadAdminLogo, removeAdminLogo }
+  return { apiLogin, logout, uploadAdminLogo, removeAdminLogo }
 }

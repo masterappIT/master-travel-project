@@ -107,7 +107,7 @@
 .user-management .user-detail-drawer .wallet-form button:not(.secondary){border:1px solid #1769e0;color:#fff;background:var(--gradient-primary);box-shadow:var(--shadow-primary)}
 .user-management .user-detail-drawer .user-login-audit,.user-management .user-detail-drawer .user-records>div,.user-management .user-detail-drawer .history-table{box-shadow:0 3px 12px rgba(39,72,111,.035)}
 .user-management .user-detail-drawer .user-login-audit{margin:10px 16px 12px;padding:14px;border-radius:12px}
-.user-management .user-detail-drawer .user-records{gap:10px;padding:0 16px}
+.user-management .user-detail-drawer .user-records{grid-template-columns:minmax(0,1fr);gap:10px;padding:0 16px}
 .user-management .user-detail-drawer .user-records>div,.user-management .user-detail-drawer .history-table{padding:14px;border-radius:12px}
 .user-management .user-detail-drawer .history-table{margin:10px 16px 0}
 .user-management .user-detail-drawer .history-table+.history-table{margin-top:10px}

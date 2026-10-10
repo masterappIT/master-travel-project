@@ -12,10 +12,9 @@ import { LazyVehiclePhotoViewer } from './components/LazyVehiclePhotoViewer.js'
 import { sortByOrder, formatOrderNumber, displayMainlandCity, apiMainlandCity, displayPlaceName, formatTripAddress } from './utils/formatters.js'
 import { promotionKindLabel, promotionDiscountLabel } from './utils/promotions.js'
 import { dateTimeInput, formatTripAmount, paymentMethodLabel, formatBenefits } from './utils/display-formatters.js'
-import { createOperationsStorage } from './utils/operations-storage.js'
 import { createFeedbackController } from './utils/feedback.js'
 import { createErrorDisplay } from './utils/error-display.js'
-import { generateRandomCouponCodeStr, createTimeOptions, createOperationsDisplay } from './utils/entry-helpers.js'
+import { generateRandomCouponCodeStr, createTimeOptions } from './utils/entry-helpers.js'
 import { createAdminFormState } from './utils/admin-form-state.js'
 import { createAdminSettingsState } from './utils/admin-settings-state.js'
 import { createAdminSessionState } from './utils/admin-session-state.js'
@@ -31,7 +30,7 @@ import { createPromotionDisplay } from './utils/promotion-display.js'
 import { applyAdminSettings, createAdminSettingsLoader } from './utils/admin-settings-loader.js'
 import { createAdminResourceLoader } from './utils/admin-load-orchestrator.js'
 import { registerAdminComponents } from './utils/register-admin-components.js'
-import { primaryNavigation, operationsNavigation, createNavigationController, createOverlayController } from './layout/index.js'
+import { primaryNavigation, createNavigationController, createOverlayController } from './layout/index.js'
 const DashboardPage = defineAsyncComponent(() => import('./pages/dashboard/DashboardPage.js').then(module => module.DashboardPage))
 const ProjectObservabilityPage = defineAsyncComponent(() => import('./pages/project-observability/ProjectObservabilityPage.js').then(module => module.ProjectObservabilityPage))
 const UsersPage = defineAsyncComponent(() => import('./pages/users/UsersPage.js').then(module => module.UsersPage))
@@ -50,8 +49,6 @@ const LoginSettingsPage = defineAsyncComponent(() => import('./pages/login-setti
 const AuditLogsPage = defineAsyncComponent(() => import('./pages/audit-logs/AuditLogsPage.js').then(module => module.AuditLogsPage))
 const AdministratorsPage = defineAsyncComponent(() => import('./pages/administrators/AdministratorsPage.js').then(module => module.AdministratorsPage))
 const NotificationsPage = defineAsyncComponent(() => import('./pages/notifications/NotificationsPage.js').then(module => module.NotificationsPage))
-const OperationsPage = defineAsyncComponent(() => import('./pages/operations/OperationsPage.js').then(module => module.OperationsPage))
-const ChartersPage = defineAsyncComponent(() => import('./pages/charters/ChartersPage.js').then(module => module.ChartersPage))
 import { createUsersActions } from './pages/users/users.actions.js'
 import { createDriversActions } from './pages/drivers/drivers.actions.js'
 import { isEligibleVehicleDriver } from './utils/drivers.js'
@@ -70,8 +67,6 @@ import { createNotificationsPageState } from './pages/notifications/notification
 import { createNotificationsActions } from './pages/notifications/notifications.actions.js'
 import { createServerListState } from './utils/admin-query-state.js'
 import { loadAllOptions, retainSelectedOptions } from './utils/admin-remote-options.js'
-import { createOperationsActions } from './pages/operations/operations.actions.js'
-import { createCharterActions } from './pages/charters/charters.actions.js'
 import './style.css'
 import './styles/project-observability.css'
 
@@ -80,14 +75,14 @@ const { token, locale, username, password, currentAdministrator } = createAdminS
 const { t, translateRegion, translateStatus, formatDate, toggleLocale } = createLocalization(locale)
 const passengerTripStatusLabel = trip => getPassengerTripStatusLabel(trip, translateStatus)
 const displayError = createErrorDisplay({ locale, t })
-const { view, mobileNavOpen, loading, error, dashboard } = createAdminShellState()
+const { view, mobileNavOpen, loading, error, dashboard, dashboardUpdatedAt, dashboardRefreshFailed } = createAdminShellState()
 const vehiclesPageState = createVehiclesPageState()
 const vehicleTab = vehiclesPageState.tab
 const extraSortId = vehiclesPageState.extraSortId
 let loadRequestId = 0
 const { exchangeRate, pricingCurrency, settlementCurrency, passengerDefaultCurrency, driverDefaultCurrency, paymentCurrencies, severeWeatherEnabled, adminLogo, paymentSettings } = createAdminSettingsState()
-const { users, selectedUser, walletTransactions, topUpWithdrawalHistory, trips, charterOrders, addresses, mainlandCities, addressSearchKeyword, addressSearchResults, addressSearching, categories, vehicles, extras, distancePricing, routeMinimumFares, routeMinimumFareForm, membershipPlans, membershipOrders, promotions, promotionForm, promotionSaving, promotionDeletingId, promotionTogglingId, mileageRules, mileageRewards, mileageAccounts, mileageRewardForm, mileageLedger, mileageSelectedAccount, mileageSaving, invitationSettings, invitationWalletCurrency, invitationSummary, invitationRecords, invitationSaving } = createAdminResourceState()
-const { administrators, auditLogs, notifications, notificationTemplates, notificationUsers, notificationDrivers, personnel, entryItems, drivers, selectedDriver, expenseItems } = createAdminAuxiliaryState()
+const { users, selectedUser, walletTransactions, topUpWithdrawalHistory, trips, addresses, mainlandCities, addressSearchKeyword, addressSearchResults, addressSearching, categories, vehicles, extras, distancePricing, routeMinimumFares, routeMinimumFareForm, membershipPlans, membershipOrders, promotions, promotionForm, promotionSaving, promotionDeletingId, promotionTogglingId, mileageRules, mileageRewards, mileageAccounts, mileageRewardForm, mileageLedger, mileageSelectedAccount, mileageSaving, invitationSettings, invitationWalletCurrency, invitationSummary, invitationRecords, invitationSaving } = createAdminResourceState()
+const { administrators, auditLogs, notifications, notificationTemplates, notificationUsers, notificationDrivers, drivers, selectedDriver } = createAdminAuxiliaryState()
 const allVehicles = ref([])
 const eligibleVehicleDrivers = computed(() => drivers.value.filter(isEligibleVehicleDriver))
 const { orderUrls, createdOrderUrl, tripCatalog, tripVehicleCategoryId, tripQuote, vehicleCategories, tripBookingStep, tripPaymentMethod, tripPaymentAmount, tripUseFareBalance, tripUseCashBalance, tripLocationKeyword, tripOriginKeyword, tripDestinationKeyword, tripLocationResults, tripLocationSearching, tripLocationTarget } = createAdminInteractionState()
@@ -99,17 +94,16 @@ const { saved: paymentSettingsSaved, raceSaving: driverRaceSaving, configs: paym
 const notificationPageState = createNotificationsPageState(notificationUsers, notificationDrivers)
 const notificationRecipientSearch = notificationPageState.recipientSearch
 let notificationOptionRequest = 0
-const { addressForm, userForm, walletAdjustment, tripForm, selectedTrip, tripDetailLoading, tripDetailError, tripDetailId, dispatchForm, orderUrlForm, charterForm, administratorForm, notificationForm, notificationTemplateForm, mainlandCityForm, membershipForm, categoryForm, vehicleForm, extraForm, personnelForm, driverForm, settlementForm, entryForm, expenseForm } = createAdminFormState()
+const { addressForm, userForm, walletAdjustment, tripForm, selectedTrip, tripDetailLoading, tripDetailError, tripDetailId, dispatchForm, orderUrlForm, administratorForm, notificationForm, notificationTemplateForm, mainlandCityForm, membershipForm, categoryForm, vehicleForm, extraForm, driverForm, settlementForm } = createAdminFormState()
 const {
-  usersPageState, addressesPageState, promotionsPageState, tripsPageState, settlementsPageState, driversPageState, operationsPageState,
+  usersPageState, addressesPageState, promotionsPageState, tripsPageState, settlementsPageState, driversPageState,
   addressRegionFilter, addressCityFilter, totalAddressCount, enabledAddressCount, mainlandAddressCount,
   promotionFilterTab, promotionSearchQuery,
   userPage, userPageSize, userSearchQuery, userStatusFilter, filteredUsers, userPageCount, pagedUsers, goToUserPage,
   tripSearchQuery, tripStatusFilter, tripDateFilter, tripPage, tripPageSize, dispatchSearch, dispatchPage, dispatchPageSize,
   tripDateYear, tripDateMonth, tripDateDay, tripDateYears, tripDateDays, clearTripDateFilter,
-  driverFilter, driverTypeFilter, driverSearch, driverFiltersActive, resetDriverFilters,
-  personnelFilter, entryFilter, expenseFilter
-} = createAdminPageStates({ users, addresses, promotions, trips, drivers, personnel, entryItems, expenseItems })
+  driverFilter, driverTypeFilter, driverSearch, driverFiltersActive, resetDriverFilters
+} = createAdminPageStates({ users, addresses, promotions, trips, drivers })
 const membershipOrdersState = createServerListState({ pageSize: 20 })
 const notificationsState = createServerListState({ pageSize: 10 })
 const auditLogsState = createServerListState({ pageSize: 20, filters: { search: '', status: 'all', method: 'all' } })
@@ -131,6 +125,8 @@ const resourceLoader = createAdminResourceLoader({
   loading,
   error,
   dashboard,
+  dashboardUpdatedAt,
+  dashboardRefreshFailed,
   loadRequestId: loadRequestState,
   displayError,
   applySettings: applyAdminSettings,
@@ -142,7 +138,6 @@ const resourceLoader = createAdminResourceLoader({
     dispatch: () => import('./utils/admin-resource-loader.js').then(({ loadDispatchResources }) => loadDispatchResources({ tripsApi, driversApi, trips, drivers, orderUrls, state: tripsPageState })),
     settlements: () => import('./utils/admin-resource-loader.js').then(({ loadSettlementResources }) => loadSettlementResources({ tripsApi, driversApi, trips, drivers, query: settlementsPageState.query.value, state: settlementsPageState })),
     trips: () => import('./utils/admin-resource-loader.js').then(({ loadTripsResources }) => loadTripsResources({ tripsApi, usersApi, api, trips, users, state: tripsPageState, tripCatalog })),
-    charters: () => import('./utils/admin-resource-loader.js').then(({ loadCharterResources }) => loadCharterResources({ api, charterOrders })),
     addresses: () => import('./utils/admin-resource-loader.js').then(({ loadAddressResources }) => loadAddressResources({ addressesApi, addresses, mainlandCities, displayMainlandCity, displayError })),
     membership: () => import('./utils/admin-resource-loader.js').then(({ loadMembershipResources }) => loadMembershipResources({ api, membershipPlans, membershipOrders, query: membershipOrdersState.query.value, state: membershipOrdersState })),
     promotions: () => import('./utils/admin-resource-loader.js').then(({ loadPromotionResources }) => loadPromotionResources({ api, promotions, mileageRules, mileageRewards, mileageAccounts, invitationSettings, invitationWalletCurrency, invitationSummary, invitationRecords })),
@@ -189,8 +184,8 @@ const usersActions = createUsersActions({
   error,
   notify
 })
-const adminSessionActions = createAdminSessionActions({ api, token, username, password, currentAdministrator, error, exchangeRate, adminLogo, view, load, displayError })
-const { apiLogin, logout, saveExchangeRate, uploadAdminLogo, removeAdminLogo } = adminSessionActions
+const adminSessionActions = createAdminSessionActions({ api, token, username, password, currentAdministrator, error, adminLogo, dashboard, dashboardUpdatedAt, dashboardRefreshFailed, view, load, displayError })
+const { apiLogin, logout, uploadAdminLogo, removeAdminLogo } = adminSessionActions
 const saveFinanceCurrencySettings = async () => {
   try {
     await financePageState.saveCurrencySettings(api)
@@ -213,7 +208,6 @@ const notificationsActions = createNotificationsActions({ api, notificationForm,
 const { resetNotification, createTemplate, clearNotificationRecipients, toggleNotificationRecipient, notificationRecipientChecked, saveNotification } = notificationsActions
 const paymentsActions = createPaymentsActions({ api, paymentSettings, paymentCurrencies, paymentSettingsSaved, driverRaceSaving, error, displayError, configs: paymentConfigs, selectedConfig: selectedPaymentConfig, editorOpen: paymentEditorOpen, editorStep: paymentEditorStep, testResult: paymentTestResult })
 const { savePaymentSettings, loadPaymentConfigs, closePaymentEditor, savePaymentConfigDraft, duplicatePaymentConfig, testPaymentConfig } = paymentsActions
-const { updateCharterStatus, editCharter, saveCharter } = createCharterActions({ api, charterForm, load, error, displayError, dateTimeInput })
 const { edit: editUser, reset: resetUser, select: selectUser, save: saveUser, saving: userSaving, updateStatus: updateUserStatus, remove: removeUser, openWalletAdjustment, saveWalletAdjustment } = usersActions
 const loadUserOptions = async selectedId => {
   const options = await loadAllOptions(query => usersApi.options(query))
@@ -242,16 +236,7 @@ const driverActions = createDriversActions({ driversApi, driverForm, selectedDri
 const { reviewStatusLabel, resetDriver, editDriver, closeDriverForm, formatDriverHongKongPlate, formatDriverMacauPlate, formatDriverMainlandPlate, changeDriverOwnership, uploadDriverPhotos, removeDriverPhoto, saveDriver, updateDriverStatus, removeDriver, openDriverDetail, previewDriver, closeDriverDetail, approveDriver, requestDriverRevision, rejectDriver, resetSettlement, saveSettlement, refreshDriverVehicles, loadDriverTrips, driverTrips, driverTripsLoading, driverTripsError, driverTripsPage, driverTripsTotal, driverTripsPageCount, updateVehicleStatus, removeVehicle: removeDriverVehicle, vehicleForm: driverVehicleForm, resetVehicleForm, editVehicle: editDriverVehicle, closeVehicleForm, changeVehicleOwnership: changeDriverVehicleOwnership, uploadVehiclePhoto, saveVehicle: saveDriverVehicle, manageVehicleAssignments, closeVehicleAssignments, bindVehicleDriver, setPrimaryVehicle, unbindVehicleDriver, vehicleAssignments, assignmentVehicle } = driverActions
 const administratorsActions = createAdministratorsActions({ api, administratorForm, load, error, displayError, requestConfirmation, notify })
 const { resetAdministrator, editAdministrator, saveAdministrator, disableAdministrator, unlockAdministrator, revokeAdministratorSessions } = administratorsActions
-const operationsStorage = createOperationsStorage({ personnel, entryItems, expenseItems })
-const persistOperations = operationsStorage.persist
-const seedOperations = operationsStorage.seed
-const operationsActions = createOperationsActions({ personnel, personnelForm, entryItems, entryForm, expenseItems, expenseForm, persistOperations, requestConfirmation, notify })
-const { resetPersonnel, editPersonnel, savePersonnel, removePersonnel, resetEntryItem, editEntryItem, saveEntryItem, removeEntryItem, resetExpense, editExpense, saveExpense, removeExpense } = operationsActions
-const filteredPersonnel = operationsPageState.filteredPersonnel
 const filteredDrivers = driversPageState.filtered
-const filteredEntryItems = operationsPageState.filteredEntryItems
-const filteredExpenses = operationsPageState.filteredExpenses
-const { incomeRows, incomeTotal, expenseTotal } = createOperationsDisplay({ trips, charterOrders, expenseItems })
 const filteredNotificationUsers = notificationPageState.filteredUsers
 const filteredNotificationDrivers = notificationPageState.filteredDrivers
 
@@ -286,11 +271,9 @@ const filteredAddresses = addressesPageState.filtered
 const App = { setup() {
   const navigate = createNavigationController({ view, load })
   const visiblePrimaryNavigation = computed(() => primaryNavigation.filter(item => !item.superAdminOnly || isSuperAdministrator.value))
-  const visibleOperationsNavigation = operationsNavigation
   const activePageComponent = computed(() => ({
     dashboard: 'DashboardPage',
     'project-observability': 'ProjectObservabilityPage',
-    charters: 'ChartersPage',
     users: 'UsersPage',
     drivers: 'DriversPage',
     dispatch: 'DriversPage',
@@ -302,10 +285,6 @@ const App = { setup() {
     membership: 'MembershipPage',
     'route-pricing': 'RoutePricingPage',
     vehicles: 'VehiclesPage',
-    'operations-personnel': 'OperationsPage',
-    entries: 'OperationsPage',
-    income: 'OperationsPage',
-    expenses: 'OperationsPage',
     notifications: 'NotificationsPage',
     administrators: 'AdministratorsPage',
     auditLogs: 'AuditLogsPage',
@@ -315,7 +294,6 @@ const App = { setup() {
   })[view.value] || 'DashboardPage')
   createOverlayController({ confirmDialog, createdOrderUrl, orderUrlForm, dispatchForm, tripForm, selectedTrip, selectedUser, closeCreatedOrderUrl, closeTrip })
   onMounted(() => {
-    seedOperations()
     load()
   })
   const userNavigation = target => navigate(target)
@@ -323,7 +301,6 @@ const App = { setup() {
     vehicleTab.value = tab
     return navigate('vehicles')
   }
-  const appContext = { token, locale, view, vehicleTab, mobileNavOpen, navigate, userNavigation, setVehicleView, visiblePrimaryNavigation, visibleOperationsNavigation, title, dashboard, exchangeRate, severeWeatherEnabled, adminLogo, users, selectedUser, walletTransactions, topUpWithdrawalHistory, trips, charterOrders, addresses, mainlandCities, mainlandCityForm, addressRegionFilter, addressCityFilter, totalCount: totalAddressCount, enabledCount: enabledAddressCount, mainlandCount: mainlandAddressCount, filteredAddresses, addressSearchKeyword, addressSearchResults, addressSearching, categories, vehicles, extras, extraSortId, distancePricing, pricingCurrency, routeMinimumFares, routeMinimumFareForm, membershipPlans, promotions, promotionForm, membershipForm, addressForm, categoryForm, vehicleForm, extraForm, userForm, userPage, userPageSize, userPageCount, pagedUsers, filteredUsers, userSearchQuery, userStatusFilter, goToUserPage, walletAdjustment, tripForm, selectedTrip, tripCatalog, tripQuote, dispatchForm, orderUrlForm, orderUrls, createdOrderUrl, dispatchSearch, dispatchPage, dispatchPageSize, dispatchPageCount, dispatchFilteredTrips, pagedDispatchTrips, goToDispatchPage, tripBookingStep, tripPaymentMethod, tripPaymentAmount, tripUseFareBalance, tripUseCashBalance, selectedDriver, settlementForm, driverTrips, driverTripsLoading, driverTripsError, driverTripsPage, driverTripsTotal, driverTripsPageCount, loadDriverTrips, tripLocationKeyword, tripLocationResults, tripLocationSearching, tripLocationTarget, tripSearchQuery, tripStatusFilter, tripDateFilter, tripPage, tripPageSize, tripPageCount, pagedTrips, goToTripPage, tripDateYear, tripDateMonth, tripDateDay, tripDateYears, tripDateDays, clearTripDateFilter, filteredTrips, charterForm, currentAdministrator, administrators, auditLogs, administratorForm, notifications, notificationTemplates, notificationForm, notificationTemplateForm, personnel, personnelForm, personnelFilter, drivers, vehicleCategories, driverForm, driverFilter, driverTypeFilter, driverSearch, driverFiltersActive, resetDriverFilters, filteredDrivers, filteredPersonnel, entryItems, entryForm, entryFilter, filteredEntryItems, expenseItems, expenseForm, expenseFilter, filteredExpenses, incomeRows, incomeTotal, expenseTotal, canWrite, isSuperAdministrator, loading, error, username, password, timeOptions, apiLogin, logout, load, resetAdministrator, editAdministrator, saveAdministrator, disableAdministrator, saveExchangeRate, uploadAdminLogo, removeAdminLogo, t, toggleLocale, translateRegion, translateStatus, formatDate, formatOrderNumber, formatTripAddress, formatTripAmount, paymentMethodLabel, displayMainlandCity, updateCharterStatus, editUser, resetUser, selectUser, saveUser, updateUserStatus, openWalletAdjustment, editTrip, resetTrip, searchTripLocation, selectTripLocation, handleTripRegionChange, calculateTripRoute, prepareTripQuote, completeTripBooking, showTrip, closeTrip, updateTripStatus, saveWalletAdjustment, saveTrip, saveCharter, openDispatch, saveDispatch, openOrderUrlForm, createOrderUrl, copyOrderUrl, closeCreatedOrderUrl, revokeOrderUrl, editAddress, resetAddress, searchAddressPlaces, selectAddressSearchResult, handleAddressRegionChange, handleAddressCityChange, saveAddress, removeAddress, resetMainlandCity, editMainlandCity, saveMainlandCity, removeMainlandCity, editCategory, editCatalogVehicle, resetCategory, saveCategory, toggleCategory, saveVehicle, toggleVehicle, removeCategory, removeVehicle, resetVehicle, editExtra, resetExtra, triggerLabel, triggerSummary, isTriggerActive, toggleSevereWeather, showOnlyExtra, addPricingTier, removePricingTier, syncPreviousTier, syncNextTier, saveDistancePricing, switchPricingCurrency, resetRouteMinimumFare, editRouteMinimumFare, saveRouteMinimumFare, removeRouteMinimumFare, editMembership, resetMembership, saveMembership, removeMembership, formatBenefits, resetPromotion, editPromotion, savePromotion, removePromotion, promotionKindLabel, promotionDiscountLabel, promotionDiscountHint, promotionStackingHint, promotionFilterTab, promotionSearchQuery, filteredPromotions, duplicatePromotion, togglePromotionEnabled, generateRandomCouponCode, toggleWeekday, isWeekdaySelected, setWeekdaysPreset, formatWeekdaysText, formatRouteText, formatTimeRangeText, resetNotification, saveNotification, resetDriver, editDriver, uploadDriverPhotos, removeDriverPhoto, saveDriver, removeDriver, openDriverDetail, closeDriverDetail, resetSettlement, saveSettlement, previewDriver, resetPersonnel, editPersonnel, savePersonnel, removePersonnel, resetEntryItem, editEntryItem, saveEntryItem, removeEntryItem, resetExpense, editExpense, saveExpense, removeExpense, paymentSettings, paymentSettingsSaved, driverRaceSaving, savePaymentSettings, promotionSaving, promotionDeletingId, promotionTogglingId, toasts, dismissToast, confirmDialog, resolveConfirmation }
    // Domain contexts are provided independently; the legacy aggregate context is no longer exposed.
    provide('adminPaymentsContext', {
      view,
@@ -739,9 +716,15 @@ const App = { setup() {
    provide('adminDashboardContext', {
      view,
      isSuperAdministrator,
+     loading,
+     error,
      dashboard,
+     dashboardUpdatedAt,
+     dashboardRefreshFailed,
      adminLogo,
      t,
+     formatDate,
+     navigate,
      uploadAdminLogo,
      removeAdminLogo
    })
@@ -865,53 +848,6 @@ const App = { setup() {
      settleTrip,
      unsettleTrip
    })
-   provide('adminDispatchCharterContext', {
-     view,
-     users,
-     charterOrders,
-     charterForm,
-     t,
-     translateStatus,
-     formatDate,
-     canWrite,
-     updateCharterStatus,
-     editCharter,
-     saveCharter
-   })
-   provide('adminOperationsContext', {
-     view,
-     t,
-     formatDate,
-     canWrite,
-     load,
-     personnel,
-     personnelForm,
-     personnelFilter,
-     filteredPersonnel,
-     entryItems,
-     entryForm,
-     entryFilter,
-     filteredEntryItems,
-     expenseItems,
-     expenseForm,
-     expenseFilter,
-     filteredExpenses,
-     incomeRows,
-     incomeTotal,
-     expenseTotal,
-     resetPersonnel,
-     editPersonnel,
-     savePersonnel,
-     removePersonnel,
-     resetEntryItem,
-     editEntryItem,
-     saveEntryItem,
-     removeEntryItem,
-     resetExpense,
-     editExpense,
-     saveExpense,
-     removeExpense
-   })
     return {
       token,
       locale,
@@ -933,7 +869,6 @@ const App = { setup() {
       apiLogin,
       logout,
       load,
-      saveExchangeRate,
       t,
       toggleLocale,
       toasts,
@@ -949,7 +884,6 @@ const App = { setup() {
   <button type="button" :class="{active:view==='trips'}" @click="navigate('trips')">{{t('trips')}}</button>
   <button type="button" :class="{active:view==='dispatch'}" @click="navigate('dispatch')">{{t('dispatch')}}</button>
   <button type="button" :class="{active:view==='settlements'}" @click="navigate('settlements')">{{t('settlements')}}</button>
-  <button type="button" :class="{active:view==='charters'}" @click="navigate('charters')">{{t('charters')}}</button>
   <button type="button" :class="{active:view==='addresses'}" @click="navigate('addresses')">{{t('addresses')}}</button>
   <button type="button" :class="{active:view==='vehicles'||view==='route-pricing'}" @click="setVehicleView(vehicleTab === 'route-pricing' ? 'catalog' : vehicleTab)">車型與定價</button>
   <button type="button" :class="{active:view==='membership'}" @click="navigate('membership')">{{t('membership')}}</button>
@@ -960,18 +894,9 @@ const App = { setup() {
   <button type="button" :class="{active:view==='notifications'}" @click="navigate('notifications')">消息推送</button>
   <button type="button" v-if="isSuperAdministrator" :class="{active:view==='administrators'}" @click="navigate('administrators')">{{t('administrators')}}</button>
   <button type="button" v-if="isSuperAdministrator" :class="{active:view==='auditLogs'}" @click="navigate('auditLogs')">{{t('auditLogs')}}</button>
-  <div class="nav-group operations-nav">
-    <button class="nav-group-toggle" type="button">{{t('operations')}} <span>⌄</span></button>
-    <div class="nav-group-items">
-      <button type="button" :class="{active:view==='operations-personnel'}" @click="navigate('operations-personnel')">{{t('personnelManagement')}}</button>
-      <button type="button" :class="{active:view==='entries'}" @click="navigate('entries')">{{t('entryItems')}}</button>
-      <button type="button" :class="{active:view==='income'}" @click="navigate('income')">{{t('incomeReport')}}</button>
-      <button type="button" :class="{active:view==='expenses'}" @click="navigate('expenses')">{{t('expenseDetails')}}</button>
-    </div>
-  </div>
   <button type="button" class="logout logout-mobile" @click="logout">{{t('signOut')}}</button>
 </nav><div v-if="currentAdministrator" class="admin-identity"><b>{{currentAdministrator.displayName}}</b><span>{{currentAdministrator.role}}</span></div><button type="button" class="logout logout-desktop" @click="logout">{{t('signOut')}}</button>
-</aside><main :class="{readonly: !canWrite}"><header><div v-if="view==='dashboard'"><span class="eyebrow">{{t('adminConsole')}}</span><h1>{{title}}</h1></div><div v-else class="page-header-spacer" aria-hidden="true"></div><div class="header-actions"><span v-if="!canWrite" class="readonly-badge">唯讀模式</span><label v-if="canWrite && view==='dashboard'" class="rate-control">{{t('exchangeRate')}} <input v-model="exchangeRate" type="number" min="0.0001" step="0.0001"/><button type="button" @click="saveExchangeRate">{{t('saveRate')}}</button></label><template v-if="view==='dashboard'"><button type="button" class="language-toggle" @click="toggleLocale" :aria-label="t('languageLabel')">中 / EN</button><button type="button" class="refresh" @click="load">↻ {{t('refresh')}}</button></template></div></header><div v-if="error" class="error">{{error}}</div><KeepAlive><component :is="activePageComponent" /></KeepAlive></main></div>` }
+</aside><main :class="{readonly: !canWrite}"><header><div v-if="view==='dashboard'"><span class="eyebrow">{{t('dashboardConsoleLabel')}}</span><h1>{{t('dashboardPageTitle')}}</h1></div><div v-else class="page-header-spacer" aria-hidden="true"></div><div class="header-actions"><span v-if="!canWrite" class="readonly-badge">唯讀模式</span><template v-if="view==='dashboard'"><button type="button" class="language-toggle" @click="toggleLocale" :aria-label="t('languageLabel')">中 / EN</button><button type="button" class="refresh" :disabled="loading" @click="load">↻ {{loading ? t('loading') : t('refresh')}}</button></template></div></header><div v-if="error" class="error">{{error}}</div><KeepAlive><component :is="activePageComponent" /></KeepAlive></main></div>` }
 const app = createApp(App)
 registerAdminComponents(app, {
   UsersPage,
@@ -979,7 +904,6 @@ registerAdminComponents(app, {
   DriverVehiclesPage,
   TripsPage,
   SettlementsPage,
-  ChartersPage,
   DashboardPage,
   AddressesPage,
   ProjectObservabilityPage,
@@ -987,7 +911,6 @@ registerAdminComponents(app, {
   MembershipPage,
   RoutePricingPage,
   VehiclesPage,
-  OperationsPage,
   PaymentsPage,
   FinancePage,
   LoginSettingsPage,

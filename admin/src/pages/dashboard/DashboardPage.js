@@ -3,5 +3,53 @@ import { inject } from 'vue'
 export const DashboardPage = {
   name: 'DashboardPage',
   setup() { return inject('adminDashboardContext') },
-  template: String.raw`<section v-if="view==='dashboard' && isSuperAdministrator" class="logo-settings panel"><div><span class="eyebrow">BRANDING</span><h2>Logo 設定</h2><p>上傳後會以保持比例置中裁切方式填滿固定 180 × 56 px 顯示框，檔案上限 1 MB。</p></div><div class="logo-settings-actions"><div class="logo-preview"><img v-if="adminLogo" :src="adminLogo" width="180" height="56" alt="Admin logo"/><span v-else>尚未設定 Logo</span></div><label class="logo-upload">更換 Logo<input type="file" accept="image/png,image/jpeg,image/webp" @change="uploadAdminLogo"/></label><button type="button" v-if="adminLogo" class="logo-remove" @click="removeAdminLogo">移除</button></div></section><section v-if="view==='dashboard' && dashboard" class="cards"><article><span>{{t('totalUsers')}}</span><strong>{{dashboard.users}}</strong></article><article><span>{{t('onlineDrivers')}}</span><strong>{{dashboard.onlineDrivers}}</strong></article><article><span>{{t('onlinePassengers')}}</span><strong>{{dashboard.onlinePassengers}}</strong></article><article><span>{{t('totalTrips')}}</span><strong>{{dashboard.trips}}</strong></article><article><span>{{t('pendingTrips')}}</span><strong>{{dashboard.pendingTrips}}</strong></article><article><span>{{t('completedTrips')}}</span><strong>{{dashboard.completedTrips}}</strong></article><article><span>{{t('charterOrders')}}</span><strong>{{dashboard.charterOrders}}</strong></article><article><span>{{t('activeAddresses')}}</span><strong>{{dashboard.recommendedAddresses}}</strong></article></section>`
+  template: String.raw`
+    <div v-if="view === 'dashboard'" class="admin-dashboard">
+      <section v-if="isSuperAdministrator" class="admin-dashboard-settings">
+        <h2>{{ t('dashboardLogoTitle') }}</h2>
+        <div class="admin-dashboard-logo admin-dashboard-setting-row">
+          <div><p>{{ t('dashboardLogoHint') }}</p></div>
+          <div class="admin-dashboard-logo-actions">
+            <div class="admin-dashboard-logo-preview"><img v-if="adminLogo" :src="adminLogo" width="180" height="56" :alt="t('dashboardLogoTitle')" /><span v-else>{{ t('dashboardNoLogo') }}</span></div>
+            <label class="admin-dashboard-logo-upload">{{ t('dashboardChangeLogo') }}<input type="file" accept="image/png,image/jpeg,image/webp" @change="uploadAdminLogo" /></label>
+            <button v-if="adminLogo" type="button" class="admin-dashboard-logo-remove" @click="removeAdminLogo">{{ t('dashboardRemoveLogo') }}</button>
+          </div>
+        </div>
+      </section>
+
+      <div class="admin-dashboard-heading">
+        <div>
+          <h2>{{ t('dashboardAttention') }}</h2>
+          <p>{{ t('dashboardAttentionHint') }}</p>
+        </div>
+        <p v-if="dashboardUpdatedAt" class="admin-dashboard-updated">
+          {{ t('dashboardUpdatedAt') }} <time :datetime="dashboardUpdatedAt.toISOString()">{{ formatDate(dashboardUpdatedAt, true) }}</time>
+          <span v-if="dashboardRefreshFailed"> · {{ t('dashboardDataMayBeOld') }}</span>
+        </p>
+      </div>
+
+      <p v-if="loading && !dashboard" class="admin-dashboard-state" role="status">{{ t('loading') }}</p>
+      <p v-else-if="!dashboard" class="admin-dashboard-state">{{ t('dashboardUnavailable') }}</p>
+
+      <template v-if="dashboard">
+        <div class="admin-dashboard-metrics admin-dashboard-metrics-priority">
+          <button type="button" class="admin-dashboard-card admin-dashboard-card-action" @click="navigate('trips')">
+            <span>{{ t('pendingTrips') }}</span><strong>{{ dashboard.pendingTrips }}</strong>
+            <small>{{ t('dashboardViewTrips') }} →</small>
+          </button>
+        </div>
+
+        <div class="admin-dashboard-heading admin-dashboard-secondary-heading">
+          <div><h2>{{ t('dashboardOverview') }}</h2><p>{{ t('dashboardOverviewHint') }}</p></div>
+        </div>
+        <div class="admin-dashboard-metrics">
+          <article class="admin-dashboard-card"><span>{{ t('totalUsers') }}</span><strong>{{ dashboard.users }}</strong></article>
+          <article class="admin-dashboard-card"><span>{{ t('onlineDrivers') }}</span><strong>{{ dashboard.onlineDrivers }}</strong></article>
+          <article class="admin-dashboard-card"><span>{{ t('onlinePassengers') }}</span><strong>{{ dashboard.onlinePassengers }}</strong></article>
+          <article class="admin-dashboard-card"><span>{{ t('totalTrips') }}</span><strong>{{ dashboard.trips }}</strong></article>
+          <article class="admin-dashboard-card"><span>{{ t('completedTrips') }}</span><strong>{{ dashboard.completedTrips }}</strong></article>
+          <article class="admin-dashboard-card"><span>{{ t('activeAddresses') }}</span><strong>{{ dashboard.recommendedAddresses }}</strong></article>
+        </div>
+      </template>
+    </div>`
 }
