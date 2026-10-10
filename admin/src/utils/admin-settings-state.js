@@ -15,9 +15,6 @@ export function createAdminSettingsState() {
     directContactEnabled: true,
     orderContextEnabled: true,
     imageUploadEnabled: true,
-    videoUploadEnabled: true,
-    voiceMessageEnabled: true,
-    voiceCallEnabled: true,
     maxUploadSizeMb: 50
   })
   const paymentSettings = ref({

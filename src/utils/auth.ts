@@ -15,6 +15,7 @@ const USER_CACHE_KEYS = [
   'selected-message-type',
   'selected-notification',
   'support-rider-id',
+  'support-guest-session',
 ]
 const profileListeners = new Set<(user: AuthUser | null) => void>()
 

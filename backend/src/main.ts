@@ -70,6 +70,13 @@ import { inviteShareHtml } from "./order-invite-share";
 import { publicDriverOrderChannelFilter } from "./driver-order-channel";
 import { billableExtraSelections, withinImmediateWindow } from "./quote-extras";
 import { promotionMatchesRoute } from "./promotion-route";
+import {
+  compressSupportImage,
+  SUPPORT_MEDIA_MAX_INPUT_BYTES,
+  SupportMediaStorage,
+  supportMediaId,
+  supportMediaKey,
+} from "./support-media";
 
 try {
   loadEnvFile("../.env");
@@ -376,6 +383,7 @@ interface MembershipPlan {
   order: number;
 }
 const prisma = new PrismaClient();
+const supportMediaStorage = new SupportMediaStorage();
 
 const observabilityEvents = new Subject<Record<string, unknown>>();
 const observabilityRegionWrites = new ObservabilityRegionWriteTracker();
@@ -904,9 +912,6 @@ const appSettingsDefaults = {
   supportDirectContactEnabled: true,
   supportOrderContextEnabled: true,
   supportImageUploadEnabled: true,
-  supportVideoUploadEnabled: true,
-  supportVoiceMessageEnabled: true,
-  supportVoiceCallEnabled: true,
   supportMaxUploadSizeMb: 50,
   wechatMiniProgramEnabled: false,
   wechatMiniProgramLoginMode: "wechatOnly" as WechatMiniProgramLoginMode,
@@ -2027,9 +2032,6 @@ function appSettingsResponse(settings: Omit<typeof appSettingsDefaults, "payment
       directContactEnabled: settings.supportDirectContactEnabled ?? true,
       orderContextEnabled: settings.supportOrderContextEnabled ?? true,
       imageUploadEnabled: settings.supportImageUploadEnabled ?? true,
-      videoUploadEnabled: settings.supportVideoUploadEnabled ?? true,
-      voiceMessageEnabled: settings.supportVoiceMessageEnabled ?? true,
-      voiceCallEnabled: settings.supportVoiceCallEnabled ?? true,
       maxUploadSizeMb: settings.supportMaxUploadSizeMb ?? 50,
     },
     wechatMiniProgram: {
@@ -4182,6 +4184,8 @@ function assertProductionConfiguration() {
   validateAdminPassword(process.env.ADMIN_PASSWORD!, process.env.ADMIN_USERNAME!);
   if (process.env.ADMIN_SESSION_SECRET!.length < 32)
     throw new Error("ADMIN_SESSION_SECRET must contain at least 32 characters");
+  if (!process.env.SUPPORT_AGENT_SESSION_SECRET || process.env.SUPPORT_AGENT_SESSION_SECRET.length < 32)
+    throw new Error("SUPPORT_AGENT_SESSION_SECRET must contain at least 32 characters");
 }
 const now = new Date().toISOString();
 const administrators: Administrator[] = [
@@ -4281,6 +4285,8 @@ function publicAdministrator(admin: Administrator) {
 }
 const ADMIN_SESSION_COOKIE = "admin_session";
 const ADMIN_CSRF_COOKIE = "admin_csrf";
+const SUPPORT_AGENT_COOKIE = "support_agent_session";
+const SUPPORT_AGENT_CSRF_COOKIE = "support_agent_csrf";
 const ADMIN_SESSION_MAX_AGE_MS = 8 * 60 * 60 * 1000;
 
 function secret() {
@@ -4376,6 +4382,134 @@ function requireRole(req: RequestLike, roles: AdminRole[]) {
   if (!roles.includes(session.role))
     throw new ForbiddenException("Insufficient administrator permission");
   return session;
+}
+
+type SupportActor = { type: "ADMIN" | "AGENT"; id: string };
+const supportAgentSecret = () => {
+  if (process.env.NODE_ENV === "production" && !process.env.SUPPORT_AGENT_SESSION_SECRET)
+    throw new Error("SUPPORT_AGENT_SESSION_SECRET is required in production");
+  return process.env.SUPPORT_AGENT_SESSION_SECRET || "development-support-agent-secret";
+};
+
+async function supportAgentFrom(req: RequestLike): Promise<SupportActor> {
+  const value = cookieValue(req, SUPPORT_AGENT_COOKIE);
+  const [payload, signature] = value.split(".");
+  if (!payload || !signature) throw new UnauthorizedException("Valid support agent session required");
+  const expected = createHmac("sha256", supportAgentSecret()).update(payload).digest("base64url");
+  try {
+    if (!timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) throw new Error("Invalid signature");
+    const session = JSON.parse(Buffer.from(payload, "base64url").toString()) as { sub: string; jti: string; exp: number };
+    if (!session.sub || !session.jti || session.exp <= Date.now()) throw new Error("Expired session");
+    const stored = await prisma.supportAgentSession.findUnique({ where: { jti: session.jti }, include: { agent: true } });
+    if (!stored || stored.agentId !== session.sub || stored.revokedAt || stored.expiresAt.getTime() <= Date.now() || !stored.agent.enabled)
+      throw new Error("Revoked session");
+    return { type: "AGENT", id: session.sub };
+  } catch {
+    throw new UnauthorizedException("Valid support agent session required");
+  }
+}
+
+function requireSupportAgentCsrf(req: RequestLike) {
+  const token = cookieValue(req, SUPPORT_AGENT_CSRF_COOKIE);
+  const header = req.headers["x-csrf-token"] || "";
+  if (token.length < 32 || header.length !== token.length || !timingSafeEqual(Buffer.from(token), Buffer.from(header)))
+    throw new ForbiddenException("Valid support CSRF token required");
+}
+
+async function supportActor(req: RequestLike, agentOnly = false): Promise<SupportActor> {
+  if (!agentOnly && req.url?.startsWith("/admin/")) {
+    const session = requireRole(req, ["SUPER_ADMIN", "OPERATOR"]);
+    return { type: "ADMIN", id: session.sub };
+  }
+  return supportAgentFrom(req);
+}
+
+async function supportSettings() {
+  const settings = await prisma.appSetting.findUniqueOrThrow({ where: { id: appSettingsDefaults.id } });
+  requireSupportEnabled(settings);
+  return settings;
+}
+
+function requireSupportEnabled(settings: { supportEnabled: boolean }) {
+  if (!settings.supportEnabled) throw new ForbiddenException("Customer support is disabled");
+}
+
+function supportGuestHash(token: string) {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+function supportText(value: unknown) {
+  if (typeof value !== "string" || !value.trim() || value.trim().length > 4000)
+    throw new BadRequestException("Support message must contain 1 to 4000 characters");
+  return value.trim();
+}
+
+function supportClientMessageId(value: unknown) {
+  if (typeof value !== "string" || !/^[A-Za-z0-9_-]{8,80}$/.test(value))
+    throw new BadRequestException("Valid clientMessageId is required");
+  return value;
+}
+
+function supportConversationResponse(conversation: { id: string; participantType: string; participantId: string | null; createdAt: Date; updatedAt: Date; lastMessageAt: Date | null }) {
+  return {
+    id: conversation.id,
+    participantType: conversation.participantType,
+    participantId: conversation.participantId,
+    createdAt: conversation.createdAt.toISOString(),
+    updatedAt: conversation.updatedAt.toISOString(),
+    lastMessageAt: conversation.lastMessageAt?.toISOString() || null,
+  };
+}
+
+function supportMessageResponse(message: { id: string; conversationId: string; senderType: string; senderId: string; text: string; clientMessageId: string; createdAt: Date }) {
+  return { ...message, createdAt: message.createdAt.toISOString() };
+}
+
+async function writeSupportMessage(conversationId: string, senderType: string, senderId: string, body: { text?: string; clientMessageId?: string }) {
+  const text = supportText(body.text);
+  const clientMessageId = supportClientMessageId(body.clientMessageId);
+  const existing = await prisma.supportMessage.findUnique({
+    where: { conversationId_senderType_senderId_clientMessageId: { conversationId, senderType, senderId, clientMessageId } },
+  });
+  if (existing) {
+    if (existing.text !== text) throw new HttpException("clientMessageId already used for a different message", HttpStatus.CONFLICT);
+    return existing;
+  }
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const message = await tx.supportMessage.create({ data: { conversationId, senderType, senderId, text, clientMessageId } });
+      await tx.supportConversation.update({ where: { id: conversationId }, data: { lastMessageAt: message.createdAt } });
+      await tx.supportAuditLog.create({ data: { actorType: senderType, actorId: senderId, action: "MESSAGE_SENT", conversationId } });
+      return message;
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      const duplicate = await prisma.supportMessage.findUnique({
+        where: { conversationId_senderType_senderId_clientMessageId: { conversationId, senderType, senderId, clientMessageId } },
+      });
+      if (duplicate) {
+        if (duplicate.text !== text) throw new HttpException("clientMessageId already used for a different message", HttpStatus.CONFLICT);
+        return duplicate;
+      }
+    }
+    throw error;
+  }
+}
+
+async function supportConversationForParticipant(req: RequestLike, type: "PASSENGER" | "DRIVER" | "GUEST", id: string) {
+  const session = type === "PASSENGER" ? await clientSessionFrom(req) : type === "DRIVER" ? await driverSessionFrom(req) : null;
+  const conversation = await prisma.supportConversation.findUnique({ where: { id } });
+  if (!conversation || conversation.participantType !== type) throw new HttpException("Conversation not found", HttpStatus.NOT_FOUND);
+  if (type === "GUEST") {
+    const token = req.headers.authorization?.replace(/^Bearer\s+/i, "") || "";
+    const expected = conversation.guestTokenHash || "";
+    const actual = /^[a-f0-9]{64}$/.test(token) ? supportGuestHash(token) : "";
+    if (!expected || actual.length !== expected.length || !timingSafeEqual(Buffer.from(actual), Buffer.from(expected)))
+      throw new HttpException("Conversation not found", HttpStatus.NOT_FOUND);
+  } else {
+    if (conversation.participantId !== session!.sub) throw new HttpException("Conversation not found", HttpStatus.NOT_FOUND);
+  }
+  return conversation;
 }
 function persistAudit(log: AdminAuditLog) {
   adminAuditLogs.unshift(log);
@@ -7819,6 +7953,409 @@ class AdminAuthController {
     response.clearCookie(ADMIN_CSRF_COOKIE, cookieOptions(req, false, 0));
     return { ok: true };
   }
+}
+
+@Controller("support/conversations")
+class PassengerSupportController {
+  @Post("mine")
+  async mine(@Req() req: RequestLike) {
+    const session = await clientSessionFrom(req);
+    await supportSettings();
+    const conversation = await prisma.supportConversation.upsert({
+      where: { principalKey: `PASSENGER:${session.sub}` },
+      create: { participantType: "PASSENGER", participantId: session.sub, principalKey: `PASSENGER:${session.sub}`, openedByType: "PASSENGER", openedById: session.sub },
+      update: {},
+    });
+    return supportConversationResponse(conversation);
+  }
+
+  @Get(":id/messages")
+  async messages(@Req() req: RequestLike, @Param("id") id: string) {
+    await supportConversationForParticipant(req, "PASSENGER", id);
+    await supportSettings();
+    const data = await prisma.supportMessage.findMany({ where: { conversationId: id }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 100 });
+    return { data: data.reverse().map(supportMessageResponse) };
+  }
+
+  @Post(":id/messages")
+  async send(@Req() req: RequestLike, @Param("id") id: string, @Body() body: { text?: string; clientMessageId?: string }) {
+    await supportConversationForParticipant(req, "PASSENGER", id);
+    await supportSettings();
+    const session = await clientSessionFrom(req);
+    return supportMessageResponse(await writeSupportMessage(id, "PASSENGER", session.sub, body));
+  }
+}
+
+@Controller("driver/support/conversations")
+class DriverSupportController {
+  @Post("mine")
+  async mine(@Req() req: RequestLike) {
+    const session = await driverSessionFrom(req);
+    await supportSettings();
+    const conversation = await prisma.supportConversation.upsert({
+      where: { principalKey: `DRIVER:${session.sub}` },
+      create: { participantType: "DRIVER", participantId: session.sub, principalKey: `DRIVER:${session.sub}`, openedByType: "DRIVER", openedById: session.sub },
+      update: {},
+    });
+    return supportConversationResponse(conversation);
+  }
+
+  @Get(":id/messages")
+  async messages(@Req() req: RequestLike, @Param("id") id: string) {
+    await supportConversationForParticipant(req, "DRIVER", id);
+    await supportSettings();
+    const data = await prisma.supportMessage.findMany({ where: { conversationId: id }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 100 });
+    return { data: data.reverse().map(supportMessageResponse) };
+  }
+
+  @Post(":id/messages")
+  async send(@Req() req: RequestLike, @Param("id") id: string, @Body() body: { text?: string; clientMessageId?: string }) {
+    await supportConversationForParticipant(req, "DRIVER", id);
+    await supportSettings();
+    const session = await driverSessionFrom(req);
+    return supportMessageResponse(await writeSupportMessage(id, "DRIVER", session.sub, body));
+  }
+}
+
+@Controller("support/guest")
+class GuestSupportController {
+  @Post("conversation")
+  async create() {
+    const settings = await supportSettings();
+    if (!settings.supportGuestEnabled) throw new ForbiddenException("Guest support is disabled");
+    const token = randomBytes(32).toString("hex");
+    const conversation = await prisma.supportConversation.create({
+      data: { participantType: "GUEST", principalKey: `GUEST:${supportGuestHash(token)}`, guestTokenHash: supportGuestHash(token), openedByType: "GUEST", openedById: "guest" },
+    });
+    return { conversation: supportConversationResponse(conversation), token };
+  }
+
+  @Get("conversation/:id/messages")
+  async messages(@Req() req: RequestLike, @Param("id") id: string) {
+    await supportConversationForParticipant(req, "GUEST", id);
+    const settings = await supportSettings();
+    if (!settings.supportGuestEnabled) throw new ForbiddenException("Guest support is disabled");
+    const data = await prisma.supportMessage.findMany({ where: { conversationId: id }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 100 });
+    return { data: data.reverse().map(supportMessageResponse) };
+  }
+
+  @Post("conversation/:id/messages")
+  async send(@Req() req: RequestLike, @Param("id") id: string, @Body() body: { text?: string; clientMessageId?: string }) {
+    await supportConversationForParticipant(req, "GUEST", id);
+    const settings = await supportSettings();
+    if (!settings.supportGuestEnabled) throw new ForbiddenException("Guest support is disabled");
+    return supportMessageResponse(await writeSupportMessage(id, "GUEST", id, body));
+  }
+}
+
+@Controller("admin/support/media")
+class AdminSupportMediaController {
+  @Post()
+  @UseInterceptors(
+    FileInterceptor("file", {
+      limits: { fileSize: SUPPORT_MEDIA_MAX_INPUT_BYTES },
+      fileFilter: (_req, _file, cb) => cb(null, true),
+    }),
+  )
+  async upload(
+    @Req() req: RequestLike,
+    @Body() body: { conversationId?: string },
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    const session = requireRole(req, ["SUPER_ADMIN", "OPERATOR"]);
+    const conversationId = typeof body.conversationId === "string" ? body.conversationId.trim() : "";
+    if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(conversationId))
+      throw new BadRequestException("conversationId is required and must be a safe identifier");
+    if (!await prisma.supportConversation.findUnique({ where: { id: conversationId } }))
+      throw new HttpException("Conversation not found", HttpStatus.NOT_FOUND);
+    const settings = await supportSettings();
+    if (!settings.supportImageUploadEnabled) throw new ForbiddenException("Support image upload is disabled");
+    if (!file?.buffer?.length) throw new BadRequestException("Image file is required");
+
+    let variants;
+    try {
+      variants = await compressSupportImage(file.buffer);
+    } catch (error) {
+      throw new BadRequestException(error instanceof Error ? error.message : "Image file is invalid");
+    }
+
+    const mediaId = supportMediaId();
+    const displayStorageKey = supportMediaKey(conversationId, mediaId, "display");
+    const thumbnailStorageKey = supportMediaKey(conversationId, mediaId, "thumbnail");
+    await supportMediaStorage.put(displayStorageKey, variants.display.buffer);
+    try {
+      await supportMediaStorage.put(thumbnailStorageKey, variants.thumbnail.buffer);
+    } catch (error) {
+      await supportMediaStorage.delete(displayStorageKey);
+      throw error;
+    }
+    try {
+      const media = await prisma.supportMedia.create({
+        data: {
+          id: mediaId,
+          conversationId,
+          senderType: "ADMIN",
+          senderId: session.sub,
+          displayStorageKey,
+          thumbnailStorageKey,
+          mimeType: variants.display.mimeType,
+          displaySizeBytes: variants.display.sizeBytes,
+          thumbnailSizeBytes: variants.thumbnail.sizeBytes,
+          displayWidth: variants.display.width,
+          displayHeight: variants.display.height,
+          thumbnailWidth: variants.thumbnail.width,
+          thumbnailHeight: variants.thumbnail.height,
+          checksum: variants.display.checksum,
+          sourceFormat: variants.sourceFormat,
+          sourceWidth: variants.sourceWidth,
+          sourceHeight: variants.sourceHeight,
+        },
+      });
+      return supportMediaResponse(media);
+    } catch (error) {
+      await Promise.all([
+        supportMediaStorage.delete(displayStorageKey),
+        supportMediaStorage.delete(thumbnailStorageKey),
+      ]);
+      throw error;
+    }
+  }
+
+  @Get(":id/:variant")
+  async download(
+    @Req() req: RequestLike,
+    @Param("id") id: string,
+    @Param("variant") variant: string,
+    @Res() response: Response,
+  ) {
+    requireRole(req, ["SUPER_ADMIN", "OPERATOR"]);
+    if (variant !== "display" && variant !== "thumbnail") throw new HttpException("Media variant not found", HttpStatus.NOT_FOUND);
+    const media = await prisma.supportMedia.findUnique({ where: { id } });
+    if (!media || media.deletedAt || (media.expiresAt && media.expiresAt <= new Date()))
+      throw new HttpException("Support media not found", HttpStatus.NOT_FOUND);
+    try {
+      const buffer = await supportMediaStorage.get(variant === "display" ? media.displayStorageKey : media.thumbnailStorageKey);
+      response.setHeader("Cache-Control", "private, max-age=300");
+      response.type(media.mimeType).send(buffer);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") throw new HttpException("Support media file not found", HttpStatus.NOT_FOUND);
+      throw error;
+    }
+  }
+
+  @Delete(":id")
+  async remove(@Req() req: RequestLike, @Param("id") id: string) {
+    requireRole(req, ["SUPER_ADMIN", "OPERATOR"]);
+    const media = await prisma.supportMedia.findUnique({ where: { id } });
+    if (!media || media.deletedAt) throw new HttpException("Support media not found", HttpStatus.NOT_FOUND);
+    await Promise.all([
+      supportMediaStorage.delete(media.displayStorageKey),
+      supportMediaStorage.delete(media.thumbnailStorageKey),
+    ]);
+    await prisma.supportMedia.update({ where: { id }, data: { deletedAt: new Date() } });
+    return { ok: true, id };
+  }
+}
+
+async function supportInbox() {
+  await supportSettings();
+  const data = await prisma.supportConversation.findMany({ orderBy: [{ lastMessageAt: "desc" }, { createdAt: "desc" }], take: 100 });
+  return { data: data.map(supportConversationResponse) };
+}
+
+async function supportOpenConversation(actor: SupportActor, body: { participantType?: string; participantId?: string }) {
+  const settings = await supportSettings();
+  if (!settings.supportDirectContactEnabled) throw new ForbiddenException("Direct contact is disabled");
+  const type = body.participantType;
+  const id = typeof body.participantId === "string" ? body.participantId.trim() : "";
+  if ((type !== "PASSENGER" && type !== "DRIVER") || !id || id.length > 128) throw new BadRequestException("Valid participant type and ID required");
+  const found = type === "PASSENGER"
+    ? await prisma.user.findUnique({ where: { id }, select: { enabled: true } })
+    : await prisma.driver.findUnique({ where: { id }, select: { enabled: true } });
+  if (!found || !found.enabled) throw new HttpException("Account not found", HttpStatus.NOT_FOUND);
+  const key = `${type}:${id}`;
+  const conversation = await prisma.supportConversation.upsert({
+    where: { principalKey: key },
+    create: { participantType: type, participantId: id, principalKey: key, openedByType: actor.type, openedById: actor.id },
+    update: {},
+  });
+  await prisma.supportAuditLog.create({ data: { actorType: actor.type, actorId: actor.id, action: "DIRECT_CONTACT_OPENED", conversationId: conversation.id, targetType: type, targetId: id } });
+  return supportConversationResponse(conversation);
+}
+
+async function supportMessagesForStaff(id: string) {
+  await supportSettings();
+  const conversation = await prisma.supportConversation.findUnique({ where: { id } });
+  if (!conversation) throw new HttpException("Conversation not found", HttpStatus.NOT_FOUND);
+  const data = await prisma.supportMessage.findMany({ where: { conversationId: id }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 100 });
+  return { conversation: supportConversationResponse(conversation), data: data.reverse().map(supportMessageResponse) };
+}
+
+async function supportStaffSend(actor: SupportActor, id: string, body: { text?: string; clientMessageId?: string }) {
+  await supportSettings();
+  if (!await prisma.supportConversation.findUnique({ where: { id } })) throw new HttpException("Conversation not found", HttpStatus.NOT_FOUND);
+  return supportMessageResponse(await writeSupportMessage(id, actor.type, actor.id, body));
+}
+
+@Controller("admin/support/conversations")
+class AdminSupportConversationController {
+  @Get()
+  async list(@Req() req: RequestLike) { await supportActor(req); return supportInbox(); }
+  @Post()
+  async open(@Req() req: RequestLike, @Body() body: { participantType?: string; participantId?: string }) {
+    return supportOpenConversation(await supportActor(req), body);
+  }
+  @Get(":id/messages")
+  async messages(@Req() req: RequestLike, @Param("id") id: string) { await supportActor(req); return supportMessagesForStaff(id); }
+  @Post(":id/messages")
+  async send(@Req() req: RequestLike, @Param("id") id: string, @Body() body: { text?: string; clientMessageId?: string }) {
+    return supportStaffSend(await supportActor(req), id, body);
+  }
+}
+
+@Controller("support-agent/conversations")
+class AgentSupportConversationController {
+  @Get()
+  async list(@Req() req: RequestLike) { await supportActor(req, true); return supportInbox(); }
+  @Post()
+  async open(@Req() req: RequestLike, @Body() body: { participantType?: string; participantId?: string }) {
+    const actor = await supportActor(req, true);
+    requireSupportAgentCsrf(req);
+    return supportOpenConversation(actor, body);
+  }
+  @Get(":id/messages")
+  async messages(@Req() req: RequestLike, @Param("id") id: string) { await supportActor(req, true); return supportMessagesForStaff(id); }
+  @Post(":id/messages")
+  async send(@Req() req: RequestLike, @Param("id") id: string, @Body() body: { text?: string; clientMessageId?: string }) {
+    const actor = await supportActor(req, true);
+    requireSupportAgentCsrf(req);
+    return supportStaffSend(actor, id, body);
+  }
+}
+
+@Controller("admin/support/agents")
+class AdminSupportAgentController {
+  @Get()
+  async list(@Req() req: RequestLike) {
+    requireRole(req, ["SUPER_ADMIN"]);
+    const data = await prisma.supportAgent.findMany({ select: { id: true, username: true, displayName: true, enabled: true, createdAt: true }, orderBy: { createdAt: "desc" } });
+    return { data };
+  }
+
+  @Post()
+  async create(@Req() req: RequestLike, @Body() body: { username?: string; displayName?: string; password?: string }) {
+    const admin = requireRole(req, ["SUPER_ADMIN"]);
+    const username = typeof body.username === "string" ? body.username.trim() : "";
+    const displayName = typeof body.displayName === "string" ? body.displayName.trim() : "";
+    if (!/^[A-Za-z0-9._-]{3,64}$/.test(username) || !displayName || displayName.length > 100)
+      throw new BadRequestException("Valid username and display name required");
+    validateAdminPassword(body.password || "", username);
+    try {
+      const agent = await prisma.supportAgent.create({ data: { username, normalizedUsername: username.toLowerCase(), displayName, passwordHash: hashPassword(body.password!) } });
+      await prisma.supportAuditLog.create({ data: { actorType: "ADMIN", actorId: admin.sub, action: "AGENT_CREATED", targetType: "AGENT", targetId: agent.id } });
+      return { id: agent.id, username: agent.username, displayName: agent.displayName, enabled: agent.enabled };
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") throw new BadRequestException("Support agent username already exists");
+      throw error;
+    }
+  }
+
+  @Patch(":id")
+  async setEnabled(@Req() req: RequestLike, @Param("id") id: string, @Body() body: { enabled?: boolean }) {
+    const admin = requireRole(req, ["SUPER_ADMIN"]);
+    if (typeof body.enabled !== "boolean") throw new BadRequestException("enabled must be boolean");
+    const existing = await prisma.supportAgent.findUnique({ where: { id } });
+    if (!existing) throw new HttpException("Support agent not found", HttpStatus.NOT_FOUND);
+    const agent = await prisma.supportAgent.update({ where: { id }, data: { enabled: body.enabled } });
+    if (!body.enabled) await prisma.supportAgentSession.updateMany({ where: { agentId: id, revokedAt: null }, data: { revokedAt: new Date() } });
+    await prisma.supportAuditLog.create({ data: { actorType: "ADMIN", actorId: admin.sub, action: body.enabled ? "AGENT_ENABLED" : "AGENT_DISABLED", targetType: "AGENT", targetId: id } });
+    return { id: agent.id, enabled: agent.enabled };
+  }
+}
+
+@Controller("support-agent/auth")
+class SupportAgentAuthController {
+  @Post("login")
+  async login(@Req() req: RequestLike, @Res({ passthrough: true }) response: Response, @Body() body: { username?: string; password?: string }) {
+    const username = typeof body.username === "string" ? body.username.trim().toLowerCase() : "";
+    const agent = await prisma.supportAgent.findUnique({ where: { normalizedUsername: username } });
+    const now = Date.now();
+    const blocked = agent?.lockedUntil && agent.lockedUntil.getTime() > now;
+    const matches = verifyPassword(body.password || "", agent?.passwordHash || fallbackAdminPasswordHash);
+    if (!agent || !agent.enabled || blocked || !matches) {
+      if (agent && !blocked) {
+        const failures = agent.failedLoginAttempts + 1;
+        await prisma.supportAgent.update({ where: { id: agent.id }, data: { failedLoginAttempts: failures, lockedUntil: failures >= 5 ? new Date(now + 15 * 60 * 1000) : null } });
+      }
+      await wait(250);
+      throw new UnauthorizedException("Invalid support credentials");
+    }
+    const exp = now + ADMIN_SESSION_MAX_AGE_MS;
+    const jti = randomBytes(16).toString("hex");
+    await prisma.supportAgent.update({ where: { id: agent.id }, data: { failedLoginAttempts: 0, lockedUntil: null } });
+    await prisma.supportAgentSession.create({ data: { jti, agentId: agent.id, expiresAt: new Date(exp) } });
+    const payload = Buffer.from(JSON.stringify({ sub: agent.id, jti, exp })).toString("base64url");
+    const token = `${payload}.${createHmac("sha256", supportAgentSecret()).update(payload).digest("base64url")}`;
+    response.cookie(SUPPORT_AGENT_COOKIE, token, cookieOptions(req, true));
+    response.cookie(SUPPORT_AGENT_CSRF_COOKIE, randomBytes(32).toString("base64url"), cookieOptions(req, false));
+    await prisma.supportAuditLog.create({ data: { actorType: "AGENT", actorId: agent.id, action: "LOGIN" } });
+    return { agent: { id: agent.id, username: agent.username, displayName: agent.displayName }, expiresAt: new Date(exp).toISOString() };
+  }
+
+  @Get("me")
+  async me(@Req() req: RequestLike) {
+    const actor = await supportAgentFrom(req);
+    const agent = await prisma.supportAgent.findUniqueOrThrow({ where: { id: actor.id }, select: { id: true, username: true, displayName: true } });
+    return agent;
+  }
+
+  @Post("logout")
+  async logout(@Req() req: RequestLike, @Res({ passthrough: true }) response: Response) {
+    const actor = await supportAgentFrom(req);
+    requireSupportAgentCsrf(req);
+    const value = cookieValue(req, SUPPORT_AGENT_COOKIE);
+    const payload = value.split(".")[0];
+    const session = JSON.parse(Buffer.from(payload, "base64url").toString()) as { jti: string };
+    await prisma.supportAgentSession.updateMany({ where: { jti: session.jti, revokedAt: null }, data: { revokedAt: new Date() } });
+    response.clearCookie(SUPPORT_AGENT_COOKIE, cookieOptions(req, true, 0));
+    response.clearCookie(SUPPORT_AGENT_CSRF_COOKIE, cookieOptions(req, false, 0));
+    await prisma.supportAuditLog.create({ data: { actorType: "AGENT", actorId: actor.id, action: "LOGOUT" } });
+    return { ok: true };
+  }
+}
+
+function supportMediaResponse(media: {
+  id: string;
+  conversationId: string;
+  senderType: string;
+  senderId: string;
+  mimeType: string;
+  displaySizeBytes: number;
+  thumbnailSizeBytes: number;
+  displayWidth: number;
+  displayHeight: number;
+  thumbnailWidth: number;
+  thumbnailHeight: number;
+  checksum: string;
+  sourceFormat: string;
+  sourceWidth: number;
+  sourceHeight: number;
+  createdAt: Date;
+  expiresAt: Date | null;
+}) {
+  return {
+    id: media.id,
+    conversationId: media.conversationId,
+    senderType: media.senderType,
+    senderId: media.senderId,
+    mimeType: media.mimeType,
+    display: { width: media.displayWidth, height: media.displayHeight, sizeBytes: media.displaySizeBytes, url: `/admin/support/media/${encodeURIComponent(media.id)}/display` },
+    thumbnail: { width: media.thumbnailWidth, height: media.thumbnailHeight, sizeBytes: media.thumbnailSizeBytes, url: `/admin/support/media/${encodeURIComponent(media.id)}/thumbnail` },
+    checksum: media.checksum,
+    source: { format: media.sourceFormat, width: media.sourceWidth, height: media.sourceHeight },
+    createdAt: media.createdAt.toISOString(),
+    expiresAt: media.expiresAt?.toISOString() || null,
+  };
 }
 @Controller("admin")
 class AdminController {
@@ -13201,7 +13738,7 @@ class SettingsController {
       alipayPayEnabled?: boolean;
       bankCardPayEnabled?: boolean;
       sandboxMode?: boolean;
-      support?: { enabled?: boolean; guestEnabled?: boolean; directContactEnabled?: boolean; orderContextEnabled?: boolean; imageUploadEnabled?: boolean; videoUploadEnabled?: boolean; voiceMessageEnabled?: boolean; voiceCallEnabled?: boolean; maxUploadSizeMb?: number };
+      support?: { enabled?: boolean; guestEnabled?: boolean; directContactEnabled?: boolean; orderContextEnabled?: boolean; imageUploadEnabled?: boolean; maxUploadSizeMb?: number };
       wechatMiniProgram?: { enabled?: boolean; loginMode?: "wechatOnly" | "wechatAndSms" | "smsOnly"; appId?: string; appSecret?: string; phoneCapability?: boolean; avatarCapability?: boolean; nicknameCapability?: boolean };
       wechatWeb?: { enabled?: boolean; appId?: string; appSecret?: string; redirectUri?: string };
       appleLogin?: { ios?: { enabled?: boolean; teamId?: string; keyId?: string; clientId?: string; privateKey?: string; bundleId?: string }; web?: { enabled?: boolean; teamId?: string; keyId?: string; clientId?: string; redirectUri?: string; privateKey?: string } };      sms253?: { enabled?: boolean; endpoint?: string; sendUrl?: string; variableUrl?: string; balanceUrl?: string; account?: string; password?: string; template?: string; report?: boolean; variableReport?: boolean; variableTemplate?: string; variableParams?: string; testPhone?: string; international?: { enabled?: boolean; endpoint?: string; sendUrl?: string; variableUrl?: string; balanceUrl?: string; account?: string; password?: string; template?: string; report?: boolean; variableReport?: boolean; variableTemplate?: string; variableParams?: string; testPhone?: string } };
@@ -13314,9 +13851,6 @@ class SettingsController {
       supportDirectContactEnabled: support?.directContactEnabled ?? settings.supportDirectContactEnabled,
       supportOrderContextEnabled: support?.orderContextEnabled ?? settings.supportOrderContextEnabled,
       supportImageUploadEnabled: support?.imageUploadEnabled ?? settings.supportImageUploadEnabled,
-      supportVideoUploadEnabled: support?.videoUploadEnabled ?? settings.supportVideoUploadEnabled,
-      supportVoiceMessageEnabled: support?.voiceMessageEnabled ?? settings.supportVoiceMessageEnabled,
-      supportVoiceCallEnabled: support?.voiceCallEnabled ?? settings.supportVoiceCallEnabled,
       supportMaxUploadSizeMb: support?.maxUploadSizeMb === undefined ? settings.supportMaxUploadSizeMb : Math.trunc(Number(support.maxUploadSizeMb)),
       wechatMiniProgramEnabled: wechat?.enabled ?? settings.wechatMiniProgramEnabled,
       wechatMiniProgramLoginMode: wechat?.loginMode ?? settings.wechatMiniProgramLoginMode,
@@ -15899,6 +16433,14 @@ class HealthController {
     DriverOrderInviteController,
     DriverOrderUrlController,
     AdminAuthController,
+    PassengerSupportController,
+    DriverSupportController,
+    GuestSupportController,
+    AdminSupportConversationController,
+    AgentSupportConversationController,
+    AdminSupportAgentController,
+    SupportAgentAuthController,
+    AdminSupportMediaController,
     AdminController,
   ],
   providers: [{ provide: APP_INTERCEPTOR, useClass: AdminAccessInterceptor }],

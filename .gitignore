@@ -15,6 +15,7 @@ backend/generated
 .env.*
 !.env.example
 *.local
+.support-media/
 
 # Editor directories and files
 .idea

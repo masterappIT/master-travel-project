@@ -86,7 +86,7 @@ npm run build:h5
 npm --prefix admin run build
 ```
 
-產物為 `admin/dist`，會被包裝成 `admin` image，部署至獨立 Cloud Run service。
+產物為 `admin/dist`，包含後台首頁與 `/support-agent.html` 獨立客服工作台，會被包裝成 `admin` image，部署至獨立 Cloud Run service。
 
 後台只負責頁面、表單、互動、狀態呈現與 API 呼叫。權限、輸入驗證與商業結果必須由 API 再次驗證；後台不可直接連線資料庫。
 
@@ -161,6 +161,7 @@ Secret Manager 注入：
 - `DATABASE_URL`
 - `ADMIN_PASSWORD`
 - `ADMIN_SESSION_SECRET`
+- `SUPPORT_AGENT_SESSION_SECRET`
 - `AMAP_WEB_SERVICE_KEY`
 
 Secret 不可寫入 source code、前端 bundle、Docker image 或 GitHub repository。

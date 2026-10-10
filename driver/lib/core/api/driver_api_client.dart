@@ -99,6 +99,19 @@ class DriverApiClient {
         if (_token != null) 'Authorization': 'Bearer $_token',
       };
 
+  Future<Map<String, dynamic>> openSupportConversation() async => _decode(
+      await _client.post(Uri.parse('$baseUrl/driver/support/conversations/mine'), headers: _headers));
+
+  Future<List<Map<String, dynamic>>> listSupportMessages(String conversationId) async {
+    final result = _decode(await _client.get(
+      Uri.parse('$baseUrl/driver/support/conversations/${Uri.encodeComponent(conversationId)}/messages'), headers: _headers));
+    return ((result['data'] as List<dynamic>?) ?? []).whereType<Map<String, dynamic>>().toList();
+  }
+
+  Future<Map<String, dynamic>> sendSupportMessage(String conversationId, String text, String clientMessageId) async => _decode(
+      await _client.post(Uri.parse('$baseUrl/driver/support/conversations/${Uri.encodeComponent(conversationId)}/messages'),
+        headers: _headers, body: jsonEncode({'text': text, 'clientMessageId': clientMessageId})));
+
   Future<List<Map<String, dynamic>>> listLoginMethods({
     String? preview,
     String? previewToken,

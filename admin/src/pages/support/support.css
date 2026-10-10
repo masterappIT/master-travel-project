@@ -12,13 +12,22 @@
 .support-management .support-notice span { color: #526b8b; }
 .support-management .support-tabs { display: flex; gap: 5px; border-bottom: 1px solid #dce5f1; }
 .support-management .support-control-button { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; padding: 8px 15px; border: 1px solid #cbd8e9; border-radius: 10px; color: #3b5576; background: #fff; font: inherit; font-size: 12px; font-weight: 750; line-height: 1.3; cursor: pointer; }
-.support-management .support-control-button:focus-visible, .support-management .support-control-input:focus-visible, .support-management .support-control-textarea:focus-visible { outline: 3px solid #9dc4f5; outline-offset: 2px; }
+.support-management .support-control-button:focus-visible, .support-management .support-control-input:focus-visible, .support-management .support-toggle:focus-visible { outline: 3px solid #9dc4f5; outline-offset: 2px; }
 .support-management .support-control-button:disabled { color: #8294ab; border-color: #dce4ef; background: #eef2f7; box-shadow: none; cursor: not-allowed; }
 .support-management .support-control-button--primary:not(:disabled) { border-color: #1769e0; color: #fff; background: #1769e0; }
+.support-management .support-control-button--danger:not(:disabled) { border-color: #f1bdc5; color: #a5273d; background: #fff5f6; }
+.support-management .support-control-button--compact { min-height: 32px; margin-left: 8px; padding: 5px 12px; }
 .support-management .support-control-button--tab, .support-management .support-control-button--tab-active { border: 0; border-radius: 10px 10px 0 0; background: transparent; }
 .support-management .support-control-button--tab-active { color: #1769e0; box-shadow: inset 0 -3px #1769e0; }
 .support-management .support-control-button--filter, .support-management .support-control-button--filter-active { min-height: 34px; border-radius: 999px; padding: 7px 13px; }
 .support-management .support-control-button--filter-active { border-color: #acd0fb; color: #1769e0; background: #edf5ff; }
+.support-management .support-conversation-list { display: grid; gap: 8px; margin-top: 14px; }
+.support-management .support-control-button--conversation { display: grid; justify-content: stretch; gap: 3px; width: 100%; min-height: 56px; padding: 9px 12px; text-align: left; overflow-wrap: anywhere; }
+.support-management .support-control-button--conversation strong { font-size: 12px; }
+.support-management .support-control-button--conversation small, .support-management .support-conversation-id { color: #71839a; font-size: 11px; font-weight: 500; }
+.support-management .support-control-button--conversation[aria-current="true"] { border-color: #a8c9f3; background: #edf5ff; color: #1769e0; }
+.support-management .support-error { margin: 10px 0 0; padding: 12px 14px; border: 1px solid #f2c8cf; border-radius: 10px; color: #912b42; background: #fff3f5; font-size: 12px; line-height: 1.5; }
+.support-management .support-list-state { margin: 16px 0; color: #62758f; font-size: 13px; }
 .support-management .support-workspace { display: grid; grid-template-columns: minmax(280px, 340px) minmax(0, 1fr); gap: 16px; min-height: 560px; }
 .support-management .support-conversation-panel, .support-management .support-detail-panel, .support-management .support-outbound { min-width: 0; border: 1px solid #dce5f1; border-radius: 15px; background: #fff; box-shadow: 0 10px 25px rgba(21, 54, 92, .04); }
 .support-management .support-conversation-panel { display: flex; flex-direction: column; padding: 20px; }
@@ -29,7 +38,9 @@
 .support-management .support-search { margin-top: 22px; }
 .support-management .support-control-input, .support-management .support-control-textarea { box-sizing: border-box; width: 100%; border: 1px solid #ccd8e7; border-radius: 10px; padding: 10px 12px; color: #1b3556; background: #fff; font: inherit; font-size: 13px; }
 .support-management .support-control-input { height: 42px; }
-.support-management .support-control-textarea { min-height: 86px; resize: vertical; }
+.support-management .support-control-textarea { min-height: 86px; font-size: 13px; font-weight: 400; line-height: 1.5; resize: vertical; }
+.support-management .support-control-textarea::placeholder { color: #8294ab; font-weight: 400; opacity: 1; }
+.support-management .support-control-textarea:focus-visible { border-color: #4a8df0; outline: 2px solid #9dc4f5; outline-offset: 1px; }
 .support-management .support-control-input:disabled, .support-management .support-control-textarea:disabled { color: #8294ab; background: #f5f7fa; cursor: not-allowed; }
 .support-management .support-field-hint { margin: 6px 0 0; color: #7d8da2; font-size: 11px; }
 .support-management .support-filter { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; }
@@ -38,6 +49,19 @@
 .support-management .support-list-empty strong, .support-management .support-detail-empty strong { font-size: 14px; }
 .support-management .support-list-empty p, .support-management .support-detail-empty p { max-width: 280px; margin: 6px 0 0; color: #7a8ca4; font-size: 12px; line-height: 1.5; }
 .support-management .support-detail-panel { display: flex; flex-direction: column; }
+.support-management .support-message-list { flex: 1; min-height: 250px; max-height: 470px; overflow-y: auto; padding: 18px 22px; }
+.support-management .support-message { max-width: 85%; margin-bottom: 12px; padding: 12px; border-radius: 10px; background: #f3f8ff; overflow-wrap: anywhere; }
+.support-management .support-message.is-staff { margin-left: auto; background: #e8f1ff; }
+.support-management .support-message-meta { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; }
+.support-management .support-message-meta time { color: #71839a; font-size: 11px; }
+.support-management .support-message p { margin: 5px 0; white-space: pre-wrap; }
+.support-management .support-message small { color: #71839a; }
+.support-management .support-agent-management { display: grid; gap: 12px; border-top: 1px solid #e5ebf3; padding-top: 18px; }
+.support-management .support-agent-form { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; }
+.support-management .support-agent-form label { display: grid; gap: 6px; min-width: 160px; }
+.support-management .support-agent-form .support-control-input { min-width: 0; }
+.support-management .support-agent-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px; border: 1px solid #dce5f1; border-radius: 10px; }
+.support-management .support-agent-row span { min-width: 0; overflow-wrap: anywhere; }
 .support-management .support-detail-header { padding: 20px 22px; border-bottom: 1px solid #e5ebf3; }
 .support-management .support-detail-placeholder { color: #8294ab; font-size: 12px; }
 .support-management .support-composer { display: grid; gap: 9px; padding: 17px 22px 20px; border-top: 1px solid #e5ebf3; color: #4b6280; font-size: 12px; font-weight: 750; }
@@ -54,7 +78,7 @@
 .support-management .support-outbound-note strong { color: #315c92; font-size: 12px; }
 .support-management .support-outbound-note p { margin: 5px 0 0; color: #617995; font-size: 12px; line-height: 1.6; }
 @media (max-width: 900px) { .support-management .support-workspace { grid-template-columns: 1fr; } .support-management .support-conversation-panel { min-height: 350px; } .support-management .support-detail-panel { min-height: 460px; } }
-@media (max-width: 620px) { .support-management .support-heading, .support-management .support-composer-actions, .support-management .support-outbound-actions { align-items: flex-start; flex-direction: column; } .support-management .support-connection-status { align-self: flex-start; } .support-management .support-conversation-panel, .support-management .support-outbound { padding: 17px; } .support-management .support-composer-actions > div { justify-content: flex-start; } }
+@media (max-width: 620px) { .support-management .support-heading, .support-management .support-composer-actions, .support-management .support-outbound-actions { align-items: flex-start; flex-direction: column; } .support-management .support-connection-status { align-self: flex-start; } .support-management .support-conversation-panel, .support-management .support-outbound { padding: 17px; } .support-management .support-composer-actions > div { justify-content: flex-start; } .support-management .support-control-button--filter, .support-management .support-control-button--filter-active, .support-management .support-control-button--compact { min-height: 44px; } }
 .support-management .support-settings { display: grid; gap: 20px; padding: 24px; border: 1px solid #dce5f1; border-radius: 15px; background: #fff; box-shadow: 0 10px 25px rgba(21, 54, 92, .04); }
 .support-management .support-settings-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
 .support-management .support-settings-heading h3 { margin: 5px 0 0; color: #172d49; font-size: 20px; }
@@ -65,16 +89,14 @@
 .support-management .support-setting-card--primary { grid-column: 1 / -1; border-color: #bcd6f7; background: #f7fbff; }
 .support-management .support-setting-card strong { color: #203b5d; font-size: 13px; }
 .support-management .support-setting-card p { margin: 5px 0 0; color: #71839a; font-size: 11px; line-height: 1.5; }
-.support-management .support-toggle { display: inline-flex; align-items: center; gap: 7px; flex: none; min-height: 36px; padding: 0; border: 0; color: #71839a; background: transparent; font: inherit; font-size: 11px; font-weight: 800; cursor: pointer; }
+.support-management .support-toggle { display: inline-flex; align-items: center; gap: 7px; flex: none; min-height: 44px; padding: 0; border: 0; color: #71839a; background: transparent; font: inherit; font-size: 11px; font-weight: 800; cursor: pointer; }
 .support-management .support-toggle-track { position: relative; display: block; width: 38px; height: 22px; border-radius: 999px; background: #b8c5d6; transition: background .16s ease; }
 .support-management .support-toggle-thumb { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .16s ease; box-shadow: 0 1px 3px rgba(30, 52, 80, .2); }
 .support-management .support-toggle.is-on { color: #1769e0; }
 .support-management .support-toggle.is-on .support-toggle-track { background: #1769e0; }
 .support-management .support-toggle.is-on .support-toggle-thumb { transform: translateX(16px); }
 .support-management .support-toggle:disabled { cursor: not-allowed; opacity: .52; }
-.support-management .support-settings-footer { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; padding-top: 17px; border-top: 1px solid #e5ebf3; }
-.support-management .support-settings-footer label { display: grid; gap: 7px; max-width: 250px; color: #4b6280; font-size: 12px; font-weight: 750; }
-.support-management .support-settings-footer small { color: #8294ab; font-size: 10px; font-weight: 500; line-height: 1.4; }
-.support-management .support-settings-footer > div { display: flex; align-items: center; gap: 12px; }
+.support-management .support-pending-note { margin: 0; padding: 14px 16px; border: 1px solid #dbe7f5; border-radius: 10px; color: #526b8b; background: #f8fbff; font-size: 12px; line-height: 1.6; }
+.support-management .support-settings-footer { display: flex; align-items: center; justify-content: flex-end; gap: 18px; padding-top: 17px; border-top: 1px solid #e5ebf3; }
 .support-management .support-settings-saved { color: #14804a; font-size: 12px; font-weight: 750; }
-@media (max-width: 620px) { .support-management .support-settings { padding: 17px; } .support-management .support-settings-heading, .support-management .support-settings-footer { align-items: flex-start; flex-direction: column; } .support-management .support-settings-grid { grid-template-columns: 1fr; } .support-management .support-setting-card--primary { grid-column: auto; } .support-management .support-settings-footer label { max-width: none; width: 100%; } }
+@media (max-width: 620px) { .support-management .support-settings { padding: 17px; } .support-management .support-settings-heading, .support-management .support-settings-footer { align-items: flex-start; flex-direction: column; } .support-management .support-settings-grid { grid-template-columns: 1fr; } .support-management .support-setting-card--primary { grid-column: auto; } .support-management .support-message { max-width: 95%; } .support-management .support-agent-form label { width: 100%; } .support-management .support-agent-row { align-items: flex-start; flex-direction: column; } }

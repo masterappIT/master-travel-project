@@ -103,8 +103,9 @@ H5 建置成功不代表微信小程序與 App Plus 已通過；需要依目標�
 |---|---|---|
 | Database | `DATABASE_URL`, `PORT` | API / Prisma |
 | Frontend | `VITE_API_BASE_URL`, `VITE_API_URL` | Passenger / Admin / Vite |
-| Authentication | `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `ADMIN_SESSION_SECRET` | API；secret 不可進前端 |
+| Authentication | `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `ADMIN_SESSION_SECRET`, `SUPPORT_AGENT_SESSION_SECRET` | API；secret 不可進前端 |
 | CORS | `ADMIN_CORS_ORIGIN`, `APP_CORS_ORIGINS` | API |
+| Support media | `SUPPORT_MEDIA_STORAGE_DIR` | API 本機開發私有媒體目錄；正式環境須改接私有 Cloud Storage |
 | Integrations | `AMAP_WEB_SERVICE_KEY` | API |
 | Development login | `VITE_ENABLE_DEV_LOGIN`, `VITE_DEV_LOGIN_*` | 非 production Vite |
 

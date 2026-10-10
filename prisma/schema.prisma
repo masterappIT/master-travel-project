@@ -93,6 +93,105 @@ model Notification {
   @@index([important, createdAt])
 }
 
+model SupportMedia {
+  id                   String    @id
+  conversationId       String
+  senderType           String
+  senderId             String
+  displayStorageKey    String    @unique
+  thumbnailStorageKey  String    @unique
+  mimeType             String    @default("image/webp")
+  displaySizeBytes     Int
+  thumbnailSizeBytes   Int
+  displayWidth         Int
+  displayHeight        Int
+  thumbnailWidth       Int
+  thumbnailHeight      Int
+  checksum             String
+  sourceFormat         String
+  sourceWidth         Int
+  sourceHeight        Int
+  createdAt            DateTime  @default(now())
+  expiresAt            DateTime?
+  deletedAt            DateTime?
+
+  @@index([conversationId, createdAt])
+  @@index([expiresAt])
+  @@index([senderType, senderId, createdAt])
+}
+
+model SupportConversation {
+  id                 String           @id @default(cuid())
+  participantType    String
+  participantId      String?
+  principalKey       String           @unique
+  guestTokenHash     String?          @unique
+  openedByType       String
+  openedById         String
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  lastMessageAt      DateTime?
+  messages           SupportMessage[]
+
+  @@index([participantType, participantId])
+  @@index([lastMessageAt])
+}
+
+model SupportAgent {
+  id                  String                @id @default(cuid())
+  username            String
+  normalizedUsername  String                @unique
+  displayName         String
+  passwordHash        String
+  enabled             Boolean               @default(true)
+  failedLoginAttempts Int                   @default(0)
+  lockedUntil         DateTime?
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+  sessions            SupportAgentSession[]
+}
+
+model SupportAgentSession {
+  id             String       @id @default(cuid())
+  jti            String       @unique
+  agentId        String
+  expiresAt      DateTime
+  revokedAt      DateTime?
+  createdAt      DateTime     @default(now())
+  agent          SupportAgent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([agentId, revokedAt])
+  @@index([expiresAt])
+}
+
+model SupportAuditLog {
+  id              String   @id @default(cuid())
+  actorType       String
+  actorId         String
+  action          String
+  conversationId  String?
+  targetType      String?
+  targetId        String?
+  createdAt       DateTime @default(now())
+
+  @@index([conversationId, createdAt])
+  @@index([actorType, actorId, createdAt])
+}
+
+model SupportMessage {
+  id                 String              @id @default(cuid())
+  conversationId     String
+  senderType         String
+  senderId           String
+  text               String              @db.Text
+  clientMessageId    String
+  createdAt          DateTime            @default(now())
+  conversation       SupportConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, senderType, senderId, clientMessageId])
+  @@index([conversationId, createdAt, id])
+}
+
 model DriverNotificationPreference {
   driverId        String   @id
   notificationsOn Boolean  @default(true)
@@ -682,9 +781,6 @@ model AppSetting {
   supportDirectContactEnabled             Boolean  @default(true)
   supportOrderContextEnabled              Boolean  @default(true)
   supportImageUploadEnabled               Boolean  @default(true)
-  supportVideoUploadEnabled               Boolean  @default(true)
-  supportVoiceMessageEnabled              Boolean  @default(true)
-  supportVoiceCallEnabled                 Boolean  @default(true)
   supportMaxUploadSizeMb                  Int      @default(50)
   wechatMiniProgramEnabled                Boolean  @default(false)
   wechatMiniProgramLoginMode              String   @default("wechatOnly")

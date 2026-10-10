@@ -13,9 +13,6 @@ export function applyAdminSettings(settings, { exchangeRate, pricingCurrency, se
     directContactEnabled: settings.support?.directContactEnabled !== false,
     orderContextEnabled: settings.support?.orderContextEnabled !== false,
     imageUploadEnabled: settings.support?.imageUploadEnabled !== false,
-    videoUploadEnabled: settings.support?.videoUploadEnabled !== false,
-    voiceMessageEnabled: settings.support?.voiceMessageEnabled !== false,
-    voiceCallEnabled: settings.support?.voiceCallEnabled !== false,
     maxUploadSizeMb: Number.isInteger(Number(settings.support?.maxUploadSizeMb)) ? Number(settings.support.maxUploadSizeMb) : 50
   }
   paymentSettings.value = {

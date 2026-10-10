@@ -1,0 +1,29 @@
+* { box-sizing: border-box; }
+body { margin: 0; background: #f0f4fa; color: #172d49; font: 14px/1.5 system-ui, sans-serif; }
+.support-agent-app { max-width: 1200px; margin: auto; padding: 24px; }
+.support-agent-app header { display: flex; justify-content: space-between; align-items: center; gap: 20px; margin-bottom: 20px; }
+.support-agent-app h1 { margin: 0; font-size: 28px; }
+.support-agent-app h2 { margin: 0 0 15px; font-size: 18px; }
+.support-agent-app small { color: #637894; }
+.support-agent-app button, .support-agent-app input, .support-agent-app select, .support-agent-app textarea { font: inherit; border: 1px solid #c8d5e6; border-radius: 9px; padding: 10px 12px; }
+.support-agent-app button { cursor: pointer; background: #fff; color: #1b4d91; }
+.support-agent-app button:disabled { cursor: not-allowed; opacity: .55; }
+.support-agent-app button:focus-visible, .support-agent-app input:focus-visible, .support-agent-app select:focus-visible, .support-agent-app textarea:focus-visible { outline: 3px solid #9dc4f5; }
+.support-agent-app label { display: grid; gap: 6px; }
+.support-agent-app .login-card, .support-agent-app .outbound, .support-agent-app .inbox, .support-agent-app .conversation { padding: 20px; border: 1px solid #dce5f1; border-radius: 14px; background: #fff; }
+.support-agent-app .login-card { display: grid; gap: 15px; max-width: 400px; margin: 10vh auto 0; }
+.support-agent-app .login-card button, .support-agent-app .conversation form button, .support-agent-app .outbound button { color: #fff; background: #1769e0; border-color: #1769e0; }
+.support-agent-app .outbound { display: flex; align-items: end; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
+.support-agent-app .outbound h2 { flex-basis: 100%; margin-bottom: 0; }
+.support-agent-app .workspace { display: grid; grid-template-columns: minmax(250px, 330px) 1fr; gap: 16px; }
+.support-agent-app .inbox { display: flex; flex-direction: column; gap: 8px; }
+.support-agent-app .inbox button { text-align: left; overflow-wrap: anywhere; }
+.support-agent-app .inbox button.selected { background: #e8f1ff; }
+.support-agent-app .conversation { display: flex; flex-direction: column; min-height: 500px; }
+.support-agent-app .message-list { flex: 1; max-height: 450px; overflow-y: auto; }
+.support-agent-app .message-list article { padding: 12px; margin-bottom: 10px; border-radius: 10px; background: #f3f8ff; overflow-wrap: anywhere; }
+.support-agent-app .message-list article p { white-space: pre-wrap; }
+.support-agent-app .conversation form { display: grid; gap: 10px; }
+.support-agent-app .conversation textarea { width: 100%; resize: vertical; }
+.support-agent-app .error { padding: 12px; border-radius: 10px; background: #ffecef; color: #9b243b; }
+@media (max-width: 700px) { .support-agent-app .workspace { grid-template-columns: 1fr; } }

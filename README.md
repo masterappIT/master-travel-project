@@ -156,7 +156,7 @@ H5 建置成功不能取代微信小程序及 App Plus 驗證。
 
 ## 內置客服
 
-乘客端與管理後台目前提供客服介面草稿；訊息、語音及通話尚未接入服務。已確認的需求及建議交付順序記錄於 [內置客服需求](docs/INTERNAL-SUPPORT-REQUIREMENTS.md)。
+乘客端、司機端、管理後台及獨立客服工作台已接入文字對話；第一版採共用收件匣，由 `SUPER_ADMIN` 建立獨立客服帳戶。圖片僅完成壓縮與管理端私有儲存基礎，正式 Cloud Storage adapter、圖片訊息與過期清理尚未完成。影片、語音訊息及語音通話不在目前範圍。詳見 [內置客服需求](docs/INTERNAL-SUPPORT-REQUIREMENTS.md)。
 
 ## 命名規範
 

@@ -269,7 +269,7 @@ const formatSettlementTotal = settlementsPageState.formatTotal
 const title = computed(() => t(view.value))
 const filteredAddresses = addressesPageState.filtered
 
-const App = { setup() {
+const App = { components: { SupportPage }, setup() {
   const navigate = createNavigationController({ view, load })
   const visiblePrimaryNavigation = computed(() => primaryNavigation.filter(item => !item.superAdminOnly || isSuperAdministrator.value))
   const activePageComponent = computed(() => ({
@@ -376,6 +376,7 @@ const App = { setup() {
      supportSettings,
      settingsLoader,
      notify,
+     requestConfirmation,
      displayError,
      load
    })
@@ -934,7 +935,6 @@ registerAdminComponents(app, {
   AuditLogsPage,
   AdministratorsPage,
   NotificationsPage,
-  SupportPage,
   LoadingState,
   ErrorState,
   ToastHost,

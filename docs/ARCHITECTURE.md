@@ -36,6 +36,8 @@ Admin 入口由 [`admin/src/main.js`](../admin/src/main.js) 組裝 API、狀態�
 
 資源實作位於 [`admin/src/utils/admin-resource-loader.js`](../admin/src/utils/admin-resource-loader.js)；此分層是逐步模組化邊界，並不表示所有頁面已完成獨立拆分。任何後續拆分都必須維持既有導航、API contract、loading/error 狀態與 UI baseline。
 
+內置客服文字對話由 API 與 PostgreSQL 集中管理。Admin 客服頁沿用管理員身份；同一 Admin 前端部署中的 [`support-agent.html`](../admin/support-agent.html) 使用獨立客服帳戶與 session。乘客、司機與訪客各自經 API 驗證對話歸屬，兩個客服工作入口共用收件匣。圖片媒體目前只有管理端私有儲存基礎，尚未關聯客服訊息。
+
 ## 資料流
 
 ```mermaid

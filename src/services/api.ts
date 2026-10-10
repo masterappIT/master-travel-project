@@ -1,5 +1,5 @@
 import type { CrossBorderTrip } from '../../shared/types/trip'
-import { clearAuthentication, getAuthToken, type AuthUser } from '../utils/auth'
+import { clearAuthentication, getAuthToken, isAuthenticated, type AuthUser } from '../utils/auth'
 import { getClientPlatform } from '../platform'
 
 const observabilityClientPlatform = () => getClientPlatform()
@@ -16,7 +16,8 @@ if (typeof uni !== 'undefined' && typeof uni.addInterceptor === 'function') {
 const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim()
 export let API_BASE_URL = configuredApiBaseUrl || 'http://127.0.0.1:3010'
 // #ifdef H5
-API_BASE_URL = configuredApiBaseUrl || '/api'
+// Local H5 uses Vite's same-origin proxy; the configured LAN URL is for mini-program and App builds.
+API_BASE_URL = import.meta.env.DEV ? '/api' : configuredApiBaseUrl || '/api'
 // #endif
 const REQUEST_TIMEOUT_MS = 10000
 const requestWithTimeout = (options: UniApp.RequestOptions): Promise<UniApp.RequestSuccessCallbackResult> => new Promise((resolve, reject) => {
@@ -73,6 +74,62 @@ const networkError = (error: unknown, fallback: string) => {
 const authHeaders = () => {
   const token = getAuthToken()
   return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
+export type SupportConversation = {
+  id: string
+  participantType: 'PASSENGER' | 'DRIVER' | 'GUEST'
+  participantId: string | null
+  createdAt: string
+  updatedAt: string
+  lastMessageAt: string | null
+}
+
+export type SupportMessage = {
+  id: string
+  conversationId: string
+  senderType: string
+  senderId: string
+  text: string
+  clientMessageId: string
+  createdAt: string
+}
+
+const supportGuestKey = 'support-guest-session'
+export const getSupportGuestSession = () => uni.getStorageSync(supportGuestKey) as { conversation: SupportConversation; token: string } | null
+export const clearSupportGuestSession = () => uni.removeStorageSync(supportGuestKey)
+
+export async function openSupportConversation(): Promise<{ conversation: SupportConversation; guest: boolean }> {
+  if (isAuthenticated() && getAuthToken()) {
+    const response = await requestWithTimeout({ url: `${API_BASE_URL}/support/conversations/mine`, method: 'POST', header: authHeaders() })
+    if (response.statusCode >= 400) throw apiError(response, '無法開啟客服對話')
+    return { conversation: response.data as SupportConversation, guest: false }
+  }
+  const stored = getSupportGuestSession()
+  if (stored?.conversation?.id && stored.token) return { conversation: stored.conversation, guest: true }
+  const response = await requestWithTimeout({ url: `${API_BASE_URL}/support/guest/conversation`, method: 'POST' })
+  if (response.statusCode >= 400) throw apiError(response, '無法開啟訪客客服', false)
+  const session = response.data as { conversation: SupportConversation; token: string }
+  uni.setStorageSync(supportGuestKey, session)
+  return { conversation: session.conversation, guest: true }
+}
+
+export async function listSupportMessages(conversationId: string, guest: boolean): Promise<SupportMessage[]> {
+  const session = guest ? getSupportGuestSession() : null
+  const url = guest ? `${API_BASE_URL}/support/guest/conversation/${encodeURIComponent(conversationId)}/messages` : `${API_BASE_URL}/support/conversations/${encodeURIComponent(conversationId)}/messages`
+  const response = await requestWithTimeout({ url, header: guest ? { Authorization: `Bearer ${session?.token || ''}` } : authHeaders() })
+  if (response.statusCode >= 400) {
+    throw apiError(response, '無法載入客服訊息', !guest)
+  }
+  return (response.data as { data: SupportMessage[] }).data
+}
+
+export async function sendSupportMessage(conversationId: string, guest: boolean, text: string, clientMessageId: string): Promise<SupportMessage> {
+  const session = guest ? getSupportGuestSession() : null
+  const url = guest ? `${API_BASE_URL}/support/guest/conversation/${encodeURIComponent(conversationId)}/messages` : `${API_BASE_URL}/support/conversations/${encodeURIComponent(conversationId)}/messages`
+  const response = await requestWithTimeout({ url, method: 'POST', header: guest ? { Authorization: `Bearer ${session?.token || ''}` } : authHeaders(), data: { text, clientMessageId } })
+  if (response.statusCode >= 400) throw apiError(response, '發送客服訊息失敗', !guest)
+  return response.data as SupportMessage
 }
 
 export type Notification = {
