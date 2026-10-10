@@ -23,6 +23,7 @@ import {
   UnauthorizedException,
   UploadedFile,
   UploadedFiles,
+  UseGuards,
   UseInterceptors,
 } from "@nestjs/common";
 import { FileFieldsInterceptor, FileInterceptor } from "@nestjs/platform-express";
@@ -43,6 +44,7 @@ import {
   X509Certificate,
 } from "node:crypto";
 import { loadEnvFile } from "node:process";
+import { SupportMediaUploadGuard, supportMediaEnabledForEnvironment } from "./support-media-upload-guard";
 import { normalizeObservabilityIp, isPrivateObservabilityIp, observabilityIpSelection, resolveLocalObservabilityRegion, createObservabilityRegionResolver } from "./observability-region";
 import { ObservabilityRegionWriteTracker } from "./observability-region-write";
 import sharp from "sharp";
@@ -383,7 +385,12 @@ interface MembershipPlan {
   order: number;
 }
 const prisma = new PrismaClient();
-const supportMediaStorage = new SupportMediaStorage();
+const supportMediaStorage = supportMediaEnabledForEnvironment(process.env.NODE_ENV) ? new SupportMediaStorage() : null;
+
+function requireSupportMediaStorage(): SupportMediaStorage {
+  if (!supportMediaStorage) throw new ForbiddenException("Support image upload is disabled in production");
+  return supportMediaStorage;
+}
 
 const observabilityEvents = new Subject<Record<string, unknown>>();
 const observabilityRegionWrites = new ObservabilityRegionWriteTracker();
@@ -2031,7 +2038,7 @@ function appSettingsResponse(settings: Omit<typeof appSettingsDefaults, "payment
       guestEnabled: settings.supportGuestEnabled ?? true,
       directContactEnabled: settings.supportDirectContactEnabled ?? true,
       orderContextEnabled: settings.supportOrderContextEnabled ?? true,
-      imageUploadEnabled: settings.supportImageUploadEnabled ?? true,
+      imageUploadEnabled: Boolean(supportMediaStorage) && (settings.supportImageUploadEnabled ?? true),
       maxUploadSizeMb: settings.supportMaxUploadSizeMb ?? 50,
     },
     wechatMiniProgram: {
@@ -4203,7 +4210,7 @@ const administrators: Administrator[] = [
     lockedUntil: null,
   },
 ];
-const activeAdminSessions = new Map<string, number>();
+export const activeAdminSessions = new Map<string, number>();
 const revokedAdminSessions = new Map<string, number>();
 const adminAuditLogs: AdminAuditLog[] = [];
 
@@ -8049,8 +8056,12 @@ class GuestSupportController {
 }
 
 @Controller("admin/support/media")
-class AdminSupportMediaController {
+export class AdminSupportMediaController {
   @Post()
+  @UseGuards(new SupportMediaUploadGuard(
+    (request) => { requireRole(request as RequestLike, ["SUPER_ADMIN", "OPERATOR"]); },
+    requireSupportMediaStorage,
+  ))
   @UseInterceptors(
     FileInterceptor("file", {
       limits: { fileSize: SUPPORT_MEDIA_MAX_INPUT_BYTES },
@@ -8063,6 +8074,7 @@ class AdminSupportMediaController {
     @UploadedFile() file?: Express.Multer.File,
   ) {
     const session = requireRole(req, ["SUPER_ADMIN", "OPERATOR"]);
+    const storage = requireSupportMediaStorage();
     const conversationId = typeof body.conversationId === "string" ? body.conversationId.trim() : "";
     if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(conversationId))
       throw new BadRequestException("conversationId is required and must be a safe identifier");
@@ -8082,11 +8094,11 @@ class AdminSupportMediaController {
     const mediaId = supportMediaId();
     const displayStorageKey = supportMediaKey(conversationId, mediaId, "display");
     const thumbnailStorageKey = supportMediaKey(conversationId, mediaId, "thumbnail");
-    await supportMediaStorage.put(displayStorageKey, variants.display.buffer);
+    await storage.put(displayStorageKey, variants.display.buffer);
     try {
-      await supportMediaStorage.put(thumbnailStorageKey, variants.thumbnail.buffer);
+      await storage.put(thumbnailStorageKey, variants.thumbnail.buffer);
     } catch (error) {
-      await supportMediaStorage.delete(displayStorageKey);
+      await storage.delete(displayStorageKey);
       throw error;
     }
     try {
@@ -8114,8 +8126,8 @@ class AdminSupportMediaController {
       return supportMediaResponse(media);
     } catch (error) {
       await Promise.all([
-        supportMediaStorage.delete(displayStorageKey),
-        supportMediaStorage.delete(thumbnailStorageKey),
+        storage.delete(displayStorageKey),
+        storage.delete(thumbnailStorageKey),
       ]);
       throw error;
     }
@@ -8129,12 +8141,13 @@ class AdminSupportMediaController {
     @Res() response: Response,
   ) {
     requireRole(req, ["SUPER_ADMIN", "OPERATOR"]);
+    const storage = requireSupportMediaStorage();
     if (variant !== "display" && variant !== "thumbnail") throw new HttpException("Media variant not found", HttpStatus.NOT_FOUND);
     const media = await prisma.supportMedia.findUnique({ where: { id } });
     if (!media || media.deletedAt || (media.expiresAt && media.expiresAt <= new Date()))
       throw new HttpException("Support media not found", HttpStatus.NOT_FOUND);
     try {
-      const buffer = await supportMediaStorage.get(variant === "display" ? media.displayStorageKey : media.thumbnailStorageKey);
+      const buffer = await storage.get(variant === "display" ? media.displayStorageKey : media.thumbnailStorageKey);
       response.setHeader("Cache-Control", "private, max-age=300");
       response.type(media.mimeType).send(buffer);
     } catch (error) {
@@ -8146,11 +8159,12 @@ class AdminSupportMediaController {
   @Delete(":id")
   async remove(@Req() req: RequestLike, @Param("id") id: string) {
     requireRole(req, ["SUPER_ADMIN", "OPERATOR"]);
+    const storage = requireSupportMediaStorage();
     const media = await prisma.supportMedia.findUnique({ where: { id } });
     if (!media || media.deletedAt) throw new HttpException("Support media not found", HttpStatus.NOT_FOUND);
     await Promise.all([
-      supportMediaStorage.delete(media.displayStorageKey),
-      supportMediaStorage.delete(media.thumbnailStorageKey),
+      storage.delete(media.displayStorageKey),
+      storage.delete(media.thumbnailStorageKey),
     ]);
     await prisma.supportMedia.update({ where: { id }, data: { deletedAt: new Date() } });
     return { ok: true, id };
@@ -16536,4 +16550,4 @@ async function bootstrap() {
     process.env.API_HOST || "0.0.0.0",
   );
 }
-bootstrap();
+if (require.main === module) bootstrap();

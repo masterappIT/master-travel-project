@@ -17,7 +17,7 @@
 
 - [乘客端聊天頁](../src/pages/support/chat.vue)、[司機端客服頁](../driver/lib/contact_support_page.dart)、[管理後台客服頁](../admin/src/pages/support/SupportPage.js)與[獨立客服工作台](../admin/support-agent.html)已接入同一套文字對話 API。介面以定時讀取取得新訊息。
 - 乘客、司機沿用各自現有 session；訪客使用後端核發的隨機憑證，憑證遺失後無法恢復舊訪客對話。客服可用現有 `User.id`／`Driver.id` 建立或開啟對話。訊息有排序、去重及操作者稽核。
-- 管理員權限為 `SUPER_ADMIN`／`OPERATOR`，獨立客服帳戶由 `SUPER_ADMIN` 建立、停用；兩個工作入口共用收件匣。圖片附件按鈕仍停用。`SupportMedia` metadata 與管理端圖片媒體端點尚未關聯實際訊息或開放給對話參與者。
+- 管理員權限為 `SUPER_ADMIN`／`OPERATOR`，獨立客服帳戶由 `SUPER_ADMIN` 建立、停用；兩個工作入口共用收件匣。圖片附件按鈕仍停用；正式環境的圖片媒體端點暫停使用，避免 Cloud Run 暫存檔案遺失，待持久化私有儲存接入後才開放。`SupportMedia` metadata 與管理端圖片媒體端點尚未關聯實際訊息或開放給對話參與者。
 - [管理後台消息推送頁](../admin/src/pages/notifications/NotificationsPage.js)是另一項功能。訂單／行程資訊只供畫面參考，不能作為訂單讀取授權。
 
 以上是目前程式碼狀態；正式啟用仍須完成目標平台驗收、部署配置及圖片訊息階段。
