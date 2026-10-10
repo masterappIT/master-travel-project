@@ -6,7 +6,7 @@
         <OrdersBackButton icon-src="/static/orders/traveling-back.svg" @tap="goBack" />
         <text class="number">訂單編號：{{ orderNumber }}</text>
       </view>
-      <view class="assist"><image src="/static/orders/help.svg" mode="aspectFit" /><text>訂單協助</text></view>
+      <view class="assist" role="button" aria-label="就此訂單聯繫客服" @tap="openOrderSupport(storedOrder)"><image src="/static/orders/help.svg" mode="aspectFit" /><text>訂單協助</text></view>
       <view class="status"><image src="/static/orders/status-blue.svg" mode="aspectFit" /><text>待出行</text></view>
       <scroll-view class="traveling-detail-scroll" scroll-y>
         <view class="traveling-detail-content">
@@ -41,6 +41,7 @@ import { formatOrderDetailAddress, formatOrderDetailAddressLine } from '../../ut
 import { getClientTrip, type ClientTrip } from '../../services/api'
 import { formatCurrencyAmount, normalizeCurrency } from '../../composables/useCurrency'
 import { sumOrderDiscounts } from '../../utils/orderDiscount'
+import { openOrderSupport } from '../../utils/supportNavigation'
 
 const { responsiveStyle } = useResponsiveCanvas()
 const headerStyle = computed(() => {

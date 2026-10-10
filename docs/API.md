@@ -17,6 +17,8 @@ API 必須在 server side 再次執行：
 
 API 包含管理員、乘客與司機等不同 session/token 流程。管理員 session secret、client secret、driver token secret 等敏感設定只能由環境變數或 Secret Manager 提供。
 
+先前未使用的第三方客服轉送路由已移除。內置客服目前只有乘客端與管理後台介面草稿，尚無可用的對話 API 或客服身份驗證契約；接入時須另行定義乘客、司機、訪客及客服人員的授權邊界。
+
 管理端設定寫入與連線測試必須由後端檢查角色；不能只依賴前端按鈕 disabled 狀態。
 
 ## CORS

@@ -40,7 +40,7 @@
 
       <view class="status-panel">
         <image class="city-scene" src="/static/vehicles/trip-progress/city.svg" mode="scaleToFill" />
-        <view class="quick-actions"><text @tap="showComingSoon('修改目的地')">修改目的地</text><text @tap="showComingSoon('聯繫客服')">聯繫客服</text></view>
+        <view class="quick-actions"><text @tap="showComingSoon('修改目的地')">修改目的地</text><text @tap="contactSupport">聯繫客服</text></view>
         <view class="status-content">
           <image class="status-mark" src="/static/vehicles/trip-progress/status.svg" mode="aspectFit" />
           <text class="status-title">正在前往目的地</text>
@@ -62,11 +62,12 @@
 import TripRouteMap from '../../components/vehicles/TripRouteMap.vue'
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { isIosApp } from '../../platform'
-import { onLoad } from '@dcloudio/uni-app'
+import { onHide, onLoad, onShow } from '@dcloudio/uni-app'
 import { getClientTrip, type ClientTrip } from '../../services/api'
 import { formatOrderCardAddress, formatOrderSummaryAddress } from '../../utils/orderAddress'
 import { cachedPagePath, cachedPageUrl, getCachedPageOrderQuery, hasPageInNavigationHistory, isCachedPageActive, openCachedPage } from '../../utils/navigation'
 import { isPendingTrip } from '../../utils/pendingTrip'
+import { openOrderSupport } from '../../utils/supportNavigation'
 import { layoutVehiclePlates } from '../../utils/vehiclePlate'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 
@@ -135,10 +136,13 @@ watch([cachedPagePath, cachedPageUrl], ([path, url]) => {
 }, { immediate: true })
 // #endif
 onUnmounted(stopPolling)
+onHide(stopPolling)
+onShow(() => { if (tripId.value && !pollTimer) { void loadTrip(); startPolling() } })
 const goBack = () => openCachedPage(hasPageInNavigationHistory('/pages/trips/pending', '/pages/vehicles/trip-progress')
   ? `/pages/trips/pending?id=${encodeURIComponent(tripId.value)}`
   : `/pages/orders/traveling-detail?id=${encodeURIComponent(tripId.value)}`)
 const callDriver = () => { const phone = trip.value?.driver?.phone; if (phone) uni.makePhoneCall({ phoneNumber: phone }); else uni.showToast({ title: '暫無司機電話', icon: 'none' }) }
+const contactSupport = () => { stopPolling(); openOrderSupport(trip.value) }
 const showComingSoon = (label: string) => uni.showToast({ title: `${label}功能準備中`, icon: 'none' })
 </script>
 

@@ -32,10 +32,11 @@
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 
 import { closeCachedPage } from '../../utils/navigation'
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { formatCurrencyAmount } from '../../composables/useCurrency'
 import { onLoad } from '@dcloudio/uni-app'
-import { listNotifications, markNotificationRead, type Notification } from '../../services/api'
+import { markNotificationRead, type Notification } from '../../services/api'
+import { notificationIcon } from './notificationIcon'
 
 type MessageType = 'order' | 'top-up' | 'withdrawal' | 'refund'
 
@@ -104,13 +105,16 @@ const notification = ref<Notification | null>(null)
 const detail = computed(() => notification.value ? {
   title: notification.value.title,
   status: notification.value.readAt ? '已讀' : '新消息',
-  icon: '/static/messages/top-up.svg',
+  icon: notificationIcon(notification.value.templateType, notification.value.audience),
   time: new Date(notification.value.createdAt).toLocaleString(),
   rows: [{ label: '受眾', value: notification.value.audience.includes('DRIVER') ? '司機端' : '用戶端' }, { label: '發送時間', value: new Date(notification.value.createdAt).toLocaleString() }],
   notice: notification.value.content
 } : { ...details[type.value], time: '2024年1月1日 10:30' })
 
-onLoad(async (options) => {
+let detailLoaded = false
+const loadDetail = async (options?: Record<string, string>) => {
+  if (detailLoaded) return
+  detailLoaded = true
   const stored = uni.getStorageSync('selected-notification')
   if (stored?.id) notification.value = stored as Notification
   const requestedType = options?.type as MessageType
@@ -120,7 +124,13 @@ onLoad(async (options) => {
     notification.value.readAt = new Date().toISOString()
     uni.setStorageSync('selected-notification', notification.value)
   }
-})
+}
+
+onLoad((options) => { void loadDetail(options) })
+// The mini-program embeds this page in the home host, where page onLoad does not run.
+// #ifdef MP-WEIXIN || MP-TOUTIAO
+onMounted(() => { void loadDetail() })
+// #endif
 
 const goBack = () => closeCachedPage('/pages/messages/messages')
 </script>

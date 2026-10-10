@@ -4,6 +4,7 @@ import 'core/widgets/driver_overlays.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import 'app/route_names.dart';
+import 'contact_support_page.dart';
 import 'core/api/driver_api_client.dart';
 import 'core/formatters/passenger_name.dart';
 import 'core/layout/driver_page_shell.dart';
@@ -304,6 +305,19 @@ class _OrderAcceptedPageState extends State<OrderAcceptedPage> {
               _AcceptedVehicleCard(vehicle: vehicle),
               const SizedBox(height: DriverSpacing.xl),
             ],
+            if (!_loading && _error == null)
+              TextButton.icon(
+                onPressed: () => DriverNavigation.push(
+                  context,
+                  DriverRouteNames.contactSupport,
+                  arguments: DriverSupportContext(
+                    tripId: widget.tripId!,
+                    statusLabel: '已接單',
+                  ),
+                ),
+                icon: const Icon(Icons.headset_mic_outlined),
+                label: const Text('就此行程聯繫客服'),
+              ),
             if (!_loading && _error == null)
               Row(children: [
                 Expanded(

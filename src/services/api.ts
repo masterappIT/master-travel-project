@@ -744,42 +744,6 @@ export async function identifyPaymentCard(cardNumber: string): Promise<CardIdent
   return response.data as CardIdentification
 }
 
-export type SupportMessage = {
-  id: string
-  direction: 'inbound' | 'outbound' | string
-  content: { type?: string; text?: string } | string
-  createdAt: string
-}
-
-let supportToken = ''
-
-async function supportRequest<T>(path: string, options: { method?: 'GET' | 'POST'; data?: unknown } = {}): Promise<T> {
-  const response = await uni.request({
-    url: `${API_BASE_URL}/support${path}`,
-    method: options.method || 'GET',
-    data: options.data as string | AnyObject | ArrayBuffer | undefined,
-    header: supportToken ? { Authorization: `Bearer ${supportToken}` } : {}
-  })
-  if (response.statusCode >= 400) throw new Error((response.data as { message?: string })?.message || '客服服務暫時無法使用')
-  return response.data as T
-}
-
-export async function startSupportSession(riderId: string, displayName?: string) {
-  const result = await supportRequest<{ token: string; expiresAt: string }>('/session', { method: 'POST', data: { riderId, displayName } })
-  supportToken = result.token
-  return result
-}
-
-export async function listSupportMessages(): Promise<SupportMessage[]> {
-  const result = await supportRequest<{ data: SupportMessage[] }>('/messages')
-  return result.data
-}
-
-export async function sendSupportMessage(text: string): Promise<SupportMessage> {
-  const clientId = `master-travel-project-${Date.now()}-${Math.random().toString(36).slice(2)}`
-  return supportRequest<SupportMessage>('/messages', { method: 'POST', data: { text, clientId } })
-}
-
 export type WalletInfo = {
   id: string
   name: string

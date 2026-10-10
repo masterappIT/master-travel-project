@@ -4,7 +4,7 @@
       <OrdersBackButton icon-src="/static/orders/traveling-back.svg" @tap="goBack" />
       <text class="number">訂單編號：{{ orderNumber }}</text>
     </view>
-    <view class="assist"><image src="/static/orders/help.svg" mode="aspectFit" /><text>訂單協助</text></view>
+    <view class="assist" role="button" aria-label="就此訂單聯繫客服" @tap="openOrderSupport(storedOrder)"><image src="/static/orders/help.svg" mode="aspectFit" /><text>訂單協助</text></view>
       <view class="status"><image src="/static/orders/status-pending.svg" mode="aspectFit" /><text>待確認</text></view>
       <view class="traveling-card standard-detail-card pending-card" :class="{ 'long-addresses': hasLongAddress }">
       <view class="locations"><view :class="{ 'long-location': isLongAddress(originLabel) }"><image src="/static/orders/origin.svg" mode="aspectFit" /><text>{{ formatOrderDetailAddressLine(originLabel) }}</text></view><view :class="{ 'long-location': isLongAddress(destinationLabel) }"><image src="/static/orders/destination.svg" mode="aspectFit" /><text>{{ formatOrderDetailAddressLine(destinationLabel) }}</text></view></view>
@@ -45,6 +45,7 @@ import OrdersBackButton from '../../components/orders/OrdersBackButton.vue'
 import { formatOrderDetailAddress, formatOrderDetailAddressLine } from '../../utils/orderAddress'
 import { formatCurrencyAmount, normalizeCurrency } from '../../composables/useCurrency'
 import { sumOrderDiscounts } from '../../utils/orderDiscount'
+import { openOrderSupport } from '../../utils/supportNavigation'
 import { cancelClientTrip, getClientTrip, getFareQuote, getWalletMe, payTrip, type ClientTrip, type FareQuote } from '../../services/api'
 import { readWallet } from '../../utils/wallet'
 const isCompleted = ref(false)

@@ -8,7 +8,7 @@
     </view>
     <template v-if="isTraveling">
       <view class="status traveling-page-status"><image src="/static/orders/status-blue.svg" mode="aspectFit" /><text>待出行</text></view>
-      <view class="assist traveling-assist"><image src="/static/orders/help.svg" mode="aspectFit" /><text>訂單協助</text></view>
+      <view class="assist traveling-assist" role="button" aria-label="就此訂單聯繫客服" @tap="openOrderSupport(storedOrder)"><image src="/static/orders/help.svg" mode="aspectFit" /><text>訂單協助</text></view>
       <scroll-view class="traveling-scroll" scroll-y>
       <view class="card traveling-card">
         <view class="locations"><view><image src="/static/orders/origin.svg" mode="aspectFit" /><text>{{ formatOrderDetailAddressLine(originLabel) }}</text></view><view><image src="/static/orders/destination.svg" mode="aspectFit" /><text>{{ formatOrderDetailAddressLine(destinationLabel) }}</text></view></view>
@@ -23,7 +23,7 @@
       </scroll-view>
     </template>
     <template v-else>
-      <view class="assist"><image src="/static/orders/help.svg" mode="aspectFit" /><text>訂單協助</text></view>
+      <view class="assist" role="button" aria-label="就此訂單聯繫客服" @tap="openOrderSupport(storedOrder)"><image src="/static/orders/help.svg" mode="aspectFit" /><text>訂單協助</text></view>
       <view :class="['status', { 'completed-status': isCompleted }]">
         <image :src="statusIcon" mode="aspectFit" /><text>{{ statusLabel }}</text>
       </view>
@@ -54,6 +54,7 @@ import OrdersBackButton from '../../components/orders/OrdersBackButton.vue'
 import { formatOrderDetailAddress, formatOrderDetailAddressLine } from '../../utils/orderAddress'
 import { formatCurrencyAmount, normalizeCurrency } from '../../composables/useCurrency'
 import { sumOrderDiscounts } from '../../utils/orderDiscount'
+import { openOrderSupport } from '../../utils/supportNavigation'
 const tripStore = useTripStore()
 const { responsiveStyle } = useResponsiveCanvas()
 const isCompleted = ref(false)

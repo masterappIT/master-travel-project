@@ -33,7 +33,7 @@
       </view>
     </template>
     <template v-else-if="!loadError && !loading && isCancelled">
-      <view class="assist"><image src="/static/orders/help.svg" mode="aspectFit" /><text>訂單協助</text></view>
+      <view class="assist" role="button" aria-label="就此訂單聯繫客服" @tap="openOrderSupport(storedOrder)"><image src="/static/orders/help.svg" mode="aspectFit" /><text>訂單協助</text></view>
       <view class="status"><image :src="statusIcon" mode="aspectFit" /><text>取消</text></view>
       <view class="traveling-card standard-detail-card">
       <view class="locations"><view><image src="/static/orders/origin.svg" mode="aspectFit" /><text>{{ formatOrderDetailAddressLine(originLabel) }}</text></view><view><image src="/static/orders/destination.svg" mode="aspectFit" /><text>{{ formatOrderDetailAddressLine(destinationLabel) }}</text></view></view>
@@ -62,6 +62,7 @@ import OrdersBackButton from '../../components/orders/OrdersBackButton.vue'
 import { formatOrderDetailAddress, formatOrderDetailAddressLine } from '../../utils/orderAddress'
 import { formatCurrencyAmount, normalizeCurrency } from '../../composables/useCurrency'
 import { sumOrderDiscounts } from '../../utils/orderDiscount'
+import { openOrderSupport } from '../../utils/supportNavigation'
 const tripStore = useTripStore()
 const { responsiveStyle } = useResponsiveCanvas()
 const isCompleted = ref(false)

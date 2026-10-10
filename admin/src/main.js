@@ -49,6 +49,7 @@ const LoginSettingsPage = defineAsyncComponent(() => import('./pages/login-setti
 const AuditLogsPage = defineAsyncComponent(() => import('./pages/audit-logs/AuditLogsPage.js').then(module => module.AuditLogsPage))
 const AdministratorsPage = defineAsyncComponent(() => import('./pages/administrators/AdministratorsPage.js').then(module => module.AdministratorsPage))
 const NotificationsPage = defineAsyncComponent(() => import('./pages/notifications/NotificationsPage.js').then(module => module.NotificationsPage))
+const SupportPage = defineAsyncComponent(() => import('./pages/support/SupportPage.js').then(module => module.SupportPage))
 import { createUsersActions } from './pages/users/users.actions.js'
 import { createDriversActions } from './pages/drivers/drivers.actions.js'
 import { isEligibleVehicleDriver } from './utils/drivers.js'
@@ -204,8 +205,8 @@ const saveFinanceRateSettings = async () => {
     error.value = displayError(e)
   }
 }
-const notificationsActions = createNotificationsActions({ api, notificationForm, notificationRecipientSearch, notificationTemplates, load, error, displayError })
-const { resetNotification, createTemplate, clearNotificationRecipients, toggleNotificationRecipient, notificationRecipientChecked, saveNotification } = notificationsActions
+const notificationsActions = createNotificationsActions({ api, notificationForm, notificationRecipientSearch, notificationTemplates, load, error, displayError, notify, requestConfirmation })
+const { templateActionId, resetNotification, createTemplate, setTemplateEnabled, removeTemplate, clearNotificationRecipients, toggleNotificationRecipient, notificationRecipientChecked, saveNotification } = notificationsActions
 const paymentsActions = createPaymentsActions({ api, paymentSettings, paymentCurrencies, paymentSettingsSaved, driverRaceSaving, error, displayError, configs: paymentConfigs, selectedConfig: selectedPaymentConfig, editorOpen: paymentEditorOpen, editorStep: paymentEditorStep, testResult: paymentTestResult })
 const { savePaymentSettings, loadPaymentConfigs, closePaymentEditor, savePaymentConfigDraft, duplicatePaymentConfig, testPaymentConfig } = paymentsActions
 const { edit: editUser, reset: resetUser, select: selectUser, save: saveUser, saving: userSaving, updateStatus: updateUserStatus, remove: removeUser, openWalletAdjustment, saveWalletAdjustment } = usersActions
@@ -286,6 +287,7 @@ const App = { setup() {
     'route-pricing': 'RoutePricingPage',
     vehicles: 'VehiclesPage',
     notifications: 'NotificationsPage',
+    support: 'SupportPage',
     administrators: 'AdministratorsPage',
     auditLogs: 'AuditLogsPage',
     finance: 'FinancePage',
@@ -347,6 +349,7 @@ const App = { setup() {
      canWrite,
      notifications,
      notificationTemplates,
+     templateActionId,
      notificationForm,
      notificationTemplateForm,
      notificationRecipientSearch,
@@ -358,6 +361,8 @@ const App = { setup() {
      filteredNotificationDrivers,
      resetNotification,
      createTemplate,
+     setTemplateEnabled,
+     removeTemplate,
      clearNotificationRecipients,
      toggleNotificationRecipient,
      notificationRecipientChecked,
@@ -892,6 +897,7 @@ const App = { setup() {
   <button type="button" :class="{active:view==='finance'}" @click="navigate('finance')">財務管理中心</button>
   <button type="button" :class="{active:view==='login-settings'}" @click="navigate('login-settings')">{{t('loginSettings')}}</button>
   <button type="button" :class="{active:view==='notifications'}" @click="navigate('notifications')">消息推送</button>
+  <button type="button" :class="{active:view==='support'}" @click="navigate('support')">客服管理</button>
   <button type="button" v-if="isSuperAdministrator" :class="{active:view==='administrators'}" @click="navigate('administrators')">{{t('administrators')}}</button>
   <button type="button" v-if="isSuperAdministrator" :class="{active:view==='auditLogs'}" @click="navigate('auditLogs')">{{t('auditLogs')}}</button>
   <button type="button" class="logout logout-mobile" @click="logout">{{t('signOut')}}</button>
@@ -917,6 +923,7 @@ registerAdminComponents(app, {
   AuditLogsPage,
   AdministratorsPage,
   NotificationsPage,
+  SupportPage,
   LoadingState,
   ErrorState,
   ToastHost,

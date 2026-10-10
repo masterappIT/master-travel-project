@@ -58,7 +58,12 @@ abstract final class DriverRouter {
         DriverRouteNames.settlementOverview: (_) =>
             const SettlementOverviewPage(),
         DriverRouteNames.about: (_) => const AboutPage(),
-        DriverRouteNames.contactSupport: (_) => const ContactSupportPage(),
+        DriverRouteNames.contactSupport: (context) {
+          final arguments = ModalRoute.of(context)?.settings.arguments;
+          return ContactSupportPage(
+            trip: arguments is DriverSupportContext ? arguments : null,
+          );
+        },
         DriverRouteNames.vehicle: (_) => const VehiclePage(),
         DriverRouteNames.notificationSettings: (_) =>
             const NotificationSettingsPage(),

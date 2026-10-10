@@ -16,6 +16,7 @@
 
 | 文件 | 用途 |
 |---|---|
+| [內置客服需求記錄](./INTERNAL-SUPPORT-REQUIREMENTS.md) | 記錄已確認要求、介面草稿、後續接入範圍與待決策事項 |
 | [Driver README](../driver/README.md) | Driver Flutter 專案說明 |
 | [Cloud Run Runbook](../deploy/cloud-run/README.md) | Cloud Run migration、健康檢查、回滾與 restore drill |
 | [Login Settings Architecture](../.github/instructions/login-settings-architecture.instructions.md) | 後台登入配置的分配層與配置層契約 |

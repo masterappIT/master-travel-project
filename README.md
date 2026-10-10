@@ -121,8 +121,6 @@ H5 靜態檔案與 `/api/` 同源反向代理可參考 `deploy/nginx.h5.conf`。
 | `ADMIN_CORS_ORIGIN` | 管理後台允許來源 |
 | `APP_CORS_ORIGINS` | 客戶端與後台允許來源，以逗號分隔 |
 | `AMAP_WEB_SERVICE_KEY` | 高德 Web 服務金鑰，用於位置搜索、逆地理編碼及路線規劃；僅存放於後端 |
-| `MASTERBOX_BASE_URL`、`MASTERBOX_APP_ID`、`MASTERBOX_API_KEY` | Master Box Integration 設定 |
-| `SUPPORT_SESSION_SECRET` | 客服 session 簽章密鑰 |
 
 完整範例請參考 `.env.example`。
 
@@ -156,15 +154,9 @@ npm --prefix brand run build
 
 H5 建置成功不能取代微信小程序及 App Plus 驗證。
 
-## Master Box 客服整合
+## 內置客服
 
-乘客端透過 Master Travel Project API 接入 Master Box Integration Conversation API。首頁及個人中心的客服入口會開啟聊天畫面，永久 API Key 只保存在後端。
-
-1. 在 Master Box 建立第三方 Integration，取得 App ID 與 API Key。
-2. 在 `.env` 設定 `MASTERBOX_BASE_URL`、`MASTERBOX_APP_ID`、`MASTERBOX_API_KEY` 與 `SUPPORT_SESSION_SECRET`。
-3. 分別啟動 Master Box、Master Travel Project API 與客戶端。
-
-目前 Master Box 的 `@masterbox/chat-embed` 尚未提供瀏覽器訊息及 WebSocket 路由，因此客戶端每 3 秒透過後端輪詢現有 Integration API。相關路由上線後可改用即時傳輸。
+乘客端與管理後台目前提供客服介面草稿；訊息、語音及通話尚未接入服務。已確認的需求及建議交付順序記錄於 [內置客服需求](docs/INTERNAL-SUPPORT-REQUIREMENTS.md)。
 
 ## 命名規範
 

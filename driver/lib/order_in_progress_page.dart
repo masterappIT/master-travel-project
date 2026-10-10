@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'core/widgets/driver_overlays.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'app/route_names.dart';
+import 'contact_support_page.dart';
 import 'core/api/driver_api_client.dart';
 import 'core/formatters/passenger_name.dart';
 import 'core/layout/driver_page_shell.dart';
@@ -203,6 +204,19 @@ class _OrderInProgressPageState extends State<OrderInProgressPage> {
               price: _formatPrice(_trip?['price'], _trip?['currency']),
             ),
             const SizedBox(height: DriverSpacing.xl),
+            TextButton.icon(
+              onPressed: () => DriverNavigation.push(
+                context,
+                DriverRouteNames.contactSupport,
+                arguments: DriverSupportContext(
+                  tripId: widget.tripId!,
+                  statusLabel: '行程進行中',
+                ),
+              ),
+              icon: const Icon(Icons.headset_mic_outlined),
+              label: const Text('就此行程聯繫客服'),
+            ),
+            const SizedBox(height: DriverSpacing.sm),
             ElevatedButton(
               onPressed: _loading ? null : _completeTrip,
               style: _completeStyle(),

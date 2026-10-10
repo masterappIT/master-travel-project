@@ -105,7 +105,7 @@ H5 建置成功不代表微信小程序與 App Plus 已通過；需要依目標�
 | Frontend | `VITE_API_BASE_URL`, `VITE_API_URL` | Passenger / Admin / Vite |
 | Authentication | `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `ADMIN_SESSION_SECRET` | API；secret 不可進前端 |
 | CORS | `ADMIN_CORS_ORIGIN`, `APP_CORS_ORIGINS` | API |
-| Integrations | `AMAP_WEB_SERVICE_KEY`, `MASTERBOX_*`, `SUPPORT_SESSION_SECRET` | API |
+| Integrations | `AMAP_WEB_SERVICE_KEY` | API |
 | Development login | `VITE_ENABLE_DEV_LOGIN`, `VITE_DEV_LOGIN_*` | 非 production Vite |
 
 完整正式環境設定請參考 [PRODUCTION-DEPLOYMENT.md](./PRODUCTION-DEPLOYMENT.md)。

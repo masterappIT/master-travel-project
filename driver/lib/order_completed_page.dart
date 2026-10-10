@@ -1,6 +1,7 @@
 import 'core/widgets/driver_address_text.dart';
 import 'package:flutter/material.dart';
 import 'app/route_names.dart';
+import 'contact_support_page.dart';
 import 'core/api/driver_api_client.dart';
 import 'core/formatters/passenger_name.dart';
 import 'core/layout/driver_page_shell.dart';
@@ -149,6 +150,19 @@ class _OrderCompletedPageState extends State<OrderCompletedPage> {
             const SizedBox(height: DriverSpacing.xl),
             _FareBreakdownCard(total: total),
             const SizedBox(height: DriverSpacing.xl),
+            TextButton.icon(
+              onPressed: () => DriverNavigation.push(
+                context,
+                DriverRouteNames.contactSupport,
+                arguments: DriverSupportContext(
+                  tripId: widget.tripId!,
+                  statusLabel: '已完成',
+                ),
+              ),
+              icon: const Icon(Icons.headset_mic_outlined),
+              label: const Text('就此行程聯繫客服'),
+            ),
+            const SizedBox(height: DriverSpacing.sm),
             ElevatedButton(
               onPressed: () {
                 DriverNavigation.replaceAll(context, DriverRouteNames.orders);
