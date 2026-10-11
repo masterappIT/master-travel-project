@@ -13,6 +13,10 @@
       show-location
       :enable-zoom="!bookingPickerOpen"
       :enable-scroll="!bookingPickerOpen"
+      <!-- #ifdef MP-WEIXIN -->
+      @updated="onMapUpdated"
+      @rendererror="onMapRenderError"
+      <!-- #endif -->
     />
     <!-- #endif -->
     <!-- #ifdef H5 -->
@@ -231,6 +235,23 @@ const routeFitRegion = computed<MapPoint[]>(() => {
   ]
 })
 const instance = getCurrentInstance()
+const emit = defineEmits<{ 'first-update': []; 'render-error': [] }>()
+// #ifdef MP-WEIXIN
+let reportedFirstUpdate = false
+const onMapUpdated = () => {
+  if (reportedFirstUpdate) return
+  reportedFirstUpdate = true
+  emit('first-update')
+  console.info('[home map] first render update')
+}
+const onMapRenderError = (event: { detail?: { errCode?: number; errMsg?: string } }) => {
+  console.warn('[home map] same-layer render failed', {
+    errCode: event.detail?.errCode,
+    errMsg: event.detail?.errMsg
+  })
+  emit('render-error')
+}
+// #endif
 const fitRoute = async () => {
   // #ifdef APP-PLUS || MP-WEIXIN || MP-TOUTIAO
   await nextTick()

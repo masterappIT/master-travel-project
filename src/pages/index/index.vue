@@ -3,13 +3,19 @@
     <view v-if="rideMode === 'cross-border'" class="page-content">
       <view class="canvas">
         <!-- #ifdef MP-WEIXIN -->
-        <HomeMap v-if="activePagePath === '/pages/index/index'" map-id="home-main-map" :latitude="mapLatitude" :longitude="mapLongitude" :scale="mapScale" :markers="mapMarkers" :polyline="mapPolyline" :center-trigger="mapCenterTrigger" :route-fit-trigger="routeFitTrigger" :booking-picker-open="bookingTimePicker" :pickup-label="pickupMapLabel" :destination-label="destination" :route-summary="routeSummary" :native-height="932" :map-top="0" :visible-top="190" :visible-bottom="560" />
+        <HomeMap v-if="homeMapMounted && activePagePath === '/pages/index/index'" map-id="home-main-map" :latitude="mapLatitude" :longitude="mapLongitude" :scale="mapScale" :markers="mapMarkers" :polyline="mapPolyline" :center-trigger="mapCenterTrigger" :route-fit-trigger="routeFitTrigger" :booking-picker-open="bookingTimePicker" :pickup-label="pickupMapLabel" :destination-label="destination" :route-summary="routeSummary" :native-height="932" :map-top="0" :visible-top="190" :visible-bottom="560" @first-update="onMapFirstUpdate" @render-error="onMapRenderError" />
         <!-- #endif -->
         <!-- #ifdef H5 || MP-TOUTIAO || MP-ALIPAY || MP-XHS -->
         <HomeMap v-if="activePagePath === '/pages/index/index'" map-id="home-main-map" :latitude="mapLatitude" :longitude="mapLongitude" :scale="mapScale" :markers="mapMarkers" :polyline="mapPolyline" :center-trigger="mapCenterTrigger" :route-fit-trigger="routeFitTrigger" :booking-picker-open="bookingTimePicker" :pickup-label="pickupMapLabel" :destination-label="destination" :route-summary="routeSummary" />
         <!-- #endif -->
         <view class="home-foreground">
-          <HomeHeader :key="headerRenderKey" :location-label="locationLabel" />
+          <!-- #ifdef MP-WEIXIN -->
+          <view v-if="homeMapState === 'error'" class="map-status" aria-label="地圖顯示失敗">
+            <text>地圖暫時無法顯示</text>
+            <text class="map-status-retry" @tap="retryHomeMap">重新載入地圖</text>
+          </view>
+          <!-- #endif -->
+          <HomeHeader :location-label="locationLabel" />
           <HomeTravelModeSwitch :mode="rideMode" @update:mode="switchRideMode" />
           <!-- #ifndef APP-PLUS -->
           <HomeMapActions @location="handleMapLocation" />
@@ -198,8 +204,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick } from 'vue'
+import { ref, computed, nextTick, watch } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
+// #ifdef MP-WEIXIN
+import { onReady } from '@dcloudio/uni-app'
+// #endif
 // #ifdef MP-WEIXIN || MP-TOUTIAO
 import { onHide } from '@dcloudio/uni-app'
 // #endif
@@ -290,6 +299,33 @@ type TravelMode = 'cross-border' | 'airport'
 
 const activePagePath = cachedPagePath
 const homeAccessGranted = ref(false)
+// #ifdef MP-WEIXIN
+const homeMapMounted = ref(false)
+const homeMapState = ref<'pending' | 'ready' | 'error'>('pending')
+const homeMapActive = computed(() => homeAccessGranted.value && activePagePath.value === '/pages/index/index' && rideMode.value === 'cross-border')
+let homeMapMountRun = 0
+let homePageReady = false
+const mountHomeMapAfterForeground = async () => {
+  const run = ++homeMapMountRun
+  homeMapMounted.value = false
+  homeMapState.value = 'pending'
+  if (!homeMapActive.value) return
+  await nextTick()
+  if (run !== homeMapMountRun || !homeMapActive.value) return
+  uni.createSelectorQuery().select('.home-foreground').boundingClientRect((rect) => {
+    if (run !== homeMapMountRun || !homeMapActive.value) return
+    if (rect) homeMapMounted.value = true
+    else homeMapState.value = 'error'
+  }).exec()
+}
+const retryHomeMap = () => { void mountHomeMapAfterForeground() }
+const onMapFirstUpdate = () => {
+  if (homeMapActive.value && homeMapMounted.value && homeMapState.value === 'pending') homeMapState.value = 'ready'
+}
+const onMapRenderError = () => {
+  if (homeMapActive.value && homeMapMounted.value) homeMapState.value = 'error'
+}
+// #endif
 // #ifdef MP-WEIXIN || MP-TOUTIAO
 activateEmbeddedPageHost()
 // #endif
@@ -305,6 +341,21 @@ onLoad((options) => {
 
 const tripStore = useTripStore()
 const rideMode = ref<RideMode>('cross-border')
+// #ifdef MP-WEIXIN
+watch(homeMapActive, (active) => {
+  if (!active) {
+    homeMapMountRun += 1
+    homeMapMounted.value = false
+    homeMapState.value = 'pending'
+  } else if (homePageReady) {
+    void mountHomeMapAfterForeground()
+  }
+})
+onReady(() => {
+  homePageReady = true
+  if (homeMapActive.value) void mountHomeMapAfterForeground()
+})
+// #endif
 const travelMode = ref<TravelMode>('cross-border')
 const origin = ref('')
 const originIsCurrent = ref(false)
@@ -337,7 +388,6 @@ const mapCenterTrigger = ref(0)
 const routeFitTrigger = ref(0)
 const locationLabel = ref('位置獲取中')
 const detailedAddress = ref('')
-const headerRenderKey = ref(0)
 const bookingTimePicker = ref(false)
 const airportModeHintVisible = ref(false)
 let hasShown = false
@@ -376,7 +426,7 @@ const switchRideMode = (mode: RideMode) => {
 // #ifdef MP-WEIXIN || MP-TOUTIAO
 let viewportRefreshTimer: ReturnType<typeof setTimeout> | undefined
 let viewportRefreshRun = 0
-const refreshHomeViewport = async (remountHeader: boolean) => {
+const refreshHomeViewport = async () => {
   const run = ++viewportRefreshRun
   refreshViewport()
   await nextTick()
@@ -384,7 +434,6 @@ const refreshHomeViewport = async (remountHeader: boolean) => {
   viewportRefreshTimer = setTimeout(() => {
     if (run !== viewportRefreshRun) return
     refreshViewport()
-    if (remountHeader) headerRenderKey.value += 1
     viewportRefreshTimer = undefined
   }, 50)
 }
@@ -400,7 +449,7 @@ onShow(() => {
   if (!homeAccessGranted.value) return
   // #ifdef MP-WEIXIN || MP-TOUTIAO
   if (viewportRefreshTimer) clearTimeout(viewportRefreshTimer)
-  void refreshHomeViewport(hasShown)
+  void refreshHomeViewport()
   // #endif
   if (!hasShown) void useCurrentLocation(false, true)
   hasShown = true
@@ -963,7 +1012,7 @@ const showComingSoon = (name: string) => uni.showToast({ title: `${name}功能�
 </script>
 
 <style scoped>
-:global(html),:global(body),:global(#app){width:100%;min-width:0;height:auto;min-height:100%;margin:0;overflow:visible;overscroll-behavior:auto}.page{position:relative;top:auto;left:auto;width:430px;height:var(--mobile-height, 932px);min-height:var(--mobile-height, 932px);margin:0;overflow-y:auto;overflow-x:hidden;background:#fff;border-radius:35px;box-sizing:border-box;color:#38434a;font-family:'Noto Sans TC',sans-serif;transform:scale(var(--mobile-scale, 1));transform-origin:top left}.page-content{position:absolute;inset:0;width:430px;height:932px}.canvas{position:relative;width:430px;height:932px;min-height:932px}.home-foreground{position:absolute;inset:0;z-index:1;pointer-events:none}.home-foreground :deep(.route-panel),.home-foreground :deep(.travel-mode-switch){pointer-events:auto}.nav-layer{position:absolute;inset:0;z-index:10;pointer-events:none}.nav-layer :deep(.bottom-nav){pointer-events:auto} .flight-modal{position:fixed;inset:0;z-index:1000;display:flex;align-items:flex-end;justify-content:center}.flight-modal-mask{position:absolute;inset:0;background:rgba(29,38,43,.42)}.flight-modal-card{position:relative;width:min(430px,100%);padding:28px 24px calc(24px + env(safe-area-inset-bottom));box-sizing:border-box;border-radius:28px 28px 0 0;background:#fff;color:#38434a;box-shadow:0 -8px 30px rgba(28,39,45,.16);text-align:center}.flight-modal-title{font-size:15px;font-weight:600;color:#778187}.flight-modal-number{margin-top:7px;font-size:28px;font-weight:700;letter-spacing:1px}.flight-modal-status{margin-top:5px;font-size:13px;color:#8a9499}.flight-modal-route{display:flex;align-items:center;gap:12px;margin:24px 0;padding:16px 12px;border-radius:16px;background:#f5f8f9}.flight-modal-airport{display:flex;flex:1;min-width:0;flex-direction:column;gap:5px;text-align:left;font-size:12px;color:#79858b}.flight-modal-airport--right{text-align:right}.flight-modal-label{font-size:12px;font-weight:600;color:#5ab8a5}.flight-modal-iata{font-size:22px;font-weight:700;color:#38434a}.flight-modal-arrow{font-size:24px;color:#9aa6aa}.flight-modal-question{margin-bottom:14px;font-size:15px;font-weight:600}.flight-modal-actions{display:flex;gap:12px}.flight-direction-actions{display:flex;gap:12px}.flight-candidate-list{display:flex;flex-direction:column;gap:10px;max-height:300px;overflow-y:auto;text-align:left}.flight-candidate{width:100%;padding:14px 16px;margin:0;border:1px solid #d8e0e3;border-radius:14px;background:#fff;color:#38434a;text-align:left}.flight-candidate-main,.flight-candidate-detail{display:flex;justify-content:space-between;gap:12px;align-items:center}.flight-candidate-route{font-size:16px;font-weight:700}.flight-candidate-time{font-size:16px;font-weight:700;color:#5ab8a5}.flight-candidate-detail{margin-top:6px;font-size:12px;color:#7b878c}.flight-modal-notice{margin:0 0 14px;padding:10px 12px;border-radius:10px;background:#fff7e6;color:#b06a00;font-size:13px;line-height:1.5}.flight-modal-action{flex:1;height:48px;margin:0;border:1px solid #d8e0e3;border-radius:14px;background:#fff;color:#526168;font-size:15px;line-height:48px}.flight-modal-action--disabled{border-color:#e3e7e8;background:#f1f3f4;color:#aeb7ba;opacity:1}.flight-modal-action--primary{border-color:#5ab8a5;background:#5ab8a5;color:#fff}.flight-modal-cancel{display:block;margin-top:17px;font-size:13px;color:#9aa4a8}
+:global(html),:global(body),:global(#app){width:100%;min-width:0;height:auto;min-height:100%;margin:0;overflow:visible;overscroll-behavior:auto}.page{position:relative;top:auto;left:auto;width:430px;height:var(--mobile-height, 932px);min-height:var(--mobile-height, 932px);margin:0;overflow-y:auto;overflow-x:hidden;background:#fff;border-radius:35px;box-sizing:border-box;color:#38434a;font-family:'Noto Sans TC',sans-serif;transform:scale(var(--mobile-scale, 1));transform-origin:top left}.page-content{position:absolute;inset:0;width:430px;height:932px}.canvas{position:relative;width:430px;height:932px;min-height:932px}.home-foreground{position:absolute;inset:0;z-index:1;pointer-events:none}.map-status{position:absolute;top:285px;left:50%;display:flex;align-items:center;flex-direction:column;gap:10px;transform:translateX(-50%);padding:12px 16px;border-radius:12px;background:rgba(255,255,255,.94);color:#38434a;font-size:13px;white-space:nowrap;pointer-events:auto}.map-status-retry{color:#285cfc;text-decoration:underline}.home-foreground :deep(.route-panel),.home-foreground :deep(.travel-mode-switch){pointer-events:auto}.nav-layer{position:absolute;inset:0;z-index:10;pointer-events:none}.nav-layer :deep(.bottom-nav){pointer-events:auto} .flight-modal{position:fixed;inset:0;z-index:1000;display:flex;align-items:flex-end;justify-content:center}.flight-modal-mask{position:absolute;inset:0;background:rgba(29,38,43,.42)}.flight-modal-card{position:relative;width:min(430px,100%);padding:28px 24px calc(24px + env(safe-area-inset-bottom));box-sizing:border-box;border-radius:28px 28px 0 0;background:#fff;color:#38434a;box-shadow:0 -8px 30px rgba(28,39,45,.16);text-align:center}.flight-modal-title{font-size:15px;font-weight:600;color:#778187}.flight-modal-number{margin-top:7px;font-size:28px;font-weight:700;letter-spacing:1px}.flight-modal-status{margin-top:5px;font-size:13px;color:#8a9499}.flight-modal-route{display:flex;align-items:center;gap:12px;margin:24px 0;padding:16px 12px;border-radius:16px;background:#f5f8f9}.flight-modal-airport{display:flex;flex:1;min-width:0;flex-direction:column;gap:5px;text-align:left;font-size:12px;color:#79858b}.flight-modal-airport--right{text-align:right}.flight-modal-label{font-size:12px;font-weight:600;color:#5ab8a5}.flight-modal-iata{font-size:22px;font-weight:700;color:#38434a}.flight-modal-arrow{font-size:24px;color:#9aa6aa}.flight-modal-question{margin-bottom:14px;font-size:15px;font-weight:600}.flight-modal-actions{display:flex;gap:12px}.flight-direction-actions{display:flex;gap:12px}.flight-candidate-list{display:flex;flex-direction:column;gap:10px;max-height:300px;overflow-y:auto;text-align:left}.flight-candidate{width:100%;padding:14px 16px;margin:0;border:1px solid #d8e0e3;border-radius:14px;background:#fff;color:#38434a;text-align:left}.flight-candidate-main,.flight-candidate-detail{display:flex;justify-content:space-between;gap:12px;align-items:center}.flight-candidate-route{font-size:16px;font-weight:700}.flight-candidate-time{font-size:16px;font-weight:700;color:#5ab8a5}.flight-candidate-detail{margin-top:6px;font-size:12px;color:#7b878c}.flight-modal-notice{margin:0 0 14px;padding:10px 12px;border-radius:10px;background:#fff7e6;color:#b06a00;font-size:13px;line-height:1.5}.flight-modal-action{flex:1;height:48px;margin:0;border:1px solid #d8e0e3;border-radius:14px;background:#fff;color:#526168;font-size:15px;line-height:48px}.flight-modal-action--disabled{border-color:#e3e7e8;background:#f1f3f4;color:#aeb7ba;opacity:1}.flight-modal-action--primary{border-color:#5ab8a5;background:#5ab8a5;color:#fff}.flight-modal-cancel{display:block;margin-top:17px;font-size:13px;color:#9aa4a8}
 /* #ifdef H5 || APP-PLUS || MP-WEIXIN */
 .airport-hint-modal{position:fixed;inset:0;z-index:1100;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box}.airport-hint-mask{position:absolute;inset:0;background:rgba(24,35,41,.55)}.airport-hint-card{position:relative;width:min(360px,100%);padding:28px 24px 22px;border:1px solid rgba(255,255,255,.7);border-radius:24px;background:#fff;box-shadow:0 18px 50px rgba(18,31,38,.28);box-sizing:border-box;text-align:center}.airport-hint-icon{width:48px;height:48px;margin:0 auto 12px;border-radius:16px;background:#e7f7f3;color:#4eaf9d;font-size:25px;line-height:48px}.airport-hint-title{font-size:19px;font-weight:700;color:#38434a}.airport-hint-content{margin-top:12px;color:#66747b;font-size:14px;line-height:1.75}.airport-hint-button{width:100%;height:46px;margin-top:22px;border:0;border-radius:14px;background:#5ab8a5;color:#fff;font-size:15px;line-height:46px}
 /* #endif */
