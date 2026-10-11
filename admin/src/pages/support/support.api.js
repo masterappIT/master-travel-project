@@ -11,10 +11,7 @@ export function createSupportApi(api) {
     },
     sendMessage: (id, text, clientMessageId) => api(`/admin/support/conversations/${encodeURIComponent(id)}/messages`, { method: 'POST', body: JSON.stringify({ text, clientMessageId }) }),
     openConversation: (participantType, participantId) => api('/admin/support/conversations', { method: 'POST', body: JSON.stringify({ participantType, participantId }) }),
-    searchRecipients: (participantType, phone) => {
-      const path = participantType === 'DRIVER' ? '/admin/drivers/options' : '/admin/users/options'
-      return api(`${path}?page=1&pageSize=20&search=${encodeURIComponent(phone)}`, { cancelOnNavigate: false })
-    },
+    searchRecipients: (participantType, countryCode, phone) => api(`/admin/support/conversations/recipients?type=${encodeURIComponent(participantType)}&countryCode=${encodeURIComponent(countryCode)}&phone=${encodeURIComponent(phone)}`, { cancelOnNavigate: false }),
     listAgents: () => api('/admin/support/agents', { cancelOnNavigate: false }),
     createAgent: form => api('/admin/support/agents', { method: 'POST', body: JSON.stringify(form) }),
     setAgentEnabled: (id, enabled) => api(`/admin/support/agents/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ enabled }) }),

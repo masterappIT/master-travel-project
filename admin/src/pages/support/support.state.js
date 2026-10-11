@@ -7,6 +7,7 @@ export function useSupportPage(context) {
   const supportApi = createSupportApi(api)
   const section = ref('inbox')
   const audience = ref('ALL')
+  const replyFilter = ref('ALL')
   const search = ref('')
   const recipientType = ref('PASSENGER')
   const recipientLookupMode = ref('PHONE')
@@ -25,6 +26,8 @@ export function useSupportPage(context) {
   const participantProfileError = ref('')
   const messageListElement = ref(null)
   const selectedId = ref('')
+  const profileExpanded = ref(false)
+  watch(selectedId, () => { profileExpanded.value = false })
   const busy = ref(false)
   const inboxLoading = ref(false)
   const inboxLoaded = ref(false)
@@ -53,7 +56,7 @@ export function useSupportPage(context) {
     const element = messageListElement.value
     if (element) element.scrollTop = element.scrollHeight
   }
-  const filteredConversations = computed(() => conversations.value.filter(item => audience.value === 'ALL' || item.participantType === audience.value).filter(item => !search.value.trim() || `${item.participantId || ''} ${item.id}`.toLowerCase().includes(search.value.trim().toLowerCase())))
+  const filteredConversations = computed(() => conversations.value.filter(item => audience.value === 'ALL' || item.participantType === audience.value).filter(item => replyFilter.value === 'ALL' || item.needsStaffReply).filter(item => !search.value.trim() || `${item.participantId || ''} ${item.id}`.toLowerCase().includes(search.value.trim().toLowerCase())))
   const selectedConversation = computed(() => conversations.value.find(item => item.id === selectedId.value) || null)
   const stopRefresh = () => {
     if (refreshTimer) clearInterval(refreshTimer)
@@ -69,6 +72,7 @@ export function useSupportPage(context) {
   const settingsDraft = reactive({ ...supportSettings.value })
   const savingSettings = ref(false)
   const settingsSaved = ref(false)
+  const settingsDirty = computed(() => settingsDraft.enabled !== supportSettings.value.enabled || settingsDraft.guestEnabled !== supportSettings.value.guestEnabled || settingsDraft.directContactEnabled !== supportSettings.value.directContactEnabled)
   const serviceEnabled = computed(() => supportSettings.value.enabled)
   watch(supportSettings, value => Object.assign(settingsDraft, value), { deep: true })
   watch(() => [settingsDraft.enabled, settingsDraft.guestEnabled, settingsDraft.directContactEnabled], () => {
@@ -103,5 +107,5 @@ export function useSupportPage(context) {
   })
   onDeactivated(stopRefresh)
   onUnmounted(stopRefresh)
-  return { section, audience, search, recipientType, recipientLookupMode, recipientId, recipientCountryCode, recipientPhone, recipientOptions, recipientSearching, recipientSearchPerformed, recipientSearchError, recipientLabel, recipientDisplayName, formatRecipientPhone, participantPhone, driverRegionalPhone, serviceEnabled, settingsDraft, savingSettings, settingsSaved, saveSettings, canWrite, isSuperAdministrator, conversations, filteredConversations, selectedConversation, messages, selectedId, participantProfile, participantProfileLoading, participantProfileError, messageListElement, draft, busy, inboxLoading, inboxLoaded, inboxError, messagesLoading, messagesLoaded, messagesError, actionError, agents, agentsLoading, agentsLoaded, agentsError, agentActionId, agentForm, participantLabel, senderLabel, staffMessage, formatTime, loadInbox, selectConversation, backToInbox, sendReply, searchRecipients, resetRecipientSearch, selectRecipient, openRecipient, loadParticipantProfile, createAgent, setAgentEnabled, onTabKeydown, scrollMessagesToEnd }
+  return { section, audience, replyFilter, search, recipientType, recipientLookupMode, recipientId, recipientCountryCode, recipientPhone, recipientOptions, recipientSearching, recipientSearchPerformed, recipientSearchError, recipientLabel, recipientDisplayName, formatRecipientPhone, participantPhone, driverRegionalPhone, serviceEnabled, settingsDraft, settingsDirty, savingSettings, settingsSaved, saveSettings, canWrite, isSuperAdministrator, conversations, filteredConversations, selectedConversation, messages, selectedId, profileExpanded, participantProfile, participantProfileLoading, participantProfileError, messageListElement, draft, busy, inboxLoading, inboxLoaded, inboxError, messagesLoading, messagesLoaded, messagesError, actionError, agents, agentsLoading, agentsLoaded, agentsError, agentActionId, agentForm, participantLabel, senderLabel, staffMessage, formatTime, loadInbox, selectConversation, backToInbox, sendReply, searchRecipients, resetRecipientSearch, selectRecipient, openRecipient, loadParticipantProfile, createAgent, setAgentEnabled, onTabKeydown, scrollMessagesToEnd }
 }

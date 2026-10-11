@@ -17,7 +17,7 @@ const renderer = createRenderer({
   insertStaticContent: (content, parent) => { const node = { content, parent }; parent.children.push(node); return [node, node] }
 })
 
-function mountSupport(api) {
+function mountSupport(api, confirm = async () => true) {
   const supportSettings = ref({ enabled: true, guestEnabled: true, directContactEnabled: true })
   let page
   const app = renderer.createApp({
@@ -29,7 +29,7 @@ function mountSupport(api) {
         supportSettings,
         settingsLoader: { invalidate() {} },
         notify() {},
-        requestConfirmation: async () => true,
+        requestConfirmation: confirm,
         displayError: cause => cause.message
       })
       return () => h('div')
@@ -63,7 +63,7 @@ test('outbound action opens an existing account conversation and selects it', as
 
 test('phone lookup lets an administrator select the matching account', async () => {
   const view = mountSupport(async path => {
-    assert.equal(path, '/admin/users/options?page=1&pageSize=20&search=66996688')
+    assert.equal(path, '/admin/support/conversations/recipients?type=PASSENGER&countryCode=%2B852&phone=66996688')
     return { data: [{ id: 'account-1', phone: '+852 66996688' }] }
   })
   try {
@@ -80,12 +80,36 @@ test('support settings save updates the saved state after a successful response'
   const view = mountSupport(async (path, options = {}) => {
     assert.equal(path, '/settings')
     assert.equal(options.method, 'POST')
-    return { support: { enabled: true, guestEnabled: true, directContactEnabled: true } }
+    return { support: { enabled: true, guestEnabled: false, directContactEnabled: true } }
   })
   try {
     view.page.settingsDraft.guestEnabled = false
     await view.page.saveSettings()
     assert.equal(view.page.settingsSaved.value, true)
     assert.equal(view.page.savingSettings.value, false)
+  } finally { view.close() }
+})
+
+test('reply filter includes only conversations whose latest message awaits staff', () => {
+  const view = mountSupport(async () => ({ data: [] }))
+  try {
+    view.page.conversations.value = [
+      { id: 'incoming', participantType: 'PASSENGER', needsStaffReply: true },
+      { id: 'answered', participantType: 'DRIVER', needsStaffReply: false }
+    ]
+    view.page.replyFilter.value = 'PENDING'
+    assert.deepEqual(view.page.filteredConversations.value.map(item => item.id), ['incoming'])
+  } finally { view.close() }
+})
+
+test('disabling support requires confirmation and leaves settings unchanged when cancelled', async () => {
+  let writes = 0
+  const view = mountSupport(async () => { writes++; return {} }, async () => false)
+  try {
+    view.page.settingsDraft.enabled = false
+    assert.equal(view.page.settingsDirty.value, true)
+    await view.page.saveSettings()
+    assert.equal(writes, 0)
+    assert.equal(view.page.settingsSaved.value, false)
   } finally { view.close() }
 })

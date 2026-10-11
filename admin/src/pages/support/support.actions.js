@@ -71,13 +71,6 @@ export function createSupportActions(context) {
     finally { busy.value = false }
     if (sent) { notify('回覆已發送'); await loadInbox() }
   }
-  const normalizePhoneSearch = value => {
-    const digits = String(value || '').replace(/\D/g, '')
-    for (const prefix of ['852', '853', '86']) {
-      if (digits.startsWith(prefix) && digits.length > prefix.length + 4) return digits.slice(prefix.length)
-    }
-    return digits
-  }
   const resetRecipientSearch = () => {
     recipientId.value = ''
     recipientOptions.value = []
@@ -86,18 +79,18 @@ export function createSupportActions(context) {
   }
   const searchRecipients = async () => {
     if (!canWrite.value || !serviceEnabled.value || recipientSearching.value) return
-    const phone = normalizePhoneSearch(`${recipientCountryCode.value}${recipientPhone.value}`)
+    const phone = recipientPhone.value.replace(/[\s-]/g, '')
     recipientSearchPerformed.value = true
     recipientSearchError.value = ''
     recipientOptions.value = []
     recipientId.value = ''
-    if (phone.length < 4) {
-      recipientSearchError.value = '請輸入至少 4 位電話號碼'
+    if (!/^\d{4,15}$/.test(phone)) {
+      recipientSearchError.value = '請輸入 4 至 15 位本地電話號碼'
       return
     }
     recipientSearching.value = true
     try {
-      const response = await supportApi.searchRecipients(recipientType.value, phone)
+      const response = await supportApi.searchRecipients(recipientType.value, recipientCountryCode.value, phone)
       recipientOptions.value = response.data || []
     } catch (cause) {
       recipientSearchError.value = displayError(cause)
@@ -157,6 +150,8 @@ export function createSupportActions(context) {
   }
   const saveSettings = async () => {
     if (!canWrite.value || !isSuperAdministrator.value || savingSettings.value) return
+    if (settingsDraft.enabled === supportSettings.value.enabled && settingsDraft.guestEnabled === supportSettings.value.guestEnabled && settingsDraft.directContactEnabled === supportSettings.value.directContactEnabled) return
+    if (supportSettings.value.enabled && !settingsDraft.enabled && !await requestConfirmation({ title: '停用內置客服', message: '停用後，乘客端、司機端、訪客及後台客服入口都將無法繼續使用文字客服。確定儲存此設定？', confirmLabel: '停用並儲存', danger: true })) return
     savingSettings.value = true
     settingsSaved.value = false
     try {

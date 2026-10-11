@@ -8173,8 +8173,16 @@ export class AdminSupportMediaController {
 
 async function supportInbox() {
   await supportSettings();
-  const data = await prisma.supportConversation.findMany({ orderBy: [{ lastMessageAt: "desc" }, { createdAt: "desc" }], take: 100 });
-  return { data: data.map(supportConversationResponse) };
+  const data = await prisma.supportConversation.findMany({
+    orderBy: [{ lastMessageAt: "desc" }, { createdAt: "desc" }],
+    take: 100,
+    include: { messages: { orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 1, select: { text: true, senderType: true } } },
+  });
+  return { data: data.map(conversation => ({
+    ...supportConversationResponse(conversation),
+    lastMessagePreview: conversation.messages[0]?.text || null,
+    needsStaffReply: Boolean(conversation.messages[0] && !["ADMIN", "AGENT"].includes(conversation.messages[0].senderType)),
+  })) };
 }
 
 async function supportOpenConversation(actor: SupportActor, body: { participantType?: string; participantId?: string }) {
@@ -8205,6 +8213,39 @@ async function supportMessagesForStaff(id: string) {
   return { conversation: supportConversationResponse(conversation), data: data.reverse().map(supportMessageResponse) };
 }
 
+async function supportRecipients(req: RequestLike) {
+  const settings = await supportSettings();
+  if (!settings.supportDirectContactEnabled) throw new ForbiddenException("Direct contact is disabled");
+  const type = req.query?.type;
+  const countryCode = req.query?.countryCode;
+  const phone = req.query?.phone?.replace(/[\s-]/g, "");
+  if ((type !== "PASSENGER" && type !== "DRIVER") || !["+852", "+853", "+86"].includes(countryCode || "") || !phone || !/^\d{4,15}$/.test(phone))
+    throw new BadRequestException("Valid participant type and phone required");
+  if (type === "PASSENGER") {
+    const data = await prisma.user.findMany({
+      where: { enabled: true, countryCode, phoneNumber: phone },
+      select: { id: true, name: true, displayName: true, countryCode: true, phoneNumber: true },
+      orderBy: [{ name: "asc" }, { id: "asc" }], take: 20,
+    });
+    return { data: data.map(({ countryCode: code, phoneNumber, ...item }) => ({ ...item, phone: `${code} ${phoneNumber}` })) };
+  }
+  const data = await prisma.driver.findMany({
+    where: { enabled: true, OR: [
+      { phoneCountryCode: countryCode, phone },
+      ...(countryCode === "+86" ? [{ mainlandPhone: phone }] : []),
+    ] },
+    select: { id: true, name: true, phoneCountryCode: true, phone: true, mainlandPhone: true },
+    orderBy: [{ name: "asc" }, { id: "asc" }], take: 20,
+  });
+  return { data: data.map(item => ({
+    id: item.id,
+    name: item.name,
+    phone: countryCode === "+86" && item.mainlandPhone === phone
+      ? `+86 ${item.mainlandPhone}`
+      : `${item.phoneCountryCode} ${item.phone}`,
+  })) };
+}
+
 async function supportStaffSend(actor: SupportActor, id: string, body: { text?: string; clientMessageId?: string }) {
   await supportSettings();
   if (!await prisma.supportConversation.findUnique({ where: { id } })) throw new HttpException("Conversation not found", HttpStatus.NOT_FOUND);
@@ -8215,6 +8256,8 @@ async function supportStaffSend(actor: SupportActor, id: string, body: { text?: 
 class AdminSupportConversationController {
   @Get()
   async list(@Req() req: RequestLike) { await supportActor(req); return supportInbox(); }
+  @Get("recipients")
+  async recipients(@Req() req: RequestLike) { await supportActor(req); return supportRecipients(req); }
   @Post()
   async open(@Req() req: RequestLike, @Body() body: { participantType?: string; participantId?: string }) {
     return supportOpenConversation(await supportActor(req), body);
@@ -8234,36 +8277,7 @@ class AgentSupportConversationController {
   @Get("recipients")
   async recipients(@Req() req: RequestLike) {
     await supportActor(req, true);
-    const settings = await supportSettings();
-    if (!settings.supportDirectContactEnabled) throw new ForbiddenException("Direct contact is disabled");
-    const type = req.query?.type;
-    const countryCode = req.query?.countryCode;
-    const phone = req.query?.phone?.replace(/[\s-]/g, "");
-    if ((type !== "PASSENGER" && type !== "DRIVER") || !["+852", "+853", "+86"].includes(countryCode || "") || !phone || !/^\d{4,15}$/.test(phone))
-      throw new BadRequestException("Valid participant type and phone required");
-    if (type === "PASSENGER") {
-      const data = await prisma.user.findMany({
-        where: { enabled: true, countryCode, phoneNumber: phone },
-        select: { id: true, name: true, displayName: true, countryCode: true, phoneNumber: true },
-        orderBy: [{ name: "asc" }, { id: "asc" }], take: 20,
-      });
-      return { data: data.map(({ countryCode: code, phoneNumber, ...item }) => ({ ...item, phone: `${code} ${phoneNumber}` })) };
-    }
-    const data = await prisma.driver.findMany({
-      where: { enabled: true, OR: [
-        { phoneCountryCode: countryCode, phone },
-        ...(countryCode === "+86" ? [{ mainlandPhone: phone }] : []),
-      ] },
-      select: { id: true, name: true, phoneCountryCode: true, phone: true, mainlandPhone: true },
-      orderBy: [{ name: "asc" }, { id: "asc" }], take: 20,
-    });
-    return { data: data.map(item => ({
-      id: item.id,
-      name: item.name,
-      phone: countryCode === "+86" && item.mainlandPhone === phone
-        ? `+86 ${item.mainlandPhone}`
-        : `${item.phoneCountryCode} ${item.phone}`,
-    })) };
+    return supportRecipients(req);
   }
   @Get(":id/participant")
   async participant(@Req() req: RequestLike, @Param("id") id: string) {

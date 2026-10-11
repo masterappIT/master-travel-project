@@ -38,7 +38,7 @@ void main() {
 
       expect(find.text('聯繫客服'), findsOneWidget);
       expect(find.text('您好，有甚麼可以幫您？'), findsOneWidget);
-      expect(find.text('圖片'), findsOneWidget);
+      expect(find.text('圖片'), findsNothing);
       expect(find.text('影片'), findsNothing);
       expect(find.text('語音訊息'), findsNothing);
       expect(find.text('語音通話'), findsNothing);
@@ -202,7 +202,6 @@ void main() {
     final secondLocalTime =
         DateTime.parse('2026-10-10T23:09:00+08:00').toLocal();
     String label(DateTime value) =>
-        '${value.month.toString().padLeft(2, '0')}/${value.day.toString().padLeft(2, '0')} '
         '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}';
     final agentTime = find.text(label(firstLocalTime));
     final driverTime = find.text(label(secondLocalTime));

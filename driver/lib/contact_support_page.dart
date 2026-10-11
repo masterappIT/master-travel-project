@@ -41,6 +41,13 @@ class _ContactSupportPageState extends State<ContactSupportPage> {
         _ => '未知發送者',
       };
 
+  String _messageDay(Map<String, dynamic> message) {
+    final date =
+        DateTime.tryParse(message['createdAt']?.toString() ?? '')?.toLocal();
+    if (date == null) return '日期未知';
+    return '${date.year}年${date.month}月${date.day}日';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -241,11 +248,30 @@ class _ContactSupportPageState extends State<ContactSupportPage> {
                           TextButton(
                               onPressed: _open,
                               child: Text('客服服務目前不可用：$_error。點此重試')),
-                        for (final message in _messages) ...[
+                        for (var index = 0;
+                            index < _messages.length;
+                            index++) ...[
+                          if (index == 0 ||
+                              _messageDay(_messages[index - 1]) !=
+                                  _messageDay(_messages[index]))
+                            Padding(
+                              padding: const EdgeInsets.only(
+                                  top: DriverSpacing.sm,
+                                  bottom: DriverSpacing.sm),
+                              child: Center(
+                                child: Text(
+                                  _messageDay(_messages[index]),
+                                  style: const TextStyle(
+                                    fontSize: DriverTypography.caption,
+                                    color: DriverColors.secondaryText,
+                                  ),
+                                ),
+                              ),
+                            ),
                           _SupportMessageBubble(
-                            message: message,
-                            senderLabel:
-                                _senderLabel(message['senderType']?.toString()),
+                            message: _messages[index],
+                            senderLabel: _senderLabel(
+                                _messages[index]['senderType']?.toString()),
                           ),
                           const SizedBox(height: DriverSpacing.sm),
                         ],
@@ -268,8 +294,6 @@ class _ContactSupportPageState extends State<ContactSupportPage> {
                                 color: DriverColors.secondaryText)),
                         const SizedBox(height: DriverSpacing.sm),
                         Row(children: [
-                          const _UnavailableAction('圖片'),
-                          const SizedBox(width: DriverSpacing.sm),
                           Expanded(
                               child: TextField(
                             controller: _draft,
@@ -307,21 +331,6 @@ class _ContactSupportPageState extends State<ContactSupportPage> {
       );
 }
 
-class _UnavailableAction extends StatelessWidget {
-  const _UnavailableAction(this.label);
-  final String label;
-
-  @override
-  Widget build(BuildContext context) => OutlinedButton(
-        onPressed: null,
-        style: OutlinedButton.styleFrom(
-            shape: const StadiumBorder(),
-            padding: const EdgeInsets.symmetric(horizontal: DriverSpacing.md)),
-        child: Text(label,
-            style: const TextStyle(fontSize: DriverTypography.label)),
-      );
-}
-
 class _SupportMessageBubble extends StatelessWidget {
   const _SupportMessageBubble({
     required this.message,
@@ -336,7 +345,7 @@ class _SupportMessageBubble extends StatelessWidget {
     if (createdAt == null) return null;
     final local = createdAt.toLocal();
     String two(int value) => value.toString().padLeft(2, '0');
-    return '${two(local.month)}/${two(local.day)} ${two(local.hour)}:${two(local.minute)}';
+    return '${two(local.hour)}:${two(local.minute)}';
   }
 
   @override
@@ -378,7 +387,7 @@ class _SupportMessageBubble extends StatelessWidget {
                 ),
                 child: Text(message['text']?.toString() ?? '',
                     style: const TextStyle(
-                        fontSize: DriverTypography.body,
+                        fontSize: DriverTypography.bodyLarge,
                         color: DriverColors.text)),
               ),
             ),
