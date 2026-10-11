@@ -53,6 +53,8 @@ const props = withDefaults(defineProps<{
   routeSummary?: string
   nativeHeight?: number
   mapTop?: number
+  visibleTop?: number
+  visibleBottom?: number
   mapId?: string
 }>(), {
   scale: 13,
@@ -174,7 +176,7 @@ const routeFitRegion = computed<MapPoint[]>(() => {
   // #ifdef APP-PLUS
   if (!props.nativeHeight && !props.fullScreen) mapHeight = 397
   // #endif
-  const visible = { left: 12, right: MAP_WIDTH - 12, top: props.nativeHeight || props.fullScreen ? 16 : Math.min(125, mapHeight / 3), bottom: mapHeight - 26 }
+  const visible = { left: 12, right: MAP_WIDTH - 12, top: props.visibleTop ?? (props.nativeHeight || props.fullScreen ? 16 : Math.min(125, mapHeight / 3)), bottom: props.visibleBottom ?? mapHeight - 26 }
   const originHeight = 42 + 20 * calloutLines(pickupCalloutLabel.value)
   const destinationHeight = 42 + 20 * (calloutLines(destinationCalloutLabel.value) + calloutLines(routeSummaryLabel.value))
   const markers = nativeMarkers.value.filter(marker => marker.id === 1 || marker.id === 2)
