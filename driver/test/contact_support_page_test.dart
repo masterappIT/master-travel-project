@@ -120,7 +120,7 @@ void main() {
         .runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
     await tester.pump();
     expect(find.text('新訊息', skipOffstage: false), findsOneWidget);
-    expect(find.text('我', skipOffstage: false), findsOneWidget);
+    expect(find.text('我', skipOffstage: false), findsNothing);
     expect(find.text('DRIVER', skipOffstage: false), findsNothing);
 
     stalePoll.complete(http.Response(jsonEncode({'data': []}), 200,
@@ -196,7 +196,7 @@ void main() {
     expect(tester.getSize(agentCard).width, lessThan(260));
     expect(tester.getSize(driverCard).width, lessThan(260));
     expect(find.text('客服'), findsOneWidget);
-    expect(find.text('我'), findsOneWidget);
+    expect(find.text('我'), findsNothing);
     final firstLocalTime =
         DateTime.parse('2026-10-10T23:08:00+08:00').toLocal();
     final secondLocalTime =
@@ -204,8 +204,16 @@ void main() {
     String label(DateTime value) =>
         '${value.month.toString().padLeft(2, '0')}/${value.day.toString().padLeft(2, '0')} '
         '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}';
-    expect(find.text(label(firstLocalTime)), findsOneWidget);
-    expect(find.text(label(secondLocalTime)), findsOneWidget);
+    final agentTime = find.text(label(firstLocalTime));
+    final driverTime = find.text(label(secondLocalTime));
+    expect(agentTime, findsOneWidget);
+    expect(driverTime, findsOneWidget);
+    expect(tester.getTopLeft(agentTime).dy,
+        greaterThanOrEqualTo(tester.getBottomLeft(agentCard).dy));
+    expect(tester.getTopLeft(driverTime).dy,
+        greaterThanOrEqualTo(tester.getBottomLeft(driverCard).dy));
+    expect(tester.getTopLeft(agentTime).dx,
+        lessThan(tester.getTopLeft(driverTime).dx));
     expect(tester.takeException(), isNull);
   });
 

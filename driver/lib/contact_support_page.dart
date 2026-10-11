@@ -343,48 +343,54 @@ class _SupportMessageBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final isMine = message['senderType'] == 'DRIVER';
     final sentAtLabel = _sentAtLabel();
+    final alignment = isMine ? Alignment.centerRight : Alignment.centerLeft;
+    final crossAxisAlignment =
+        isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start;
     return Align(
-      alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
+      alignment: alignment,
       child: ConstrainedBox(
         constraints: BoxConstraints(
           maxWidth: DriverDimensions.maxContentWidth - DriverSpacing.xl * 4,
         ),
-        child: IntrinsicWidth(
-          child: Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: DriverSpacing.lg,
-              vertical: DriverSpacing.md,
-            ),
-            decoration: BoxDecoration(
-              color:
-                  isMine ? DriverColors.infoBackground : DriverColors.surface,
-              border: Border.all(color: DriverColors.border),
-              borderRadius: BorderRadius.circular(DriverRadii.card),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(senderLabel,
-                    style: const TextStyle(
-                        fontSize: DriverTypography.caption,
-                        color: DriverColors.secondaryText)),
-                const SizedBox(height: DriverSpacing.xs),
-                Text(message['text']?.toString() ?? '',
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: crossAxisAlignment,
+          children: [
+            if (!isMine) ...[
+              Text(senderLabel,
+                  style: const TextStyle(
+                      fontSize: DriverTypography.caption,
+                      color: DriverColors.secondaryText)),
+              const SizedBox(height: DriverSpacing.xs),
+            ],
+            IntrinsicWidth(
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: DriverSpacing.lg,
+                  vertical: DriverSpacing.md,
+                ),
+                decoration: BoxDecoration(
+                  color: isMine
+                      ? DriverColors.infoBackground
+                      : DriverColors.surface,
+                  border: Border.all(color: DriverColors.border),
+                  borderRadius: BorderRadius.circular(DriverRadii.card),
+                ),
+                child: Text(message['text']?.toString() ?? '',
                     style: const TextStyle(
                         fontSize: DriverTypography.body,
                         color: DriverColors.text)),
-                if (sentAtLabel != null) ...[
-                  const SizedBox(height: DriverSpacing.xs),
-                  Text(sentAtLabel,
-                      textAlign: TextAlign.end,
-                      style: const TextStyle(
-                          fontSize: DriverTypography.caption,
-                          color: DriverColors.secondaryText)),
-                ],
-              ],
+              ),
             ),
-          ),
+            if (sentAtLabel != null) ...[
+              const SizedBox(height: DriverSpacing.xs),
+              Text(sentAtLabel,
+                  textAlign: isMine ? TextAlign.end : TextAlign.start,
+                  style: const TextStyle(
+                      fontSize: DriverTypography.caption,
+                      color: DriverColors.secondaryText)),
+            ],
+          ],
         ),
       ),
     );

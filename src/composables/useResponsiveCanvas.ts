@@ -102,8 +102,8 @@ export const useResponsiveCanvas = (options: ResponsiveCanvasOptions = {}) => {
       margin: '0',
       '--mobile-scale': `${scale}`,
       '--mobile-height': `${logicalHeight}px`,
-      '--keyboard-offset': `${keyboardHeight.value / scale}px`
-    }
+      '--keyboard-offset': `${keyboardHeight.value / scale}px`,
+      '--composer-safe-bottom': keyboardHeight.value > 0 ? '0px' : 'env(safe-area-inset-bottom)'    }
   })
 
   return { responsiveStyle, refreshViewport: updateViewport }
