@@ -20,6 +20,8 @@ import '../review_status_page.dart';
 import '../vehicle_page.dart';
 import '../wechat_payment_page.dart';
 import '../core/api/driver_api_client.dart';
+import '../core/state/driver_currency_initialization.dart';
+import '../core/tokens/driver_tokens.dart';
 import '../settlement_overview_page.dart';
 import '../language_settings_page.dart';
 import '../notification_settings_page.dart';
@@ -110,6 +112,35 @@ abstract final class DriverRouter {
             )),
       };
 
-  static Widget _approved(Widget page) =>
-      DriverApiClient.instance.isApproved ? page : const ReviewStatusPage();
+  static Widget _approved(Widget page) => DriverApiClient.instance.isApproved
+      ? _DriverCurrencyGate(child: page)
+      : const ReviewStatusPage();
+}
+
+class _DriverCurrencyGate extends StatefulWidget {
+  const _DriverCurrencyGate({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_DriverCurrencyGate> createState() => _DriverCurrencyGateState();
+}
+
+class _DriverCurrencyGateState extends State<_DriverCurrencyGate> {
+  late final Future<void> _ready = DriverCurrencyInitialization.ensureReady();
+
+  @override
+  Widget build(BuildContext context) {
+    if (DriverCurrencyInitialization.isReady) return widget.child;
+    return FutureBuilder<void>(
+      future: _ready,
+      builder: (context, snapshot) =>
+          snapshot.connectionState == ConnectionState.done
+              ? widget.child
+              : const Scaffold(
+                  backgroundColor: DriverColors.background,
+                  body: SizedBox.shrink(),
+                ),
+    );
+  }
 }
