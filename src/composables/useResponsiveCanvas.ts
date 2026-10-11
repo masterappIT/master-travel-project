@@ -1,24 +1,61 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 
-export const useResponsiveCanvas = () => {
+type ResponsiveCanvasOptions = {
+  preserveHeightOnKeyboard?: boolean
+}
+
+export const useResponsiveCanvas = (options: ResponsiveCanvasOptions = {}) => {
+  const preserveHeightOnKeyboard = options.preserveHeightOnKeyboard === true
   const viewportWidth = ref(430)
   const viewportHeight = ref(932)
+  const keyboardHeight = ref(0)
+  let baseViewportHeight = 932
+  let hasInitialViewport = false
+
+  const applyViewport = (nextWidth: number, nextHeight: number) => {
+    viewportWidth.value = nextWidth || 430
+    if (!preserveHeightOnKeyboard) {
+      viewportHeight.value = nextHeight || 932
+      return
+    }
+
+    if (!hasInitialViewport) {
+      baseViewportHeight = nextHeight || 932
+      viewportHeight.value = baseViewportHeight
+      hasInitialViewport = true
+      return
+    }
+
+    const heightDelta = Math.max(0, baseViewportHeight - (nextHeight || baseViewportHeight))
+    if (heightDelta > 80) {
+      keyboardHeight.value = heightDelta
+      viewportHeight.value = baseViewportHeight
+      return
+    }
+
+    keyboardHeight.value = 0
+    baseViewportHeight = nextHeight || baseViewportHeight
+    viewportHeight.value = baseViewportHeight
+  }
 
   const updateViewport = () => {
     if (typeof window !== 'undefined') {
-      viewportWidth.value = window.innerWidth
-      viewportHeight.value = window.visualViewport?.height ?? window.innerHeight
+      applyViewport(window.innerWidth, window.visualViewport?.height ?? window.innerHeight)
       return
     }
 
     try {
       const { windowWidth, windowHeight } = uni.getSystemInfoSync()
-      viewportWidth.value = windowWidth || 430
-      viewportHeight.value = windowHeight || 932
+      applyViewport(windowWidth || 430, windowHeight || 932)
     } catch {
-      viewportWidth.value = 430
-      viewportHeight.value = 932
+      applyViewport(430, 932)
     }
+  }
+
+  const handleKeyboardHeightChange = (result: { height: number }) => {
+    if (!preserveHeightOnKeyboard) return
+    keyboardHeight.value = Math.max(0, result.height || 0)
+    if (!keyboardHeight.value) updateViewport()
   }
 
   onMounted(() => {
@@ -31,6 +68,9 @@ export const useResponsiveCanvas = () => {
     if (typeof uni.onWindowResize === 'function') {
       uni.onWindowResize(updateViewport)
     }
+    if (preserveHeightOnKeyboard && typeof uni.onKeyboardHeightChange === 'function') {
+      uni.onKeyboardHeightChange(handleKeyboardHeightChange)
+    }
   })
 
   onUnmounted(() => {
@@ -41,6 +81,9 @@ export const useResponsiveCanvas = () => {
     }
     if (typeof uni.offWindowResize === 'function') {
       uni.offWindowResize(updateViewport)
+    }
+    if (preserveHeightOnKeyboard && typeof uni.offKeyboardHeightChange === 'function') {
+      uni.offKeyboardHeightChange(handleKeyboardHeightChange)
     }
   })
 
@@ -58,7 +101,8 @@ export const useResponsiveCanvas = () => {
       left: '0',
       margin: '0',
       '--mobile-scale': `${scale}`,
-      '--mobile-height': `${logicalHeight}px`
+      '--mobile-height': `${logicalHeight}px`,
+      '--keyboard-offset': `${keyboardHeight.value / scale}px`
     }
   })
 
