@@ -15,9 +15,9 @@ flutter build web
 ## 啟動資源交付
 
 - Flutter bootstrap 固定使用建置產物中的 `canvaskit/`，保留原有 renderer 與引擎版本，不從 Google CDN 下載 CanvasKit。
-- 共用前端容器只針對司機端 `assets/assets/fonts/NotoSansTC-*.ttf` 產生 gzip 副本；Nginx 依瀏覽器的 `Accept-Encoding` 提供壓縮版本，不支援 gzip 時仍提供原始字體。字體內容、字重與快取規則不變。
+- 共用前端容器只針對司機端 `assets/assets/fonts/NotoSansTC-*.ttf` 產生 Brotli 與 gzip 副本；Nginx 依瀏覽器的 `Accept-Encoding` 優先提供 Brotli，否則沿用 gzip 或原始 TTF。壓縮傳輸解碼後的字體內容、字重與快取規則不變；此項只減少傳輸量，不改 Flutter 載入全部五份字型的啟動行為。
 - 共用前端容器也為 `canvaskit/**/*.wasm` 產生 gzip 副本（包含根目錄）；Nginx 只在 `canvaskit/` 的 WASM 路徑啟用靜態 gzip。原始 WASM 保留，不支援 gzip 時回退原檔，解壓後內容、`application/wasm` MIME、renderer、引擎版本及快取規則不變。沒有 CanvasKit 的其他前端不產生副本。
-- HTML 不強制同時預載五份繁體中文字體；由 Flutter 按實際使用時機請求，避免約 21 MB 的字體傳輸在啟動最早階段與主程式及 CanvasKit 競爭。字體內容、家族、字重與原有頁面視覺維持不變。
+- HTML 不強制同時預載五份繁體中文字體，避免字型在啟動最早階段與主程式及 CanvasKit 競爭；目前 Flutter CanvasKit 仍會在首屏前並行載入 FontManifest 中的全部五份字型。字體內容、家族、字重與原有頁面視覺維持不變。
 - Apple 登入 SDK 在使用者按下 Apple 登入時才下載，避免外部 CDN 響應延遲或傳輸競爭卡住首屏；同時載入共用同一次請求，失敗可重試，既有 Apple 授權呼叫與錯誤處理保留。
 - 登入方式配置載入期間先顯示手機驗證卡片，但停用手機／驗證碼輸入、國碼選擇、獲取驗證碼及登入按鈕。配置確認手機登入啟用後開放操作；停用或載入失敗時保留原有卡片隱藏及錯誤行為。此調整減少表單後出現的跳動，不提前啟用登入，也不縮短字體初始化或 API 等待時間。
 - 啟動時維持既有 session 驗證與路由判斷，並讓收款貨幣設定與 session 驗證並行；未登入時不等待設定才顯示登入頁。進入已審核頁面前，若瀏覽器沒有已儲存的收款貨幣，才等待同一份系統預設設定結果，確定幣別後發送依幣種的資料請求；已儲存貨幣者略過設定請求。設定最長等待八秒，失敗時沿用既有本地回退，且同一次應用載入不反覆等待。頁面版面與視覺元件維持原狀。
@@ -28,7 +28,7 @@ flutter build web
 
 - 全域通知提示從應用主題取得文字樣式，再套用既有提示的顏色、大小與 700 字重，避免 root Overlay 繼承框架預設 monospace 字體。一般提示維持三秒；登入頁驗證碼發送提示最多兩秒，離開登入頁時提前移除。發送成功後啟動 60 秒重發倒數，倒數期間停用獲取驗證碼，失敗不啟動倒數；此等待時間不是短信送達時間或驗證碼有效期。頁面銷毀時清理倒數與提示，重新進入登入頁不保留前次倒數。API 與短信驗證契約不變；此局部修復不能視為 iPhone Safari 跨頁面缺字的完整解法。
 
-司機端只使用完整字集 TTF，保留字體 family 與 400／500／600／700／800 字重，不刪字元、不減字重。正式環境實測 WOFF2 曾出現載入變慢與方格缺字，因此不再採用；倉庫已移除司機端 WOFF2 資產、轉換及候選驗證工具，不應重新引入。部署時沿用既有容器的繁體 TTF gzip level 6 副本及 Nginx 靜態 gzip／原檔回退，不變更快取規則、CanvasKit 同站載入或 WASM gzip。本地清理不代表已發布。
+司機端只使用完整字集 TTF，保留字體 family 與 400／500／600／700／800 字重，不刪字元、不減字重。正式環境實測 WOFF2 曾出現載入變慢與方格缺字，因此不再採用；倉庫已移除司機端 WOFF2 資產、轉換及候選驗證工具，不應重新引入。部署時為原始 TTF 產生 Brotli quality 11 與既有 gzip level 6 副本，保留 gzip／原檔回退；不變更快取規則、CanvasKit 同站載入或 WASM gzip。HTTP 壓縮只保證傳輸解碼後位元組一致，首次載入收益仍須以正式環境及目標真機量測。
 
 ## 收款貨幣與收入顯示
 
@@ -76,6 +76,12 @@ CanvasKit HTTP 壓縮整合測試（需 Docker、Node.js 與 curl，先完成 `f
 
 ```bash
 node --test deploy/frontend/test-wasm-gzip.mjs
+```
+
+司機字型 HTTP 壓縮與原檔回退整合測試（需 Docker、Node.js 與 curl）：
+
+```bash
+node --test deploy/frontend/test-driver-font-brotli.mjs
 ```
 
 測試會建立臨時容器，驗證全部 WASM 的 gzip／原檔回退、解壓後位元組一致、MIME、快取與路徑隔離，完成後清理容器、映像及臨時檔。不使用正式流量；發布仍透過原 GitHub Actions 流程。

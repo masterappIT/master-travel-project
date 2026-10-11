@@ -1,11 +1,16 @@
 FROM nginx:1.27-alpine
 
+RUN apk add --no-cache brotli
+
 COPY deploy/frontend/default.conf /etc/nginx/templates/default.conf.template
 COPY --from=static / /usr/share/nginx/html
 
 RUN if [ -d /usr/share/nginx/html/assets/assets/fonts ]; then \
       for font in /usr/share/nginx/html/assets/assets/fonts/NotoSansTC-*.ttf; do \
-        if [ -f "$font" ]; then gzip -6 -c "$font" > "$font.gz"; fi; \
+        if [ -f "$font" ]; then \
+          gzip -6 -c "$font" > "$font.gz"; \
+          brotli -q 11 -c "$font" > "$font.br"; \
+        fi; \
       done; \
     fi
 
