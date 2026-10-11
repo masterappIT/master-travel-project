@@ -8,6 +8,10 @@
         <text class="mini-program-welcome">Welcome</text>
         <image class="mini-program-register-icon" src="/static/login/mini-program/register.svg" mode="scaleToFill" />
         <text class="mini-program-register-label">註冊/登入</text>
+        <view v-if="miniProgramMode === null" class="mini-program-login-status">
+          <text>{{ loginConfigFailed ? '登入配置載入失敗' : '正在載入登入方式…' }}</text>
+          <text v-if="loginConfigFailed" class="mini-program-login-retry" @tap="loadLoginConfiguration">重試</text>
+        </view>
         <MiniProgramWechatLogin
           v-if="miniProgramMode === 'wechatOnly'"
           v-model:phone="phone"
@@ -94,6 +98,8 @@ const loginMethods = ref<LoginMethod[]>([])
 const miniProgramCapabilities = ref({ phone: false, avatar: false, nickname: false })
 type MiniProgramMode = 'smsOnly' | 'wechatOnly' | 'wechatAndSms'
 const miniProgramMode = ref<MiniProgramMode | null>(null)
+const loginConfigFailed = ref(false)
+const loginConfigLoading = ref(false)
 const invitationCode = ref('')
 const loginPlatform = ref<'web' | 'miniProgram'>('miniProgram')
 const previewToken = ref('')
@@ -109,17 +115,11 @@ const readPreviewLoginMode = () => {
 }
 
 const props = defineProps<{ options: Record<string, string> }>()
-onMounted(async () => {
+const loadLoginConfiguration = async () => {
+  if (loginConfigLoading.value) return
+  loginConfigLoading.value = true
+  loginConfigFailed.value = false
   const options = props.options
-  // #ifdef APP-IOS
-  disableInputAssistantToolbar()
-  // #endif
-  isPreview.value = isAdminPreview(options)
-  if (!isPreview.value && isAuthenticated()) {
-    goHome()
-    return
-  }
-  previewToken.value = typeof options?.previewToken === 'string' ? options.previewToken : ''
   const previewMode = (typeof options?.loginMode === 'string' && ['smsOnly', 'wechatOnly', 'wechatAndSms'].includes(options.loginMode)
     ? options.loginMode as MiniProgramMode
     : readPreviewLoginMode())
@@ -140,14 +140,29 @@ onMounted(async () => {
     if (loginPlatform.value === 'miniProgram') {
       const hasWechat = loginMethods.value.some((method) => method.provider === 'wechat')
       const hasPhone = loginMethods.value.some((method) => method.provider === 'phone')
+      if (!hasWechat && !hasPhone && !isPreview.value) throw new Error('沒有可用登入方式')
       miniProgramMode.value = previewMode || (hasWechat && hasPhone ? 'wechatAndSms' : hasWechat ? 'wechatOnly' : 'smsOnly')
     }
   } catch {
     loginMethods.value = []
-    uni.showToast({ title: '登入配置載入失敗，請重新進入', icon: 'none' })
+    loginConfigFailed.value = true
+  } finally {
+    loginConfigLoading.value = false
   }
+}
+onMounted(async () => {
+  const options = props.options
+  // #ifdef APP-IOS
+  disableInputAssistantToolbar()
+  // #endif
+  isPreview.value = isAdminPreview(options)
+  if (!isPreview.value && isAuthenticated()) {
+    goHome()
+    return
+  }
+  previewToken.value = typeof options?.previewToken === 'string' ? options.previewToken : ''
   invitationCode.value = typeof options?.invite === 'string' ? options.invite.trim().toUpperCase() : ''
-
+  await loadLoginConfiguration()
 })
 
 const handleMiniProgramWechatLogin = async () => {
@@ -249,7 +264,7 @@ const handleBack = () => {
     uni.showToast({ title: 'LIVE PREVIEW 已鎖定登入頁', icon: 'none' })
     return
   }
-  uni.reLaunch({ url: '/pages/index/index?guest=1', animationType: 'none', animationDuration: 0 })
+  goHome()
 }
 
 const handleLogin = async () => {
@@ -329,6 +344,8 @@ const handleLogin = async () => {
 .mini-program-welcome { position: absolute; left: 40px; top: 29px; color: #38434a; font-family: 'Noto Sans TC', sans-serif; font-size: 38px; font-weight: 700; line-height: normal; }
 .mini-program-register-icon { position: absolute; left: 40px; top: 99px; width: 25px; height: 25px; }
 .mini-program-register-label { position: absolute; left: 40px; top: 139px; color: #38434a; font-family: 'Noto Sans TC', sans-serif; font-size: 16px; line-height: normal; }
+.mini-program-login-status { position: absolute; left: 34px; top: 190px; width: 362px; color: #38434a; font-size: 16px; line-height: 24px; text-align: center; }
+.mini-program-login-retry { display: block; margin-top: 20px; color: #285cfc; font-weight: 600; }
 .mini-program-wechat-button { position: absolute; left: 34px; top: 183px; width: 362px; height: 64px; margin: 0; padding: 0; border: 0; border-radius: 10px; background: #07c160; display: flex; align-items: center; justify-content: center; gap: 10px; }
 .mini-program-wechat-button::after { border: 0; }
 .mini-program-wechat-button.is-preview { opacity: 1; background: #07c160; }

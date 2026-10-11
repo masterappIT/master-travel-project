@@ -140,7 +140,10 @@ onUnmounted(() => {
 
 const goHome = () => openCachedPage('/pages/index/index')
 const openCustomerService = () => openCachedPage('/pages/support/chat')
-const openMessages = () => openCachedPage('/pages/messages/messages')
+const openMessages = () => {
+  if (!isAuthenticated() || !getAuthToken()) return openLogin()
+  return openCachedPage('/pages/messages/messages')
+}
 const openSettings = () => openCachedPage('/pages/settings/settings')
 const openAccount = () => openCachedPage('/pages/account/account')
 const openLogin = () => uni.reLaunch({ url: '/pages/login/login', animationType: 'none', animationDuration: 0 })

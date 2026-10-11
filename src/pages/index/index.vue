@@ -330,13 +330,8 @@ const onMapRenderError = () => {
 activateEmbeddedPageHost()
 // #endif
 
-onLoad((options) => {
-  const guestEntry = options?.guest === '1'
-  if (isAuthenticated() || guestEntry) {
-    homeAccessGranted.value = true
-    return
-  }
-  uni.reLaunch({ url: '/pages/login/login', animationType: 'none', animationDuration: 0 })
+onLoad(() => {
+  homeAccessGranted.value = true
 })
 
 const tripStore = useTripStore()
@@ -457,10 +452,23 @@ onShow(() => {
 
 const addressPicker = ref<'origin' | 'destination' | null>(null)
 const addressPickerContext = ref<'cross-border' | 'business'>('cross-border')
+const requireLoginForBookingField = () => {
+  if (isAuthenticated()) return false
+  uni.reLaunch({ url: '/pages/login/login', animationType: 'none', animationDuration: 0 })
+  return true
+}
 const chooseOrigin = () => { addressPickerContext.value = 'cross-border'; addressPicker.value = 'origin' }
-const chooseDestination = () => { addressPickerContext.value = 'cross-border'; addressPicker.value = 'destination' }
+const chooseDestination = () => {
+  if (requireLoginForBookingField()) return
+  addressPickerContext.value = 'cross-border'
+  addressPicker.value = 'destination'
+}
 const chooseBusinessOrigin = () => { addressPickerContext.value = 'business'; addressPicker.value = 'origin' }
-const chooseBusinessDestination = () => { addressPickerContext.value = 'business'; addressPicker.value = 'destination' }
+const chooseBusinessDestination = () => {
+  if (requireLoginForBookingField()) return
+  addressPickerContext.value = 'business'
+  addressPicker.value = 'destination'
+}
 const setRouteSelection = (target: 'origin' | 'destination', selection: RouteSelection | null) => {
   if (target === 'origin') originSelection.value = selection
   if (target === 'destination') destinationSelection.value = selection
@@ -702,7 +710,10 @@ const selectFlightCandidate = (candidate: FlightLookupResult) => {
   flightLookup.value = candidate
   if (candidate.scheduledTime) departureTime.value = `${flightLookupDate()}T${candidate.scheduledTime}:00`
 }
-const chooseDepartureTime = () => { bookingTimePicker.value = true }
+const chooseDepartureTime = () => {
+  if (requireLoginForBookingField()) return
+  bookingTimePicker.value = true
+}
 const airportDisplayMetadata: Record<string, { city: string; name: string }> = {
   PKX: { city: '北京', name: '北京大興國際機場' },
   HKG: { city: '香港', name: '香港國際機場' },
