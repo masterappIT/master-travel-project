@@ -20,6 +20,13 @@ http.Response response(Object body) => http.Response(
     );
 
 void main() {
+  setUp(() {
+    removeBrowserValue('driver_session_token');
+    removeBrowserValue('driver_currency_preference');
+    DriverCurrencyInitialization.resetForTesting();
+    DriverApiClient.instance = DriverApiClient();
+  });
+
   tearDown(() {
     removeBrowserValue('driver_session_token');
     removeBrowserValue('driver_currency_preference');
