@@ -136,9 +136,9 @@ body { margin: 0; }
   .support-agent-app .outbound-fields { grid-template-columns: 1fr 1fr; }
   .support-agent-app .recipient-lookup,
   .support-agent-app .outbound-id { grid-column: 1 / -1; }
-  .support-agent-app .workspace { grid-template-columns: 1fr; height: auto; min-height: 0; }
-  .support-agent-app .inbox { min-height: 480px; }
-  .support-agent-app .conversation { height: calc(100dvh - 158px); min-height: 420px; }
+  .support-agent-app .workspace { grid-template-columns: 1fr; height: calc(100dvh - 158px); min-height: 480px; }
+  .support-agent-app .inbox { min-height: 0; }
+  .support-agent-app .conversation { height: 100%; min-height: 0; }
   .support-agent-app .workspace:not(.is-detail) .conversation,
   .support-agent-app .workspace.is-detail .inbox { display: none; }
   .support-agent-app .workspace.is-detail .mobile-back { display: inline-flex; }
