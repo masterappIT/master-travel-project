@@ -8,9 +8,9 @@
         <text class="mini-program-welcome">Welcome</text>
         <image class="mini-program-register-icon" src="/static/login/mini-program/register.svg" mode="scaleToFill" />
         <text class="mini-program-register-label">註冊/登入</text>
-        <view v-if="miniProgramMode === null" class="mini-program-login-status">
-          <text>{{ loginConfigFailed ? '登入配置載入失敗' : '正在載入登入方式…' }}</text>
-          <text v-if="loginConfigFailed" class="mini-program-login-retry" @tap="loadLoginConfiguration">重試</text>
+        <view v-if="miniProgramMode === null && loginConfigFailed" class="mini-program-login-status">
+          <text>登入配置載入失敗</text>
+          <text class="mini-program-login-retry" @tap="loadLoginConfiguration">重試</text>
         </view>
         <MiniProgramWechatLogin
           v-if="miniProgramMode === 'wechatOnly'"
