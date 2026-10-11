@@ -98,10 +98,11 @@ npm --prefix admin run build
 cd driver
 flutter build web \\
   --release \\
-  --dart-define="DRIVER_API_BASE_URL=${PRODUCTION_API_URL}"
+  --dart-define="DRIVER_API_BASE_URL=/api"
 ```
 
 產物為 `driver/build/web`，會被包裝成 `driver` image，部署至獨立 Cloud Run service。
+Driver 瀏覽器請求使用同站 `/api` 反向代理，避免跨站 CORS 預檢；Flutter 依實際頁面來源把 `/api` 解析為絕對 URL，以保留事件串流等 URL 的既有組合方式。前端容器只對 Driver 的 `main.dart.js`、`canvaskit/*.wasm` 與 Noto Sans TC 字型提供預壓縮 Brotli，保留 gzip 與原檔回退；其他前端沿用既有壓縮方式。
 
 ### 4.4 Nginx 前端容器
 

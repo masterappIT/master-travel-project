@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import '../core/widgets/driver_address_text.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -33,12 +35,14 @@ class OrderInvitePage extends StatefulWidget {
     this.api,
     this.recognition,
     this.sessionStore,
+    this.sessionReady,
   });
 
   final String? token;
   final OrderInviteApiClient? api;
   final OrderInviteRecognitionAdapter? recognition;
   final OrderInviteSessionStore? sessionStore;
+  final Future<void>? sessionReady;
 
   @override
   State<OrderInvitePage> createState() => _OrderInvitePageState();
@@ -71,6 +75,7 @@ class _OrderInvitePageState extends State<OrderInvitePage> {
   Map<String, dynamic>? _preview;
   Map<String, dynamic>? _trip;
   List<String> _categories = const [];
+  String? _catalogError;
   Uint8List? _photoBytes;
   String? _photoName;
   String? _photoMime;
@@ -100,18 +105,34 @@ class _OrderInvitePageState extends State<OrderInvitePage> {
       return;
     }
     try {
-      final results =
-          await Future.wait([_api.details(_token), _api.vehicleCatalog()]);
+      final details = await _api.details(_token);
       if (!mounted) return;
-      final categories = results[1]['categories'];
-      final invitation = results[0]['invitation'];
+      final invitation = details['invitation'];
       final invitationId =
           invitation is Map ? invitation['id']?.toString() : null;
-      final storedSession =
-          invitationId == null ? null : _sessionStore.read(invitationId);
+      final storedSession = invitationId == null || _previewMode
+          ? null
+          : _sessionStore.read(invitationId);
       setState(() {
-        _preview = results[0];
+        _preview = details;
         _provisionalSessionToken = storedSession;
+      });
+      if (!_previewMode) unawaited(_loadCategories());
+      if (storedSession != null) {
+        await _restoreSession(storedSession, invitationId!);
+      }
+    } on OrderInviteApiException catch (error) {
+      if (mounted) setState(() => _error = error.message);
+    } catch (_) {
+      if (mounted) setState(() => _error = '邀請資料載入失敗，請稍後重試');
+    }
+  }
+
+  Future<void> _loadCategories() async {
+    try {
+      final categories = (await _api.vehicleCatalog())['categories'];
+      if (!mounted) return;
+      setState(() {
         _categories = categories is List
             ? categories
                 .whereType<Map>()
@@ -120,12 +141,23 @@ class _OrderInvitePageState extends State<OrderInvitePage> {
                 .where((name) => name.isNotEmpty)
                 .toList()
             : const [];
+        _catalogError = null;
       });
-      if (storedSession != null) {
-        await _restoreSession(storedSession, invitationId!);
-      }
     } on OrderInviteApiException catch (error) {
-      if (mounted) setState(() => _error = error.message);
+      if (mounted) {
+        setState(() {
+          _catalogError = error.message;
+          if (_step == 2) _error = error.message;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        const message = '車輛目錄載入失敗，請稍後重試';
+        setState(() {
+          _catalogError = message;
+          if (_step == 2) _error = message;
+        });
+      }
     }
   }
 
@@ -181,7 +213,10 @@ class _OrderInvitePageState extends State<OrderInvitePage> {
         _hkMacauCountryCode = _countryCode;
         _hkMacauPhone.text = _phone.text;
       }
-      setState(() => _step = 2);
+      setState(() {
+        _step = 2;
+        _error = _catalogError;
+      });
     });
   }
 
@@ -377,14 +412,16 @@ class _OrderInvitePageState extends State<OrderInvitePage> {
   }
 
   Future<void> _acceptRegistered() async {
-    final formalToken = DriverApiClient.instance.token;
-    if (formalToken == null || !DriverApiClient.instance.isApproved) {
-      _notice('請先使用已審核的正式司機帳戶登入');
-      return;
-    }
     await _run(() async {
+      await widget.sessionReady;
+      if (!mounted) return;
+      final formalToken = DriverApiClient.instance.token;
+      if (formalToken == null || !DriverApiClient.instance.isApproved) {
+        _notice('請先使用已審核的正式司機帳戶登入');
+        return;
+      }
       await _api.acceptRegistered(_token, formalToken);
-      setState(() => _step = 3);
+      if (mounted) setState(() => _step = 3);
     });
   }
 

@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { cpSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { gunzipSync } from 'node:zlib';
+import { brotliDecompressSync, gunzipSync } from 'node:zlib';
 import { test } from 'node:test';
 
 function docker(...args) {
@@ -21,7 +21,7 @@ function wasmPaths(directory, prefix = '') {
   });
 }
 
-test('CanvasKit gzip preserves WASM bytes, MIME, cache and identity fallback', async () => {
+test('Driver JS and CanvasKit compression preserves bytes, MIME, cache and fallbacks', async () => {
   const source = resolve('driver/build/web/canvaskit');
   const paths = wasmPaths(source);
   assert.ok(paths.length > 0, 'Build driver web before running this integration test');
@@ -31,6 +31,7 @@ test('CanvasKit gzip preserves WASM bytes, MIME, cache and identity fallback', a
   try {
     cpSync(source, join(fixture, 'canvaskit'), { recursive: true });
     cpSync(join(source, paths[0]), join(fixture, 'outside.wasm'));
+    writeFileSync(join(fixture, 'main.dart.js'), 'window.driverCompressionFixture = true;'.repeat(100));
     writeFileSync(join(fixture, 'index.html'), '<!doctype html><title>WASM test</title>');
     docker('build', '--build-context', `static=${fixture}`, '-f', 'deploy/frontend/Dockerfile', '-t', image, '.');
     container = docker('run', '-d', '-p', '127.0.0.1::8080', '-e', 'API_ORIGIN=http://127.0.0.1:8080', image);
@@ -44,26 +45,38 @@ test('CanvasKit gzip preserves WASM bytes, MIME, cache and identity fallback', a
     }
     assert.ok(ready, 'Container must become responsive');
     docker('exec', container, 'nginx', '-t');
-    for (const path of paths) {
-      const url = `${base}/canvaskit/${path}`;
+    for (const path of ['main.dart.js', ...paths.map((path) => `canvaskit/${path}`)]) {
+      const url = `${base}/${path}`;
       const identity = await fetch(url, { headers: { 'Accept-Encoding': 'identity' } });
       const gzip = await fetch(url, { headers: { 'Accept-Encoding': 'gzip' } });
+      const brotli = await fetch(url, { headers: { 'Accept-Encoding': 'br, gzip' } });
       assert.equal(identity.status, 200);
       assert.equal(gzip.status, 200);
+      assert.equal(brotli.status, 200);
       assert.equal(identity.headers.get('content-encoding'), null);
       assert.equal(gzip.headers.get('content-encoding'), 'gzip');
-      assert.equal(gzip.headers.get('content-type'), 'application/wasm');
+      assert.equal(brotli.headers.get('content-encoding'), 'br');
+      const mime = path.endsWith('.wasm') ? 'application/wasm' : 'application/javascript';
+      assert.equal(gzip.headers.get('content-type'), mime);
+      assert.equal(brotli.headers.get('content-type'), mime);
       assert.match(gzip.headers.get('vary'), /Accept-Encoding/i);
+      assert.match(brotli.headers.get('vary'), /Accept-Encoding/i);
       assert.equal(gzip.headers.get('cache-control'), identity.headers.get('cache-control'));
+      assert.equal(brotli.headers.get('cache-control'), identity.headers.get('cache-control'));
       assert.match(gzip.headers.get('cache-control'), /no-cache, must-revalidate/);
       const original = Buffer.from(await identity.arrayBuffer());
-      assert.deepEqual(original, readFileSync(join(source, path)));
+      assert.deepEqual(original, readFileSync(join(fixture, path)));
       assert.deepEqual(Buffer.from(await gzip.arrayBuffer()), original);
+      assert.deepEqual(Buffer.from(await brotli.arrayBuffer()), original);
       const raw = spawnSync('curl', ['--fail', '--silent', '-H', 'Accept-Encoding: gzip', url], { maxBuffer: 32 * 1024 * 1024 });
       assert.equal(raw.status, 0);
       assert.deepEqual(gunzipSync(raw.stdout), original);
       assert.ok(raw.stdout.length < original.length);
-      console.log(`${path}: ${original.length} -> ${raw.stdout.length} bytes`);
+      const rawBrotli = spawnSync('curl', ['--fail', '--silent', '-H', 'Accept-Encoding: br, gzip', url], { maxBuffer: 32 * 1024 * 1024 });
+      assert.equal(rawBrotli.status, 0);
+      assert.deepEqual(brotliDecompressSync(rawBrotli.stdout), original);
+      assert.ok(rawBrotli.stdout.length < raw.stdout.length);
+      console.log(`${path}: ${original.length} -> gzip ${raw.stdout.length}, br ${rawBrotli.stdout.length} bytes`);
     }
     for (const encoding of ['identity', 'gzip;q=0', '']) {
       const response = await fetch(`${base}/canvaskit/${paths[0]}`, { headers: { 'Accept-Encoding': encoding } });
@@ -78,6 +91,12 @@ test('CanvasKit gzip preserves WASM bytes, MIME, cache and identity fallback', a
     const fallback = await fetch(`${base}/canvaskit/${paths[0]}`, { headers: { 'Accept-Encoding': 'gzip' } });
     assert.equal(fallback.status, 200);
     assert.equal(fallback.headers.get('content-encoding'), null);
+    for (const path of ['main.dart.js', `canvaskit/${paths[0]}`]) {
+      docker('exec', container, 'rm', `/usr/share/nginx/html/${path}.br`);
+      const response = await fetch(`${base}/${path}`, { headers: { 'Accept-Encoding': 'br, gzip' } });
+      assert.equal(response.status, 200);
+      assert.equal(response.headers.get('content-encoding'), path.endsWith('.wasm') ? null : 'gzip');
+    }
   } finally {
     if (container) docker('rm', '-f', container);
     spawnSync('docker', ['image', 'rm', image], { encoding: 'utf8' });

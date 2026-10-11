@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 
+import 'driver_api_base_url.dart';
 import '../platform/browser_storage.dart';
 import '../state/driver_status.dart';
 import '../state/driver_currency_preference.dart';
@@ -43,17 +44,9 @@ class DriverSession {
       );
 }
 
-String _defaultDriverApiBaseUrl() {
-  const configured = String.fromEnvironment('DRIVER_API_BASE_URL');
-  if (configured.trim().isNotEmpty) return configured;
-  if (kIsWeb && Uri.base.host.isNotEmpty) return 'http://${Uri.base.host}:3010';
-  return 'http://127.0.0.1:3010';
-}
-
 class DriverApiClient {
   DriverApiClient({String? baseUrl, http.Client? client})
-      : baseUrl = (baseUrl ?? _defaultDriverApiBaseUrl())
-            .replaceAll(RegExp(r'/$'), ''),
+      : baseUrl = (baseUrl ?? driverApiBaseUrl()).replaceAll(RegExp(r'/$'), ''),
         _client = client ?? http.Client();
 
   static DriverApiClient _instance = DriverApiClient();

@@ -1,14 +1,8 @@
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
-String _defaultDriverApiBaseUrl() {
-  const configured = String.fromEnvironment('DRIVER_API_BASE_URL');
-  if (configured.trim().isNotEmpty) return configured;
-  if (kIsWeb && Uri.base.host.isNotEmpty) return 'http://${Uri.base.host}:3010';
-  return 'http://127.0.0.1:3010';
-}
+import '../api/driver_api_base_url.dart';
 
 class AirportFlight {
   const AirportFlight({
@@ -38,7 +32,7 @@ class AirportFlight {
 
 class AirportFlightClient {
   AirportFlightClient({http.Client? client, String? baseUrl})
-      : baseUrl = (baseUrl ?? _defaultDriverApiBaseUrl())
+      : baseUrl = (baseUrl ?? driverApiBaseUrl())
             .replaceAll(RegExp(r'/$'), ''),
         _client = client ?? http.Client();
 

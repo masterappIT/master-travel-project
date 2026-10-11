@@ -55,32 +55,38 @@ class _DriverStartupState extends State<_DriverStartup> {
   late final Future<void> _session = widget.api.restoreSession();
 
   @override
-  Widget build(BuildContext context) => FutureBuilder<void>(
-        future: _session,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return MaterialApp(
-              debugShowCheckedModeBanner: false,
-              home: Scaffold(
-                backgroundColor: DriverColors.background,
-                body: const Center(child: CircularProgressIndicator()),
-              ),
-            );
-          }
-          return DriverApp(
-            initialRoute: widget.isAdminPreview
-                ? DriverRouteNames.login
-                : widget.isOrderInvite
-                    ? DriverRouteNames.orderInvite
-                    : widget.api.token == null
-                        ? DriverRouteNames.login
-                        : widget.api.isApproved
-                            ? DriverRouteNames.home
-                            : DriverRouteNames.reviewStatus,
-            orderInviteToken: widget.orderInviteToken,
-          );
-        },
+  Widget build(BuildContext context) {
+    if (widget.isOrderInvite) {
+      return DriverApp(
+        initialRoute: DriverRouteNames.orderInvite,
+        orderInviteToken: widget.orderInviteToken,
+        orderInviteSession: _session,
       );
+    }
+    return FutureBuilder<void>(
+      future: _session,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return MaterialApp(
+            debugShowCheckedModeBanner: false,
+            home: Scaffold(
+              backgroundColor: DriverColors.background,
+              body: const Center(child: CircularProgressIndicator()),
+            ),
+          );
+        }
+        return DriverApp(
+          initialRoute: widget.isAdminPreview
+              ? DriverRouteNames.login
+              : widget.api.token == null
+                  ? DriverRouteNames.login
+                  : widget.api.isApproved
+                      ? DriverRouteNames.home
+                      : DriverRouteNames.reviewStatus,
+        );
+      },
+    );
+  }
 }
 
 class _NoPageTransitionBuilder extends PageTransitionsBuilder {
@@ -103,10 +109,12 @@ class DriverApp extends StatelessWidget {
     super.key,
     required this.initialRoute,
     this.orderInviteToken,
+    this.orderInviteSession,
   });
 
   final String initialRoute;
   final String? orderInviteToken;
+  final Future<void>? orderInviteSession;
   static final scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
   static final navigatorKey = GlobalKey<NavigatorState>();
 
@@ -176,7 +184,10 @@ class DriverApp extends StatelessWidget {
             MaterialPageRoute<void>(
               settings: RouteSettings(name: initialRoute),
               builder: initialRoute == DriverRouteNames.orderInvite
-                  ? (_) => OrderInvitePage(token: orderInviteToken)
+                  ? (_) => OrderInvitePage(
+                        token: orderInviteToken,
+                        sessionReady: orderInviteSession,
+                      )
                   : DriverRouter.builders[initialRoute]!,
             ),
           ],

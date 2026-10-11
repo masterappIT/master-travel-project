@@ -4,12 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 
-String _defaultDriverApiBaseUrl() {
-  const configured = String.fromEnvironment('DRIVER_API_BASE_URL');
-  if (configured.trim().isNotEmpty) return configured;
-  if (kIsWeb && Uri.base.host.isNotEmpty) return 'http://${Uri.base.host}:3010';
-  return 'http://127.0.0.1:3010';
-}
+import '../core/api/driver_api_base_url.dart';
 
 class OrderInviteApiException implements Exception {
   const OrderInviteApiException(this.statusCode, this.message);
@@ -20,8 +15,7 @@ class OrderInviteApiException implements Exception {
 
 class OrderInviteApiClient {
   OrderInviteApiClient({String? baseUrl, http.Client? client})
-      : baseUrl = (baseUrl ?? _defaultDriverApiBaseUrl())
-            .replaceAll(RegExp(r'/$'), ''),
+      : baseUrl = (baseUrl ?? driverApiBaseUrl()).replaceAll(RegExp(r'/$'), ''),
         _client = client ?? http.Client();
 
   final String baseUrl;

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:driver_web/order_invite/order_invite_api_client.dart';
@@ -181,12 +182,121 @@ void main() {
     expect(find.text('手機驗證'), findsNWidgets(2));
     expect(
       find.byWidgetPredicate(
-        (widget) => widget is TextField && widget.decoration?.hintText == '請輸入 5 位驗證碼',
+        (widget) =>
+            widget is TextField && widget.decoration?.hintText == '請輸入 5 位驗證碼',
       ),
       findsOneWidget,
     );
     expect(find.text('獲取驗證碼'), findsOneWidget);
     expect(find.text('使用已登入正式司機身份接受'), findsOneWidget);
+  });
+
+  testWidgets('invitation preview does not wait for vehicle catalog',
+      (tester) async {
+    final catalog = Completer<http.Response>();
+    final api = OrderInviteApiClient(
+      baseUrl: 'https://driver.test',
+      client: MockClient((request) {
+        if (request.url.path == '/vehicles') return catalog.future;
+        return Future.value(responseForInvite());
+      }),
+    );
+
+    await tester.pumpWidget(MaterialApp(
+      home: OrderInvitePage(token: 'invite-token', api: api),
+    ));
+    await tester.pump();
+    expect(find.text('上車：中環'), findsOneWidget);
+    expect(find.text('接受邀請'), findsOneWidget);
+
+    catalog.complete(http.Response.bytes(
+        utf8.encode(jsonEncode({
+          'categories': [
+            {'name': '轎車', 'enabled': true}
+          ]
+        })),
+        200));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('catalog failure leaves invitation preview visible',
+      (tester) async {
+    final catalog = Completer<http.Response>();
+    final api = OrderInviteApiClient(
+      baseUrl: 'https://driver.test',
+      client: MockClient((request) {
+        if (request.url.path == '/vehicles') return catalog.future;
+        return Future.value(responseForInvite());
+      }),
+    );
+
+    await tester.pumpWidget(MaterialApp(
+      home: OrderInvitePage(token: 'invite-token', api: api),
+    ));
+    await tester.pump();
+    catalog.complete(http.Response.bytes(
+        utf8.encode(jsonEncode({'message': '目錄暫時不可用'})), 503));
+    await tester.pump();
+    expect(find.text('上車：中環'), findsOneWidget);
+    expect(find.text('接受邀請'), findsOneWidget);
+    expect(find.text('目錄暫時不可用'), findsNothing);
+  });
+
+  testWidgets('catalog transport failure leaves invitation preview visible',
+      (tester) async {
+    final catalog = Completer<http.Response>();
+    final api = OrderInviteApiClient(
+      baseUrl: 'https://driver.test',
+      client: MockClient((request) {
+        if (request.url.path == '/vehicles') return catalog.future;
+        return Future.value(responseForInvite());
+      }),
+    );
+
+    await tester.pumpWidget(MaterialApp(
+      home: OrderInvitePage(token: 'invite-token', api: api),
+    ));
+    await tester.pump();
+    catalog.completeError(Exception('network unavailable'));
+    await tester.pump();
+    expect(find.text('上車：中環'), findsOneWidget);
+    expect(find.text('接受邀請'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('formal acceptance waits for pending session validation',
+      (tester) async {
+    final sessionReady = Completer<void>();
+    final api = OrderInviteApiClient(
+      baseUrl: 'https://driver.test',
+      client: MockClient((request) async {
+        if (request.url.path == '/vehicles') {
+          return http.Response(jsonEncode({'categories': []}), 200);
+        }
+        return responseForInvite();
+      }),
+    );
+
+    await tester.pumpWidget(MaterialApp(
+      home: OrderInvitePage(
+        token: 'invite-token',
+        api: api,
+        sessionReady: sessionReady.future,
+      ),
+    ));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('接受邀請'));
+    await tester.tap(find.text('接受邀請'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('使用已登入正式司機身份接受'));
+    await tester.tap(find.text('使用已登入正式司機身份接受'));
+    await tester.pump();
+    expect(find.text('使用已登入正式司機身份接受'), findsOneWidget);
+    expect(find.byType(SnackBar), findsNothing);
+
+    sessionReady.complete();
+    await tester.pump();
+    expect(find.text('請先使用已審核的正式司機帳戶登入'), findsOneWidget);
   });
 
   test('two-region plate fields follow formal registration ownership order',
@@ -244,6 +354,21 @@ void main() {
     );
   });
 }
+
+http.Response responseForInvite() => http.Response.bytes(
+      utf8.encode(jsonEncode({
+        'invitation': {'id': 'invite-1', 'status': 'ACTIVE'},
+        'trip': {
+          'id': 'trip-1',
+          'origin': '中環',
+          'destination': '機場',
+          'scheduledAt': '2026-10-01T08:00:00.000Z',
+          'vehicleCategory': '轎車',
+        },
+      })),
+      200,
+      headers: {'content-type': 'application/json; charset=utf-8'},
+    );
 
 Map<String, dynamic> _tripResponse(
         {required bool arrived,

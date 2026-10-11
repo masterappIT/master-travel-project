@@ -16,7 +16,12 @@ RUN if [ -d /usr/share/nginx/html/assets/assets/fonts ]; then \
 
 RUN if [ -d /usr/share/nginx/html/canvaskit ]; then \
       find /usr/share/nginx/html/canvaskit -type f -name '*.wasm' \
-        -exec sh -c 'gzip -6 -c "$1" > "$1.gz"' sh {} \; ; \
+        -exec sh -c 'gzip -6 -c "$1" > "$1.gz" && brotli -q 11 -c "$1" > "$1.br"' sh {} \; ; \
+    fi
+
+RUN if [ -f /usr/share/nginx/html/main.dart.js ]; then \
+      gzip -6 -c /usr/share/nginx/html/main.dart.js > /usr/share/nginx/html/main.dart.js.gz; \
+      brotli -q 11 -c /usr/share/nginx/html/main.dart.js > /usr/share/nginx/html/main.dart.js.br; \
     fi
 
 EXPOSE 8080

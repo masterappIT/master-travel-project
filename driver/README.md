@@ -10,7 +10,7 @@ flutter pub get
 flutter build web
 ```
 
-正式建置會由根目錄的 GitHub Actions 使用 `flutter build web --release`，並注入 `DRIVER_API_BASE_URL`。詳細正式環境部署請參考 [正式環境部署文件](../docs/PRODUCTION-DEPLOYMENT.md)。
+正式建置會由根目錄的 GitHub Actions 使用 `flutter build web --release`，並把 `DRIVER_API_BASE_URL` 設為同站 `/api`，由 Flutter 依實際頁面來源解析成絕對 URL。詳細正式環境部署請參考 [正式環境部署文件](../docs/PRODUCTION-DEPLOYMENT.md)。
 
 ## 啟動資源交付
 
@@ -18,11 +18,13 @@ flutter build web
 - Flutter 3.47.4 CanvasKit 在 FontManifest 未宣告 Roboto 時仍會於啟動階段下載一份 Roboto fallback。Bootstrap 將 fallback 基底指向站內 `fonts/`，提供引擎要求的同一份 Roboto WOFF2（SHA-256 `35b02ca266b79eb4996590f15817425a1ce9ebf48f84471843233ff614656bf2`）；字體採 SIL Open Font License 1.1，授權見 `web/fonts/roboto/OFL.txt`。此舉去除該字體的跨站下載依賴，並不改變 Noto Sans TC 的字形與字重。
 - 共用前端容器只針對司機端 `assets/assets/fonts/NotoSansTC-*.ttf` 產生 Brotli 與 gzip 副本；Nginx 依瀏覽器的 `Accept-Encoding` 優先提供 Brotli，否則沿用 gzip 或原始 TTF。壓縮傳輸解碼後的字體內容與快取規則不變。
 - 共用前端容器也為 `canvaskit/**/*.wasm` 產生 gzip 副本（包含根目錄）；Nginx 只在 `canvaskit/` 的 WASM 路徑啟用靜態 gzip。原始 WASM 保留，不支援 gzip 時回退原檔，解壓後內容、`application/wasm` MIME、renderer、引擎版本及快取規則不變。沒有 CanvasKit 的其他前端不產生副本。
+- 正式 Driver 建置把 API 基底指向同站 `/api`，使一般入口與訂單邀請的瀏覽器請求避開跨站 CORS 預檢。容器對 Driver 的 `main.dart.js` 與 `canvaskit/**/*.wasm` 增加 Brotli 副本，瀏覽器不支援時沿用 gzip 或原檔；解壓後內容、MIME 與 renderer 不變。這減少冷下載位元組，正式首次可操作時間仍需真機量測。
 - HTML 不預載中文字體，避免字體在啟動最早階段與主程式及 CanvasKit 競爭；Flutter CanvasKit 仍會在首屏前載入 FontManifest 中的字體。
 - Apple 登入 SDK 在使用者按下 Apple 登入時才下載，避免外部 CDN 響應延遲或傳輸競爭卡住首屏；同時載入共用同一次請求，失敗可重試，既有 Apple 授權呼叫與錯誤處理保留。
 - 登入方式配置載入期間先顯示手機驗證卡片，但停用手機／驗證碼輸入、國碼選擇、獲取驗證碼及登入按鈕。配置確認手機登入啟用後開放操作；停用或載入失敗時保留原有卡片隱藏及錯誤行為。此調整減少表單後出現的跳動，不提前啟用登入，也不縮短字體初始化或 API 等待時間。
 - 啟動時維持既有 session 驗證與路由判斷，並讓收款貨幣設定與 session 驗證並行；未登入時不等待設定才顯示登入頁。進入已審核頁面前，若瀏覽器沒有已儲存的收款貨幣，才等待同一份系統預設設定結果，確定幣別後發送依幣種的資料請求；已儲存貨幣者略過設定請求。設定最長等待八秒，失敗時沿用既有本地回退，且同一次應用載入不反覆等待。頁面版面與視覺元件維持原狀。
 - Flutter 首幀先呈現 session 驗證中的載入狀態，驗證完成後才建立原有登入／審核／首頁路由。已審核首頁可先呈現非金額區域，貨幣設定完成後才請求統計資料；首頁沿用 session 驗證取得的司機資料，不重複呼叫 `me`。首頁以外的次級頁面編譯成延遲載入模組，首次進入時等待該模組並提供載入失敗重試。此調整只縮短部分串行等待與主程式體積，仍須以正式候選測量首次可操作時間。
+- 訂單邀請入口進入 Flutter 後，邀請詳情與正式司機 session 驗證並行；訂單預覽只等待邀請詳情。車輛目錄在詳情成功後另行載入，不阻擋預覽；使用已登入正式司機身份接受時仍等待 session 驗證。這只移除進入 Flutter 後的串行等待，不縮短 Flutter 引擎、主程式及中文字型的冷下載。
 - 第二輪候選以一份官方 Noto Sans TC 可變 TTF 取代首屏前五份靜態 TTF 請求，保留家族名稱、完整字集與 400／500／600／700／800 字重。官方檔案 SHA-256 為 `864727d210d54f2537bbe23b3a839436c3992af72de9322af5270897246bd44f`，授權見 `assets/fonts/OFL-NotoSansTC.txt`。本機 Chrome 與 iOS 18.4 模擬器的登入首屏，在同視窗及同 API 失敗條件下，與原五份 TTF 的畫面逐像素一致；其他頁面、目標真機與正式環境的字形及速度仍須驗證。
 - 本輪啟動調整保留登入驗證、API、路由結果、Apple SDK 與通知流程。CanvasKit、字體家族及現有字重維持原狀；字體來源檔案改為可變 TTF，相關效能收益須以正式候選及目標真機量測。
 - 發布前須驗證內地／香港首次及再次載入、iOS／Android 字體與頁面呈現，以及登入、訂單與通知功能。效能收益以真機測量為準；回退使用上一個完整容器映像。
