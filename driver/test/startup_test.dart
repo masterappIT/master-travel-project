@@ -95,6 +95,8 @@ void main() {
     await tester.pump();
     expect(DriverCurrencyPreference.instance.code, 'HKD');
     expect(paths, contains('/driver/auth/statistics'));
+    expect(paths.where((path) => path == '/driver/auth/statistics').length, 1);
+    expect(paths.where((path) => path == '/driver/auth/me').length, 1);
   });
 
   testWidgets('stored currency enters home without settings', (tester) async {
@@ -142,6 +144,38 @@ void main() {
     expect(paths, isNot(contains('/settings')));
   });
 
+  testWidgets('stored session waits for validation before opening home',
+      (tester) async {
+    writeBrowserValue('driver_session_token', 'test-token');
+    writeBrowserValue('driver_currency_preference', 'HKD');
+    final validation = Completer<http.Response>();
+    final paths = <String>[];
+    DriverApiClient.instance = DriverApiClient(
+      client: MockClient((request) {
+        paths.add(request.url.path);
+        if (request.url.path == '/driver/auth/me') return validation.future;
+        if (request.url.path == '/driver/auth/vehicles') {
+          return Future.value(response({'data': []}));
+        }
+        return Future.value(response({'data': []}));
+      }),
+    );
+
+    await driver_app.main();
+    await tester.pump();
+    expect(paths.where((path) => path == '/driver/auth/me').length, 1);
+    expect(paths, isNot(contains('/driver/auth/vehicles')));
+    expect(find.text('工作台總覽'), findsNothing);
+
+    validation.complete(response({
+      'driver': {'reviewStatus': 'APPROVED', 'name': 'Test Driver'}
+    }));
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('工作台總覽'), findsOneWidget);
+    expect(paths.where((path) => path == '/driver/auth/me').length, 1);
+  });
+
   testWidgets('failed settings request is shared across approved routes',
       (tester) async {
     writeBrowserValue('driver_session_token', 'test-token');
@@ -177,7 +211,7 @@ void main() {
         home: Builder(
       builder: DriverRouter.builders[DriverRouteNames.orders]!,
     )));
-    await tester.pump();
+    await tester.pumpAndSettle();
     expect(paths.where((path) => path == '/settings').length, 1);
   });
 }

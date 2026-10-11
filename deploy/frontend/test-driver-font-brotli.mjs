@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { brotliDecompressSync, gunzipSync } from 'node:zlib';
@@ -15,19 +15,20 @@ function docker(...args) {
 function rawGet(url, encoding) {
   const result = spawnSync('curl', [
     '--fail', '--silent', '--show-error', '-H', `Accept-Encoding: ${encoding}`, url,
-  ], { maxBuffer: 10 * 1024 * 1024 });
+  ], { maxBuffer: 20 * 1024 * 1024 });
   assert.equal(result.status, 0, result.stderr.toString());
   return result.stdout;
 }
 
 test('Driver TTF is byte-identical through Brotli, gzip and original fallback', async () => {
-  const source = resolve('driver/assets/fonts/NotoSansTC-Regular.ttf');
+  const source = resolve('driver/assets/fonts/NotoSansTC-Variable.ttf');
   const fixture = mkdtempSync(join(tmpdir(), 'driver-font-brotli-'));
   const image = `driver-font-brotli-test:${process.pid}`;
   let container;
   try {
     const fonts = join(fixture, 'assets/assets/fonts');
-    cpSync(resolve('driver/assets/fonts'), fonts, { recursive: true });
+    mkdirSync(fonts, { recursive: true });
+    cpSync(source, join(fonts, 'NotoSansTC-Variable.ttf'));
     writeFileSync(join(fixture, 'index.html'), '<!doctype html><title>Driver font test</title>');
     writeFileSync(join(fixture, 'unrelated.ttf'), 'untouched');
     docker('build', '--build-context', `static=${fixture}`, '-f', 'deploy/frontend/Dockerfile', '-t', image, '.');
@@ -43,7 +44,7 @@ test('Driver TTF is byte-identical through Brotli, gzip and original fallback', 
     assert.ok(ready, 'Container must become responsive');
     docker('exec', container, 'nginx', '-t');
 
-    const url = `${base}/assets/assets/fonts/NotoSansTC-Regular.ttf`;
+    const url = `${base}/assets/assets/fonts/NotoSansTC-Variable.ttf`;
     const original = readFileSync(source);
     for (const [accept, expected, decode] of [
       ['br, gzip', 'br', brotliDecompressSync],
@@ -61,7 +62,7 @@ test('Driver TTF is byte-identical through Brotli, gzip and original fallback', 
       if (expected) assert.ok(transferred.length < original.length);
     }
 
-    const fontPath = '/usr/share/nginx/html/assets/assets/fonts/NotoSansTC-Regular.ttf';
+    const fontPath = '/usr/share/nginx/html/assets/assets/fonts/NotoSansTC-Variable.ttf';
     docker('exec', container, 'rm', `${fontPath}.br`);
     const gzipFallback = await fetch(url, { headers: { 'Accept-Encoding': 'br, gzip' } });
     assert.equal(gzipFallback.status, 200);

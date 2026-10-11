@@ -72,7 +72,11 @@ for (const shouldReload of [false, true]) {
     assert.equal(loads.length, shouldReload ? 0 : 1);
     if (!shouldReload) {
       assert.equal(loads[0].config.canvasKitBaseUrl, 'canvaskit/');
-      assert.deepEqual(Object.keys(loads[0].config), ['canvasKitBaseUrl']);
+      assert.equal(loads[0].config.fontFallbackBaseUrl, 'fonts/');
+      assert.deepEqual(Object.keys(loads[0].config), [
+        'canvasKitBaseUrl',
+        'fontFallbackBaseUrl',
+      ]);
     }
   });
 }

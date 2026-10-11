@@ -12,6 +12,7 @@ import 'core/navigation/driver_navigation.dart';
 import 'core/state/driver_language_preference.dart';
 import 'core/state/driver_order_alert_coordinator.dart';
 import 'core/state/driver_currency_preference.dart';
+import 'core/state/driver_currency_initialization.dart';
 import 'core/state/driver_status.dart';
 
 import 'package:driver_web/core/tokens/driver_tokens.dart';
@@ -52,9 +53,8 @@ class _HomePageState extends State<HomePage> {
     super.initState();
     DriverOrderAlertCoordinator.notificationsChanged
         .addListener(_onNotificationsChanged);
-    DriverCurrencyPreference.instance.addListener(_loadStatistics);
     _loadDriver();
-    _loadStatistics();
+    _loadStatisticsWhenCurrencyReady();
   }
 
   @override
@@ -112,10 +112,20 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  Future<void> _loadStatisticsWhenCurrencyReady() async {
+    await DriverCurrencyInitialization.ensureReady();
+    if (!mounted) return;
+    DriverCurrencyPreference.instance.addListener(_loadStatistics);
+    await _loadStatistics();
+  }
+
   Future<void> _loadDriver() async {
     try {
       final results = await Future.wait<dynamic>([
-        _api.me(),
+        if (_api.currentDriver != null)
+          Future<dynamic>.value({'driver': _api.currentDriver})
+        else
+          _api.me(),
         _api.listDriverVehicles(),
       ]);
       if (!mounted) return;

@@ -1,120 +1,108 @@
 import 'package:flutter/material.dart';
 
-import '../about_page.dart';
-import '../add_vehicle_page.dart';
 import '../auth/login_page.dart';
-import '../contact_support_page.dart';
-import '../currency_page.dart';
-import '../driver_profile_page.dart';
 import '../home_page.dart';
-import '../flight_query_page.dart';
-import '../order_accepted_page.dart';
-import '../order_completed_page.dart';
-import '../order_detail_page.dart';
-import '../order_hall_page.dart';
-import '../order_history_page.dart';
-import '../order_in_progress_page.dart';
-import '../profile_page.dart';
-import '../registration_page.dart';
+import '../order_invite/order_invite_page.dart';
 import '../review_status_page.dart';
-import '../vehicle_page.dart';
-import '../wechat_payment_page.dart';
 import '../core/api/driver_api_client.dart';
 import '../core/state/driver_currency_initialization.dart';
 import '../core/tokens/driver_tokens.dart';
-import '../settlement_overview_page.dart';
-import '../language_settings_page.dart';
-import '../notification_settings_page.dart';
-import '../order_invite/order_invite_page.dart';
+import 'deferred_routes.dart' deferred as deferred_routes;
 import 'route_names.dart';
 
 abstract final class DriverRouter {
   static Map<String, WidgetBuilder> get builders => {
         DriverRouteNames.login: (_) => const LoginPage(),
         DriverRouteNames.orderInvite: (_) => const OrderInvitePage(),
-        DriverRouteNames.registration: (context) {
-          final arguments = ModalRoute.of(context)?.settings.arguments;
-          final values = arguments is Map<String, String>
-              ? arguments
-              : const <String, String>{};
-          return RegistrationPage(
-            initialCountryCode: values['countryCode'],
-            initialPhone: values['phone'],
-            verificationChallengeId: values['challengeId'],
-            verificationCode: values['code'],
-            revisionDriver: arguments is Map<String, dynamic> &&
-                    arguments.containsKey('reviewStatus')
-                ? arguments
-                : null,
-          );
-        },
         DriverRouteNames.reviewStatus: (_) => const ReviewStatusPage(),
-        DriverRouteNames.home: (_) => _approved(const HomePage()),
-        DriverRouteNames.orders: (_) => _approved(const OrderHallPage()),
-        DriverRouteNames.orderHistory: (_) =>
-            _approved(const OrderHistoryPage()),
-        DriverRouteNames.profile: (_) => const ProfilePage(),
-        DriverRouteNames.flightQuery: (_) => const FlightQueryPage(),
-        DriverRouteNames.currency: (_) => const CurrencyPage(),
-        DriverRouteNames.wechatPayment: (_) => const WechatPaymentPage(),
-        DriverRouteNames.settlementOverview: (_) =>
-            const SettlementOverviewPage(),
-        DriverRouteNames.about: (_) => const AboutPage(),
-        DriverRouteNames.contactSupport: (context) {
-          final arguments = ModalRoute.of(context)?.settings.arguments;
-          return ContactSupportPage(
-            trip: arguments is DriverSupportContext ? arguments : null,
-          );
-        },
-        DriverRouteNames.vehicle: (_) => const VehiclePage(),
-        DriverRouteNames.notificationSettings: (_) =>
-            const NotificationSettingsPage(),
-        DriverRouteNames.languageSettings: (_) => const LanguageSettingsPage(),
-        DriverRouteNames.addVehicle: (context) {
-          final arguments = ModalRoute.of(context)?.settings.arguments;
-          return AddVehiclePage(
-            initialData: arguments is VehicleFormData ? arguments : null,
-          );
-        },
-        DriverRouteNames.profileEdit: (context) {
-          final arguments = ModalRoute.of(context)?.settings.arguments;
-          final values = arguments is Map<String, String>
-              ? arguments
-              : const <String, String>{};
-          return DriverProfilePage(
-            initialName: values['name'] ?? '',
-            initialHongKongMacauPhone: values['hongKongMacauPhone'] ?? '',
-            initialMainlandPhone: values['mainlandPhone'] ?? '',
-          );
-        },
-        DriverRouteNames.orderDetail: (context) {
-          final arguments = ModalRoute.of(context)?.settings.arguments;
-          return _approved(OrderDetailPage(tripId: arguments?.toString()));
-        },
-        DriverRouteNames.completedOrderDetail: (context) {
-          final arguments = ModalRoute.of(context)?.settings.arguments;
-          return _approved(OrderDetailPage(
-            tripId: arguments?.toString(),
-            completed: true,
-          ));
-        },
-        DriverRouteNames.orderAccepted: (context) =>
-            _approved(OrderAcceptedPage(
-              tripId: ModalRoute.of(context)?.settings.arguments?.toString(),
-            )),
-        DriverRouteNames.orderInProgress: (context) =>
-            _approved(OrderInProgressPage(
-              tripId: ModalRoute.of(context)?.settings.arguments?.toString(),
-            )),
-        DriverRouteNames.orderCompleted: (context) =>
-            _approved(OrderCompletedPage(
-              tripId: ModalRoute.of(context)?.settings.arguments?.toString(),
-            )),
+        DriverRouteNames.home: (_) =>
+            _approved(const HomePage(), currencyGate: false),
+        for (final route in _currencyRoutes)
+          route: (context) => _approved(_DeferredRoute(
+                route: route,
+                arguments: ModalRoute.of(context)?.settings.arguments,
+              )),
+        for (final route in _otherRoutes)
+          route: (context) => _DeferredRoute(
+                route: route,
+                arguments: ModalRoute.of(context)?.settings.arguments,
+              ),
       };
 
-  static Widget _approved(Widget page) => DriverApiClient.instance.isApproved
-      ? _DriverCurrencyGate(child: page)
-      : const ReviewStatusPage();
+  static const _currencyRoutes = [
+    DriverRouteNames.orders,
+    DriverRouteNames.orderHistory,
+    DriverRouteNames.orderDetail,
+    DriverRouteNames.completedOrderDetail,
+    DriverRouteNames.orderAccepted,
+    DriverRouteNames.orderInProgress,
+    DriverRouteNames.orderCompleted,
+  ];
+
+  static const _otherRoutes = [
+    DriverRouteNames.registration,
+    DriverRouteNames.profile,
+    DriverRouteNames.flightQuery,
+    DriverRouteNames.currency,
+    DriverRouteNames.wechatPayment,
+    DriverRouteNames.settlementOverview,
+    DriverRouteNames.about,
+    DriverRouteNames.contactSupport,
+    DriverRouteNames.vehicle,
+    DriverRouteNames.notificationSettings,
+    DriverRouteNames.languageSettings,
+    DriverRouteNames.addVehicle,
+    DriverRouteNames.profileEdit,
+  ];
+
+  static Widget _approved(Widget page, {bool currencyGate = true}) =>
+      DriverApiClient.instance.isApproved
+          ? currencyGate
+              ? _DriverCurrencyGate(child: page)
+              : page
+          : const ReviewStatusPage();
+}
+
+class _DeferredRoute extends StatefulWidget {
+  const _DeferredRoute({required this.route, this.arguments});
+
+  final String route;
+  final Object? arguments;
+
+  @override
+  State<_DeferredRoute> createState() => _DeferredRouteState();
+}
+
+class _DeferredRouteState extends State<_DeferredRoute> {
+  late Future<void> _load = deferred_routes.loadLibrary();
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<void>(
+        future: _load,
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Scaffold(
+              backgroundColor: DriverColors.background,
+              body: Center(
+                child: TextButton(
+                  onPressed: () => setState(() {
+                    _load = deferred_routes.loadLibrary();
+                  }),
+                  child: const Text('頁面載入失敗，請重試'),
+                ),
+              ),
+            );
+          }
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const Scaffold(
+              backgroundColor: DriverColors.background,
+              body: Center(child: CircularProgressIndicator()),
+            );
+          }
+          return deferred_routes.buildDriverRoute(
+              widget.route, widget.arguments);
+        },
+      );
 }
 
 class _DriverCurrencyGate extends StatefulWidget {

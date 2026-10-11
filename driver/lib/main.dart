@@ -17,7 +17,6 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final api = DriverApiClient.instance;
   unawaited(DriverCurrencyInitialization.ensureReady());
-  await api.restoreSession();
   final fragmentUri = Uri.tryParse(Uri.base.fragment);
   final directToken = Uri.base.queryParameters['token'];
   final fragmentToken = fragmentUri?.queryParameters['token'];
@@ -27,18 +26,61 @@ Future<void> main() async {
           Uri.base.path.endsWith('/order-invite-app') ||
           Uri.base.path.endsWith('/order-invite-preview') ||
           fragmentUri?.path == DriverRouteNames.orderInvite);
-  runApp(DriverApp(
-    initialRoute: isAdminPreview
-        ? DriverRouteNames.login
-        : isOrderInvite
-            ? DriverRouteNames.orderInvite
-            : api.token == null
-                ? DriverRouteNames.login
-                : api.isApproved
-                    ? DriverRouteNames.home
-                    : DriverRouteNames.reviewStatus,
+  runApp(_DriverStartup(
+    api: api,
+    isAdminPreview: isAdminPreview,
+    isOrderInvite: isOrderInvite,
     orderInviteToken: isOrderInvite ? directToken ?? fragmentToken : null,
   ));
+}
+
+class _DriverStartup extends StatefulWidget {
+  const _DriverStartup({
+    required this.api,
+    required this.isAdminPreview,
+    required this.isOrderInvite,
+    this.orderInviteToken,
+  });
+
+  final DriverApiClient api;
+  final bool isAdminPreview;
+  final bool isOrderInvite;
+  final String? orderInviteToken;
+
+  @override
+  State<_DriverStartup> createState() => _DriverStartupState();
+}
+
+class _DriverStartupState extends State<_DriverStartup> {
+  late final Future<void> _session = widget.api.restoreSession();
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<void>(
+        future: _session,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return MaterialApp(
+              debugShowCheckedModeBanner: false,
+              home: Scaffold(
+                backgroundColor: DriverColors.background,
+                body: const Center(child: CircularProgressIndicator()),
+              ),
+            );
+          }
+          return DriverApp(
+            initialRoute: widget.isAdminPreview
+                ? DriverRouteNames.login
+                : widget.isOrderInvite
+                    ? DriverRouteNames.orderInvite
+                    : widget.api.token == null
+                        ? DriverRouteNames.login
+                        : widget.api.isApproved
+                            ? DriverRouteNames.home
+                            : DriverRouteNames.reviewStatus,
+            orderInviteToken: widget.orderInviteToken,
+          );
+        },
+      );
 }
 
 class _NoPageTransitionBuilder extends PageTransitionsBuilder {

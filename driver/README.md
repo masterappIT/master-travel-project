@@ -15,20 +15,23 @@ flutter build web
 ## 啟動資源交付
 
 - Flutter bootstrap 固定使用建置產物中的 `canvaskit/`，保留原有 renderer 與引擎版本，不從 Google CDN 下載 CanvasKit。
-- 共用前端容器只針對司機端 `assets/assets/fonts/NotoSansTC-*.ttf` 產生 Brotli 與 gzip 副本；Nginx 依瀏覽器的 `Accept-Encoding` 優先提供 Brotli，否則沿用 gzip 或原始 TTF。壓縮傳輸解碼後的字體內容、字重與快取規則不變；此項只減少傳輸量，不改 Flutter 載入全部五份字型的啟動行為。
+- Flutter 3.47.4 CanvasKit 在 FontManifest 未宣告 Roboto 時仍會於啟動階段下載一份 Roboto fallback。Bootstrap 將 fallback 基底指向站內 `fonts/`，提供引擎要求的同一份 Roboto WOFF2（SHA-256 `35b02ca266b79eb4996590f15817425a1ce9ebf48f84471843233ff614656bf2`）；字體採 SIL Open Font License 1.1，授權見 `web/fonts/roboto/OFL.txt`。此舉去除該字體的跨站下載依賴，並不改變 Noto Sans TC 的字形與字重。
+- 共用前端容器只針對司機端 `assets/assets/fonts/NotoSansTC-*.ttf` 產生 Brotli 與 gzip 副本；Nginx 依瀏覽器的 `Accept-Encoding` 優先提供 Brotli，否則沿用 gzip 或原始 TTF。壓縮傳輸解碼後的字體內容與快取規則不變。
 - 共用前端容器也為 `canvaskit/**/*.wasm` 產生 gzip 副本（包含根目錄）；Nginx 只在 `canvaskit/` 的 WASM 路徑啟用靜態 gzip。原始 WASM 保留，不支援 gzip 時回退原檔，解壓後內容、`application/wasm` MIME、renderer、引擎版本及快取規則不變。沒有 CanvasKit 的其他前端不產生副本。
-- HTML 不強制同時預載五份繁體中文字體，避免字型在啟動最早階段與主程式及 CanvasKit 競爭；目前 Flutter CanvasKit 仍會在首屏前並行載入 FontManifest 中的全部五份字型。字體內容、家族、字重與原有頁面視覺維持不變。
+- HTML 不預載中文字體，避免字體在啟動最早階段與主程式及 CanvasKit 競爭；Flutter CanvasKit 仍會在首屏前載入 FontManifest 中的字體。
 - Apple 登入 SDK 在使用者按下 Apple 登入時才下載，避免外部 CDN 響應延遲或傳輸競爭卡住首屏；同時載入共用同一次請求，失敗可重試，既有 Apple 授權呼叫與錯誤處理保留。
 - 登入方式配置載入期間先顯示手機驗證卡片，但停用手機／驗證碼輸入、國碼選擇、獲取驗證碼及登入按鈕。配置確認手機登入啟用後開放操作；停用或載入失敗時保留原有卡片隱藏及錯誤行為。此調整減少表單後出現的跳動，不提前啟用登入，也不縮短字體初始化或 API 等待時間。
 - 啟動時維持既有 session 驗證與路由判斷，並讓收款貨幣設定與 session 驗證並行；未登入時不等待設定才顯示登入頁。進入已審核頁面前，若瀏覽器沒有已儲存的收款貨幣，才等待同一份系統預設設定結果，確定幣別後發送依幣種的資料請求；已儲存貨幣者略過設定請求。設定最長等待八秒，失敗時沿用既有本地回退，且同一次應用載入不反覆等待。頁面版面與視覺元件維持原狀。
-- 本輪啟動調整保留登入驗證、API、路由結果、Apple SDK 與通知流程。字體與 CanvasKit 的檔案、字重和快取規則仍維持原狀，相關效能收益須以正式候選及目標真機量測。
+- Flutter 首幀先呈現 session 驗證中的載入狀態，驗證完成後才建立原有登入／審核／首頁路由。已審核首頁可先呈現非金額區域，貨幣設定完成後才請求統計資料；首頁沿用 session 驗證取得的司機資料，不重複呼叫 `me`。首頁以外的次級頁面編譯成延遲載入模組，首次進入時等待該模組並提供載入失敗重試。此調整只縮短部分串行等待與主程式體積，仍須以正式候選測量首次可操作時間。
+- 第二輪候選以一份官方 Noto Sans TC 可變 TTF 取代首屏前五份靜態 TTF 請求，保留家族名稱、完整字集與 400／500／600／700／800 字重。官方檔案 SHA-256 為 `864727d210d54f2537bbe23b3a839436c3992af72de9322af5270897246bd44f`，授權見 `assets/fonts/OFL-NotoSansTC.txt`。本機 Chrome 與 iOS 18.4 模擬器的登入首屏，在同視窗及同 API 失敗條件下，與原五份 TTF 的畫面逐像素一致；其他頁面、目標真機與正式環境的字形及速度仍須驗證。
+- 本輪啟動調整保留登入驗證、API、路由結果、Apple SDK 與通知流程。CanvasKit、字體家族及現有字重維持原狀；字體來源檔案改為可變 TTF，相關效能收益須以正式候選及目標真機量測。
 - 發布前須驗證內地／香港首次及再次載入、iOS／Android 字體與頁面呈現，以及登入、訂單與通知功能。效能收益以真機測量為準；回退使用上一個完整容器映像。
 
 ## TTF 正式配置
 
 - 全域通知提示從應用主題取得文字樣式，再套用既有提示的顏色、大小與 700 字重，避免 root Overlay 繼承框架預設 monospace 字體。一般提示維持三秒；登入頁驗證碼發送提示最多兩秒，離開登入頁時提前移除。發送成功後啟動 60 秒重發倒數，倒數期間停用獲取驗證碼，失敗不啟動倒數；此等待時間不是短信送達時間或驗證碼有效期。頁面銷毀時清理倒數與提示，重新進入登入頁不保留前次倒數。API 與短信驗證契約不變；此局部修復不能視為 iPhone Safari 跨頁面缺字的完整解法。
 
-司機端只使用完整字集 TTF，保留字體 family 與 400／500／600／700／800 字重，不刪字元、不減字重。正式環境實測 WOFF2 曾出現載入變慢與方格缺字，因此不再採用；倉庫已移除司機端 WOFF2 資產、轉換及候選驗證工具，不應重新引入。部署時為原始 TTF 產生 Brotli quality 11 與既有 gzip level 6 副本，保留 gzip／原檔回退；不變更快取規則、CanvasKit 同站載入或 WASM gzip。HTTP 壓縮只保證傳輸解碼後位元組一致，首次載入收益仍須以正式環境及目標真機量測。
+司機端只使用完整字集 TTF；五份靜態 TTF 保留在倉庫作為回退基線，候選產物的 FontManifest 僅引用官方可變 TTF，涵蓋原有 400／500／600／700／800 字重。先前正式實測 WOFF2 曾出現載入變慢與方格缺字，因此本候選不使用 WOFF2，也不刪字元。部署時為原始 TTF 產生 Brotli quality 11 與既有 gzip level 6 副本，保留 gzip／原檔回退；不變更快取規則、CanvasKit 同站載入或 WASM gzip。HTTP 壓縮只保證傳輸解碼後位元組一致，首次載入收益仍須以正式環境及目標真機量測。
 
 ## 收款貨幣與收入顯示
 
@@ -41,7 +44,7 @@ flutter build web
 
 ## 語言字型
 
-- 本地 `develop` 保留 `fc4f7a55` 的既有 CanvasKit 與 Noto Sans TC 完整 TTF 五種字重；繁體、簡體及英文均沿用 TC。不新增 Noto Sans SC 資源，不引入 WOFF2。
+- 既有 `fc4f7a55` 的 CanvasKit 與五份 Noto Sans TC 靜態 TTF 保留在倉庫作為回退基線；本次 Web 候選使用同系列可變 TTF 呈現原五種字重。繁體、簡體及英文均沿用 TC，不新增 Noto Sans SC 資源，也不將 Noto Sans TC 轉成 WOFF2。Roboto fallback 則使用引擎原本要求的 WOFF2 格式，改由站內供應。
 - 已撤回本次測試整合的約 50.5 MiB SC 字型、載入服務及啟動／切換語言的字型等待。語言選擇直接更新偏好，不因 SC 載入而停用選項或回退繁體；既有語言持久化與地址繁簡轉換保留。
 - 這是移除新增載入負擔，不是裝置本機字體方案；CanvasKit 使用已註冊的字型資料，CSS 系統字型名稱不能直接替代。既有 TC 資源成本仍在，簡體字形及 iOS Safari 冷啟動／切換需真機驗收。本地變更不代表已推送或發布。
 

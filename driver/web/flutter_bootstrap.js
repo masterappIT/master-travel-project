@@ -9,6 +9,7 @@ window.__driverCacheMigration.then((shouldReload) => {
   _flutter.loader.load({
     config: {
       canvasKitBaseUrl: 'canvaskit/',
+      fontFallbackBaseUrl: 'fonts/',
     },
   });
 });
