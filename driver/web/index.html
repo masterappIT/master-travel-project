@@ -39,11 +39,6 @@
     }
   </script>
   <link rel="manifest" href="manifest.json">
-  <link rel="preload" href="assets/assets/fonts/NotoSansTC-Regular.ttf" as="fetch" crossorigin fetchpriority="low">
-  <link rel="preload" href="assets/assets/fonts/NotoSansTC-Medium.ttf" as="fetch" crossorigin fetchpriority="low">
-  <link rel="preload" href="assets/assets/fonts/NotoSansTC-SemiBold.ttf" as="fetch" crossorigin fetchpriority="low">
-  <link rel="preload" href="assets/assets/fonts/NotoSansTC-Bold.ttf" as="fetch" crossorigin fetchpriority="low">
-  <link rel="preload" href="assets/assets/fonts/NotoSansTC-ExtraBold.ttf" as="fetch" crossorigin fetchpriority="low">
   <style>
     html,
     body {
@@ -94,12 +89,36 @@
       return false;
     });
   </script>
-  <script src="https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/en_US/appleid.auth.js"></script>
   <script>
+    let driverAppleSdkLoad;
+    function loadDriverAppleSdk() {
+      if (window.AppleID && window.AppleID.auth) return Promise.resolve();
+      if (driverAppleSdkLoad) return driverAppleSdkLoad;
+      driverAppleSdkLoad = new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/en_US/appleid.auth.js';
+        script.async = true;
+        script.onload = () => {
+          if (window.AppleID && window.AppleID.auth) {
+            resolve();
+            return;
+          }
+          script.remove();
+          reject(new Error('Apple Sign In SDK is unavailable'));
+        };
+        script.onerror = () => {
+          script.remove();
+          reject(new Error('Apple Sign In SDK is unavailable'));
+        };
+        document.head.appendChild(script);
+      }).catch((error) => {
+        driverAppleSdkLoad = undefined;
+        throw error;
+      });
+      return driverAppleSdkLoad;
+    }
     window.driverAppleSignIn = async function(clientId, redirectUri) {
-      if (!window.AppleID || !window.AppleID.auth) {
-        throw new Error('Apple Sign In SDK is unavailable');
-      }
+      await loadDriverAppleSdk();
       window.AppleID.auth.init({
         clientId: clientId,
         scope: 'name email',
