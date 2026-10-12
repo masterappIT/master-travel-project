@@ -714,6 +714,10 @@ model PaymentChannelConfig {
   appId              String?
   privateKey         String?   @db.Text
   publicKey          String?   @db.Text
+  merchantMode       String?
+  subMerchantId      String?
+  subAppId           String?
+  certificateSerialNo String?
   publishableKey     String?
   secretKey          String?   @db.Text
   webhookSecret      String?   @db.Text

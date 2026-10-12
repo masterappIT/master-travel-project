@@ -45,6 +45,57 @@ const createStripeDraft = (id, environment) => ({
   account: null
 })
 
+const createWechatPayHkDraft = id => ({
+  id,
+  name: 'WeChat Pay HK',
+  description: '',
+  provider: 'WeChat Pay HK',
+  method: 'APIv3',
+  region: '香港',
+  paymentCurrencies: ['HKD'],
+  settlementCurrency: 'HKD',
+  environment: 'production',
+  status: 'draft',
+  connection: 'untested',
+  lastTestMessage: '',
+  scope: 'passenger',
+  merchantMode: 'direct',
+  merchantId: '',
+  appId: '',
+  subMerchantId: '',
+  subAppId: '',
+  certificateSerialNo: '',
+  privateKey: '',
+  privateKeyConfigured: false,
+  apiV3Key: '',
+  apiV3KeyConfigured: false,
+  notifyUrl: '',
+  account: null
+})
+
+const createPaymeDraft = (id, environment) => ({
+  id,
+  name: `PayMe 香港${environment === 'production' ? '' : '（Sandbox）'}`,
+  description: '',
+  provider: 'PayMe',
+  method: 'API',
+  region: '香港',
+  paymentCurrencies: ['HKD'],
+  settlementCurrency: 'HKD',
+  environment,
+  status: 'draft',
+  connection: 'untested',
+  lastTestMessage: '',
+  scope: 'passenger',
+  clientId: '',
+  clientSecret: '',
+  clientSecretConfigured: false,
+  signingKeyId: '',
+  signingKey: '',
+  signingKeyConfigured: false,
+  account: null
+})
+
 export function createPaymentsPageState() {
   const saved = ref(false)
   const raceSaving = ref(false)
@@ -57,7 +108,7 @@ export function createPaymentsPageState() {
   const editorBusy = ref('')
   const editorError = ref('')
   const openEditor = (config, environment, provider) => {
-    selectedConfig.value = config ? JSON.parse(JSON.stringify(config)) : provider === 'Stripe' ? createStripeDraft(`config-${Date.now()}`, environment || 'sandbox') : { ...createDraft(`config-${Date.now()}`), scope: filter.value.scope === 'all' ? 'passenger' : filter.value.scope, environment: environment || 'sandbox', name: environment ? `香港 AlipayHK ${environment === 'production' ? 'Production' : 'Sandbox'}` : '' }
+    selectedConfig.value = config ? JSON.parse(JSON.stringify(config)) : provider === 'Stripe' ? createStripeDraft(`config-${Date.now()}`, environment || 'sandbox') : provider === 'WeChat Pay HK' ? createWechatPayHkDraft(`config-${Date.now()}`) : provider === 'PayMe' ? createPaymeDraft(`config-${Date.now()}`, environment || 'sandbox') : { ...createDraft(`config-${Date.now()}`), scope: filter.value.scope === 'all' ? 'passenger' : filter.value.scope, environment: environment || 'sandbox', name: environment ? `香港 AlipayHK ${environment === 'production' ? 'Production' : 'Sandbox'}` : '' }
     editorStep.value = 1
     testResult.value = ''
     editorError.value = ''

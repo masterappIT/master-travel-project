@@ -69,6 +69,8 @@ import {
 import { matchesSearchCity } from "./location-search";
 import { buildDriverOrderUrl, resolveDriverOrderBase } from "./order-url";
 import { isStripePaymentMethod, parseStripeConfigInput, testStripeConnection, verifyStripeWebhookSignature } from "./stripe-channel-config";
+import { WECHAT_PAY_HK_API_BASE, isWechatPayHkMerchantMode, parseWechatPayHkConfigInput, testWechatPayHkConnection } from "./wechat-pay-hk-channel-config";
+import { PAYME_API_BASES, parsePaymeConfigInput, testPaymeConnection } from "./payme-channel-config";
 import { inviteShareHtml } from "./order-invite-share";
 import { publicDriverOrderChannelFilter } from "./driver-order-channel";
 import { billableExtraSelections, withinImmediateWindow } from "./quote-extras";
@@ -13581,6 +13583,13 @@ function alipayHkConfigResponse(config: { id: string; displayName: string | null
 function stripeConfigResponse(config: { id: string; displayName: string | null; description: string | null; provider: string; environment: string; publishableKey: string | null; secretKey: string | null; webhookSecret: string | null; lastWebhookAt: Date | null; lastWebhookEvent: string | null; paymentMethods: string[]; partner: string; providerAccount: Prisma.JsonValue; settlementCurrency: string; configuredAt: Date; lastTestedAt: Date | null; lastTestStatus: string | null; lastTestMessage: string | null }) {
   return { id: config.id, name: config.displayName, description: config.description, provider: config.provider, environment: config.environment, publishableKey: config.publishableKey, secretKeyConfigured: Boolean(config.secretKey), webhookSecretConfigured: Boolean(config.webhookSecret), lastWebhookAt: config.lastWebhookAt, lastWebhookEvent: config.lastWebhookEvent, paymentMethods: config.paymentMethods, accountId: config.partner || null, account: config.providerAccount, settlementCurrency: config.settlementCurrency, configuredAt: config.configuredAt, lastTestedAt: config.lastTestedAt, lastTestStatus: config.lastTestStatus, lastTestMessage: config.lastTestMessage };
 }
+function wechatPayHkConfigResponse(config: { id: string; displayName: string | null; description: string | null; provider: string; environment: string; merchantMode: string | null; partner: string; appId: string | null; subMerchantId: string | null; subAppId: string | null; certificateSerialNo: string | null; privateKey: string | null; secretKey: string | null; notifyUrl: string | null; providerAccount: Prisma.JsonValue; settlementCurrency: string; configuredAt: Date; lastTestedAt: Date | null; lastTestStatus: string | null; lastTestMessage: string | null }) {
+  return { id: config.id, name: config.displayName, description: config.description, provider: config.provider, environment: config.environment, merchantMode: config.merchantMode, merchantId: config.partner, appId: config.appId, subMerchantId: config.subMerchantId, subAppId: config.subAppId, certificateSerialNo: config.certificateSerialNo, privateKeyConfigured: Boolean(config.privateKey), apiV3KeyConfigured: Boolean(config.secretKey), notifyUrl: config.notifyUrl, account: config.providerAccount, settlementCurrency: config.settlementCurrency, configuredAt: config.configuredAt, lastTestedAt: config.lastTestedAt, lastTestStatus: config.lastTestStatus, lastTestMessage: config.lastTestMessage };
+}
+// PayMe reuses generic columns: partner = client ID, secretKey = client secret, certificateSerialNo = signing key ID, privateKey = signing key.
+function paymeConfigResponse(config: { id: string; displayName: string | null; description: string | null; provider: string; environment: string; partner: string; certificateSerialNo: string | null; privateKey: string | null; secretKey: string | null; providerAccount: Prisma.JsonValue; settlementCurrency: string; configuredAt: Date; lastTestedAt: Date | null; lastTestStatus: string | null; lastTestMessage: string | null }) {
+  return { id: config.id, name: config.displayName, description: config.description, provider: config.provider, environment: config.environment, clientId: config.partner, signingKeyId: config.certificateSerialNo, clientSecretConfigured: Boolean(config.secretKey), signingKeyConfigured: Boolean(config.privateKey), account: config.providerAccount, settlementCurrency: config.settlementCurrency, configuredAt: config.configuredAt, lastTestedAt: config.lastTestedAt, lastTestStatus: config.lastTestStatus, lastTestMessage: config.lastTestMessage };
+}
 @Controller("settings")
 class SettingsController {
   @Get("alipayhk") async alipayHkConfig(@Req() req: RequestLike) {
@@ -13663,6 +13672,78 @@ class SettingsController {
       data: { lastTestedAt: new Date(), lastTestStatus: result.status, lastTestMessage: result.message, ...(result.account ? { partner: result.account.id, providerAccount: result.account } : {}) },
     });
     return { status: result.status, message: result.message, thirdPartyCalled: true, data: stripeConfigResponse(updated) };
+  }
+  // WeChat Pay APIv3 has no sandbox, so there is a single production configuration.
+  @Get("wechatpay-hk") async wechatPayHkConfigs(@Req() req: RequestLike) {
+    requireRole(req, ["SUPER_ADMIN", "OPERATOR"]);
+    const configs = await prisma.paymentChannelConfig.findMany({ where: { provider: "WECHATPAY_HK" } });
+    return { data: configs.map(wechatPayHkConfigResponse) };
+  }
+  @Post("wechatpay-hk") async saveWechatPayHkConfig(@Req() req: RequestLike, @Body() body: Record<string, unknown>) {
+    requireRole(req, ["SUPER_ADMIN"]);
+    const where = { provider_environment: { provider: "WECHATPAY_HK", environment: "production" } };
+    const existing = await prisma.paymentChannelConfig.findUnique({ where });
+    const parsed = parseWechatPayHkConfigInput(body, { privateKey: Boolean(existing?.privateKey), apiV3Key: Boolean(existing?.secretKey) });
+    if ("error" in parsed) throw new BadRequestException(parsed.error);
+    const { merchantMode, displayName, description, merchantId, appId, subMerchantId, subAppId, certificateSerialNo, privateKey, apiV3Key, notifyUrl } = parsed.value;
+    const shared = { displayName, description, merchantMode, partner: merchantId, appId, subMerchantId, subAppId, certificateSerialNo, notifyUrl, ...(privateKey ? { privateKey: encryptWechatSecret(privateKey) } : {}), ...(apiV3Key ? { secretKey: encryptWechatSecret(apiV3Key) } : {}) };
+    // Any saved field may change which merchant the credentials address, so the previous test result no longer applies.
+    const saved = await prisma.paymentChannelConfig.upsert({
+      where,
+      create: { ...shared, provider: "WECHATPAY_HK", region: "HK", environment: "production", interface: "APIv3", gatewayUrl: WECHAT_PAY_HK_API_BASE, paymentCurrency: "HKD", paymentCurrencies: ["HKD"], settlementCurrency: "HKD" },
+      update: { ...shared, configuredAt: new Date(), lastTestedAt: null, lastTestStatus: null, lastTestMessage: null, providerAccount: Prisma.DbNull },
+    });
+    return { data: wechatPayHkConfigResponse(saved), replacedSecrets: Boolean(existing && (privateKey || apiV3Key)) };
+  }
+  @Post("wechatpay-hk/test") async testWechatPayHkConfig(@Req() req: RequestLike) {
+    requireRole(req, ["SUPER_ADMIN"]);
+    const config = await prisma.paymentChannelConfig.findUnique({ where: { provider_environment: { provider: "WECHATPAY_HK", environment: "production" } } });
+    if (!config?.privateKey || !config.secretKey || !config.certificateSerialNo || !config.appId || !isWechatPayHkMerchantMode(config.merchantMode)) throw new HttpException("WeChat Pay HK configuration is not saved", HttpStatus.NOT_FOUND);
+    let privateKey: string;
+    let apiV3Key: string;
+    try { privateKey = decryptWechatSecret(config.privateKey); apiV3Key = decryptWechatSecret(config.secretKey); } catch { throw new BadRequestException("WeChat Pay HK saved keys cannot be read"); }
+    const result = await testWechatPayHkConnection({ merchantMode: config.merchantMode, merchantId: config.partner, appId: config.appId, subMerchantId: config.subMerchantId, certificateSerialNo: config.certificateSerialNo, privateKey, apiV3Key });
+    const updated = await prisma.paymentChannelConfig.update({
+      where: { id: config.id },
+      data: { lastTestedAt: new Date(), lastTestStatus: result.status, lastTestMessage: result.message, providerAccount: result.account ?? Prisma.DbNull },
+    });
+    return { status: result.status, message: result.message, thirdPartyCalled: true, data: wechatPayHkConfigResponse(updated) };
+  }
+  @Get("payme") async paymeConfigs(@Req() req: RequestLike) {
+    requireRole(req, ["SUPER_ADMIN", "OPERATOR"]);
+    const configs = await prisma.paymentChannelConfig.findMany({ where: { provider: "PAYME" }, orderBy: { environment: "asc" } });
+    return { data: configs.map(paymeConfigResponse) };
+  }
+  @Post("payme") async savePaymeConfig(@Req() req: RequestLike, @Body() body: Record<string, unknown>) {
+    requireRole(req, ["SUPER_ADMIN"]);
+    const environment = body.environment === "production" ? "production" : "sandbox";
+    const existing = await prisma.paymentChannelConfig.findUnique({ where: { provider_environment: { provider: "PAYME", environment } } });
+    const parsed = parsePaymeConfigInput(body, { clientSecret: Boolean(existing?.secretKey), signingKey: Boolean(existing?.privateKey) });
+    if ("error" in parsed) throw new BadRequestException(parsed.error);
+    const { displayName, description, clientId, clientSecret, signingKeyId, signingKey } = parsed.value;
+    const shared = { displayName, description, partner: clientId, certificateSerialNo: signingKeyId, ...(clientSecret ? { secretKey: encryptWechatSecret(clientSecret) } : {}), ...(signingKey ? { privateKey: encryptWechatSecret(signingKey) } : {}) };
+    // Any saved field may change which PayMe application the credentials address, so the previous test result no longer applies.
+    const saved = await prisma.paymentChannelConfig.upsert({
+      where: { provider_environment: { provider: "PAYME", environment: parsed.value.environment } },
+      create: { ...shared, provider: "PAYME", region: "HK", environment: parsed.value.environment, interface: "API", gatewayUrl: PAYME_API_BASES[parsed.value.environment], paymentCurrency: "HKD", paymentCurrencies: ["HKD"], settlementCurrency: "HKD" },
+      update: { ...shared, configuredAt: new Date(), lastTestedAt: null, lastTestStatus: null, lastTestMessage: null, providerAccount: Prisma.DbNull },
+    });
+    return { data: paymeConfigResponse(saved), replacedSecrets: Boolean(existing && (clientSecret || signingKey)) };
+  }
+  @Post("payme/test") async testPaymeConfig(@Req() req: RequestLike, @Body() body: { environment?: string }) {
+    requireRole(req, ["SUPER_ADMIN"]);
+    const environment = body.environment === "production" ? "production" : "sandbox";
+    const config = await prisma.paymentChannelConfig.findUnique({ where: { provider_environment: { provider: "PAYME", environment } } });
+    if (!config?.secretKey || !config.privateKey || !config.certificateSerialNo) throw new HttpException("PayMe configuration is not saved", HttpStatus.NOT_FOUND);
+    let clientSecret: string;
+    let signingKey: string;
+    try { clientSecret = decryptWechatSecret(config.secretKey); signingKey = decryptWechatSecret(config.privateKey); } catch { throw new BadRequestException("PayMe saved keys cannot be read"); }
+    const result = await testPaymeConnection({ environment, clientId: config.partner, clientSecret, signingKeyId: config.certificateSerialNo, signingKey });
+    const updated = await prisma.paymentChannelConfig.update({
+      where: { id: config.id },
+      data: { lastTestedAt: new Date(), lastTestStatus: result.status, lastTestMessage: result.message, providerAccount: result.account ?? Prisma.DbNull },
+    });
+    return { status: result.status, message: result.message, thirdPartyCalled: true, data: paymeConfigResponse(updated) };
   }
   @Get("apple/status") async appleStatus(@Req() req: RequestLike) {
     requireRole(req, ["SUPER_ADMIN"]);

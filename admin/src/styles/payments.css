@@ -116,6 +116,10 @@
 .payment-settings-admin .payment-webhook-url .payment-button { flex: 0 0 auto; }
 .payment-settings-admin .payment-field-warning { color: var(--payment-warning); font-size: 11px; font-weight: 400; }
 .payment-settings-admin .payment-provider-wordmark { color: #635bff; font-size: 30px; font-weight: 800; letter-spacing: -.04em; line-height: 1; }
+/* The official WeChat Pay HK logo is the reversed (white) version, so it sits on the brand green. */
+.payment-settings-admin .payment-provider-directory-logo-wechat { background: #07c160; }
+.payment-settings-admin .payment-provider-directory-card>header>.payment-status { flex: none; white-space: nowrap; }
+.payment-settings-admin .payment-test-note { margin: 0; color: var(--payment-muted); font-size: 12px; line-height: 1.6; }
 .payment-settings-admin .payment-editor-feedback { margin: 0; padding: 12px 14px; border-radius: 10px; color: var(--payment-warning); background: var(--payment-warning-soft); font-size: 12px; line-height: 1.6; }
 
 .payment-settings-admin .payment-currency-step { display: grid; gap: 24px; max-width: 760px; }
