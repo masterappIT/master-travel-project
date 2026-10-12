@@ -95,7 +95,7 @@ installStaleChunkRecovery().setPrompt(() => requestConfirmation(locale.value ===
 const paymentsPageState = createPaymentsPageState()
 const financePageState = createFinancePageState()
 watch([pricingCurrency, settlementCurrency, passengerDefaultCurrency, driverDefaultCurrency], () => financePageState.syncCurrencySettings({ pricingCurrency: pricingCurrency.value, settlementCurrency: settlementCurrency.value, passengerDefaultCurrency: passengerDefaultCurrency.value, driverDefaultCurrency: driverDefaultCurrency.value }), { immediate: true })
-const { saved: paymentSettingsSaved, raceSaving: driverRaceSaving, configs: paymentConfigs, selectedConfig: selectedPaymentConfig, editorOpen: paymentEditorOpen, editorStep: paymentEditorStep, filter: paymentConfigFilter, testResult: paymentTestResult, editorBusy: paymentEditorBusy, editorError: paymentEditorError, openEditor: openPaymentEditor, visibleConfigs: visiblePaymentConfigs, currencyConfigCount } = paymentsPageState
+const { saved: paymentSettingsSaved, raceSaving: driverRaceSaving, configs: paymentConfigs, selectedConfig: selectedPaymentConfig, editorOpen: paymentEditorOpen, editorStep: paymentEditorStep, filter: paymentConfigFilter, testResult: paymentTestResult, editorBusy: paymentEditorBusy, editorError: paymentEditorError, openEditor: openPaymentEditor, currencyConfigCount } = paymentsPageState
 const notificationPageState = createNotificationsPageState(notificationUsers, notificationDrivers)
 const notificationRecipientSearch = notificationPageState.recipientSearch
 let notificationOptionRequest = 0
@@ -212,7 +212,7 @@ const saveFinanceRateSettings = async () => {
 const notificationsActions = createNotificationsActions({ api, notificationForm, notificationRecipientSearch, notificationTemplates, load, error, displayError, notify, requestConfirmation })
 const { templateActionId, resetNotification, createTemplate, setTemplateEnabled, removeTemplate, clearNotificationRecipients, toggleNotificationRecipient, notificationRecipientChecked, saveNotification } = notificationsActions
 const paymentsActions = createPaymentsActions({ api, paymentSettings, paymentCurrencies, paymentSettingsSaved, driverRaceSaving, error, displayError, configs: paymentConfigs, selectedConfig: selectedPaymentConfig, editorOpen: paymentEditorOpen, editorStep: paymentEditorStep, testResult: paymentTestResult, editorBusy: paymentEditorBusy, editorError: paymentEditorError })
-const { savePaymentSettings, loadPaymentConfigs, closePaymentEditor, savePaymentConfigDraft, duplicatePaymentConfig, testPaymentConfig } = paymentsActions
+const { savePaymentSettings, loadPaymentConfigs, closePaymentEditor, savePaymentConfigDraft, testPaymentConfig } = paymentsActions
 const { edit: editUser, reset: resetUser, select: selectUser, save: saveUser, saving: userSaving, updateStatus: updateUserStatus, remove: removeUser, openWalletAdjustment, saveWalletAdjustment } = usersActions
 const loadUserOptions = async selectedId => {
   const options = await loadAllOptions(query => usersApi.options(query))
@@ -323,12 +323,10 @@ const App = { components: { SupportPage }, setup() {
      paymentEditorBusy,
      paymentEditorError,
      paymentApiBase: API,
-     visiblePaymentConfigs,
      currencyConfigCount,
      openPaymentEditor,
      closePaymentEditor,
      savePaymentConfigDraft,
-     duplicatePaymentConfig,
      testPaymentConfig,
      savePaymentSettings
    })

@@ -1,6 +1,12 @@
 import { createDecipheriv, createPrivateKey, createSign, randomBytes } from "node:crypto";
 
 export const WECHAT_PAY_HK_API_BASE = "https://apihk.mch.weixin.qq.com";
+export const WECHAT_PAY_CN_API_BASE = "https://api.mch.weixin.qq.com";
+
+/** The Hong Kong and mainland APIv3 share signing and certificate handling; only the host, paths and sub-merchant lookup differ. */
+export type WechatPayApi = { base: string; certificatesPath: string; subMerchantLookup: boolean };
+export const WECHAT_PAY_HK_API: WechatPayApi = { base: WECHAT_PAY_HK_API_BASE, certificatesPath: "/v3/global/certificates", subMerchantLookup: true };
+export const WECHAT_PAY_CN_API: WechatPayApi = { base: WECHAT_PAY_CN_API_BASE, certificatesPath: "/v3/certificates", subMerchantLookup: false };
 export const WECHAT_PAY_HK_MERCHANT_MODES = ["direct", "institution"] as const;
 export type WechatPayHkMerchantMode = (typeof WECHAT_PAY_HK_MERCHANT_MODES)[number];
 
@@ -113,8 +119,8 @@ export function decryptWechatPayResource(apiV3Key: string, resource: { nonce: st
 
 type WechatPayFetch = (url: string, init: { headers: Record<string, string>; signal: AbortSignal }) => Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>;
 
-async function wechatPayGet(fetchImpl: WechatPayFetch, credentials: WechatPayHkCredentials, canonicalUrl: string) {
-  const response = await fetchImpl(`${WECHAT_PAY_HK_API_BASE}${canonicalUrl}`, {
+async function wechatPayGet(fetchImpl: WechatPayFetch, api: WechatPayApi, credentials: WechatPayHkCredentials, canonicalUrl: string) {
+  const response = await fetchImpl(`${api.base}${canonicalUrl}`, {
     headers: { Authorization: buildWechatPayAuthorization(credentials, "GET", canonicalUrl), Accept: "application/json", "User-Agent": "master-travel-admin/1.0" },
     signal: AbortSignal.timeout(10_000),
   });
@@ -127,10 +133,10 @@ async function wechatPayGet(fetchImpl: WechatPayFetch, credentials: WechatPayHkC
  * serial number and private key), decrypts one (proves the APIv3 key), and in institution mode looks up the sub-merchant.
  * Read-only; never creates an order. Messages never contain key material.
  */
-export async function testWechatPayHkConnection(credentials: WechatPayHkCredentials, fetchImpl: WechatPayFetch = fetch as unknown as WechatPayFetch): Promise<WechatPayHkTestResult> {
+export async function testWechatPayHkConnection(credentials: WechatPayHkCredentials, fetchImpl: WechatPayFetch = fetch as unknown as WechatPayFetch, api: WechatPayApi = WECHAT_PAY_HK_API): Promise<WechatPayHkTestResult> {
   let certificates: Awaited<ReturnType<typeof wechatPayGet>>;
   try {
-    certificates = await wechatPayGet(fetchImpl, credentials, "/v3/global/certificates");
+    certificates = await wechatPayGet(fetchImpl, api, credentials, api.certificatesPath);
   } catch {
     return { status: "error", message: "無法連線到微信支付，請稍後重試。", account: null };
   }
@@ -139,6 +145,11 @@ export async function testWechatPayHkConnection(credentials: WechatPayHkCredenti
   }
   if (certificates.status === 403) return { status: "error", message: `此商戶號沒有呼叫該接口的權限${certificates.code ? `（${certificates.code}）` : ""}，請在微信支付商戶平台確認 API 權限。`, account: null };
   const list = Array.isArray(certificates.body?.data) ? (certificates.body.data as Record<string, unknown>[]) : [];
+  // Merchants on the WeChat Pay public-key scheme have no platform certificate to download; the signature was still accepted.
+  if (certificates.status === 404 || (certificates.ok && !list.length)) {
+    const account: WechatPayHkAccountSnapshot = { merchantId: credentials.merchantId, merchantMode: credentials.merchantMode, platformCertificateSerialNo: null, platformCertificateExpireTime: null, subMerchant: null };
+    return { status: "warning", message: `商戶號、API 證書與私鑰驗證通過，但此商戶沒有可下載的平台證書（HTTP ${certificates.status}${certificates.code ? `，${certificates.code}` : ""}），可能使用微信支付公鑰模式，因此未能驗證 APIv3 密鑰。`, account };
+  }
   if (!certificates.ok || !list.length) {
     return { status: "error", message: `微信支付回應異常（HTTP ${certificates.status}${certificates.code ? `，${certificates.code}` : ""}），請稍後重試。`, account: null };
   }
@@ -164,11 +175,14 @@ export async function testWechatPayHkConnection(credentials: WechatPayHkCredenti
   if (credentials.merchantMode !== "institution" || !credentials.subMerchantId) {
     return { status: "success", message: "已連線微信支付：商戶號、API 證書、私鑰與 APIv3 密鑰均驗證通過。", account };
   }
+  if (!api.subMerchantLookup) {
+    return { status: "success", message: `已連線微信支付：服務商商戶號、API 證書、私鑰與 APIv3 密鑰均驗證通過。子商戶號 ${credentials.subMerchantId} 無法在此測試中核對，請自行確認。`, account };
+  }
 
   // The sub-merchant lookup is advisory: the institution credentials above are already proven valid.
   const query = `/v3/global/merchants/${encodeURIComponent(credentials.subMerchantId)}?sp_mchid=${encodeURIComponent(credentials.merchantId)}&sp_appid=${encodeURIComponent(credentials.appId)}`;
   try {
-    const subMerchant = await wechatPayGet(fetchImpl, credentials, query);
+    const subMerchant = await wechatPayGet(fetchImpl, api, credentials, query);
     if (subMerchant.ok && subMerchant.body?.sub_mchid === credentials.subMerchantId) {
       const name = typeof subMerchant.body.shortname === "string" ? subMerchant.body.shortname : typeof subMerchant.body.name === "string" ? subMerchant.body.name : null;
       account.subMerchant = { id: credentials.subMerchantId, name };

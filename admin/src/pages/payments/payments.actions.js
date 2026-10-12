@@ -30,6 +30,7 @@ const alipayHkErrorText = {
   'WeChat Pay HK APIv3 key must be 32 characters': 'APIv3 密鑰必須是 32 位字元。',
   'WeChat Pay HK notify URL must use HTTPS': '支付結果通知地址必須使用 HTTPS。',
   'WeChat Pay HK configuration is not saved': '找不到已保存的 WeChat Pay HK 配置，請先保存。',
+  'WeChat Pay CN configuration is not saved': '找不到已保存的內地微信支付配置，請先保存。',
   'WeChat Pay HK saved keys cannot be read': '已保存的金鑰無法讀取，請重新輸入私鑰與 APIv3 密鑰後保存。',
   'PayMe environment is invalid': '配置環境不正確，請關閉後重新開啟配置。',
   'PayMe name or description is too long': '配置名稱不可超過 80 字，說明不可超過 500 字。',
@@ -65,9 +66,10 @@ const stripeConfigFromApi = item => ({
   publishableKey: item.publishableKey || '', secretKey: '', secretKeyConfigured: item.secretKeyConfigured, webhookSecret: '', webhookSecretConfigured: Boolean(item.webhookSecretConfigured), lastWebhookAt: item.lastWebhookAt || null, lastWebhookEvent: item.lastWebhookEvent || '', paymentMethods: item.paymentMethods || [], account: item.account || null
 })
 
-const wechatPayHkConfigFromApi = item => ({
-  id: item.id, name: item.name || 'WeChat Pay HK', description: item.description || '', provider: 'WeChat Pay HK', environment: item.environment, method: 'APIv3', region: '香港',
-  currency: 'HKD', paymentCurrencies: ['HKD'], settlementCurrency: item.settlementCurrency || 'HKD', status: 'draft', scope: 'passenger',
+// Shared by the Hong Kong and mainland channels; `cn` selects the mainland labels and RMB.
+const wechatPayConfigFromApi = (item, cn) => ({
+  id: item.id, name: item.name || (cn ? '內地微信支付' : 'WeChat Pay HK'), description: item.description || '', provider: cn ? '內地微信支付' : 'WeChat Pay HK', environment: item.environment, method: 'APIv3', region: cn ? '中國內地' : '香港',
+  currency: cn ? 'RMB' : 'HKD', paymentCurrencies: [cn ? 'RMB' : 'HKD'], settlementCurrency: item.settlementCurrency || (cn ? 'RMB' : 'HKD'), status: 'draft', scope: 'passenger',
   connection: ['success', 'warning', 'error'].includes(item.lastTestStatus) ? item.lastTestStatus : 'untested', lastTestMessage: item.lastTestMessage || '',
   merchantMode: item.merchantMode || 'direct', merchantId: item.merchantId || '', appId: item.appId || '', subMerchantId: item.subMerchantId || '', subAppId: item.subAppId || '', certificateSerialNo: item.certificateSerialNo || '',
   privateKey: '', privateKeyConfigured: Boolean(item.privateKeyConfigured), apiV3Key: '', apiV3KeyConfigured: Boolean(item.apiV3KeyConfigured), notifyUrl: item.notifyUrl || '', account: item.account || null
@@ -103,8 +105,8 @@ export function createPaymentsActions({ api, paymentSettings, paymentCurrencies,
   async function loadPaymentConfigs() {
     // The providers load independently so one failing endpoint does not hide the other's saved configs.
     const optional = path => api(path).catch(err => { error.value = displayError(err); return { data: [] } })
-    const [response, stripeResponse, wechatPayHkResponse, paymeResponse, alipayCnResponse] = await Promise.all([api('/settings/alipayhk'), optional('/settings/stripe'), optional('/settings/wechatpay-hk'), optional('/settings/payme'), optional('/settings/alipay-cn')])
-    configs.value = [...stripeResponse.data.map(stripeConfigFromApi), ...wechatPayHkResponse.data.map(wechatPayHkConfigFromApi), ...paymeResponse.data.map(paymeConfigFromApi), ...alipayCnResponse.data.map(alipayCnConfigFromApi), ...response.data.map(item => ({ id: item.id, name: item.name || `香港 AlipayHK (${item.environment})`, provider: 'AlipayHK', environment: item.environment, method: 'WAP', region: '香港', currency: item.paymentCurrency, paymentCurrencies: item.paymentCurrencies || [item.paymentCurrency], settlementCurrency: item.settlementCurrency || 'HKD', status: 'draft', connection: item.lastTestStatus === 'success' ? 'success' : 'untested', scope: 'passenger', capabilities: { trip: true, wallet: false, refund: true, partialRefund: false }, api: { baseUrl: item.gatewayUrl, createUrl: 'create_forex_trade_wap', queryUrl: 'single_trade_query', refundUrl: 'forex_refund' }, merchant: { merchantId: item.partner, appId: item.appId || '' }, secrets: { apiKey: '', apiSecret: '', privateKey: '', publicKey: '', callbackSecret: '' }, privateKeyConfigured: item.privateKeyConfigured, publicKeyConfigured: item.publicKeyConfigured, callbacks: { paymentUrl: item.notifyUrl || '', refundUrl: item.returnUrl || '' }, description: item.description || '' }))]
+    const [response, stripeResponse, wechatPayHkResponse, paymeResponse, alipayCnResponse, wechatPayCnResponse] = await Promise.all([api('/settings/alipayhk'), optional('/settings/stripe'), optional('/settings/wechatpay-hk'), optional('/settings/payme'), optional('/settings/alipay-cn'), optional('/settings/wechatpay-cn')])
+    configs.value = [...stripeResponse.data.map(stripeConfigFromApi), ...wechatPayHkResponse.data.map(item => wechatPayConfigFromApi(item, false)), ...paymeResponse.data.map(paymeConfigFromApi), ...alipayCnResponse.data.map(alipayCnConfigFromApi), ...wechatPayCnResponse.data.map(item => wechatPayConfigFromApi(item, true)), ...response.data.map(item => ({ id: item.id, name: item.name || `香港 AlipayHK (${item.environment})`, provider: 'AlipayHK', environment: item.environment, method: 'WAP', region: '香港', currency: item.paymentCurrency, paymentCurrencies: item.paymentCurrencies || [item.paymentCurrency], settlementCurrency: item.settlementCurrency || 'HKD', status: 'draft', connection: item.lastTestStatus === 'success' ? 'success' : 'untested', scope: 'passenger', capabilities: { trip: true, wallet: false, refund: true, partialRefund: false }, api: { baseUrl: item.gatewayUrl, createUrl: 'create_forex_trade_wap', queryUrl: 'single_trade_query', refundUrl: 'forex_refund' }, merchant: { merchantId: item.partner, appId: item.appId || '' }, secrets: { apiKey: '', apiSecret: '', privateKey: '', publicKey: '', callbackSecret: '' }, privateKeyConfigured: item.privateKeyConfigured, publicKeyConfigured: item.publicKeyConfigured, callbacks: { paymentUrl: item.notifyUrl || '', refundUrl: item.returnUrl || '' }, description: item.description || '' }))]
   }
   const closePaymentEditor = () => { editorOpen.value = false; selectedConfig.value = null }
   const replaceConfig = config => {
@@ -133,22 +135,25 @@ export function createPaymentsActions({ api, paymentSettings, paymentCurrencies,
     } catch (err) { editorError.value = editorErrorText(err) } finally { editorBusy.value = '' }
   }
   // Same flow as Stripe: the credentials are complete once saved, so the connection test follows immediately.
-  const saveWechatPayHkConfig = async value => {
+  const wechatPayEndpoint = config => config.provider === '內地微信支付' ? '/settings/wechatpay-cn' : '/settings/wechatpay-hk'
+  const saveWechatPayConfig = async value => {
+    const cn = value.provider === '內地微信支付'
     try {
       editorError.value = ''
       editorBusy.value = 'saving'
-      const response = await api('/settings/wechatpay-hk', { method: 'POST', body: JSON.stringify({ merchantMode: value.merchantMode, name: value.name, description: value.description, merchantId: value.merchantId, appId: value.appId, subMerchantId: value.subMerchantId, subAppId: value.subAppId, certificateSerialNo: value.certificateSerialNo, privateKey: value.privateKey, apiV3Key: value.apiV3Key, notifyUrl: value.notifyUrl }) })
-      replaceConfig(wechatPayHkConfigFromApi(response.data))
+      const response = await api(wechatPayEndpoint(value), { method: 'POST', body: JSON.stringify({ merchantMode: value.merchantMode, name: value.name, description: value.description, merchantId: value.merchantId, appId: value.appId, subMerchantId: value.subMerchantId, subAppId: value.subAppId, certificateSerialNo: value.certificateSerialNo, privateKey: value.privateKey, apiV3Key: value.apiV3Key, notifyUrl: value.notifyUrl }) })
+      replaceConfig(wechatPayConfigFromApi(response.data, cn))
       editorBusy.value = ''
-      await testWechatPayHkConfig()
+      await testWechatPayConfig()
     } catch (err) { editorError.value = editorErrorText(err) } finally { editorBusy.value = '' }
   }
-  const testWechatPayHkConfig = async () => {
+  const testWechatPayConfig = async () => {
+    const cn = selectedConfig.value.provider === '內地微信支付'
     try {
       editorError.value = ''
       editorBusy.value = 'testing'
-      const result = await api('/settings/wechatpay-hk/test', { method: 'POST' })
-      replaceConfig(wechatPayHkConfigFromApi(result.data))
+      const result = await api(wechatPayEndpoint(selectedConfig.value) + '/test', { method: 'POST' })
+      replaceConfig(wechatPayConfigFromApi(result.data, cn))
     } catch (err) { editorError.value = editorErrorText(err) } finally { editorBusy.value = '' }
   }
   const savePaymeConfig = async value => {
@@ -190,7 +195,7 @@ export function createPaymentsActions({ api, paymentSettings, paymentCurrencies,
   const savePaymentConfigDraft = async value => {
     if (!value || editorBusy.value) return
     if (value.provider === 'Stripe') return saveStripeConfig(value)
-    if (value.provider === 'WeChat Pay HK') return saveWechatPayHkConfig(value)
+    if (value.provider === 'WeChat Pay HK' || value.provider === '內地微信支付') return saveWechatPayConfig(value)
     if (value.provider === 'PayMe') return savePaymeConfig(value)
     if (value.provider === '內地支付寶') return saveAlipayCnConfig(value)
     try {
@@ -209,21 +214,11 @@ export function createPaymentsActions({ api, paymentSettings, paymentCurrencies,
       setTimeout(() => { paymentSettingsSaved.value = false }, 3000)
     } catch (err) { editorError.value = editorErrorText(err) } finally { editorBusy.value = '' }
   }
-  const duplicatePaymentConfig = config => {
-    // One saved config per environment: a copy only makes sense as a draft for the other one, and secrets never leave the backend.
-    const environment = config.environment === 'production' ? 'sandbox' : 'production'
-    if (configs.value.some(item => item.provider === config.provider && item.environment === environment)) return
-    selectedConfig.value = { ...JSON.parse(JSON.stringify(config)), id: `config-${Date.now()}`, environment, name: `香港 AlipayHK (${environment})`, status: 'draft', connection: 'untested', privateKeyConfigured: false, publicKeyConfigured: false, description: '' }
-    editorStep.value = 1
-    testResult.value = ''
-    editorError.value = ''
-    editorOpen.value = true
-  }
   const testPaymentConfig = async () => {
     const configId = selectedConfig.value?.id
     if (editorBusy.value) return
     if (selectedConfig.value?.provider === 'Stripe' && configId && !configId.startsWith('config-')) return testStripeConfig()
-    if (selectedConfig.value?.provider === 'WeChat Pay HK' && configId && !configId.startsWith('config-')) return testWechatPayHkConfig()
+    if (['WeChat Pay HK', '內地微信支付'].includes(selectedConfig.value?.provider) && configId && !configId.startsWith('config-')) return testWechatPayConfig()
     if (selectedConfig.value?.provider === 'PayMe' && configId && !configId.startsWith('config-')) return testPaymeConfig()
     if (selectedConfig.value?.provider === '內地支付寶' && configId && !configId.startsWith('config-')) return testAlipayCnConfig()
     if (!configId || configId.startsWith('config-') || !selectedConfig.value?.environment) {
@@ -240,5 +235,5 @@ export function createPaymentsActions({ api, paymentSettings, paymentCurrencies,
       if (saved) saved.connection = testResult.value === 'success' ? 'success' : 'untested'
     } catch (err) { testResult.value = 'error'; editorError.value = editorErrorText(err) } finally { editorBusy.value = '' }
   }
-  return { savePaymentSettings, loadPaymentConfigs, closePaymentEditor, savePaymentConfigDraft, duplicatePaymentConfig, testPaymentConfig }
+  return { savePaymentSettings, loadPaymentConfigs, closePaymentEditor, savePaymentConfigDraft, testPaymentConfig }
 }

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createCipheriv, createVerify, generateKeyPairSync } from "node:crypto";
-import { buildWechatPayAuthorization, decryptWechatPayResource, parseWechatPayHkConfigInput, testWechatPayHkConnection } from "./wechat-pay-hk-channel-config";
+import { WECHAT_PAY_CN_API, buildWechatPayAuthorization, decryptWechatPayResource, parseWechatPayHkConfigInput, testWechatPayHkConnection } from "./wechat-pay-hk-channel-config";
 
 const { privateKey: PRIVATE_KEY, publicKey: PUBLIC_KEY } = generateKeyPairSync("rsa", {
   modulusLength: 2048,
@@ -124,4 +124,21 @@ test("institution mode confirms the sub-merchant and only warns when it cannot",
   assert.equal(missing.status, "warning");
   assert.match(missing.message, /INVALID_REQUEST/);
   assert.equal(missing.account?.subMerchant, null);
+});
+
+test("mainland uses its own host and path and does not look up the sub-merchant", async () => {
+  const provider = { ...credentials, merchantMode: "institution" as const, subMerchantId: "1900000109" };
+  const { fetchImpl, calls } = wechatStub({ "/v3/certificates": { status: 200, body: certificateList() } });
+  const result = await testWechatPayHkConnection(provider, fetchImpl, WECHAT_PAY_CN_API);
+  assert.equal(result.status, "success");
+  assert.match(result.message, /1900000109/);
+  assert.equal(result.account?.subMerchant, null);
+  assert.deepEqual(calls.map((call) => call.url), ["https://api.mch.weixin.qq.com/v3/certificates"]);
+});
+
+test("a merchant without downloadable platform certificates gets a warning, not a false failure", async () => {
+  const result = await testWechatPayHkConnection(credentials, wechatStub({ "/v3/certificates": { status: 404, body: { code: "RESOURCE_NOT_EXISTS" } } }).fetchImpl, WECHAT_PAY_CN_API);
+  assert.equal(result.status, "warning");
+  assert.match(result.message, /RESOURCE_NOT_EXISTS/);
+  assert.equal(result.account?.platformCertificateSerialNo, null);
 });
