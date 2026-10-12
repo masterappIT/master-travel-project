@@ -91,3 +91,74 @@ test("order invite production mode sends SMS and stores the issued code", async 
     const [salt, digest] = f.challenge.codeHash.split(":");
     assert.equal(scryptSync(f.sent, salt, 64).toString("hex"), digest);
 });
+
+function registerFixture(codeHash: string) {
+  const methodStart = source.indexOf('  @Post(":token/register-and-accept")');
+  const methodEnd = source.indexOf("    const now = new Date();", methodStart);
+  // Stop right after the code check: a passing check reaches the vehicle
+  // category lookup, which reports a sentinel instead of continuing.
+  const registerSource = `class DriverOrderInviteController {\n${source.slice(methodStart, methodEnd)}\n}}`;
+  const context = {
+    createHash: require("node:crypto").createHash,
+    randomBytes,
+    scryptSync,
+    timingSafeEqual,
+    Buffer,
+    Date,
+    Post: () => () => {},
+    Param: () => () => {},
+    Body: () => () => {},
+    UploadedFile: () => () => {},
+    UseInterceptors: () => () => {},
+    FileInterceptor: () => undefined,
+    normalizeVehiclePlateData: (body: any) => body,
+    validVehiclePlateData: () => true,
+    parsePhoneIdentity: (body: any) => ({ countryCode: body.countryCode, phoneNumber: body.phoneNumber }),
+    prisma: {
+      driverOtpChallenge: {
+        findUnique: async () => ({
+          id: "challenge-1",
+          driverId: null,
+          consumedAt: null,
+          invitationOrderUrlId: "invite-1",
+          expiresAt: new Date(Date.now() + 60000),
+          countryCode: "+852",
+          phone: "55558888",
+          codeHash,
+        }),
+      },
+      vehicleCategory: { findFirst: async () => { throw new Error("code accepted"); } },
+    },
+    HttpException: class extends Error {},
+    HttpStatus: { BAD_REQUEST: 400, CONFLICT: 409 },
+    UnauthorizedException: class extends Error {},
+  };
+  const compiled = ts.transpileModule(
+    `${helpers}\n${registerSource}\nnew DriverOrderInviteController()`,
+    { compilerOptions: { target: ts.ScriptTarget.ES2022, experimentalDecorators: true } },
+  ).outputText;
+  const controller = runInNewContext(compiled, context);
+  controller.details = async () => ({ invitation: { id: "invite-1" } });
+  return (code: string) => controller.registerAndAccept("token", {
+    name: "Driver",
+    vehicleCategory: "Alphard",
+    vehicleColor: "Black",
+    phoneCountryCode: "+852",
+    phone: "55558888",
+    hongKongMacauCountryCode: "+852",
+    hongKongMacauPhone: "55558888",
+    challengeId: "challenge-1",
+    code,
+  }, { mimetype: "image/png" });
+}
+
+for (const [mode, storedHash] of [
+  ["development mode", (code: string) => `scrypt$${fixture().hash(code)}`],
+  ["SMS mode", (code: string) => fixture().hash(code)],
+] as const) {
+  test(`register-and-accept accepts the verified invitation code in ${mode}`, async () => {
+    const submit = registerFixture(storedHash("54321"));
+    await assert.rejects(submit("54321"), /code accepted/);
+    await assert.rejects(submit("12345"), /Invalid invitation verification code/);
+  });
+}

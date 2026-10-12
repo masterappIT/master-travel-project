@@ -5649,7 +5649,7 @@ class DriverAuthController {
       where: { id: body.challengeId.trim() },
       include: { driver: true },
     });
-    if (!challenge?.driver || challenge.consumedAt || challenge.expiresAt.getTime() <= Date.now() || !verifyPassword(body.code.trim(), challenge.codeHash))
+    if (!challenge?.driver || challenge.consumedAt || challenge.expiresAt.getTime() <= Date.now() || !verifyStoredVerificationCode(body.code.trim(), challenge.codeHash))
       throw new UnauthorizedException("Invalid phone verification");
     const existing = await prisma.driverAuthIdentity.findUnique({
       where: { provider_providerId: { provider, providerId } },
@@ -7408,7 +7408,7 @@ class DriverOrderInviteController {
         challenge.invitationOrderUrlId !== preview.invitation.id ||
         challenge.expiresAt.getTime() <= Date.now() ||
         challenge.countryCode !== identity.countryCode || challenge.phone !== identity.phoneNumber ||
-        code.length !== 5 || !verifyPassword(code, challenge.codeHash))
+        code.length !== 5 || !verifyStoredVerificationCode(code, challenge.codeHash))
       throw new UnauthorizedException("Invalid invitation verification code");
     const activeCategory = await prisma.vehicleCategory.findFirst({ where: { name: vehicleCategory, enabled: true }, select: { id: true } });
     if (!activeCategory)
