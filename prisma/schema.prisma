@@ -703,6 +703,8 @@ model Payment {
 
 model PaymentChannelConfig {
   id                 String    @id @default(cuid())
+  displayName        String?
+  description        String?
   provider           String
   region             String
   environment        String
