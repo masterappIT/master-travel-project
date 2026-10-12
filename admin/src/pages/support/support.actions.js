@@ -1,5 +1,5 @@
 export function createSupportActions(context) {
-  const { supportApi, canWrite, isSuperAdministrator, supportSettings, settingsLoader, notify, requestConfirmation, displayError, section, recipientType, recipientId, recipientCountryCode, recipientPhone, recipientLookupMode, recipientOptions, recipientSearching, recipientSearchPerformed, recipientSearchError, draft, conversations, messages, selectedId, busy, inboxLoading, inboxLoaded, inboxError, messagesLoading, messagesLoaded, messagesError, actionError, participantProfile, participantProfileLoading, participantProfileError, agentActionId, agentsLoading, agentsLoaded, agentsError, agents, agentForm, savingSettings, settingsSaved, settingsDraft, serviceEnabled, requests, scrollMessagesToEnd } = context
+  const { supportApi, canWrite, isSuperAdministrator, supportSettings, settingsLoader, notify, requestConfirmation, displayError, section, outboundOpen, recipientType, recipientId, recipientCountryCode, recipientPhone, recipientLookupMode, recipientOptions, recipientSearching, recipientSearchPerformed, recipientSearchError, draft, conversations, messages, selectedId, busy, inboxLoading, inboxLoaded, inboxError, messagesLoading, messagesLoaded, messagesError, actionError, participantProfile, participantProfileLoading, participantProfileError, hasMoreMessages, loadingOlder, alertSound, trackIncoming, playSupportAlert, isNearBottom, keepScrollPosition, savingSettings, settingsSaved, settingsDraft, serviceEnabled, requests, scrollMessagesToEnd } = context
   const loadInbox = async () => {
     const request = ++requests.inbox
       if (!inboxLoaded.value) inboxError.value = ''
@@ -8,44 +8,81 @@ export function createSupportActions(context) {
       const response = await supportApi.listConversations()
       if (request !== requests.inbox) return
       conversations.value = response.data || []
+      const fresh = trackIncoming(conversations.value)
+      if (fresh) { if (alertSound.value) playSupportAlert(); notify(`收到 ${fresh} 個對話的新訊息`) }
       inboxLoaded.value = true
       inboxError.value = ''
       if (selectedId.value && section.value === 'inbox' && !conversations.value.some(item => item.id === selectedId.value)) {
-        selectedId.value = ''; messages.value = []; messagesLoaded.value = false; participantProfile.value = null; requests.messages += 1; requests.profile += 1
+        selectedId.value = ''; messages.value = []; messagesLoaded.value = false; hasMoreMessages.value = false; participantProfile.value = null; requests.messages += 1; requests.profile += 1
       }
     } catch (cause) { if (request === requests.inbox) inboxError.value = displayError(cause) }
     finally { if (request === requests.inbox) inboxLoading.value = false }
-      if (request === requests.inbox && !inboxError.value && selectedId.value && section.value === 'inbox' && !messagesLoading.value) await selectConversation(selectedId.value, false)
+      if (request === requests.inbox && !inboxError.value && selectedId.value && section.value === 'inbox' && !messagesLoading.value && !loadingOlder.value) await selectConversation(selectedId.value, false)
   }
   const selectConversation = async (id, clear = true) => {
     const request = ++requests.messages
-    const profileRequest = ++requests.profile
     if (selectedId.value !== id) { draft.value = ''; requests.pendingReply = null }
     selectedId.value = id
-      if (clear) { messages.value = []; messagesLoaded.value = false; messagesError.value = ''; participantProfile.value = null; participantProfileError.value = '' }
+    if (clear) { requests.profile += 1; requests.profileLoadedFor = ''; messages.value = []; messagesLoaded.value = false; messagesError.value = ''; hasMoreMessages.value = false; participantProfile.value = null; participantProfileError.value = ''; participantProfileLoading.value = false }
+    // 背景刷新時只有在使用者停留於底部（或剛發送）才跟隨到最新訊息，避免打斷閱讀歷史。
+    const follow = clear || requests.forceScroll || isNearBottom()
+    requests.forceScroll = false
     messagesLoading.value = true
     try {
       const response = await supportApi.listMessages(id)
-      if (request === requests.messages && selectedId.value === id) { messages.value = response.data || []; messagesLoaded.value = true; messagesError.value = ''; await scrollMessagesToEnd(); await loadParticipantProfile(response.conversation || conversations.value.find(item => item.id === id), profileRequest) }
+      if (request === requests.messages && selectedId.value === id) {
+        const latest = response.data || []
+        const latestIds = new Set(latest.map(item => item.id))
+        const earlier = clear || !latest.length ? [] : messages.value.filter(item => !latestIds.has(item.id) && item.createdAt <= latest[0].createdAt)
+        if (!earlier.length) hasMoreMessages.value = response.hasMore === true
+        messages.value = [...earlier, ...latest]
+        messagesLoaded.value = true
+        messagesError.value = ''
+        if (follow) await scrollMessagesToEnd()
+        // 對象資料只在切換對話或尚未成功載入時讀取，避免每次輪詢重複請求與狀態閃爍。
+        if (requests.profileLoadedFor !== id && !participantProfileLoading.value && !participantProfileError.value) await loadParticipantProfile(response.conversation || conversations.value.find(item => item.id === id))
+      }
     } catch (cause) { if (request === requests.messages && selectedId.value === id) messagesError.value = displayError(cause) }
     finally { if (request === requests.messages) messagesLoading.value = false }
   }
   const loadParticipantProfile = async (conversation, request = ++requests.profile) => {
-    if (!conversation?.participantId || !conversation.participantType) { participantProfile.value = null; participantProfileLoading.value = false; return }
+    if (!conversation?.participantId || !conversation.participantType) { participantProfile.value = null; participantProfileLoading.value = false; requests.profileLoadedFor = conversation?.id || ''; return }
     participantProfileLoading.value = true
     participantProfileError.value = ''
     try {
       const profile = await supportApi.participantProfile(conversation)
-      if (request === requests.profile && selectedId.value === conversation.id) participantProfile.value = profile
+      if (request === requests.profile && selectedId.value === conversation.id) { participantProfile.value = profile; requests.profileLoadedFor = conversation.id }
     } catch (cause) {
       if (request === requests.profile && selectedId.value === conversation.id) participantProfileError.value = displayError(cause)
     } finally {
       if (request === requests.profile) participantProfileLoading.value = false
     }
   }
+  const loadOlderMessages = async () => {
+    const id = selectedId.value
+    const first = messages.value[0]
+    if (!id || !first || loadingOlder.value || !hasMoreMessages.value) return
+    const request = requests.messages
+    loadingOlder.value = true
+    try {
+      const response = await supportApi.listMessages(id, first.id)
+      if (request === requests.messages && selectedId.value === id) {
+        const known = new Set(messages.value.map(item => item.id))
+        await keepScrollPosition(() => { messages.value = [...(response.data || []).filter(item => !known.has(item.id)), ...messages.value] })
+        hasMoreMessages.value = response.hasMore === true
+        messagesError.value = ''
+      }
+    } catch (cause) { if (request === requests.messages && selectedId.value === id) messagesError.value = displayError(cause) }
+    finally { loadingOlder.value = false }
+  }
+  const retryParticipantProfile = () => {
+    participantProfileError.value = ''
+    return loadParticipantProfile(conversations.value.find(item => item.id === selectedId.value))
+  }
   const backToInbox = () => {
     selectedId.value = ''
     messages.value = []
+    hasMoreMessages.value = false
     messagesLoaded.value = false
     messagesError.value = ''
     participantProfile.value = null
@@ -69,7 +106,13 @@ export function createSupportActions(context) {
       sent = true
     } catch (cause) { actionError.value = displayError(cause) }
     finally { busy.value = false }
-    if (sent) { notify('回覆已發送'); await loadInbox() }
+    if (sent) { requests.forceScroll = true; notify('回覆已發送'); await loadInbox() }
+  }
+  // 輸入法選字時的 Enter 不發送；Shift+Enter 換行。
+  const onComposerKeydown = event => {
+    if (event.key !== 'Enter' || event.shiftKey || event.isComposing || event.keyCode === 229) return
+    event.preventDefault()
+    void sendReply()
   }
   const resetRecipientSearch = () => {
     recipientId.value = ''
@@ -98,10 +141,6 @@ export function createSupportActions(context) {
       recipientSearching.value = false
     }
   }
-  const selectRecipient = item => {
-    recipientId.value = item.id || ''
-    recipientSearchError.value = ''
-  }
   const openRecipient = async () => {
     if (!canWrite.value || !serviceEnabled.value || !recipientId.value.trim() || busy.value) return
     busy.value = true
@@ -109,44 +148,17 @@ export function createSupportActions(context) {
     try {
       const response = await supportApi.openConversation(recipientType.value, recipientId.value.trim())
       section.value = 'inbox'
-      notify('對話已開啟')
+      outboundOpen.value = false
       await loadInbox()
       await selectConversation(response.id)
     } catch (cause) { actionError.value = displayError(cause) }
     finally { busy.value = false }
   }
-  const loadAgents = async () => {
-    if (!isSuperAdministrator.value) return
-    const request = ++requests.agents
-      if (!agentsLoaded.value) agentsError.value = ''
-    agentsLoading.value = true
-    try { const response = await supportApi.listAgents(); if (request === requests.agents) { agents.value = response.data || []; agentsLoaded.value = true; agentsError.value = '' } }
-    catch (cause) { if (request === requests.agents) agentsError.value = displayError(cause) }
-    finally { if (request === requests.agents) agentsLoading.value = false }
-  }
-  const createAgent = async () => {
-    if (!canWrite.value || !isSuperAdministrator.value || busy.value || agentActionId.value) return
-    busy.value = true
-    actionError.value = ''
-    try {
-      await supportApi.createAgent(agentForm)
-      agentForm.username = ''; agentForm.displayName = ''; agentForm.password = ''
-      notify('客服帳戶已建立')
-      await loadAgents()
-    } catch (cause) { actionError.value = displayError(cause) }
-    finally { busy.value = false }
-  }
-  const setAgentEnabled = async agent => {
-    if (!canWrite.value || !isSuperAdministrator.value || busy.value || agentActionId.value) return
-    agentActionId.value = agent.id
-    try {
-      if (agent.enabled && !await requestConfirmation({ title: '停用客服帳戶', message: `確定停用「${agent.displayName}」？此帳戶的現有登入工作階段會立即失效。`, confirmLabel: '停用', danger: true })) return
-      actionError.value = ''
-      await supportApi.setAgentEnabled(agent.id, !agent.enabled)
-      notify(agent.enabled ? '客服帳戶已停用' : '客服帳戶已啟用')
-      await loadAgents()
-    } catch (cause) { actionError.value = displayError(cause) }
-    finally { agentActionId.value = '' }
+  // 點選查找結果即開啟對話，不需再按一次確認。
+  const selectRecipient = item => {
+    recipientId.value = item.id || ''
+    recipientSearchError.value = ''
+    return openRecipient()
   }
   const saveSettings = async () => {
     if (!canWrite.value || !isSuperAdministrator.value || savingSettings.value) return
@@ -166,14 +178,5 @@ export function createSupportActions(context) {
       savingSettings.value = false
     }
   }
-  const onTabKeydown = event => {
-    const tabs = ['inbox', 'outbound', 'settings']
-    const current = tabs.indexOf(section.value)
-    const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : event.key === 'ArrowRight' ? (current + 1) % tabs.length : event.key === 'ArrowLeft' ? (current + tabs.length - 1) % tabs.length : -1
-    if (next < 0) return
-    event.preventDefault()
-    section.value = tabs[next]
-    event.currentTarget.querySelectorAll('[role="tab"]')[next]?.focus()
-  }
-  return { loadInbox, selectConversation, backToInbox, sendReply, searchRecipients, resetRecipientSearch, selectRecipient, openRecipient, loadAgents, createAgent, setAgentEnabled, saveSettings, onTabKeydown }
+  return { loadInbox, selectConversation, loadOlderMessages, retryParticipantProfile, backToInbox, sendReply, onComposerKeydown, searchRecipients, resetRecipientSearch, selectRecipient, openRecipient, saveSettings }
 }

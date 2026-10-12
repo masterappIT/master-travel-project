@@ -8182,15 +8182,29 @@ export class AdminSupportMediaController {
 async function supportInbox() {
   await supportSettings();
   const data = await prisma.supportConversation.findMany({
-    orderBy: [{ lastMessageAt: "desc" }, { createdAt: "desc" }],
+    orderBy: [{ lastMessageAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
     take: 100,
     include: { messages: { orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 1, select: { text: true, senderType: true } } },
   });
-  return { data: data.map(conversation => ({
-    ...supportConversationResponse(conversation),
-    lastMessagePreview: conversation.messages[0]?.text || null,
-    needsStaffReply: Boolean(conversation.messages[0] && !["ADMIN", "AGENT"].includes(conversation.messages[0].senderType)),
-  })) };
+  const idsOf = (type: string) => data.filter(item => item.participantType === type && item.participantId).map(item => item.participantId!);
+  const [users, drivers] = await Promise.all([
+    prisma.user.findMany({ where: { id: { in: idsOf("PASSENGER") } }, select: { id: true, name: true, displayName: true, countryCode: true, phoneNumber: true } }),
+    prisma.driver.findMany({ where: { id: { in: idsOf("DRIVER") } }, select: { id: true, name: true, phoneCountryCode: true, phone: true } }),
+  ]);
+  const participants = new Map<string, { name: string | null; phone: string | null }>([
+    ...users.map(item => [`PASSENGER:${item.id}`, { name: item.displayName || item.name || null, phone: item.phoneNumber ? `${item.countryCode} ${item.phoneNumber}` : null }] as const),
+    ...drivers.map(item => [`DRIVER:${item.id}`, { name: item.name || null, phone: item.phone ? `${item.phoneCountryCode} ${item.phone}` : null }] as const),
+  ]);
+  return { data: data.map(conversation => {
+    const participant = participants.get(`${conversation.participantType}:${conversation.participantId}`);
+    return {
+      ...supportConversationResponse(conversation),
+      participantName: participant?.name || null,
+      participantPhone: participant?.phone || null,
+      lastMessagePreview: conversation.messages[0]?.text || null,
+      needsStaffReply: Boolean(conversation.messages[0] && !["ADMIN", "AGENT"].includes(conversation.messages[0].senderType)),
+    };
+  }) };
 }
 
 async function supportOpenConversation(actor: SupportActor, body: { participantType?: string; participantId?: string }) {
@@ -8213,12 +8227,32 @@ async function supportOpenConversation(actor: SupportActor, body: { participantT
   return supportConversationResponse(conversation);
 }
 
-async function supportMessagesForStaff(id: string) {
+const SUPPORT_STAFF_MESSAGE_PAGE = 100;
+
+async function supportMessagesForStaff(id: string, before?: string) {
   await supportSettings();
   const conversation = await prisma.supportConversation.findUnique({ where: { id } });
   if (!conversation) throw new HttpException("Conversation not found", HttpStatus.NOT_FOUND);
-  const data = await prisma.supportMessage.findMany({ where: { conversationId: id }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 100 });
-  return { conversation: supportConversationResponse(conversation), data: data.reverse().map(supportMessageResponse) };
+  const cursor = before ? await prisma.supportMessage.findFirst({ where: { id: before, conversationId: id }, select: { id: true, createdAt: true } }) : null;
+  if (before && !cursor) throw new BadRequestException("Valid message cursor required");
+  const page = await prisma.supportMessage.findMany({
+    where: { conversationId: id, ...(cursor ? { OR: [{ createdAt: { lt: cursor.createdAt } }, { createdAt: cursor.createdAt, id: { lt: cursor.id } }] } : {}) },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take: SUPPORT_STAFF_MESSAGE_PAGE + 1,
+  });
+  const data = page.slice(0, SUPPORT_STAFF_MESSAGE_PAGE).reverse();
+  const agentIds = [...new Set(data.filter(item => item.senderType === "AGENT").map(item => item.senderId))];
+  const agents = agentIds.length ? await prisma.supportAgent.findMany({ where: { id: { in: agentIds } }, select: { id: true, displayName: true } }) : [];
+  const agentNames = new Map(agents.map(item => [item.id, item.displayName]));
+  const senderName = (item: { senderType: string; senderId: string }) =>
+    item.senderType === "AGENT" ? agentNames.get(item.senderId) || null
+      : item.senderType === "ADMIN" ? administrators.find(admin => admin.id === item.senderId)?.displayName || null
+        : null;
+  return {
+    conversation: supportConversationResponse(conversation),
+    data: data.map(item => ({ ...supportMessageResponse(item), senderName: senderName(item) })),
+    hasMore: page.length > SUPPORT_STAFF_MESSAGE_PAGE,
+  };
 }
 
 async function supportRecipients(req: RequestLike) {
@@ -8271,7 +8305,7 @@ class AdminSupportConversationController {
     return supportOpenConversation(await supportActor(req), body);
   }
   @Get(":id/messages")
-  async messages(@Req() req: RequestLike, @Param("id") id: string) { await supportActor(req); return supportMessagesForStaff(id); }
+  async messages(@Req() req: RequestLike, @Param("id") id: string) { await supportActor(req); return supportMessagesForStaff(id, req.query?.before); }
   @Post(":id/messages")
   async send(@Req() req: RequestLike, @Param("id") id: string, @Body() body: { text?: string; clientMessageId?: string }) {
     return supportStaffSend(await supportActor(req), id, body);
@@ -8319,7 +8353,7 @@ class AgentSupportConversationController {
     return supportOpenConversation(actor, body);
   }
   @Get(":id/messages")
-  async messages(@Req() req: RequestLike, @Param("id") id: string) { await supportActor(req, true); return supportMessagesForStaff(id); }
+  async messages(@Req() req: RequestLike, @Param("id") id: string) { await supportActor(req, true); return supportMessagesForStaff(id, req.query?.before); }
   @Post(":id/messages")
   async send(@Req() req: RequestLike, @Param("id") id: string, @Body() body: { text?: string; clientMessageId?: string }) {
     const actor = await supportActor(req, true);
@@ -8333,8 +8367,19 @@ class AdminSupportAgentController {
   @Get()
   async list(@Req() req: RequestLike) {
     requireRole(req, ["SUPER_ADMIN"]);
-    const data = await prisma.supportAgent.findMany({ select: { id: true, username: true, displayName: true, enabled: true, createdAt: true }, orderBy: { createdAt: "desc" } });
-    return { data };
+    const [agents, activeSessions, lastSessions] = await Promise.all([
+      prisma.supportAgent.findMany({ select: { id: true, username: true, displayName: true, enabled: true, failedLoginAttempts: true, lockedUntil: true, createdAt: true }, orderBy: { createdAt: "desc" } }),
+      prisma.supportAgentSession.groupBy({ by: ["agentId"], where: { revokedAt: null, expiresAt: { gt: new Date() } }, _count: { _all: true } }),
+      prisma.supportAgentSession.groupBy({ by: ["agentId"], _max: { createdAt: true } }),
+    ]);
+    const sessionCounts = new Map(activeSessions.map(item => [item.agentId, item._count._all]));
+    const lastLogins = new Map(lastSessions.map(item => [item.agentId, item._max.createdAt]));
+    return { data: agents.map(agent => ({
+      ...agent,
+      lockedUntil: agent.lockedUntil?.toISOString() || null,
+      lastLoginAt: lastLogins.get(agent.id)?.toISOString() || null,
+      activeSessionCount: sessionCounts.get(agent.id) || 0,
+    })) };
   }
 
   @Post()
@@ -8356,15 +8401,51 @@ class AdminSupportAgentController {
   }
 
   @Patch(":id")
-  async setEnabled(@Req() req: RequestLike, @Param("id") id: string, @Body() body: { enabled?: boolean }) {
+  async update(@Req() req: RequestLike, @Param("id") id: string, @Body() body: { enabled?: boolean; displayName?: string; password?: string }) {
     const admin = requireRole(req, ["SUPER_ADMIN"]);
-    if (typeof body.enabled !== "boolean") throw new BadRequestException("enabled must be boolean");
+    if (body.enabled !== undefined && typeof body.enabled !== "boolean") throw new BadRequestException("enabled must be boolean");
+    if (body.displayName !== undefined && typeof body.displayName !== "string") throw new BadRequestException("Valid display name required");
+    if (body.password !== undefined && typeof body.password !== "string") throw new BadRequestException("Valid password required");
+    const displayName = body.displayName?.trim();
+    if (body.displayName !== undefined && (!displayName || displayName.length > 100)) throw new BadRequestException("Valid display name required");
+    if (body.enabled === undefined && body.displayName === undefined && !body.password) throw new BadRequestException("No support agent changes provided");
     const existing = await prisma.supportAgent.findUnique({ where: { id } });
     if (!existing) throw new HttpException("Support agent not found", HttpStatus.NOT_FOUND);
-    const agent = await prisma.supportAgent.update({ where: { id }, data: { enabled: body.enabled } });
-    if (!body.enabled) await prisma.supportAgentSession.updateMany({ where: { agentId: id, revokedAt: null }, data: { revokedAt: new Date() } });
-    await prisma.supportAuditLog.create({ data: { actorType: "ADMIN", actorId: admin.sub, action: body.enabled ? "AGENT_ENABLED" : "AGENT_DISABLED", targetType: "AGENT", targetId: id } });
-    return { id: agent.id, enabled: agent.enabled };
+    if (body.password) validateAdminPassword(body.password, existing.username);
+    const agent = await prisma.supportAgent.update({
+      where: { id },
+      data: {
+        ...(body.enabled !== undefined ? { enabled: body.enabled } : {}),
+        ...(displayName ? { displayName } : {}),
+        ...(body.password ? { passwordHash: hashPassword(body.password), failedLoginAttempts: 0, lockedUntil: null } : {}),
+      },
+    });
+    if (body.enabled === false || body.password) await prisma.supportAgentSession.updateMany({ where: { agentId: id, revokedAt: null }, data: { revokedAt: new Date() } });
+    const actions = [
+      ...(body.enabled !== undefined && body.enabled !== existing.enabled ? [body.enabled ? "AGENT_ENABLED" : "AGENT_DISABLED"] : []),
+      ...(displayName && displayName !== existing.displayName ? ["AGENT_RENAMED"] : []),
+      ...(body.password ? ["AGENT_PASSWORD_RESET"] : []),
+    ];
+    if (actions.length) await prisma.supportAuditLog.createMany({ data: actions.map(action => ({ actorType: "ADMIN", actorId: admin.sub, action, targetType: "AGENT", targetId: id })) });
+    return { id: agent.id, username: agent.username, displayName: agent.displayName, enabled: agent.enabled };
+  }
+
+  @Post(":id/unlock")
+  async unlock(@Req() req: RequestLike, @Param("id") id: string) {
+    const admin = requireRole(req, ["SUPER_ADMIN"]);
+    if (!await prisma.supportAgent.findUnique({ where: { id }, select: { id: true } })) throw new HttpException("Support agent not found", HttpStatus.NOT_FOUND);
+    await prisma.supportAgent.update({ where: { id }, data: { failedLoginAttempts: 0, lockedUntil: null } });
+    await prisma.supportAuditLog.create({ data: { actorType: "ADMIN", actorId: admin.sub, action: "AGENT_UNLOCKED", targetType: "AGENT", targetId: id } });
+    return { ok: true };
+  }
+
+  @Post(":id/revoke-sessions")
+  async revokeSessions(@Req() req: RequestLike, @Param("id") id: string) {
+    const admin = requireRole(req, ["SUPER_ADMIN"]);
+    if (!await prisma.supportAgent.findUnique({ where: { id }, select: { id: true } })) throw new HttpException("Support agent not found", HttpStatus.NOT_FOUND);
+    const revoked = await prisma.supportAgentSession.updateMany({ where: { agentId: id, revokedAt: null, expiresAt: { gt: new Date() } }, data: { revokedAt: new Date() } });
+    await prisma.supportAuditLog.create({ data: { actorType: "ADMIN", actorId: admin.sub, action: "AGENT_SESSIONS_REVOKED", targetType: "AGENT", targetId: id } });
+    return { ok: true, revokedCount: revoked.count };
   }
 }
 
@@ -8402,6 +8483,25 @@ class SupportAgentAuthController {
     const actor = await supportAgentFrom(req);
     const agent = await prisma.supportAgent.findUniqueOrThrow({ where: { id: actor.id }, select: { id: true, username: true, displayName: true } });
     return agent;
+  }
+
+  @Post("password")
+  async changePassword(@Req() req: RequestLike, @Body() body: { currentPassword?: string; newPassword?: string }) {
+    const actor = await supportAgentFrom(req);
+    requireSupportAgentCsrf(req);
+    const agent = await prisma.supportAgent.findUniqueOrThrow({ where: { id: actor.id } });
+    if (typeof body.currentPassword !== "string" || !verifyPassword(body.currentPassword, agent.passwordHash)) {
+      await wait(250);
+      throw new BadRequestException("Current password is incorrect");
+    }
+    if (typeof body.newPassword !== "string") throw new BadRequestException("Valid password required");
+    validateAdminPassword(body.newPassword, agent.username);
+    if (body.newPassword === body.currentPassword) throw new BadRequestException("New password must differ from the current password");
+    const current = JSON.parse(Buffer.from(cookieValue(req, SUPPORT_AGENT_COOKIE).split(".")[0], "base64url").toString()) as { jti: string };
+    await prisma.supportAgent.update({ where: { id: agent.id }, data: { passwordHash: hashPassword(body.newPassword) } });
+    await prisma.supportAgentSession.updateMany({ where: { agentId: agent.id, revokedAt: null, jti: { not: current.jti } }, data: { revokedAt: new Date() } });
+    await prisma.supportAuditLog.create({ data: { actorType: "AGENT", actorId: agent.id, action: "PASSWORD_CHANGED" } });
+    return { ok: true };
   }
 
   @Post("logout")

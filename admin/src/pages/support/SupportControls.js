@@ -19,6 +19,7 @@ export const SupportInput = {
   inheritAttrs: false,
   props: { modelValue: { type: String, default: '' }, disabled: Boolean },
   emits: ['update:modelValue'],
+  methods: { focus() { this.$el?.focus() } },
   render() {
     return h('input', {
       ...this.$attrs,

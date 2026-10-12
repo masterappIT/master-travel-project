@@ -372,8 +372,10 @@ const App = { components: { SupportPage }, setup() {
      notificationRecipientChecked,
      saveNotification
    })
+   provide('adminSupportAgentAccountsContext', { api, canWrite, notify, requestConfirmation, displayError })
    provide('adminSupportContext', {
      view,
+     navigate,
      api,
      canWrite,
      isSuperAdministrator,
