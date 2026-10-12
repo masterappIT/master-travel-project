@@ -42,6 +42,7 @@ description: 分析、開發、修復或重構 uni-app 乘客端 src/ 的分層�
 - domain service 負責 API 契約與資料轉換；composable 負責頁面流程組合。避免將表單狀態、路由與 storage 決策塞進通用 HTTP client。
 - 拆分時先保留舊 export 作相容層，逐步遷移授權範圍內的呼叫端；相容層不得造成循環依賴或重新成為業務聚合中心。
 - 不以重構為由改動登入、權限、價格、訂單狀態或支付行為，不用假資料掩蓋契約差異。
+- 頁面首屏必須等待的請求要同時發出並設定逾時（沿用 `requestWithTimeout`），不得一個接一個等待；新增首屏請求前先確認能否併入既有請求或沿用既有快取。小程序登入頁的做法見 `src/utils/miniProgramLoginConfig.ts`：並行載入、逾時、先用本機快取再背景更新；快取只影響顯示，登入是否允許仍由後端驗證。
 
 ## 4. 狀態、Storage 與 Navigation
 
