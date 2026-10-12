@@ -1895,12 +1895,18 @@ const loginMethodDefaults = [
 ] as const;
 
 async function ensureLoginMethodSettings() {
-  await Promise.all(loginMethodDefaults.map((item) => prisma.loginMethodSetting.upsert({
+  const findLoginMethodSettings = () => prisma.loginMethodSetting.findMany({ orderBy: [{ sortOrder: "asc" }, { provider: "asc" }] });
+  const methods = await findLoginMethodSettings();
+  const existing = new Set(methods.map((item) => item.provider));
+  const missing = loginMethodDefaults.filter((item) => !existing.has(item.provider));
+  // 公開登入端點每次都會經過這裡；只有缺少預設資料時才寫入。
+  if (!missing.length) return methods;
+  await Promise.all(missing.map((item) => prisma.loginMethodSetting.upsert({
     where: { provider: item.provider },
     create: { ...item },
     update: {},
   })));
-  return prisma.loginMethodSetting.findMany({ orderBy: [{ sortOrder: "asc" }, { provider: "asc" }] });
+  return findLoginMethodSettings();
 }
 
 async function requireLoginMethodEnabled(provider: string, client: "passenger" | "driver") {
@@ -4656,15 +4662,18 @@ class ClientAuthController {
     if (platform !== undefined && platform !== "web" && platform !== "miniProgram") throw new BadRequestException("登入平台無效");
     if (platform === "miniProgram" && client !== "passenger") throw new BadRequestException("小程序只支援乘客端");
     if (loginMode !== undefined && !isWechatMiniProgramLoginMode(loginMode)) throw new BadRequestException("小程序登入模式無效");
-    const methods = preview === "1" ? await ensureLoginMethodDrafts() : await ensureLoginMethodSettings();
     const isMiniProgram = platform === "miniProgram" && client === "passenger";
-    const miniProgramMode = isMiniProgram
-      ? (preview === "1" && loginMode ? loginMode : await wechatMiniProgramLoginMode())
+    const [methods, miniProgramSettings] = await Promise.all([
+      preview === "1" ? ensureLoginMethodDrafts() : ensureLoginMethodSettings(),
+      isMiniProgram ? wechatMiniProgramCredentials() : null,
+    ]);
+    const miniProgramMode = miniProgramSettings
+      ? (preview === "1" && loginMode ? loginMode : miniProgramSettings.loginMode)
       : null;
     // 小程序因登入模式拆成三種版面，入口完全由「小程序微信啟用開關」與「小程序登入模式」決定，
     // 不受乘客端 Web／App 共用的 passengerEnabled 開關影響；Web／App／司機端共用同一套 UI，
     // 僅以 passengerEnabled／driverEnabled 作為顯示與否的唯一開關。
-    const miniProgramWechatEnabled = isMiniProgram ? (await wechatMiniProgramCredentials()).enabled : false;
+    const miniProgramWechatEnabled = miniProgramSettings?.enabled ?? false;
     const visibleMethods = methods.filter((item) => {
       if (isMiniProgram) {
         if (item.provider === "wechat") return miniProgramWechatEnabled && miniProgramMode !== "smsOnly";
@@ -4678,8 +4687,7 @@ class ClientAuthController {
 
   @Get("wechat/mini-program-config")
   async wechatMiniProgramConfig() {
-    const { enabled, phoneCapability, avatarCapability, nicknameCapability, appId, appSecret } = await wechatMiniProgramCredentials();
-    const loginMode = await wechatMiniProgramLoginMode();
+    const { enabled, loginMode, phoneCapability, avatarCapability, nicknameCapability, appId, appSecret } = await wechatMiniProgramCredentials();
     const configured = Boolean(enabled && appId && appSecret);
     return {
       enabled: configured,
