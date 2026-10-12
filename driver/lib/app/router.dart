@@ -5,6 +5,7 @@ import '../home_page.dart';
 import '../order_invite/order_invite_page.dart';
 import '../review_status_page.dart';
 import '../core/api/driver_api_client.dart';
+import '../core/fonts/driver_font_layers.dart';
 import '../core/state/driver_currency_initialization.dart';
 import '../core/tokens/driver_tokens.dart';
 import 'deferred_routes.dart' deferred as deferred_routes;
@@ -38,6 +39,17 @@ abstract final class DriverRouter {
     DriverRouteNames.orderInProgress,
     DriverRouteNames.orderCompleted,
   ];
+
+  // Pages with free-text inputs wait for every font layer so typed or pasted
+  // characters never render as missing-glyph boxes.
+  static const textInputRoutes = {
+    DriverRouteNames.registration,
+    DriverRouteNames.profileEdit,
+    DriverRouteNames.flightQuery,
+    DriverRouteNames.wechatPayment,
+    DriverRouteNames.contactSupport,
+    DriverRouteNames.addVehicle,
+  };
 
   static const _otherRoutes = [
     DriverRouteNames.registration,
@@ -74,7 +86,13 @@ class _DeferredRoute extends StatefulWidget {
 }
 
 class _DeferredRouteState extends State<_DeferredRoute> {
-  late Future<void> _load = deferred_routes.loadLibrary();
+  late Future<void> _load = _loadRoute();
+
+  Future<void> _loadRoute() => Future.wait([
+        deferred_routes.loadLibrary(),
+        if (DriverRouter.textInputRoutes.contains(widget.route))
+          DriverFontLayers.loadAll(),
+      ]);
 
   @override
   Widget build(BuildContext context) => FutureBuilder<void>(
@@ -86,7 +104,7 @@ class _DeferredRouteState extends State<_DeferredRoute> {
               body: Center(
                 child: TextButton(
                   onPressed: () => setState(() {
-                    _load = deferred_routes.loadLibrary();
+                    _load = _loadRoute();
                   }),
                   child: const Text('頁面載入失敗，請重試'),
                 ),

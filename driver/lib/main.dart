@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'app/router.dart';
 import 'app/route_names.dart';
 import 'core/api/driver_api_client.dart';
+import 'core/fonts/driver_font_layers.dart';
 import 'core/state/driver_alert_audio_controller.dart';
 import 'core/state/driver_currency_initialization.dart';
 import 'core/state/driver_language_preference.dart';
@@ -32,6 +33,11 @@ Future<void> main() async {
     isOrderInvite: isOrderInvite,
     orderInviteToken: isOrderInvite ? directToken ?? fragmentToken : null,
   ));
+  // Start the common font layer after the first frame; API responses still
+  // wait for whichever layers their text needs.
+  WidgetsBinding.instance.addPostFrameCallback((_) => unawaited(
+      DriverFontLayers.load(DriverFontLayer.common)
+          .catchError((Object _) {})));
 }
 
 class _DriverStartup extends StatefulWidget {

@@ -38,9 +38,18 @@ flutter build web
 ## 簡體中文補充字型
 
 - Noto Sans TC 不含部分簡體字（例如 GB2312 的 6,763 字中有 1,898 字不在其中）。`fontFallbackBaseUrl` 指向站內 `fonts/`，站內只提供 Roboto，因此缺字無法從遠端補字。
-- `assets/fonts/NotoSansSC-Supplement.ttf` 只收錄 Noto Sans SC 有、Noto Sans TC 沒有的 11,856 個字元，保留可變字重軸；與 Noto Sans TC 一同於首屏前載入，主題以 `fontFamilyFallback` 引用。Noto Sans TC 原有字形不變。
-- 來源為 google/fonts `ofl/notosanssc/NotoSansSC[wght].ttf`（SHA-256 `a3041811a78c361b1de50f953c805e0244951c21c5bd412f7232ef0d899af0da`），授權見 `assets/fonts/OFL-NotoSansSC.txt`。產物 SHA-256 為 `a544e0db477ffd75061a6ea01ccfc963a0f96b198637d101aa379a6d14e7a554`，以 `tool/build_sc_supplement_font.py`（fontTools 4.65.0）可重現；正式建置直接使用已提交檔案。
-- `test/font_coverage_test.dart` 驗證補充字型不與 Noto Sans TC 重疊，並涵蓋司機端簡體介面文字與常見內地資料；由於 Chrome 測試平台無法讀取素材，此檔僅在 Dart VM 執行（`cd driver && flutter test test/font_coverage_test.dart`），`npm run verify:driver` 會略過。`test/theme_font_fallback_test.dart` 於 Chrome 驗證主題後備字型設定。
+- `assets/fonts/NotoSansSC-Supplement.ttf` 只收錄 Noto Sans SC 有、Noto Sans TC 沒有的 11,856 個字元，保留可變字重軸；它與 `NotoSansTC-Variable.ttf` 一同作為分層字型的來源檔，不直接隨產物發布。
+- 來源為 google/fonts `ofl/notosanssc/NotoSansSC[wght].ttf`（SHA-256 `a3041811a78c361b1de50f953c805e0244951c21c5bd412f7232ef0d899af0da`），授權見 `assets/fonts/OFL-NotoSansSC.txt`。產物 SHA-256 為 `a544e0db477ffd75061a6ea01ccfc963a0f96b198637d101aa379a6d14e7a554`，以 `tool/build_sc_supplement_font.py`（fontTools 4.65.0）可重現。
+
+## 分層字型與首次載入
+
+- 正式實測首次載入時，首屏前須下載完整繁體字型與簡體補充字型（Brotli 後約 9.3 MB），佔首屏等待的大部分。現以 `tool/build_driver_font_layers.py`（fontTools 4.66.0）把上述兩個來源檔切成三層，字形與可變字重不變：
+  - **UI 層**（`NotoSans{TC,SC}-UI.ttf`）：`lib/` 內所有字元及 ASCII、常用標點，列在 FontManifest，首屏前載入（Brotli 後約 255 KB）。
+  - **常用層**（`NotoSans{TC,SC}-Common.ttf`）：GB2312 與 Big5 常用字，首屏後背景載入。
+  - **罕用層**（`NotoSans{TC,SC}-Rare.ttf`）：其餘字元，只在需要時載入。
+- 不出現缺字方框的保證：三個 API client 解碼後先以 `DriverFontLayers.ensureForPayload` 確認所需字型層已載入才返回，等待併入各頁原有的載入狀態；有自由輸入框的次級頁面（`DriverRouter.textInputRoutes`）在原有的延遲模組載入畫面中一併等待全部字型層；訂單邀請頁不阻擋預覽，輸入框在全部字型層載入前保持唯讀，貼上識別內容前先確認字型。
+- 新增或修改 `lib/` 的介面文字後，須在 `driver/` 執行 `python3 tool/build_driver_font_layers.py` 重新產生字型與 `lib/core/fonts/driver_font_coverage.g.dart`；`test/font_coverage_test.dart`（Dart VM，已納入 `npm run verify:driver`）在介面文字未收錄於 UI 層、各層重疊或與來源不一致時失敗。
+- 本機以部署映像（Brotli）及 Chrome 網速模擬量測未登入首屏：4G（9 Mbps／170 ms）由正式環境 14.1 秒降至 3.6 秒；慢速 4G（1.6 Mbps／150 ms）由 65.2 秒降至 16.1 秒。已登入頁面另須等待常用層（Brotli 後約 2.6 MB）。正式環境、內地／香港真機及 iOS 仍須實測。
 
 ## 收款貨幣與收入顯示
 

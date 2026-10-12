@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:driver_web/core/api/driver_api_client.dart';
+import 'package:driver_web/core/tokens/driver_tokens.dart';
 import 'package:driver_web/main.dart' as driver_app;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -23,7 +24,7 @@ void main() {
     await tester.pump();
     final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
     final style = app.theme!.textTheme.bodyMedium!;
-    expect(style.fontFamily, 'Noto Sans TC');
-    expect(style.fontFamilyFallback, contains('Noto Sans SC Supplement'));
+    expect(style.fontFamily, DriverTypography.fontFamily);
+    expect(style.fontFamilyFallback, DriverTypography.fontFamilyFallback);
   });
 }

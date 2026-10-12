@@ -61,7 +61,15 @@ abstract final class DriverRadii {
 
 abstract final class DriverTypography {
   static const fontFamily = 'Noto Sans TC';
-  static const fontFamilyFallback = ['Noto Sans SC Supplement'];
+  // UI layers load before the first frame; the rest are loaded on demand by
+  // DriverFontLayers before text that needs them is shown.
+  static const fontFamilyFallback = [
+    'Noto Sans SC UI',
+    'Noto Sans TC Common',
+    'Noto Sans SC Common',
+    'Noto Sans TC Rare',
+    'Noto Sans SC Rare',
+  ];
   static const body = 14.0;
   static const bodyLarge = 16.0;
   static const label = 13.0;

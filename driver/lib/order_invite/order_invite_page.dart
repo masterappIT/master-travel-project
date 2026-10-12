@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../core/api/driver_api_client.dart';
+import '../core/fonts/driver_font_layers.dart';
 import '../core/platform/browser_image_picker.dart';
 import '../core/tokens/driver_tokens.dart';
 import '../core/vehicle_plate_rules.dart';
@@ -96,8 +97,14 @@ class _OrderInvitePageState extends State<OrderInvitePage> {
   void initState() {
     super.initState();
     setOrderInviteSeo('MasterApp｜司機端 ｜邀請接單');
+    _loadInputFonts();
     _load();
   }
+
+  // Text fields stay read-only until every font layer is loaded, so typed
+  // characters never render as missing-glyph boxes; the preview does not wait.
+  static void _loadInputFonts() =>
+      unawaited(DriverFontLayers.loadAll().catchError((Object _) {}));
 
   Future<void> _load() async {
     if (_token.isEmpty) {
@@ -232,6 +239,11 @@ class _OrderInvitePageState extends State<OrderInvitePage> {
 
   Future<void> _pasteRecognition() async {
     final data = await Clipboard.getData(Clipboard.kTextPlain);
+    try {
+      await DriverFontLayers.ensureForText(data?.text ?? '');
+    } catch (_) {
+      return;
+    }
     final recognized = _recognition.recognizeText(data?.text ?? '');
     if (!mounted) return;
     final confirmed = await showDialog<bool>(
@@ -963,17 +975,21 @@ class _InviteTextField extends StatelessWidget {
           const SizedBox(height: DriverSpacing.sm),
           SizedBox(
             height: 50,
-            child: TextField(
-              controller: controller,
-              readOnly: readOnly,
-              keyboardType: keyboardType,
-              inputFormatters: inputFormatters,
-              decoration: _inviteRegistrationInputDecoration(
-                hintText: hint,
-                prefixText: prefixText,
-                suffixText: suffixText,
+            child: ValueListenableBuilder<bool>(
+              valueListenable: DriverFontLayers.allLoaded,
+              builder: (context, fontsLoaded, _) => TextField(
+                controller: controller,
+                readOnly: readOnly || !fontsLoaded,
+                onTap: fontsLoaded ? null : _OrderInvitePageState._loadInputFonts,
+                keyboardType: keyboardType,
+                inputFormatters: inputFormatters,
+                decoration: _inviteRegistrationInputDecoration(
+                  hintText: hint,
+                  prefixText: prefixText,
+                  suffixText: suffixText,
+                ),
+                style: const TextStyle(fontSize: 15, color: DriverColors.text),
               ),
-              style: const TextStyle(fontSize: 15, color: DriverColors.text),
             ),
           ),
         ],

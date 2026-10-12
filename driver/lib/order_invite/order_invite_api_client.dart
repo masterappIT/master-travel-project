@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 
 import '../core/api/driver_api_base_url.dart';
+import '../core/fonts/driver_font_layers.dart';
 
 class OrderInviteApiException implements Exception {
   const OrderInviteApiException(this.statusCode, this.message);
@@ -144,6 +145,7 @@ class OrderInviteApiClient {
     final decoded = response.bodyBytes.isEmpty
         ? <String, dynamic>{}
         : _tryDecode(response.bodyBytes);
+    await DriverFontLayers.ensureForPayload(decoded);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       final message = decoded is Map
           ? decoded['message']?.toString() ?? '邀請處理失敗'

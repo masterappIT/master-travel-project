@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../api/driver_api_base_url.dart';
+import '../fonts/driver_font_layers.dart';
 
 class AirportFlight {
   const AirportFlight({
@@ -61,6 +62,7 @@ class AirportFlightClient {
       throw const AirportFlightException('航班資料暫時無法取得');
     }
     final payload = jsonDecode(response.body);
+    await DriverFontLayers.ensureForPayload(payload);
     if (payload is! List) {
       throw const AirportFlightException('航班資料格式不正確');
     }

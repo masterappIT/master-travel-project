@@ -26,11 +26,16 @@ flutter:
   fonts:
     - family: Noto Sans TC
       fonts:
-        - asset: assets/fonts/NotoSansTC-Variable.ttf
-    - family: Noto Sans SC Supplement
+        - asset: assets/fonts/NotoSansTC-UI.ttf
+    - family: Noto Sans SC UI
       fonts:
-        - asset: assets/fonts/NotoSansSC-Supplement.ttf
+        - asset: assets/fonts/NotoSansSC-UI.ttf
   assets:
+    # Loaded on demand by lib/core/fonts/driver_font_layers.dart.
+    - assets/fonts/NotoSansTC-Common.ttf
+    - assets/fonts/NotoSansSC-Common.ttf
+    - assets/fonts/NotoSansTC-Rare.ttf
+    - assets/fonts/NotoSansSC-Rare.ttf
     - assets/order-history-origin.svg
     - assets/order-history-destination.svg
     - assets/completed-origin.svg

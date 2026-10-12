@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 
+import '../fonts/driver_font_layers.dart';
 import 'driver_api_base_url.dart';
 import '../platform/browser_storage.dart';
 import '../state/driver_status.dart';
@@ -92,16 +93,16 @@ class DriverApiClient {
         if (_token != null) 'Authorization': 'Bearer $_token',
       };
 
-  Future<Map<String, dynamic>> openSupportConversation() async => _decode(
+  Future<Map<String, dynamic>> openSupportConversation() async => await _decode(
       await _client.post(Uri.parse('$baseUrl/driver/support/conversations/mine'), headers: _headers));
 
   Future<List<Map<String, dynamic>>> listSupportMessages(String conversationId) async {
-    final result = _decode(await _client.get(
+    final result = await _decode(await _client.get(
       Uri.parse('$baseUrl/driver/support/conversations/${Uri.encodeComponent(conversationId)}/messages'), headers: _headers));
     return ((result['data'] as List<dynamic>?) ?? []).whereType<Map<String, dynamic>>().toList();
   }
 
-  Future<Map<String, dynamic>> sendSupportMessage(String conversationId, String text, String clientMessageId) async => _decode(
+  Future<Map<String, dynamic>> sendSupportMessage(String conversationId, String text, String clientMessageId) async => await _decode(
       await _client.post(Uri.parse('$baseUrl/driver/support/conversations/${Uri.encodeComponent(conversationId)}/messages'),
         headers: _headers, body: jsonEncode({'text': text, 'clientMessageId': clientMessageId})));
 
@@ -117,19 +118,19 @@ class DriverApiClient {
     final uri = Uri.parse('$baseUrl/driver/auth/login-methods')
         .replace(queryParameters: query.isEmpty ? null : query);
     final response = await _client.get(uri, headers: _headers);
-    final decoded = _decode(response);
+    final decoded = await _decode(response);
     return ((decoded['data'] as List<dynamic>?) ?? [])
         .whereType<Map<String, dynamic>>()
         .toList();
   }
 
-  Future<Map<String, dynamic>> appleConfig() async => _decode(await _client.get(
+  Future<Map<String, dynamic>> appleConfig() async => await _decode(await _client.get(
         Uri.parse('$baseUrl/driver/auth/third-party/apple-config'),
         headers: _headers,
       ));
 
   Future<Map<String, dynamic>> wechatWebAuthorizeUrl() async =>
-      _decode(await _client.get(
+      await _decode(await _client.get(
         Uri.parse('$baseUrl/driver/auth/third-party/wechat/web/authorize-url'),
         headers: _headers,
       ));
@@ -139,7 +140,7 @@ class DriverApiClient {
     required String providerToken,
     String? state,
   }) async {
-    final session = DriverSession.fromJson(_decode(await _client.post(
+    final session = DriverSession.fromJson(await _decode(await _client.post(
       Uri.parse('$baseUrl/driver/auth/third-party'),
       headers: _headers,
       body: jsonEncode({
@@ -162,7 +163,7 @@ class DriverApiClient {
     required String code,
     String? state,
   }) async {
-    final session = DriverSession.fromJson(_decode(await _client.post(
+    final session = DriverSession.fromJson(await _decode(await _client.post(
       Uri.parse('$baseUrl/driver/auth/third-party/bind'),
       headers: _headers,
       body: jsonEncode({
@@ -182,7 +183,7 @@ class DriverApiClient {
 
   Future<Map<String, dynamic>> requestRegistrationCode(
           {required String countryCode, required String phoneNumber}) async =>
-      _decode(await _client.post(
+      await _decode(await _client.post(
           Uri.parse('$baseUrl/driver/auth/register/phone/request'),
           headers: _headers,
           body: jsonEncode(
@@ -192,7 +193,7 @@ class DriverApiClient {
     required String challengeId,
     required String code,
   }) async =>
-      _decode(await _client.post(
+      await _decode(await _client.post(
           Uri.parse('$baseUrl/driver/auth/register/phone/verify'),
           headers: _headers,
           body: jsonEncode({'challengeId': challengeId, 'code': code})));
@@ -245,7 +246,7 @@ class DriverApiClient {
     if (_token != null) request.headers['Authorization'] = 'Bearer $_token';
     final streamedResponse = await _client.send(request);
     final response = await http.Response.fromStream(streamedResponse);
-    final session = DriverSession.fromJson(_decode(response));
+    final session = DriverSession.fromJson(await _decode(response));
     _token = session.token;
     _currentDriver = session.driver;
     sessionRevision.value++;
@@ -289,14 +290,14 @@ class DriverApiClient {
       ));
     }
     final result =
-        _decode(await http.Response.fromStream(await _client.send(request)));
+        await _decode(await http.Response.fromStream(await _client.send(request)));
     _currentDriver = result;
     return result;
   }
 
   Future<Map<String, dynamic>> requestPhoneCode(
           {required String countryCode, required String phoneNumber}) async =>
-      _decode(await _client.post(
+      await _decode(await _client.post(
           Uri.parse('$baseUrl/driver/auth/phone/request'),
           headers: _headers,
           body: jsonEncode(
@@ -304,7 +305,7 @@ class DriverApiClient {
 
   Future<DriverSession> verifyPhoneCode(
       {required String challengeId, required String code}) async {
-    final session = DriverSession.fromJson(_decode(await _client.post(
+    final session = DriverSession.fromJson(await _decode(await _client.post(
         Uri.parse('$baseUrl/driver/auth/phone/verify'),
         headers: _headers,
         body: jsonEncode({'challengeId': challengeId, 'code': code}))));
@@ -317,7 +318,7 @@ class DriverApiClient {
 
   Future<Map<String, dynamic>> me() async {
     final wasApproved = isApproved;
-    final result = _decode(await _client
+    final result = await _decode(await _client
         .get(Uri.parse('$baseUrl/driver/auth/me'), headers: _headers));
     final driver = result['driver'] is Map ? result['driver'] : result;
     if (driver is Map) {
@@ -332,7 +333,7 @@ class DriverApiClient {
   }
 
   Future<Map<String, dynamic>> updateStatus(bool isOnline) async {
-    final result = _decode(await _client.post(
+    final result = await _decode(await _client.post(
         Uri.parse('$baseUrl/driver/auth/status'),
         headers: _headers,
         body: jsonEncode({'isOnline': isOnline})));
@@ -345,7 +346,7 @@ class DriverApiClient {
     required String countryCode,
     required String phoneNumber,
   }) async =>
-      _decode(await _client.post(
+      await _decode(await _client.post(
           Uri.parse('$baseUrl/driver/auth/me/phone/request'),
           headers: _headers,
           body: jsonEncode({
@@ -356,7 +357,7 @@ class DriverApiClient {
 
   Future<Map<String, dynamic>> verifyPhoneChange(
       String challengeId, String code) async {
-    final driver = _decode(await _client.post(
+    final driver = await _decode(await _client.post(
         Uri.parse('$baseUrl/driver/auth/me/phone/verify'),
         headers: _headers,
         body: jsonEncode({'challengeId': challengeId, 'code': code})));
@@ -366,7 +367,7 @@ class DriverApiClient {
 
   Future<Map<String, dynamic>> updateProfile(
           Map<String, dynamic> fields) async =>
-      _decode(await _client.patch(Uri.parse('$baseUrl/driver/auth/me'),
+      await _decode(await _client.patch(Uri.parse('$baseUrl/driver/auth/me'),
           headers: _headers, body: jsonEncode(fields)));
 
   Future<Map<String, dynamic>> updateWechatPayment({
@@ -386,11 +387,11 @@ class DriverApiClient {
           'wechatQrCode', qrCodeBytes,
           filename: fileName, contentType: MediaType.parse(mimeType)));
     }
-    return _decode(await http.Response.fromStream(await request.send()));
+    return await _decode(await http.Response.fromStream(await request.send()));
   }
 
   Future<Map<String, dynamic>> listDriverVehicles() async =>
-      _decode(await _client.get(Uri.parse('$baseUrl/driver/auth/vehicles'),
+      await _decode(await _client.get(Uri.parse('$baseUrl/driver/auth/vehicles'),
           headers: _headers));
 
   Future<Map<String, dynamic>> createVehicle(
@@ -448,57 +449,57 @@ class DriverApiClient {
         contentType: MediaType.parse(vehiclePhotoMime!),
       ));
     }
-    return _decode(await http.Response.fromStream(await _client.send(request)));
+    return await _decode(await http.Response.fromStream(await _client.send(request)));
   }
 
   Future<Map<String, dynamic>> setPrimaryVehicle(String id) async =>
-      _decode(await _client.post(
+      await _decode(await _client.post(
           Uri.parse(
               '$baseUrl/driver/auth/vehicles/${Uri.encodeComponent(id)}/primary'),
           headers: _headers));
 
   Future<Map<String, dynamic>> deleteVehicle(String id) async =>
-      _decode(await _client.delete(
+      await _decode(await _client.delete(
           Uri.parse('$baseUrl/driver/auth/vehicles/${Uri.encodeComponent(id)}'),
           headers: _headers));
 
-  Future<Map<String, dynamic>> listVehicleCatalog() async => _decode(
+  Future<Map<String, dynamic>> listVehicleCatalog() async => await _decode(
       await _client.get(Uri.parse('$baseUrl/vehicles'), headers: _headers));
 
-  Future<Map<String, dynamic>> settings() async => _decode(
+  Future<Map<String, dynamic>> settings() async => await _decode(
       await _client.get(Uri.parse('$baseUrl/settings'), headers: _headers));
 
-  Future<Map<String, dynamic>> statistics() async => _decode(await _client.get(
+  Future<Map<String, dynamic>> statistics() async => await _decode(await _client.get(
       Uri.parse('$baseUrl/driver/auth/statistics').replace(queryParameters: {
         'currency': DriverCurrencyPreference.instance.code,
       }),
       headers: _headers));
 
   Future<Map<String, dynamic>> notificationEventTicket() async =>
-      _decode(await _client.post(
+      await _decode(await _client.post(
           Uri.parse('$baseUrl/driver/auth/notifications/events/ticket'),
           headers: _headers));
-  Future<Map<String, dynamic>> orderEventTicket() async => _decode(
+  Future<Map<String, dynamic>> orderEventTicket() async => await _decode(
       await _client.post(Uri.parse('$baseUrl/driver/auth/trips/events/ticket'),
           headers: _headers));
-  Future<List<dynamic>> availableTrips() async => _decodeList(await _client.get(
+  Future<List<dynamic>> availableTrips() async => await _decodeList(await _client.get(
       Uri.parse('$baseUrl/driver/auth/trips/available').replace(
           queryParameters: {
             'currency': DriverCurrencyPreference.instance.code
           }),
       headers: _headers));
-  Future<List<dynamic>> activeTrips() async => _decodeList(await _client.get(
+  Future<List<dynamic>> activeTrips() async => await _decodeList(await _client.get(
       Uri.parse('$baseUrl/driver/auth/trips/active').replace(queryParameters: {
         'currency': DriverCurrencyPreference.instance.code
       }),
       headers: _headers));
-  Future<List<dynamic>> trips() async => _decodeList(await _client.get(
+  Future<List<dynamic>> trips() async => await _decodeList(await _client.get(
       Uri.parse('$baseUrl/driver/auth/trips').replace(queryParameters: {
         'currency': DriverCurrencyPreference.instance.code,
       }),
       headers: _headers));
   Future<Map<String, dynamic>> trip(String id) async =>
-      _decode(await _client.get(
+      await _decode(await _client.get(
           Uri.parse('$baseUrl/driver/auth/trips/${Uri.encodeComponent(id)}')
               .replace(queryParameters: {
             'currency': DriverCurrencyPreference.instance.code
@@ -506,54 +507,54 @@ class DriverApiClient {
           headers: _headers));
   Future<Map<String, dynamic>> acceptTrip(String id,
           {String? vehicleId}) async =>
-      _decode(await _client.post(
+      await _decode(await _client.post(
           Uri.parse(
               '$baseUrl/driver/auth/trips/${Uri.encodeComponent(id)}/accept'),
           headers: _headers,
           body: jsonEncode({if (vehicleId != null) 'vehicleId': vehicleId})));
   Future<Map<String, dynamic>> rejectTrip(String id) async =>
-      _decode(await _client.post(
+      await _decode(await _client.post(
           Uri.parse(
               '$baseUrl/driver/auth/trips/${Uri.encodeComponent(id)}/reject'),
           headers: _headers));
   Future<Map<String, dynamic>> arriveTrip(String id) async =>
-      _decode(await _client.post(
+      await _decode(await _client.post(
           Uri.parse(
               '$baseUrl/driver/auth/trips/${Uri.encodeComponent(id)}/arrive'),
           headers: _headers));
   Future<Map<String, dynamic>> cancelTrip(String id) async =>
-      _decode(await _client.post(
+      await _decode(await _client.post(
           Uri.parse(
               '$baseUrl/driver/auth/trips/${Uri.encodeComponent(id)}/cancel'),
           headers: _headers));
   Future<Map<String, dynamic>> startTrip(String id) async =>
-      _decode(await _client.post(
+      await _decode(await _client.post(
           Uri.parse(
               '$baseUrl/driver/auth/trips/${Uri.encodeComponent(id)}/start'),
           headers: _headers));
   Future<Map<String, dynamic>> completeTrip(String id) async =>
-      _decode(await _client.post(
+      await _decode(await _client.post(
           Uri.parse(
               '$baseUrl/driver/auth/trips/${Uri.encodeComponent(id)}/complete'),
           headers: _headers));
   Future<Map<String, dynamic>> notificationPreferences() async =>
-      _decode(await _client.get(
+      await _decode(await _client.get(
           Uri.parse('$baseUrl/driver/auth/notification-preferences'),
           headers: _headers));
   Future<Map<String, dynamic>> updateNotificationPreferences(
           Map<String, bool> fields) async =>
-      _decode(await _client.patch(
+      await _decode(await _client.patch(
           Uri.parse('$baseUrl/driver/auth/notification-preferences'),
           headers: _headers,
           body: jsonEncode(fields)));
   Future<List<dynamic>> pendingCancellationNotifications() async =>
-      _decodeList(await _client.get(
+      await _decodeList(await _client.get(
           Uri.parse('$baseUrl/driver/auth/notifications/cancellations/pending'),
           headers: _headers));
-  Future<List<dynamic>> notifications() async => _decodeList(await _client
+  Future<List<dynamic>> notifications() async => await _decodeList(await _client
       .get(Uri.parse('$baseUrl/driver/auth/notifications'), headers: _headers));
   Future<Map<String, dynamic>> readNotification(String id) async =>
-      _decode(await _client.post(
+      await _decode(await _client.post(
           Uri.parse(
               '$baseUrl/driver/auth/notifications/${Uri.encodeComponent(id)}/read'),
           headers: _headers));
@@ -566,9 +567,12 @@ class DriverApiClient {
     clearSession();
   }
 
-  Map<String, dynamic> _decode(http.Response response) {
+  // Every decoded payload passes through DriverFontLayers so its text never
+  // renders before the font layer that covers it has loaded.
+  Future<Map<String, dynamic>> _decode(http.Response response) async {
     final payload =
         response.body.isEmpty ? <String, dynamic>{} : jsonDecode(response.body);
+    await DriverFontLayers.ensureForPayload(payload);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       final message = payload is Map
           ? payload['message']?.toString() ?? 'Request failed'
@@ -578,14 +582,17 @@ class DriverApiClient {
     return Map<String, dynamic>.from(payload as Map);
   }
 
-  List<dynamic> _decodeList(http.Response response) {
+  Future<List<dynamic>> _decodeList(http.Response response) async {
     if (response.statusCode < 200 || response.statusCode >= 300) {
       final payload = response.body.isEmpty ? null : jsonDecode(response.body);
+      await DriverFontLayers.ensureForPayload(payload);
       final message = payload is Map
           ? payload['message']?.toString() ?? 'Request failed'
           : 'Request failed';
       throw DriverApiException(response.statusCode, message);
     }
-    return jsonDecode(response.body) as List<dynamic>;
+    final payload = jsonDecode(response.body) as List<dynamic>;
+    await DriverFontLayers.ensureForPayload(payload);
+    return payload;
   }
 }

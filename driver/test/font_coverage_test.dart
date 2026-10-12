@@ -1,11 +1,12 @@
-// rootBundle asset loads never complete under `flutter test --platform chrome`,
-// so the font table checks run on the Dart VM (`flutter test
-// test/font_coverage_test.dart`). The theme fallback is covered on Chrome by
-// theme_font_fallback_test.dart.
+// Font files are read with dart:io, so these checks run on the Dart VM
+// (scripts/check-driver-tests.mjs runs them as part of `npm run verify:driver`).
 @TestOn('vm')
 library;
 
-import 'package:flutter/services.dart';
+import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:driver_web/core/fonts/driver_font_coverage.g.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Reads the Unicode code points mapped by a TrueType font's cmap table
@@ -70,23 +71,73 @@ Set<int> _codePoints(ByteData font) {
   return result;
 }
 
-Future<Set<int>> _fontCodePoints(String asset) async =>
-    _codePoints(await rootBundle.load(asset));
+Set<int> _fontCodePoints(String path) =>
+    _codePoints(ByteData.sublistView(File(path).readAsBytesSync()));
+
+Set<int> _decodedRanges(List<int> encoded) {
+  final result = <int>{};
+  var position = 0;
+  for (var i = 0; i < encoded.length; i += 2) {
+    final start = position + encoded[i];
+    position = start + encoded[i + 1];
+    for (var cp = start; cp < position; cp++) {
+      result.add(cp);
+    }
+  }
+  return result;
+}
+
+const _layers = ['UI', 'Common', 'Rare'];
 
 void main() {
-  late Set<int> traditional;
-  late Set<int> supplement;
+  final layers = <String, Set<int>>{
+    for (final script in ['TC', 'SC'])
+      for (final layer in _layers)
+        '$script-$layer':
+            _fontCodePoints('assets/fonts/NotoSans$script-$layer.ttf'),
+  };
+  Set<int> layer(String name) =>
+      layers['TC-$name']!.union(layers['SC-$name']!);
 
-  setUpAll(() async {
-    TestWidgetsFlutterBinding.ensureInitialized();
-    traditional = await _fontCodePoints('assets/fonts/NotoSansTC-Variable.ttf');
-    supplement =
-        await _fontCodePoints('assets/fonts/NotoSansSC-Supplement.ttf');
+  test('layers split the source fonts without overlap or loss', () {
+    final traditional = _fontCodePoints('assets/fonts/NotoSansTC-Variable.ttf');
+    final supplement = _fontCodePoints('assets/fonts/NotoSansSC-Supplement.ttf');
+    expect(supplement.intersection(traditional), isEmpty);
+    final names = layers.keys.toList();
+    for (var i = 0; i < names.length; i++) {
+      for (var j = i + 1; j < names.length; j++) {
+        expect(layers[names[i]]!.intersection(layers[names[j]]!), isEmpty,
+            reason: '${names[i]} / ${names[j]}');
+      }
+    }
+    final all = layers.values.expand((points) => points).toSet();
+    expect(all, traditional.union(supplement));
   });
 
-  test('supplement only adds code points missing from Noto Sans TC', () {
-    expect(supplement.length, 11856);
-    expect(supplement.intersection(traditional), isEmpty);
+  test('generated coverage table matches the deferred layer fonts', () {
+    expect(_decodedRanges(driverFontCommonRanges), layer('Common'));
+    expect(_decodedRanges(driverFontRareRanges), layer('Rare'));
+  });
+
+  test('UI layer covers every character in the app source', () {
+    final covered = layers.values.expand((points) => points).toSet();
+    final missing = <String>{};
+    for (final file in Directory('lib').listSync(recursive: true)) {
+      if (file is! File ||
+          !file.path.endsWith('.dart') ||
+          file.path.endsWith('.g.dart')) {
+        continue;
+      }
+      for (final rune in file.readAsStringSync().runes) {
+        if (rune >= 0x2E80 &&
+            covered.contains(rune) &&
+            !layer('UI').contains(rune)) {
+          missing.add('${String.fromCharCode(rune)} (${file.path})');
+        }
+      }
+    }
+    expect(missing, isEmpty,
+        reason: 'Run `python3 tool/build_driver_font_layers.py` from driver/');
   });
 
   test('Simplified Chinese used by the app and mainland data is covered', () {
@@ -98,12 +149,17 @@ void main() {
       // Common Traditional text keeps rendering from Noto Sans TC.
       '香港 · 中西區美利大廈 接單大廳 等待出發',
     ];
-    final covered = traditional.union(supplement);
+    final covered = layers.values.expand((points) => points).toSet();
     final missing = <String>{
       for (final rune in samples.join().runes)
         if (rune > 0x7F && !covered.contains(rune) && rune != 0x3000)
           String.fromCharCode(rune),
     };
     expect(missing, isEmpty);
+    // Mainland place names in data are in the common layer, not the rare one.
+    for (final rune in '深圳湾广州白云机场佛山禅城区'.runes) {
+      expect(layer('Rare').contains(rune), isFalse,
+          reason: String.fromCharCode(rune));
+    }
   });
 }
