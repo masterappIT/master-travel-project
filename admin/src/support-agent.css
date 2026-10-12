@@ -2,7 +2,7 @@
 .support-agent-app,
 .support-agent-app * { box-sizing: border-box; }
 body { margin: 0; }
-.support-agent-app { --agent-ink: #0f2138; --agent-muted: #64748b; --agent-faint: #94a3b8; --agent-line: #e6ebf2; --agent-surface: #fff; --agent-canvas: #f3f5f9; --agent-brand: #1f5fbf; --agent-brand-deep: #123a7a; --agent-danger: #e5484d; position: fixed; inset: 0 0 auto; display: flex; height: var(--agent-viewport-height, 100dvh); color: var(--agent-ink); background: var(--agent-canvas); font: 15px/1.5 Inter, "Noto Sans TC", "PingFang TC", system-ui, sans-serif; -webkit-font-smoothing: antialiased; overflow: hidden; }
+.support-agent-app { --agent-ink: #0f2138; --agent-muted: #64748b; --agent-faint: #94a3b8; --agent-line: #e6ebf2; --agent-surface: #fff; --agent-canvas: #f3f5f9; --agent-brand: #1f5fbf; --agent-brand-deep: #123a7a; --agent-danger: #e5484d; position: fixed; top: var(--agent-viewport-top, 0); right: 0; left: 0; display: flex; height: var(--agent-viewport-height, 100dvh); color: var(--agent-ink); background: var(--agent-canvas); font: 15px/1.5 Inter, "Noto Sans TC", "PingFang TC", system-ui, sans-serif; -webkit-font-smoothing: antialiased; overflow: hidden; }
 .support-agent-app button,
 .support-agent-app input,
 .support-agent-app select,

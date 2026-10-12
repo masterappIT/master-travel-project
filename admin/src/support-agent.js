@@ -102,8 +102,10 @@ createApp({
     const outboundOpen = ref(false)
     const outboundClose = ref(null)
     const viewportHeight = ref(0)
-    // 手機鍵盤彈出時以可視區高度為準，讓輸入列貼在鍵盤上方。
-    const appStyle = computed(() => viewportHeight.value ? { '--agent-viewport-height': `${viewportHeight.value}px` } : {})
+    const viewportTop = ref(0)
+    // 手機鍵盤彈出時以可視區為準，讓輸入列貼在鍵盤上方。iOS Safari 會把整個頁面往上捲來露出輸入框，
+    // 固定定位的畫面因此被推出可視區上方，所以高度之外還要跟隨可視區的頂端位移。
+    const appStyle = computed(() => viewportHeight.value ? { '--agent-viewport-height': `${viewportHeight.value}px`, '--agent-viewport-top': `${viewportTop.value}px` } : {})
     const touchInput = typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches
     const recipient = reactive({ participantType: 'PASSENGER', participantId: '' })
     const recipientLookupMode = ref('PHONE')
@@ -365,14 +367,15 @@ createApp({
     const nearBottom = () => !messageList.value || messageList.value.scrollHeight - messageList.value.scrollTop - messageList.value.clientHeight < 48
     const keepAtBottom = async () => { if (!nearBottom()) return; await nextTick(); await scrollMessagesToEnd() }
     watch([draft, profileExpanded], keepAtBottom)
-    const syncViewport = () => { void keepAtBottom(); viewportHeight.value = Math.round(window.visualViewport?.height || 0) }
+    const syncViewport = () => { void keepAtBottom(); viewportHeight.value = Math.round(window.visualViewport?.height || 0); viewportTop.value = Math.max(0, Math.round(window.visualViewport?.offsetTop || 0)) }
     onMounted(async () => {
       syncViewport()
       window.visualViewport?.addEventListener('resize', syncViewport)
+      window.visualViewport?.addEventListener('scroll', syncViewport)
       try { agent.value = await request('/auth/me'); await load() } catch { agent.value = null }
       timer = setInterval(() => { if (agent.value) void load() }, 5000)
     })
-    onUnmounted(() => { window.visualViewport?.removeEventListener('resize', syncViewport); if (timer) clearInterval(timer); if (noticeTimer) clearTimeout(noticeTimer); document.title = baseTitle; clearParticipantProfile() })
+    onUnmounted(() => { window.visualViewport?.removeEventListener('resize', syncViewport); window.visualViewport?.removeEventListener('scroll', syncViewport); if (timer) clearInterval(timer); if (noticeTimer) clearTimeout(noticeTimer); document.title = baseTitle; clearParticipantProfile() })
     return { conversationName, initial, dayLabel, startsNewDay, formatClock, audience, audiences, audienceCount, driverStatus, chatPhoneHref, passwordOpen, passwordForm, passwordError, passwordSaving, passwordFirst, openPassword, closePassword, changePassword, menuOpen, outboundOpen, outboundClose, appStyle, touchInput, formatShortTime, chatTitle, chatSubtitle, openOutbound, closeOutbound, signOutFromMenu, hasMoreMessages, loadingOlder, loadOlderMessages, notice, alertSound, toggleAlertSound, pendingCount, onComposerKeydown, agent, credentials, conversations, filtered, selectedId, selectedConversation, participantProfile, participantProfileLoading, participantProfileError, participantPhone, driverRegionalPhone, loadParticipantProfile, messages, draft, search, replyFilter, profileExpanded, recipient, recipientLookupMode, recipientCountryCode, recipientPhone, recipientOptions, recipientSearching, recipientSearchPerformed, recipientSearchError, recipientLabel, recipientDisplayName, resetRecipientSearch, setRecipientType, setRecipientLookupMode, searchRecipients, selectRecipient, error, busy, inboxLoading, messagesLoading, messageList, participantLabel, senderLabel, formatTime, signIn, signOut, select, backToInbox, send, open }
   },
   components: { AgentButton, AgentIcon, AgentInput, AgentLink, AgentSelect, AgentTextarea },
