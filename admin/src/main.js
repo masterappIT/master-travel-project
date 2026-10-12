@@ -334,6 +334,12 @@ const App = { components: { SupportPage }, setup() {
      view,
      api,
      ...financePageState,
+     // 財務渠道的寫入端點後端僅允許 SUPER_ADMIN。
+     canManageChannels: isSuperAdministrator,
+     navigate,
+     requestConfirmation,
+     notify,
+     displayError,
      saveFinanceCurrencySettings,
      saveFinanceRateSettings
    })

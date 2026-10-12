@@ -930,6 +930,28 @@ export async function createPendingTrip(params: CreatePendingTripRequest): Promi
   return response.data as CreatePendingTripResult
 }
 
+export type PaymentScenario = 'TRIP_PAYMENT' | 'FARE_TOP_UP' | 'MEMBERSHIP'
+
+export type PaymentSheetRow = {
+  id: string
+  kind: 'FARE_BALANCE' | 'CASH_BALANCE' | 'EXTERNAL'
+  label: string
+  icon: string
+  provider: string | null
+}
+
+/** The payment methods finance has arranged for one paid action, in display order. Listing them takes no payment. */
+export async function getPaymentSheet(scenario: PaymentScenario): Promise<PaymentSheetRow[]> {
+  const response = await uni.request({
+    url: `${API_BASE_URL}/payments/sheet?scenario=${scenario}`,
+    header: authHeaders(),
+    timeout: REQUEST_TIMEOUT_MS
+  }).catch(error => { throw networkError(error, '無法連接伺服器，付款方式載入失敗') })
+  if (response.statusCode >= 400) throw apiError(response, '付款方式載入失敗')
+  const data = (response.data as { data?: unknown }).data
+  return Array.isArray(data) ? data as PaymentSheetRow[] : []
+}
+
 export async function payTrip(params: TripPayRequest): Promise<TripPayResult> {
   const response = await uni.request({
     url: `${API_BASE_URL}/payments/trip-pay`,

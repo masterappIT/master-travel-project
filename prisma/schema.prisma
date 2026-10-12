@@ -734,11 +734,43 @@ model PaymentChannelConfig {
   lastTestedAt       DateTime?
   lastTestStatus     String?
   lastTestMessage    String?
+  // Payment-settings fact: when this config last stopped being usable (re-saved or failed its connection test).
+  lastUnavailableAt  DateTime?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
+  financeChannel     FinanceChannel?
 
   @@unique([provider, environment])
   @@index([provider, region, paymentCurrency])
+}
+
+// Finance-centre decision about a technically connected channel. Never holds or changes third-party credentials.
+model FinanceChannel {
+  id              String               @id @default(cuid())
+  channelConfigId String               @unique
+  status          String
+  confirmedAt     DateTime
+  confirmedBy     String?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  channelConfig   PaymentChannelConfig @relation(fields: [channelConfigId], references: [id], onDelete: Cascade)
+}
+
+// One row of a passenger payment sheet, as arranged by finance. External rows name the provider that handles them;
+// which of that provider's configs is used follows the environment in use.
+model PaymentSheetItem {
+  id        String   @id @default(cuid())
+  scenario  String
+  kind      String
+  label     String
+  icon      String
+  enabled   Boolean  @default(true)
+  provider  String?
+  sortOrder Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([scenario, sortOrder])
 }
 
 enum PaymentStatus {

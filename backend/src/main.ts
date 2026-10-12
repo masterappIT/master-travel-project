@@ -72,6 +72,8 @@ import { isStripePaymentMethod, parseStripeConfigInput, testStripeConnection, ve
 import { WECHAT_PAY_CN_API, WECHAT_PAY_HK_API, type WechatPayApi, isWechatPayHkMerchantMode, parseWechatPayHkConfigInput, testWechatPayHkConnection } from "./wechat-pay-hk-channel-config";
 import { PAYME_API_BASES, parsePaymeConfigInput, testPaymeConnection } from "./payme-channel-config";
 import { isAlipayCnMerchantMode, parseAlipayCnConfigInput, testAlipayCnConnection } from "./alipay-cn-channel-config";
+import { FINANCE_SCENARIOS, SHEET_ICONS, SHEET_LABEL_MAX_LENGTH, SHEET_MAX_ITEMS, SHEET_PROVIDERS, channelEnvironmentInUse, channelOperatingState, channelTechnicalState, defaultSheetItems, isChannelOffered, isFinanceScenario, parseFinanceChannelInput, parseSheetItems, passengerSheetRows, type FinanceScenario } from "./finance-channel";
+import { isOverviewPeriod, overviewPeriodStart, summariseFinance } from "./finance-overview";
 import { inviteShareHtml } from "./order-invite-share";
 import { publicDriverOrderChannelFilter } from "./driver-order-channel";
 import { billableExtraSelections, withinImmediateWindow } from "./quote-extras";
@@ -13608,7 +13610,7 @@ async function saveWechatPayConfig(req: RequestLike, body: Record<string, unknow
   const saved = await prisma.paymentChannelConfig.upsert({
     where,
     create: { ...shared, provider: channel.provider, region: channel.region, environment: "production", interface: "APIv3", gatewayUrl: channel.api.base, paymentCurrency: channel.currency, paymentCurrencies: [channel.currency], settlementCurrency: channel.currency },
-    update: { ...shared, configuredAt: new Date(), lastTestedAt: null, lastTestStatus: null, lastTestMessage: null, providerAccount: Prisma.DbNull },
+    update: { ...shared, configuredAt: new Date(), lastTestedAt: null, lastTestStatus: null, lastTestMessage: null, lastUnavailableAt: new Date(), providerAccount: Prisma.DbNull },
   });
   return { data: wechatPayHkConfigResponse(saved), replacedSecrets: Boolean(existing && (privateKey || apiV3Key)) };
 }
@@ -13622,7 +13624,7 @@ async function testWechatPayConfig(req: RequestLike, channel: WechatPayChannel) 
   const result = await testWechatPayHkConnection({ merchantMode: config.merchantMode, merchantId: config.partner, appId: config.appId, subMerchantId: config.subMerchantId, certificateSerialNo: config.certificateSerialNo, privateKey, apiV3Key }, undefined, channel.api);
   const updated = await prisma.paymentChannelConfig.update({
     where: { id: config.id },
-    data: { lastTestedAt: new Date(), lastTestStatus: result.status, lastTestMessage: result.message, providerAccount: result.account ?? Prisma.DbNull },
+    data: { lastTestedAt: new Date(), lastTestStatus: result.status, lastTestMessage: result.message, ...(result.status === "error" ? { lastUnavailableAt: new Date() } : {}), providerAccount: result.account ?? Prisma.DbNull },
   });
   return { status: result.status, message: result.message, thirdPartyCalled: true, data: wechatPayHkConfigResponse(updated) };
 }
@@ -13633,6 +13635,127 @@ function alipayCnConfigResponse(config: { id: string; displayName: string | null
 // PayMe reuses generic columns: partner = client ID, secretKey = client secret, certificateSerialNo = signing key ID, privateKey = signing key.
 function paymeConfigResponse(config: { id: string; displayName: string | null; description: string | null; provider: string; environment: string; partner: string; certificateSerialNo: string | null; privateKey: string | null; secretKey: string | null; providerAccount: Prisma.JsonValue; settlementCurrency: string; configuredAt: Date; lastTestedAt: Date | null; lastTestStatus: string | null; lastTestMessage: string | null }) {
   return { id: config.id, name: config.displayName, description: config.description, provider: config.provider, environment: config.environment, clientId: config.partner, signingKeyId: config.certificateSerialNo, clientSecretConfigured: Boolean(config.secretKey), signingKeyConfigured: Boolean(config.privateKey), account: config.providerAccount, settlementCurrency: config.settlementCurrency, configuredAt: config.configuredAt, lastTestedAt: config.lastTestedAt, lastTestStatus: config.lastTestStatus, lastTestMessage: config.lastTestMessage };
+}
+type FinanceChannelRow = Prisma.PaymentChannelConfigGetPayload<{ include: { financeChannel: true } }>;
+function financeChannelResponse(config: FinanceChannelRow, sandboxMode: boolean) {
+  const finance = config.financeChannel;
+  return {
+    id: config.id,
+    provider: config.provider,
+    name: config.displayName,
+    environment: config.environment,
+    region: config.region,
+    settlementCurrency: config.settlementCurrency,
+    paymentCurrencies: config.paymentCurrencies,
+    lastTestStatus: config.lastTestStatus,
+    lastTestedAt: config.lastTestedAt,
+    lastTestMessage: config.lastTestMessage,
+    technical: channelTechnicalState(config),
+    operatingState: channelOperatingState(config, finance),
+    offered: isChannelOffered(config, finance, sandboxMode),
+    finance: finance ? { status: finance.status, confirmedAt: finance.confirmedAt, confirmedBy: finance.confirmedBy } : null,
+  };
+}
+/** The saved sheet for a scenario, or the app's long-standing default rows while finance has not arranged one. */
+async function loadPaymentSheet(scenario: FinanceScenario) {
+  const [saved, settings] = await Promise.all([
+    prisma.paymentSheetItem.findMany({ where: { scenario }, orderBy: { sortOrder: "asc" } }),
+    prisma.appSetting.findUniqueOrThrow({ where: { id: appSettingsDefaults.id } }),
+  ]);
+  const items = saved.length
+    ? saved.map((item) => ({ id: item.id, kind: item.kind as "FARE_BALANCE" | "CASH_BALANCE" | "EXTERNAL", label: item.label, icon: item.icon as (typeof SHEET_ICONS)[number], enabled: item.enabled, provider: item.provider }))
+    : defaultSheetItems(settings).map((item, index) => ({ id: `default-${index}`, ...item }));
+  return { items, customised: saved.length > 0, settings };
+}
+// Finance centre: reads what payment settings has connected and records finance's own decision. It never reads or writes credentials.
+@Controller("admin/finance")
+class FinanceController {
+  @Get("channels") async channels(@Req() req: RequestLike) {
+    requireRole(req, ["SUPER_ADMIN", "OPERATOR"]);
+    const [configs, settings] = await Promise.all([
+      prisma.paymentChannelConfig.findMany({ include: { financeChannel: true }, orderBy: [{ settlementCurrency: "asc" }, { provider: "asc" }, { environment: "asc" }] }),
+      prisma.appSetting.findUniqueOrThrow({ where: { id: appSettingsDefaults.id } }),
+    ]);
+    return { data: configs.map((config) => financeChannelResponse(config, settings.sandboxMode)), sandboxMode: settings.sandboxMode, environmentInUse: channelEnvironmentInUse(settings.sandboxMode) };
+  }
+  @Post("channels/:id") async updateChannel(@Req() req: RequestLike, @Param("id") id: string, @Body() body: Record<string, unknown>) {
+    const session = requireRole(req, ["SUPER_ADMIN"]);
+    const config = await prisma.paymentChannelConfig.findUnique({ where: { id }, include: { financeChannel: true } });
+    if (!config) throw new HttpException("Finance channel is not found", HttpStatus.NOT_FOUND);
+    const parsed = parseFinanceChannelInput(body, config);
+    if ("error" in parsed) throw new BadRequestException(parsed.error);
+    const { status } = parsed.value;
+    if (status === "DISABLED" && !config.financeChannel) throw new BadRequestException("Finance channel is not adopted");
+    const confirmedBy = administrators.find((item) => item.id === session.sub)?.username ?? null;
+    // Activating is finance's confirmation of the channel as it is now.
+    const data = status === "ACTIVE" ? { status, confirmedAt: new Date(), confirmedBy } : { status };
+    await prisma.financeChannel.upsert({ where: { channelConfigId: config.id }, create: { channelConfigId: config.id, status, confirmedAt: new Date(), confirmedBy }, update: data });
+    const [updated, settings] = await Promise.all([
+      prisma.paymentChannelConfig.findUniqueOrThrow({ where: { id }, include: { financeChannel: true } }),
+      prisma.appSetting.findUniqueOrThrow({ where: { id: appSettingsDefaults.id } }),
+    ]);
+    return { data: financeChannelResponse(updated, settings.sandboxMode) };
+  }
+  // Read-only figures from payments and trips that already exist; nothing here moves money.
+  @Get("overview") async overview(@Req() req: RequestLike, @Query("period") periodParam?: string) {
+    requireRole(req, ["SUPER_ADMIN", "OPERATOR"]);
+    const period = isOverviewPeriod(periodParam) ? periodParam : "month";
+    const from = overviewPeriodStart(period);
+    const [payments, pendingTrips, { items, settings }, channels] = await Promise.all([
+      prisma.payment.findMany({ where: { createdAt: { gte: from } }, select: { total: true, currency: true, fareAmount: true, cashAmount: true, externalAmount: true, status: true } }),
+      prisma.trip.findMany({ where: { status: "COMPLETED", completedAt: { gte: from }, settlement: null, driverPayoutAmount: { not: null } }, select: { driverPayoutAmount: true, driverPayoutCurrency: true } }),
+      loadPaymentSheet("TRIP_PAYMENT"),
+      prisma.paymentChannelConfig.findMany({ include: { financeChannel: true } }),
+    ]);
+    const offeredRows = passengerSheetRows(items, channels, settings.sandboxMode);
+    return {
+      period,
+      from: from.toISOString(),
+      currencies: summariseFinance(payments, pendingTrips.map((trip) => ({ amount: trip.driverPayoutAmount ?? 0, currency: trip.driverPayoutCurrency || "RMB" }))),
+      collection: { walletMethods: offeredRows.filter((row) => row.kind !== "EXTERNAL").length, externalMethods: offeredRows.filter((row) => row.kind === "EXTERNAL").length, operatingChannels: channels.filter((channel) => isChannelOffered(channel, channel.financeChannel, settings.sandboxMode)).length, sandboxMode: settings.sandboxMode },
+    };
+  }
+  @Get("payments") async payments(@Req() req: RequestLike) {
+    requireRole(req, ["SUPER_ADMIN", "OPERATOR"]);
+    const query = parseAdminListQuery(req, 50);
+    const status = adminQueryValue(req, "status");
+    const where: Prisma.PaymentWhereInput = {
+      ...(status === "PAID" || status === "REFUNDED" ? { status } : {}),
+      ...(query.search ? { OR: [
+        { tripId: { contains: query.search, mode: "insensitive" } },
+        { externalReference: { contains: query.search, mode: "insensitive" } },
+        { user: { phoneNumber: { contains: query.search } } },
+        { user: { name: { contains: query.search, mode: "insensitive" } } },
+      ] } : {}),
+    };
+    const [data, total] = await prisma.$transaction([
+      prisma.payment.findMany({ where, orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip: (query.page - 1) * query.pageSize, take: query.pageSize, include: { user: { select: { name: true, phoneNumber: true } } } }),
+      prisma.payment.count({ where }),
+    ]);
+    return adminListResponse(data.map((item) => ({ id: item.id, tripId: item.tripId, passenger: { name: item.user.name, phoneNumber: item.user.phoneNumber }, total: item.total, currency: item.currency, fareAmount: item.fareAmount, cashAmount: item.cashAmount, externalAmount: item.externalAmount, externalPaymentMethod: item.externalPaymentMethod, externalReference: item.externalReference, status: item.status, refundedAt: item.refundedAt?.toISOString() ?? null, createdAt: item.createdAt.toISOString() })), total, query);
+  }
+  @Get("payment-sheet") async paymentSheet(@Req() req: RequestLike, @Query("scenario") scenario?: string) {
+    requireRole(req, ["SUPER_ADMIN", "OPERATOR"]);
+    if (!isFinanceScenario(scenario)) throw new BadRequestException("Payment sheet scenario is invalid");
+    const { items, customised } = await loadPaymentSheet(scenario);
+    return { data: items, customised, scenario, scenarios: FINANCE_SCENARIOS, icons: SHEET_ICONS, providers: SHEET_PROVIDERS, limits: { items: SHEET_MAX_ITEMS, labelLength: SHEET_LABEL_MAX_LENGTH } };
+  }
+  @Post("payment-sheet") async savePaymentSheet(@Req() req: RequestLike, @Body() body: Record<string, unknown>) {
+    requireRole(req, ["SUPER_ADMIN"]);
+    if (!isFinanceScenario(body.scenario)) throw new BadRequestException("Payment sheet scenario is invalid");
+    const scenario = body.scenario;
+    const parsed = parseSheetItems(body.items);
+    if ("error" in parsed) throw new BadRequestException(parsed.error);
+    const walletEnabled = (kind: string) => parsed.value.some((item) => item.kind === kind && item.enabled);
+    await prisma.$transaction([
+      prisma.paymentSheetItem.deleteMany({ where: { scenario } }),
+      prisma.paymentSheetItem.createMany({ data: parsed.value.map((item, sortOrder) => ({ ...item, scenario, sortOrder })) }),
+      // Trip payment enforces these two switches when charging, so they must agree with what the sheet offers.
+      ...(scenario === "TRIP_PAYMENT" ? [prisma.appSetting.update({ where: { id: appSettingsDefaults.id }, data: { fareBalancePayEnabled: walletEnabled("FARE_BALANCE"), cashBalancePayEnabled: walletEnabled("CASH_BALANCE") } })] : []),
+    ]);
+    const { items } = await loadPaymentSheet(scenario);
+    return { data: items, customised: true, scenario };
+  }
 }
 @Controller("settings")
 class SettingsController {
@@ -13665,7 +13788,7 @@ class SettingsController {
     const saved = await prisma.paymentChannelConfig.upsert({
       where: { provider_environment: { provider: "ALIPAY_HK", environment } },
       create: { provider: "ALIPAY_HK", displayName, description, region: "HK", environment, interface: "WAP", gatewayUrl, partner, appId: typeof body.appId === "string" ? body.appId.trim() || null : null, privateKey: privateKey ? encryptWechatSecret(privateKey) : null, publicKey: publicKey ? encryptWechatSecret(publicKey) : null, notifyUrl: typeof body.notifyUrl === "string" ? body.notifyUrl.trim() || null : null, returnUrl: typeof body.returnUrl === "string" ? body.returnUrl.trim() || null : null, paymentCurrency: uniquePaymentCurrencies[0], paymentCurrencies: uniquePaymentCurrencies, settlementCurrency: "HKD" },
-      update: { displayName, description, gatewayUrl, partner, appId: typeof body.appId === "string" ? body.appId.trim() || null : undefined, ...(privateKey ? { privateKey: encryptWechatSecret(privateKey) } : {}), ...(publicKey ? { publicKey: encryptWechatSecret(publicKey) } : {}), notifyUrl: typeof body.notifyUrl === "string" ? body.notifyUrl.trim() || null : undefined, returnUrl: typeof body.returnUrl === "string" ? body.returnUrl.trim() || null : undefined, region: "HK", interface: "WAP", paymentCurrency: uniquePaymentCurrencies[0], paymentCurrencies: uniquePaymentCurrencies, settlementCurrency: "HKD", configuredAt: new Date(), lastTestedAt: null, lastTestStatus: null, lastTestMessage: null },
+      update: { displayName, description, gatewayUrl, partner, appId: typeof body.appId === "string" ? body.appId.trim() || null : undefined, ...(privateKey ? { privateKey: encryptWechatSecret(privateKey) } : {}), ...(publicKey ? { publicKey: encryptWechatSecret(publicKey) } : {}), notifyUrl: typeof body.notifyUrl === "string" ? body.notifyUrl.trim() || null : undefined, returnUrl: typeof body.returnUrl === "string" ? body.returnUrl.trim() || null : undefined, region: "HK", interface: "WAP", paymentCurrency: uniquePaymentCurrencies[0], paymentCurrencies: uniquePaymentCurrencies, settlementCurrency: "HKD", configuredAt: new Date(), lastTestedAt: null, lastTestStatus: null, lastTestMessage: null, lastUnavailableAt: new Date() },
     });
     return { data: alipayHkConfigResponse(saved), replacedSecrets: Boolean(existing && (privateKey || publicKey)) };
   }
@@ -13699,7 +13822,7 @@ class SettingsController {
     const saved = await prisma.paymentChannelConfig.upsert({
       where: { provider_environment: { provider: "STRIPE", environment: parsed.value.environment } },
       create: { ...shared, provider: "STRIPE", region: "HK", environment: parsed.value.environment, interface: "API", gatewayUrl: "https://api.stripe.com", partner: "", paymentCurrency: "HKD", paymentCurrencies: ["HKD"], settlementCurrency: "HKD" },
-      update: { ...shared, configuredAt: new Date(), lastTestedAt: null, lastTestStatus: null, lastTestMessage: null, ...(secretKey ? { partner: "", providerAccount: Prisma.DbNull } : {}) },
+      update: { ...shared, configuredAt: new Date(), lastTestedAt: null, lastTestStatus: null, lastTestMessage: null, lastUnavailableAt: new Date(), ...(secretKey ? { partner: "", providerAccount: Prisma.DbNull } : {}) },
     });
     return { data: stripeConfigResponse(saved), replacedSecrets: Boolean(existing && (secretKey || webhookSecret)) };
   }
@@ -13713,7 +13836,7 @@ class SettingsController {
     const result = await testStripeConnection(secretKey, config.paymentMethods.filter(isStripePaymentMethod));
     const updated = await prisma.paymentChannelConfig.update({
       where: { id: config.id },
-      data: { lastTestedAt: new Date(), lastTestStatus: result.status, lastTestMessage: result.message, ...(result.account ? { partner: result.account.id, providerAccount: result.account } : {}) },
+      data: { lastTestedAt: new Date(), lastTestStatus: result.status, lastTestMessage: result.message, ...(result.status === "error" ? { lastUnavailableAt: new Date() } : {}), ...(result.account ? { partner: result.account.id, providerAccount: result.account } : {}) },
     });
     return { status: result.status, message: result.message, thirdPartyCalled: true, data: stripeConfigResponse(updated) };
   }
@@ -13741,7 +13864,7 @@ class SettingsController {
     const saved = await prisma.paymentChannelConfig.upsert({
       where: { provider_environment: { provider: "PAYME", environment: parsed.value.environment } },
       create: { ...shared, provider: "PAYME", region: "HK", environment: parsed.value.environment, interface: "API", gatewayUrl: PAYME_API_BASES[parsed.value.environment], paymentCurrency: "HKD", paymentCurrencies: ["HKD"], settlementCurrency: "HKD" },
-      update: { ...shared, configuredAt: new Date(), lastTestedAt: null, lastTestStatus: null, lastTestMessage: null, providerAccount: Prisma.DbNull },
+      update: { ...shared, configuredAt: new Date(), lastTestedAt: null, lastTestStatus: null, lastTestMessage: null, lastUnavailableAt: new Date(), providerAccount: Prisma.DbNull },
     });
     return { data: paymeConfigResponse(saved), replacedSecrets: Boolean(existing && (clientSecret || signingKey)) };
   }
@@ -13756,7 +13879,7 @@ class SettingsController {
     const result = await testPaymeConnection({ environment, clientId: config.partner, clientSecret, signingKeyId: config.certificateSerialNo, signingKey });
     const updated = await prisma.paymentChannelConfig.update({
       where: { id: config.id },
-      data: { lastTestedAt: new Date(), lastTestStatus: result.status, lastTestMessage: result.message, providerAccount: result.account ?? Prisma.DbNull },
+      data: { lastTestedAt: new Date(), lastTestStatus: result.status, lastTestMessage: result.message, ...(result.status === "error" ? { lastUnavailableAt: new Date() } : {}), providerAccount: result.account ?? Prisma.DbNull },
     });
     return { status: result.status, message: result.message, thirdPartyCalled: true, data: paymeConfigResponse(updated) };
   }
@@ -13779,7 +13902,7 @@ class SettingsController {
     const saved = await prisma.paymentChannelConfig.upsert({
       where: { provider_environment: { provider: "ALIPAY_CN", environment: parsed.value.environment } },
       create: { ...shared, provider: "ALIPAY_CN", region: "CN", environment: parsed.value.environment, interface: "OPENAPI", paymentCurrency: "RMB", paymentCurrencies: ["RMB"], settlementCurrency: "RMB" },
-      update: { ...shared, configuredAt: new Date(), lastTestedAt: null, lastTestStatus: null, lastTestMessage: null, providerAccount: Prisma.DbNull },
+      update: { ...shared, configuredAt: new Date(), lastTestedAt: null, lastTestStatus: null, lastTestMessage: null, lastUnavailableAt: new Date(), providerAccount: Prisma.DbNull },
     });
     return { data: alipayCnConfigResponse(saved), replacedSecrets: Boolean(existing && (privateKey || alipayPublicKey || appAuthToken)) };
   }
@@ -13795,7 +13918,7 @@ class SettingsController {
     const result = await testAlipayCnConnection({ merchantMode: config.merchantMode, appId: config.appId, gatewayUrl: config.gatewayUrl, privateKey, alipayPublicKey, appAuthToken });
     const updated = await prisma.paymentChannelConfig.update({
       where: { id: config.id },
-      data: { lastTestedAt: new Date(), lastTestStatus: result.status, lastTestMessage: result.message, providerAccount: result.account ?? Prisma.DbNull },
+      data: { lastTestedAt: new Date(), lastTestStatus: result.status, lastTestMessage: result.message, ...(result.status === "error" ? { lastUnavailableAt: new Date() } : {}), providerAccount: result.account ?? Prisma.DbNull },
     });
     return { status: result.status, message: result.message, thirdPartyCalled: true, data: alipayCnConfigResponse(updated) };
   }
@@ -14958,6 +15081,15 @@ class WalletController {
 
 @Controller("payments")
 class PaymentsController {
+  // The payment sheet a signed-in passenger is shown for one paid action: the rows finance arranged, minus external rows
+  // whose channel is not connected and in operation. Listing a row takes no payment.
+  @Get("sheet")
+  async paymentSheetForPassenger(@Req() req: RequestLike, @Query("scenario") scenario?: string) {
+    await clientSessionFrom(req);
+    if (!isFinanceScenario(scenario)) throw new HttpException("Valid payment scenario is required", HttpStatus.BAD_REQUEST);
+    const [{ items, settings }, channels] = await Promise.all([loadPaymentSheet(scenario), prisma.paymentChannelConfig.findMany({ include: { financeChannel: true } })]);
+    return { data: passengerSheetRows(items, channels, settings.sandboxMode), scenario };
+  }
   // Called by Stripe, not by a signed-in user: the signature over the raw body is the only authentication.
   // It records that a genuine event arrived so the channel config can be checked end to end; it changes no order or payment state.
   @Post("stripe/webhook/:environment")
@@ -16823,6 +16955,7 @@ class HealthController {
     HealthController,
     LocationController,
     SettingsController,
+    FinanceController,
     RecommendedAddressesController,
     NotificationsController,
     PublicVehiclesController,
