@@ -459,16 +459,24 @@ class _OrderInvitePageState extends State<OrderInvitePage> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) markOrderInvitePreviewReady();
       });
-      return ColoredBox(
-        color: DriverColors.background,
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(
-              maxWidth: DriverDimensions.maxContentWidth,
-            ),
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(DriverSpacing.lg),
-              child: _OrderPreview(data: _preview!),
+      // The preview has no Material ancestor, so text would use Flutter's
+      // fallback style without the app fonts and render CJK as boxes.
+      return DefaultTextStyle.merge(
+        style: const TextStyle(
+          fontFamily: DriverTypography.fontFamily,
+          fontFamilyFallback: DriverTypography.fontFamilyFallback,
+        ),
+        child: ColoredBox(
+          color: DriverColors.background,
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                maxWidth: DriverDimensions.maxContentWidth,
+              ),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(DriverSpacing.lg),
+                child: _OrderPreview(data: _preview!),
+              ),
             ),
           ),
         ),

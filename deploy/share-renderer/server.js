@@ -15,10 +15,12 @@ const imageCache = new Map();
 const inFlight = new Map();
 const cacheTtlMs = 10 * 60 * 1000;
 const maxCacheEntries = 100;
+// Bump when the rendered card changes so stored images are rendered again.
+const cacheVersion = "v2";
 let active = false;
 
 function cacheKey(token) {
-  return `order-invites/${createHash("sha256").update(token).digest("hex")}.png`;
+  return `order-invites/${cacheVersion}/${createHash("sha256").update(token).digest("hex")}.png`;
 }
 
 async function readStoredImage(token) {
