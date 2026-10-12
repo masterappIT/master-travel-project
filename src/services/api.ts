@@ -194,7 +194,7 @@ export async function listLoginMethods(client: 'passenger' | 'driver' = 'passeng
   const platformQuery = platform ? `&platform=${platform}` : ''
   const loginModeQuery = platform === 'miniProgram' && loginMode ? `&loginMode=${encodeURIComponent(loginMode)}` : ''
   const previewQuery = preview ? `&preview=1&previewToken=${encodeURIComponent(previewToken)}` : ''
-  const response = await uni.request({
+  const response = await requestWithTimeout({
     url: `${API_BASE_URL}/auth/login-methods?client=${client}${platformQuery}${loginModeQuery}${previewQuery}`
   })
   if (response.statusCode >= 400) throw apiError(response, '無法載入登入方式', !preview)
@@ -228,7 +228,7 @@ export type WechatMiniProgramConfig = {
 }
 
 export async function getWechatMiniProgramConfig(): Promise<WechatMiniProgramConfig> {
-  const response = await uni.request({ url: `${API_BASE_URL}/auth/wechat/mini-program-config` })
+  const response = await requestWithTimeout({ url: `${API_BASE_URL}/auth/wechat/mini-program-config` })
   if (response.statusCode >= 400) throw apiError(response, '無法載入微信小程序配置')
   return response.data as WechatMiniProgramConfig
 }

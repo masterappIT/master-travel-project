@@ -232,6 +232,9 @@ import AddressPicker from '../../components/home/AddressPicker.vue'
 import BookingTimePicker from '../../components/home/BookingTimePicker.vue'
 import { activateEmbeddedPageHost, cachedPagePath, openCachedPage } from '../../utils/navigation'
 import { isAuthenticated } from '../../utils/auth'
+// #ifdef MP-WEIXIN
+import { preloadMiniProgramLoginConfig } from '../../utils/miniProgramLoginConfig'
+// #endif
 import { planDrivingRoute, reverseGeocode, lookupFlight, type Coordinate, type FlightDirection, type FlightLookupResult } from '../../services/api'
 import { findLocalRegion } from '../../utils/localRegions'
 
@@ -332,6 +335,9 @@ activateEmbeddedPageHost()
 
 onLoad(() => {
   homeAccessGranted.value = true
+  // #ifdef MP-WEIXIN
+  if (!isAuthenticated()) preloadMiniProgramLoginConfig()
+  // #endif
 })
 
 const tripStore = useTripStore()

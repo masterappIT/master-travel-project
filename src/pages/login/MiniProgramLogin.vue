@@ -82,6 +82,9 @@ import { authenticateThirdParty, getWechatWebAuthorizeUrl, listLoginMethods, req
 import { setAuthenticated, isAuthenticated } from '../../utils/auth'
 import { goHome } from '../../utils/navigation'
 import { isAdminPreview } from '../../utils/adminPreview'
+// #ifdef MP-WEIXIN
+import { readCachedMiniProgramLoginConfig, refreshMiniProgramLoginConfig, type MiniProgramLoginConfig } from '../../utils/miniProgramLoginConfig'
+// #endif
 
 
 const { responsiveStyle } = useResponsiveCanvas()
@@ -115,37 +118,54 @@ const readPreviewLoginMode = () => {
 }
 
 const props = defineProps<{ options: Record<string, string> }>()
+const resolvePreviewMode = () => (typeof props.options?.loginMode === 'string' && ['smsOnly', 'wechatOnly', 'wechatAndSms'].includes(props.options.loginMode)
+  ? props.options.loginMode as MiniProgramMode
+  : readPreviewLoginMode())
+const applyLoginMethods = (methods: LoginMethod[], previewMode?: MiniProgramMode) => {
+  loginMethods.value = methods
+  if (loginPlatform.value !== 'miniProgram') return
+  const hasWechat = methods.some((method) => method.provider === 'wechat')
+  const hasPhone = methods.some((method) => method.provider === 'phone')
+  if (!hasWechat && !hasPhone && !isPreview.value) throw new Error('沒有可用登入方式')
+  miniProgramMode.value = previewMode || (hasWechat && hasPhone ? 'wechatAndSms' : hasWechat ? 'wechatOnly' : 'smsOnly')
+}
+const failLoginConfiguration = () => {
+  loginMethods.value = []
+  miniProgramMode.value = null
+  loginConfigFailed.value = true
+}
 const loadLoginConfiguration = async () => {
   if (loginConfigLoading.value) return
   loginConfigLoading.value = true
   loginConfigFailed.value = false
-  const options = props.options
-  const previewMode = (typeof options?.loginMode === 'string' && ['smsOnly', 'wechatOnly', 'wechatAndSms'].includes(options.loginMode)
-    ? options.loginMode as MiniProgramMode
-    : readPreviewLoginMode())
+  const previewMode = resolvePreviewMode()
   try {
     // #ifdef MP-WEIXIN
-    loginMethods.value = await listLoginMethods('passenger', 'miniProgram', isPreview.value, previewToken.value, previewMode)
-    // #endif
-    // #ifndef MP-WEIXIN
-    loginMethods.value = await listLoginMethods('passenger', loginPlatform.value, isPreview.value, previewToken.value, previewMode)
-    // #endif
-    // #ifdef MP-WEIXIN
-    const hasWechat = loginMethods.value.some((method) => method.provider === 'wechat')
-    if (hasWechat) {
+    if (!isPreview.value && !previewMode) {
+      let config: MiniProgramLoginConfig
+      try {
+        config = await refreshMiniProgramLoginConfig()
+      } catch {
+        // 背景更新失敗時保留已用快取顯示的登入方式。
+        if (miniProgramMode.value === null) failLoginConfiguration()
+        return
+      }
+      miniProgramCapabilities.value = config.capabilities
+      applyLoginMethods(config.methods)
+      return
+    }
+    const previewMethods = await listLoginMethods('passenger', 'miniProgram', isPreview.value, previewToken.value, previewMode)
+    if (previewMethods.some((method) => method.provider === 'wechat')) {
       const miniProgramConfig = await getWechatMiniProgramConfig()
       miniProgramCapabilities.value = miniProgramConfig.capabilities
     }
+    applyLoginMethods(previewMethods, previewMode)
     // #endif
-    if (loginPlatform.value === 'miniProgram') {
-      const hasWechat = loginMethods.value.some((method) => method.provider === 'wechat')
-      const hasPhone = loginMethods.value.some((method) => method.provider === 'phone')
-      if (!hasWechat && !hasPhone && !isPreview.value) throw new Error('沒有可用登入方式')
-      miniProgramMode.value = previewMode || (hasWechat && hasPhone ? 'wechatAndSms' : hasWechat ? 'wechatOnly' : 'smsOnly')
-    }
+    // #ifndef MP-WEIXIN
+    applyLoginMethods(await listLoginMethods('passenger', loginPlatform.value, isPreview.value, previewToken.value, previewMode), previewMode)
+    // #endif
   } catch {
-    loginMethods.value = []
-    loginConfigFailed.value = true
+    failLoginConfiguration()
   } finally {
     loginConfigLoading.value = false
   }
@@ -162,6 +182,19 @@ onMounted(async () => {
   }
   previewToken.value = typeof options?.previewToken === 'string' ? options.previewToken : ''
   invitationCode.value = typeof options?.invite === 'string' ? options.invite.trim().toUpperCase() : ''
+  // #ifdef MP-WEIXIN
+  if (!isPreview.value && !resolvePreviewMode()) {
+    const cached = readCachedMiniProgramLoginConfig()
+    if (cached) {
+      try {
+        miniProgramCapabilities.value = cached.capabilities
+        applyLoginMethods(cached.methods)
+      } catch {
+        // 快取不可用時等待下方的即時載入結果。
+      }
+    }
+  }
+  // #endif
   await loadLoginConfiguration()
 })
 
