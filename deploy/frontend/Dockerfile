@@ -6,7 +6,7 @@ COPY deploy/frontend/default.conf /etc/nginx/templates/default.conf.template
 COPY --from=static / /usr/share/nginx/html
 
 RUN if [ -d /usr/share/nginx/html/assets/assets/fonts ]; then \
-      for font in /usr/share/nginx/html/assets/assets/fonts/NotoSansTC-*.ttf; do \
+      for font in /usr/share/nginx/html/assets/assets/fonts/NotoSansTC-*.ttf /usr/share/nginx/html/assets/assets/fonts/NotoSansSC-*.ttf; do \
         if [ -f "$font" ]; then \
           gzip -6 -c "$font" > "$font.gz"; \
           brotli -q 11 -c "$font" > "$font.br"; \

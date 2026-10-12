@@ -20,15 +20,15 @@ function rawGet(url, encoding) {
   return result.stdout;
 }
 
-test('Driver TTF is byte-identical through Brotli, gzip and original fallback', async () => {
-  const source = resolve('driver/assets/fonts/NotoSansTC-Variable.ttf');
+test('Driver TC and SC TTFs are byte-identical through Brotli, gzip and original fallback', async () => {
+  const fontNames = ['NotoSansTC-Variable.ttf', 'NotoSansSC-Supplement.ttf'];
   const fixture = mkdtempSync(join(tmpdir(), 'driver-font-brotli-'));
   const image = `driver-font-brotli-test:${process.pid}`;
   let container;
   try {
     const fonts = join(fixture, 'assets/assets/fonts');
     mkdirSync(fonts, { recursive: true });
-    cpSync(source, join(fonts, 'NotoSansTC-Variable.ttf'));
+    for (const name of fontNames) cpSync(resolve('driver/assets/fonts', name), join(fonts, name));
     writeFileSync(join(fixture, 'index.html'), '<!doctype html><title>Driver font test</title>');
     writeFileSync(join(fixture, 'unrelated.ttf'), 'untouched');
     docker('build', '--build-context', `static=${fixture}`, '-f', 'deploy/frontend/Dockerfile', '-t', image, '.');
@@ -44,35 +44,37 @@ test('Driver TTF is byte-identical through Brotli, gzip and original fallback', 
     assert.ok(ready, 'Container must become responsive');
     docker('exec', container, 'nginx', '-t');
 
-    const url = `${base}/assets/assets/fonts/NotoSansTC-Variable.ttf`;
-    const original = readFileSync(source);
-    for (const [accept, expected, decode] of [
-      ['br, gzip', 'br', brotliDecompressSync],
-      ['gzip', 'gzip', gunzipSync],
-      ['identity', null, (bytes) => bytes],
-      ['br;q=0, gzip', 'gzip', gunzipSync],
-    ]) {
-      const response = await fetch(url, { headers: { 'Accept-Encoding': accept } });
-      assert.equal(response.status, 200);
-      assert.equal(response.headers.get('content-encoding'), expected);
-      assert.match(response.headers.get('cache-control'), /no-cache, must-revalidate/);
-      assert.deepEqual(Buffer.from(await response.arrayBuffer()), original);
-      const transferred = rawGet(url, accept);
-      assert.deepEqual(decode(transferred), original);
-      if (expected) assert.ok(transferred.length < original.length);
-    }
+    for (const name of fontNames) {
+      const url = `${base}/assets/assets/fonts/${name}`;
+      const original = readFileSync(resolve('driver/assets/fonts', name));
+      for (const [accept, expected, decode] of [
+        ['br, gzip', 'br', brotliDecompressSync],
+        ['gzip', 'gzip', gunzipSync],
+        ['identity', null, (bytes) => bytes],
+        ['br;q=0, gzip', 'gzip', gunzipSync],
+      ]) {
+        const response = await fetch(url, { headers: { 'Accept-Encoding': accept } });
+        assert.equal(response.status, 200);
+        assert.equal(response.headers.get('content-encoding'), expected);
+        assert.match(response.headers.get('cache-control'), /no-cache, must-revalidate/);
+        assert.deepEqual(Buffer.from(await response.arrayBuffer()), original);
+        const transferred = rawGet(url, accept);
+        assert.deepEqual(decode(transferred), original);
+        if (expected) assert.ok(transferred.length < original.length);
+      }
 
-    const fontPath = '/usr/share/nginx/html/assets/assets/fonts/NotoSansTC-Variable.ttf';
-    docker('exec', container, 'rm', `${fontPath}.br`);
-    const gzipFallback = await fetch(url, { headers: { 'Accept-Encoding': 'br, gzip' } });
-    assert.equal(gzipFallback.status, 200);
-    assert.equal(gzipFallback.headers.get('content-encoding'), 'gzip');
-    assert.deepEqual(Buffer.from(await gzipFallback.arrayBuffer()), original);
-    docker('exec', container, 'rm', `${fontPath}.gz`);
-    const originalFallback = await fetch(url, { headers: { 'Accept-Encoding': 'br, gzip' } });
-    assert.equal(originalFallback.status, 200);
-    assert.equal(originalFallback.headers.get('content-encoding'), null);
-    assert.deepEqual(Buffer.from(await originalFallback.arrayBuffer()), original);
+      const fontPath = `/usr/share/nginx/html/assets/assets/fonts/${name}`;
+      docker('exec', container, 'rm', `${fontPath}.br`);
+      const gzipFallback = await fetch(url, { headers: { 'Accept-Encoding': 'br, gzip' } });
+      assert.equal(gzipFallback.status, 200);
+      assert.equal(gzipFallback.headers.get('content-encoding'), 'gzip');
+      assert.deepEqual(Buffer.from(await gzipFallback.arrayBuffer()), original);
+      docker('exec', container, 'rm', `${fontPath}.gz`);
+      const originalFallback = await fetch(url, { headers: { 'Accept-Encoding': 'br, gzip' } });
+      assert.equal(originalFallback.status, 200);
+      assert.equal(originalFallback.headers.get('content-encoding'), null);
+      assert.deepEqual(Buffer.from(await originalFallback.arrayBuffer()), original);
+    }
 
     const missing = await fetch(`${base}/assets/assets/fonts/NotoSansTC-Missing.ttf`, {
       headers: { 'Accept-Encoding': 'br, gzip' },

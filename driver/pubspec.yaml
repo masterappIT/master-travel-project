@@ -27,6 +27,9 @@ flutter:
     - family: Noto Sans TC
       fonts:
         - asset: assets/fonts/NotoSansTC-Variable.ttf
+    - family: Noto Sans SC Supplement
+      fonts:
+        - asset: assets/fonts/NotoSansSC-Supplement.ttf
   assets:
     - assets/order-history-origin.svg
     - assets/order-history-destination.svg

@@ -35,6 +35,13 @@ flutter build web
 
 司機端只使用完整字集 TTF；五份靜態 TTF 保留在倉庫作為回退基線，候選產物的 FontManifest 僅引用官方可變 TTF，涵蓋原有 400／500／600／700／800 字重。先前正式實測 WOFF2 曾出現載入變慢與方格缺字，因此本候選不使用 WOFF2，也不刪字元。部署時為原始 TTF 產生 Brotli quality 11 與既有 gzip level 6 副本，保留 gzip／原檔回退；不變更快取規則、CanvasKit 同站載入或 WASM gzip。HTTP 壓縮只保證傳輸解碼後位元組一致，首次載入收益仍須以正式環境及目標真機量測。
 
+## 簡體中文補充字型
+
+- Noto Sans TC 不含部分簡體字（例如 GB2312 的 6,763 字中有 1,898 字不在其中）。`fontFallbackBaseUrl` 指向站內 `fonts/`，站內只提供 Roboto，因此缺字無法從遠端補字。
+- `assets/fonts/NotoSansSC-Supplement.ttf` 只收錄 Noto Sans SC 有、Noto Sans TC 沒有的 11,856 個字元，保留可變字重軸；與 Noto Sans TC 一同於首屏前載入，主題以 `fontFamilyFallback` 引用。Noto Sans TC 原有字形不變。
+- 來源為 google/fonts `ofl/notosanssc/NotoSansSC[wght].ttf`（SHA-256 `a3041811a78c361b1de50f953c805e0244951c21c5bd412f7232ef0d899af0da`），授權見 `assets/fonts/OFL-NotoSansSC.txt`。產物 SHA-256 為 `a544e0db477ffd75061a6ea01ccfc963a0f96b198637d101aa379a6d14e7a554`，以 `tool/build_sc_supplement_font.py`（fontTools 4.65.0）可重現；正式建置直接使用已提交檔案。
+- `test/font_coverage_test.dart` 驗證補充字型不與 Noto Sans TC 重疊，並涵蓋司機端簡體介面文字與常見內地資料；由於 Chrome 測試平台無法讀取素材，此檔僅在 Dart VM 執行（`cd driver && flutter test test/font_coverage_test.dart`），`npm run verify:driver` 會略過。`test/theme_font_fallback_test.dart` 於 Chrome 驗證主題後備字型設定。
+
 ## 收款貨幣與收入顯示
 
 - 收款貨幣偏好使用 `HKD` 或 `CNY`；司機端讀取 `GET /driver/auth/statistics?currency=HKD|CNY`，後端回傳 `HKD` 或 `RMB`。
