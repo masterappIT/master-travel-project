@@ -109,7 +109,8 @@ class _OrderInfoCardState extends State<_OrderInfoCard> {
 
   bool _exceedsTwoLines(String value, double width, TextStyle style) {
     final painter = TextPainter(
-      text: TextSpan(text: value, style: style),
+      text: TextSpan(
+          text: value, style: DefaultTextStyle.of(context).style.merge(style)),
       maxLines: 2,
       textDirection: TextDirection.ltr,
     )..layout(maxWidth: width);

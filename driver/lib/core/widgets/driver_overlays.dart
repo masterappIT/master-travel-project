@@ -145,6 +145,8 @@ class DriverDialog extends StatelessWidget {
                         horizontal: DriverSpacing.xl),
                     child: DefaultTextStyle(
                       style: const TextStyle(
+                        fontFamily: DriverTypography.fontFamily,
+                        fontFamilyFallback: DriverTypography.fontFamilyFallback,
                         color: DriverColors.text,
                         fontSize: 20,
                         fontWeight: FontWeight.w700,
@@ -159,6 +161,9 @@ class DriverDialog extends StatelessWidget {
                       padding: contentPadding,
                       child: DefaultTextStyle(
                         style: const TextStyle(
+                          fontFamily: DriverTypography.fontFamily,
+                          fontFamilyFallback:
+                              DriverTypography.fontFamilyFallback,
                           color: DriverColors.text,
                           fontSize: DriverTypography.bodyLarge,
                           decoration: TextDecoration.none,

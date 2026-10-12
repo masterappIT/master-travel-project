@@ -60,6 +60,8 @@ abstract final class DriverRadii {
 }
 
 abstract final class DriverTypography {
+  static const fontFamily = 'Noto Sans TC';
+  static const fontFamilyFallback = ['Noto Sans SC Supplement'];
   static const body = 14.0;
   static const bodyLarge = 16.0;
   static const label = 13.0;

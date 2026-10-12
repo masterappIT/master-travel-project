@@ -149,8 +149,8 @@ class DriverApp extends StatelessWidget {
                   ? const Locale('zh', 'CN')
                   : const Locale('zh', 'TW'),
           theme: ThemeData(
-            fontFamily: 'Noto Sans TC',
-            fontFamilyFallback: const ['Noto Sans SC Supplement'],
+            fontFamily: DriverTypography.fontFamily,
+            fontFamilyFallback: DriverTypography.fontFamilyFallback,
             useMaterial3: true,
             scaffoldBackgroundColor: DriverColors.background,
             colorScheme: ColorScheme.fromSeed(

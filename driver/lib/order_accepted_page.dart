@@ -530,7 +530,8 @@ class _AddressPairState extends State<_AddressPair> {
 
   bool _exceedsTwoLines(String value, double width, TextStyle style) {
     final painter = TextPainter(
-      text: TextSpan(text: value, style: style),
+      text: TextSpan(
+          text: value, style: DefaultTextStyle.of(context).style.merge(style)),
       maxLines: 2,
       textDirection: TextDirection.ltr,
     )..layout(maxWidth: width);
@@ -745,7 +746,10 @@ ButtonStyle _cancelStyle() => OutlinedButton.styleFrom(
     shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(DriverRadii.card)),
     textStyle: const TextStyle(
-        fontSize: DriverTypography.bodyLarge, fontWeight: FontWeight.w500));
+        fontFamily: DriverTypography.fontFamily,
+        fontFamilyFallback: DriverTypography.fontFamilyFallback,
+        fontSize: DriverTypography.bodyLarge,
+        fontWeight: FontWeight.w500));
 ButtonStyle _arrivedStyle() => ElevatedButton.styleFrom(
     minimumSize: const Size.fromHeight(54),
     foregroundColor: DriverColors.surface,
@@ -754,4 +758,7 @@ ButtonStyle _arrivedStyle() => ElevatedButton.styleFrom(
     shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(DriverRadii.card)),
     textStyle: const TextStyle(
-        fontSize: DriverTypography.bodyLarge, fontWeight: FontWeight.w700));
+        fontFamily: DriverTypography.fontFamily,
+        fontFamilyFallback: DriverTypography.fontFamilyFallback,
+        fontSize: DriverTypography.bodyLarge,
+        fontWeight: FontWeight.w700));

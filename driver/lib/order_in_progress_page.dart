@@ -437,7 +437,8 @@ class _ProgressAddressPairState extends State<_ProgressAddressPair> {
 
   bool _exceedsTwoLines(String value, double width, TextStyle style) {
     final painter = TextPainter(
-      text: TextSpan(text: value, style: style),
+      text: TextSpan(
+          text: value, style: DefaultTextStyle.of(context).style.merge(style)),
       maxLines: 2,
       textDirection: TextDirection.ltr,
     )..layout(maxWidth: width);
@@ -576,5 +577,9 @@ ButtonStyle _completeStyle() => ElevatedButton.styleFrom(
       elevation: 0,
       shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(DriverRadii.card)),
-      textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+      textStyle: const TextStyle(
+          fontFamily: DriverTypography.fontFamily,
+          fontFamilyFallback: DriverTypography.fontFamilyFallback,
+          fontSize: 18,
+          fontWeight: FontWeight.w700),
     );

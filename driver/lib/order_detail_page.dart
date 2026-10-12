@@ -459,7 +459,10 @@ ButtonStyle _secondaryButtonStyle() => OutlinedButton.styleFrom(
       shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(DriverRadii.card)),
       textStyle: const TextStyle(
-          fontSize: DriverTypography.bodyLarge, fontWeight: FontWeight.w700),
+          fontFamily: DriverTypography.fontFamily,
+          fontFamilyFallback: DriverTypography.fontFamilyFallback,
+          fontSize: DriverTypography.bodyLarge,
+          fontWeight: FontWeight.w700),
     );
 
 ButtonStyle _primaryButtonStyle() => ElevatedButton.styleFrom(
@@ -470,5 +473,8 @@ ButtonStyle _primaryButtonStyle() => ElevatedButton.styleFrom(
       shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(DriverRadii.card)),
       textStyle: const TextStyle(
-          fontSize: DriverTypography.bodyLarge, fontWeight: FontWeight.w700),
+          fontFamily: DriverTypography.fontFamily,
+          fontFamilyFallback: DriverTypography.fontFamilyFallback,
+          fontSize: DriverTypography.bodyLarge,
+          fontWeight: FontWeight.w700),
     );

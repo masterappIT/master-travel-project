@@ -292,6 +292,19 @@ void main() {
     expect(find.text('車輛類型：轎車'), findsOneWidget);
   });
 
+  testWidgets('order detail buttons keep the app fonts and SC fallback',
+      (WidgetTester tester) async {
+    await tester
+        .pumpWidget(testApp(const OrderDetailPage(tripId: 'trip-available')));
+    await tester.pumpAndSettle();
+
+    for (final label in ['拒絕', '確認接單']) {
+      final style = DefaultTextStyle.of(tester.element(find.text(label))).style;
+      expect(style.fontFamily, DriverTypography.fontFamily);
+      expect(style.fontFamilyFallback, DriverTypography.fontFamilyFallback);
+    }
+  });
+
   testWidgets('shows accepted order waiting state and phone action',
       (WidgetTester tester) async {
     await tester.pumpWidget(testApp(const OrderAcceptedPage(tripId: 'trip-1')));
