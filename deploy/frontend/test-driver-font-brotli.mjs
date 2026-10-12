@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { createHash } from 'node:crypto';
 import { brotliDecompressSync, gunzipSync } from 'node:zlib';
 import { test } from 'node:test';
 
@@ -10,6 +11,11 @@ function docker(...args) {
   const result = spawnSync('docker', args, { encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr || result.stdout);
   return result.stdout.trim();
+}
+
+// Must match the content-derived mtime in deploy/frontend/Dockerfile.
+function contentMtime(bytes) {
+  return 946684800 + parseInt(createHash('sha256').update(bytes).digest('hex').slice(0, 7), 16);
 }
 
 function rawGet(url, encoding) {
@@ -31,6 +37,9 @@ test('Driver TC and SC TTFs are byte-identical through Brotli, gzip and original
     for (const name of fontNames) cpSync(resolve('driver/assets/fonts', name), join(fonts, name));
     writeFileSync(join(fixture, 'index.html'), '<!doctype html><title>Driver font test</title>');
     writeFileSync(join(fixture, 'unrelated.ttf'), 'untouched');
+    writeFileSync(join(fixture, 'main.dart.js'), 'console.log("driver");\n'.repeat(2000));
+    mkdirSync(join(fixture, 'canvaskit/chromium'), { recursive: true });
+    writeFileSync(join(fixture, 'canvaskit/chromium/canvaskit.wasm'), Buffer.alloc(64 * 1024, 7));
     docker('build', '--build-context', `static=${fixture}`, '-f', 'deploy/frontend/Dockerfile', '-t', image, '.');
     container = docker('run', '-d', '-p', '127.0.0.1::8080', '-e', 'API_ORIGIN=http://127.0.0.1:8080', image);
     const address = docker('port', container, '8080/tcp').split('\n')[0];
@@ -43,6 +52,30 @@ test('Driver TC and SC TTFs are byte-identical through Brotli, gzip and original
     }
     assert.ok(ready, 'Container must become responsive');
     docker('exec', container, 'nginx', '-t');
+
+    // Validators depend only on content, so unchanged files stay cached across
+    // releases even though every image build gives them a fresh mtime.
+    for (const path of [
+      'assets/assets/fonts/NotoSansTC-Variable.ttf',
+      'assets/assets/fonts/NotoSansSC-Supplement.ttf',
+      'main.dart.js',
+      'canvaskit/chromium/canvaskit.wasm',
+    ]) {
+      const url = `${base}/${path}`;
+      const mtime = contentMtime(readFileSync(join(fixture, path)));
+      for (const accept of ['br, gzip', 'gzip', 'identity']) {
+        const response = await fetch(url, { headers: { 'Accept-Encoding': accept } });
+        assert.equal(response.status, 200, `${path} ${accept}`);
+        const size = rawGet(url, accept).length;
+        const etag = response.headers.get('etag');
+        assert.equal(etag, `"${mtime.toString(16)}-${size.toString(16)}"`, `${path} ${accept}`);
+        assert.equal(Date.parse(response.headers.get('last-modified')), mtime * 1000, `${path} ${accept}`);
+        const revalidated = await fetch(url, {
+          headers: { 'Accept-Encoding': accept, 'If-None-Match': etag },
+        });
+        assert.equal(revalidated.status, 304, `${path} ${accept}`);
+      }
+    }
 
     for (const name of fontNames) {
       const url = `${base}/assets/assets/fonts/${name}`;

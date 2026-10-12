@@ -102,7 +102,7 @@ flutter build web \\
 ```
 
 產物為 `driver/build/web`，會被包裝成 `driver` image，部署至獨立 Cloud Run service。
-Driver 瀏覽器請求使用同站 `/api` 反向代理，避免跨站 CORS 預檢；Flutter 依實際頁面來源把 `/api` 解析為絕對 URL，以保留事件串流等 URL 的既有組合方式。前端容器只對 Driver 的 `main.dart.js`、`canvaskit/*.wasm`、Noto Sans TC 字型與 Noto Sans SC 補充字型提供預壓縮 Brotli，保留 gzip 與原檔回退；其他前端沿用既有壓縮方式。
+Driver 瀏覽器請求使用同站 `/api` 反向代理，避免跨站 CORS 預檢；Flutter 依實際頁面來源把 `/api` 解析為絕對 URL，以保留事件串流等 URL 的既有組合方式。前端容器只對 Driver 的 `main.dart.js`、`canvaskit/*.wasm`、Noto Sans TC 字型與 Noto Sans SC 補充字型提供預壓縮 Brotli，保留 gzip 與原檔回退；其他前端沿用既有壓縮方式。nginx 的 ETag／Last-Modified 由檔案修改時間與大小組成，映像建置時會把這些 Driver 字型、`canvaskit/` 檔案及 `main.dart.js`（含 `.gz`／`.br`）的修改時間設為由檔案內容 SHA-256 推導的固定值，內容未變的檔案跨版本保持相同驗證值並回應 304，避免每次發布後重新下載；快取標頭不變。
 
 ### 4.4 Nginx 前端容器
 

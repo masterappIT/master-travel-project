@@ -24,6 +24,19 @@ RUN if [ -f /usr/share/nginx/html/main.dart.js ]; then \
       brotli -q 11 -c /usr/share/nginx/html/main.dart.js > /usr/share/nginx/html/main.dart.js.br; \
     fi
 
+# nginx derives ETag/Last-Modified from mtime and size. Fresh build mtimes made
+# unchanged Driver fonts, CanvasKit and main.dart.js re-download after every
+# release, so derive each file's mtime from its content (applied to .gz/.br too).
+RUN for file in $(find /usr/share/nginx/html/assets/assets/fonts /usr/share/nginx/html/canvaskit \
+        -type f ! -name '*.gz' ! -name '*.br' 2>/dev/null) /usr/share/nginx/html/main.dart.js; do \
+      if [ -f "$file" ]; then \
+        stamp=$((946684800 + 0x$(sha256sum "$file" | cut -c1-7))); \
+        for variant in "$file" "$file.gz" "$file.br"; do \
+          if [ -f "$variant" ]; then touch -d "@$stamp" "$variant"; fi; \
+        done; \
+      fi; \
+    done
+
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
