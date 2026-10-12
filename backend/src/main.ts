@@ -68,6 +68,7 @@ import {
 } from "./trip-payload";
 import { matchesSearchCity } from "./location-search";
 import { buildDriverOrderUrl, resolveDriverOrderBase } from "./order-url";
+import { isStripePaymentMethod, parseStripeConfigInput, testStripeConnection, verifyStripeWebhookSignature } from "./stripe-channel-config";
 import { inviteShareHtml } from "./order-invite-share";
 import { publicDriverOrderChannelFilter } from "./driver-order-channel";
 import { billableExtraSelections, withinImmediateWindow } from "./quote-extras";
@@ -13577,6 +13578,9 @@ class RecommendedAddressesController {
 function alipayHkConfigResponse(config: { id: string; displayName: string | null; description: string | null; provider: string; region: string; environment: string; interface: string; gatewayUrl: string; partner: string; appId: string | null; privateKey: string | null; publicKey: string | null; notifyUrl: string | null; returnUrl: string | null; paymentCurrency: string; paymentCurrencies: string[]; settlementCurrency: string; configuredAt: Date; lastTestedAt: Date | null; lastTestStatus: string | null; lastTestMessage: string | null }) {
  return { id: config.id, name: config.displayName, description: config.description, provider: config.provider, region: config.region, environment: config.environment, interface: config.interface, gatewayUrl: config.gatewayUrl, partner: config.partner, appId: config.appId, privateKeyConfigured: Boolean(config.privateKey), publicKeyConfigured: Boolean(config.publicKey), notifyUrl: config.notifyUrl, returnUrl: config.returnUrl, paymentCurrency: config.paymentCurrency, paymentCurrencies: config.paymentCurrencies, settlementCurrency: config.settlementCurrency, configuredAt: config.configuredAt, lastTestedAt: config.lastTestedAt, lastTestStatus: config.lastTestStatus, lastTestMessage: config.lastTestMessage };
 }
+function stripeConfigResponse(config: { id: string; displayName: string | null; description: string | null; provider: string; environment: string; publishableKey: string | null; secretKey: string | null; webhookSecret: string | null; lastWebhookAt: Date | null; lastWebhookEvent: string | null; paymentMethods: string[]; partner: string; providerAccount: Prisma.JsonValue; settlementCurrency: string; configuredAt: Date; lastTestedAt: Date | null; lastTestStatus: string | null; lastTestMessage: string | null }) {
+  return { id: config.id, name: config.displayName, description: config.description, provider: config.provider, environment: config.environment, publishableKey: config.publishableKey, secretKeyConfigured: Boolean(config.secretKey), webhookSecretConfigured: Boolean(config.webhookSecret), lastWebhookAt: config.lastWebhookAt, lastWebhookEvent: config.lastWebhookEvent, paymentMethods: config.paymentMethods, accountId: config.partner || null, account: config.providerAccount, settlementCurrency: config.settlementCurrency, configuredAt: config.configuredAt, lastTestedAt: config.lastTestedAt, lastTestStatus: config.lastTestStatus, lastTestMessage: config.lastTestMessage };
+}
 @Controller("settings")
 class SettingsController {
   @Get("alipayhk") async alipayHkConfig(@Req() req: RequestLike) {
@@ -13624,6 +13628,41 @@ class SettingsController {
       const updated = await prisma.paymentChannelConfig.update({ where: { id: config.id }, data: { lastTestedAt: testedAt, lastTestStatus: "success", lastTestMessage: "RSA2 配置格式檢查通過；尚未呼叫第三方交易接口" } });
       return { status: "success", message: updated.lastTestMessage, checkedAt: testedAt.toISOString(), thirdPartyCalled: false };
     } catch { throw new BadRequestException("AlipayHK saved RSA2 key cannot be parsed"); }
+  }
+  @Get("stripe") async stripeConfigs(@Req() req: RequestLike) {
+    requireRole(req, ["SUPER_ADMIN", "OPERATOR"]);
+    const configs = await prisma.paymentChannelConfig.findMany({ where: { provider: "STRIPE" }, orderBy: { environment: "asc" } });
+    return { data: configs.map(stripeConfigResponse) };
+  }
+  @Post("stripe") async saveStripeConfig(@Req() req: RequestLike, @Body() body: Record<string, unknown>) {
+    requireRole(req, ["SUPER_ADMIN"]);
+    const environment = body.environment === "production" ? "production" : "sandbox";
+    const existing = await prisma.paymentChannelConfig.findUnique({ where: { provider_environment: { provider: "STRIPE", environment } } });
+    const parsed = parseStripeConfigInput(body, Boolean(existing?.secretKey));
+    if ("error" in parsed) throw new BadRequestException(parsed.error);
+    const { displayName, description, publishableKey, secretKey, webhookSecret, paymentMethods } = parsed.value;
+    // A new secret key may belong to a different Stripe account, so the previous test result and account snapshot no longer apply.
+    const shared = { displayName, description, publishableKey, paymentMethods, ...(secretKey ? { secretKey: encryptWechatSecret(secretKey) } : {}), ...(webhookSecret ? { webhookSecret: encryptWechatSecret(webhookSecret), lastWebhookAt: null, lastWebhookEvent: null } : {}) };
+    const saved = await prisma.paymentChannelConfig.upsert({
+      where: { provider_environment: { provider: "STRIPE", environment: parsed.value.environment } },
+      create: { ...shared, provider: "STRIPE", region: "HK", environment: parsed.value.environment, interface: "API", gatewayUrl: "https://api.stripe.com", partner: "", paymentCurrency: "HKD", paymentCurrencies: ["HKD"], settlementCurrency: "HKD" },
+      update: { ...shared, configuredAt: new Date(), lastTestedAt: null, lastTestStatus: null, lastTestMessage: null, ...(secretKey ? { partner: "", providerAccount: Prisma.DbNull } : {}) },
+    });
+    return { data: stripeConfigResponse(saved), replacedSecrets: Boolean(existing && (secretKey || webhookSecret)) };
+  }
+  @Post("stripe/test") async testStripeConfig(@Req() req: RequestLike, @Body() body: { environment?: string }) {
+    requireRole(req, ["SUPER_ADMIN"]);
+    const environment = body.environment === "production" ? "production" : "sandbox";
+    const config = await prisma.paymentChannelConfig.findUnique({ where: { provider_environment: { provider: "STRIPE", environment } } });
+    if (!config?.secretKey) throw new HttpException("Stripe configuration is not saved", HttpStatus.NOT_FOUND);
+    let secretKey: string;
+    try { secretKey = decryptWechatSecret(config.secretKey); } catch { throw new BadRequestException("Stripe saved secret key cannot be read"); }
+    const result = await testStripeConnection(secretKey, config.paymentMethods.filter(isStripePaymentMethod));
+    const updated = await prisma.paymentChannelConfig.update({
+      where: { id: config.id },
+      data: { lastTestedAt: new Date(), lastTestStatus: result.status, lastTestMessage: result.message, ...(result.account ? { partner: result.account.id, providerAccount: result.account } : {}) },
+    });
+    return { status: result.status, message: result.message, thirdPartyCalled: true, data: stripeConfigResponse(updated) };
   }
   @Get("apple/status") async appleStatus(@Req() req: RequestLike) {
     requireRole(req, ["SUPER_ADMIN"]);
@@ -14784,6 +14823,27 @@ class WalletController {
 
 @Controller("payments")
 class PaymentsController {
+  // Called by Stripe, not by a signed-in user: the signature over the raw body is the only authentication.
+  // It records that a genuine event arrived so the channel config can be checked end to end; it changes no order or payment state.
+  @Post("stripe/webhook/:environment")
+  async stripeWebhook(@Param("environment") environmentParam: string, @Req() req: { headers: Record<string, string | string[] | undefined>; body?: unknown }) {
+    const environment = environmentParam === "production" ? "production" : environmentParam === "sandbox" ? "sandbox" : null;
+    const config = environment ? await prisma.paymentChannelConfig.findUnique({ where: { provider_environment: { provider: "STRIPE", environment } } }) : null;
+    if (!config?.webhookSecret) throw new HttpException("Stripe webhook is not configured", HttpStatus.NOT_FOUND);
+    const signature = req.headers["stripe-signature"];
+    let signingSecret: string;
+    try { signingSecret = decryptWechatSecret(config.webhookSecret); } catch { throw new HttpException("Stripe webhook is not configured", HttpStatus.NOT_FOUND); }
+    if (!Buffer.isBuffer(req.body) || !verifyStripeWebhookSignature(req.body, Array.isArray(signature) ? signature[0] : signature, signingSecret)) {
+      throw new BadRequestException("Stripe webhook signature is invalid");
+    }
+    let eventType = "unknown";
+    try {
+      const event = JSON.parse(req.body.toString("utf8")) as { type?: unknown };
+      if (typeof event.type === "string") eventType = event.type.slice(0, 120);
+    } catch { throw new BadRequestException("Stripe webhook payload is invalid"); }
+    await prisma.paymentChannelConfig.update({ where: { id: config.id }, data: { lastWebhookAt: new Date(), lastWebhookEvent: eventType } });
+    return { received: true };
+  }
   @Post("trip-pending")
   async tripPending(
     @Req() req: RequestLike,
@@ -16670,6 +16730,8 @@ async function bootstrap() {
     bodyParser: false,
   });
   app.set("trust proxy", (ip: string, index: number) => index === 0 && isPrivateObservabilityIp(normalizeObservabilityIp(ip) || ""));
+  // Stripe signs the exact request bytes, so this one route must reach its handler unparsed.
+  app.useBodyParser("raw", { limit: "1mb", type: (req: { url?: string }) => req.url?.startsWith("/payments/stripe/webhook/") ?? false });
   app.useBodyParser("json", { limit: "2mb" });
   const notificationWebSocketServer = startNotificationWebSocketServer(
     app.getHttpServer(),

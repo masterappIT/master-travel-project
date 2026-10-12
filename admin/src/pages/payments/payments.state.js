@@ -20,6 +20,31 @@ const createDraft = id => ({
   description: ''
 })
 
+const createStripeDraft = (id, environment) => ({
+  id,
+  name: `Stripe 香港${environment === 'production' ? '' : '（測試）'}`,
+  description: '',
+  provider: 'Stripe',
+  method: 'API',
+  region: '香港',
+  paymentCurrencies: ['HKD'],
+  settlementCurrency: 'HKD',
+  environment,
+  status: 'draft',
+  connection: 'untested',
+  lastTestMessage: '',
+  scope: 'passenger',
+  publishableKey: '',
+  secretKey: '',
+  secretKeyConfigured: false,
+  webhookSecret: '',
+  webhookSecretConfigured: false,
+  lastWebhookAt: null,
+  lastWebhookEvent: '',
+  paymentMethods: ['card'],
+  account: null
+})
+
 export function createPaymentsPageState() {
   const saved = ref(false)
   const raceSaving = ref(false)
@@ -31,8 +56,8 @@ export function createPaymentsPageState() {
   const testResult = ref('')
   const editorBusy = ref('')
   const editorError = ref('')
-  const openEditor = (config, environment) => {
-    selectedConfig.value = config ? JSON.parse(JSON.stringify(config)) : { ...createDraft(`config-${Date.now()}`), scope: filter.value.scope === 'all' ? 'passenger' : filter.value.scope, environment: environment || 'sandbox', name: environment ? `香港 AlipayHK ${environment === 'production' ? 'Production' : 'Sandbox'}` : '' }
+  const openEditor = (config, environment, provider) => {
+    selectedConfig.value = config ? JSON.parse(JSON.stringify(config)) : provider === 'Stripe' ? createStripeDraft(`config-${Date.now()}`, environment || 'sandbox') : { ...createDraft(`config-${Date.now()}`), scope: filter.value.scope === 'all' ? 'passenger' : filter.value.scope, environment: environment || 'sandbox', name: environment ? `香港 AlipayHK ${environment === 'production' ? 'Production' : 'Sandbox'}` : '' }
     editorStep.value = 1
     testResult.value = ''
     editorError.value = ''

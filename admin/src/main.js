@@ -322,6 +322,7 @@ const App = { components: { SupportPage }, setup() {
      paymentTestResult,
      paymentEditorBusy,
      paymentEditorError,
+     paymentApiBase: API,
      visiblePaymentConfigs,
      currencyConfigCount,
      openPaymentEditor,

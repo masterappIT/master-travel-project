@@ -714,6 +714,13 @@ model PaymentChannelConfig {
   appId              String?
   privateKey         String?   @db.Text
   publicKey          String?   @db.Text
+  publishableKey     String?
+  secretKey          String?   @db.Text
+  webhookSecret      String?   @db.Text
+  lastWebhookAt      DateTime?
+  lastWebhookEvent   String?
+  paymentMethods     String[]  @default([])
+  providerAccount    Json?
   notifyUrl          String?
   returnUrl          String?
   paymentCurrency    String

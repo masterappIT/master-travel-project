@@ -7,8 +7,24 @@ const alipayHkErrorText = {
   'AlipayHK payment currencies are required': '請至少選擇一種乘客收款貨幣。',
   'AlipayHK name or description is too long': '配置名稱不可超過 80 字，說明不可超過 500 字。',
   'AlipayHK configuration is not saved': '找不到已保存的配置，請先保存。',
-  'AlipayHK saved RSA2 key cannot be parsed': '已保存的金鑰無法解析，請重新輸入金鑰後保存。'
+  'AlipayHK saved RSA2 key cannot be parsed': '已保存的金鑰無法解析，請重新輸入金鑰後保存。',
+  'Stripe environment is invalid': '配置模式不正確，請關閉後重新開啟配置。',
+  'Stripe name or description is too long': '配置名稱不可超過 80 字，說明不可超過 500 字。',
+  'Stripe publishable key does not match the environment': 'Publishable Key 格式不正確，或不屬於此模式（測試模式為 pk_test_，正式模式為 pk_live_）。',
+  'Stripe secret key is required for new configurations': '新增配置必須提供 Secret Key。',
+  'Stripe secret key does not match the environment': 'Secret Key 格式不正確，或不屬於此模式（測試模式為 sk_test_／rk_test_，正式模式為 sk_live_／rk_live_）。',
+  'Stripe payment methods are required': '請至少選擇一種付款方式。',
+  'Stripe webhook signing secret format is invalid': 'Webhook 簽名密鑰格式不正確，應以 whsec_ 開頭。',
+  'Stripe configuration is not saved': '找不到已保存的 Stripe 配置，請先保存。',
+  'Stripe saved secret key cannot be read': '已保存的 Secret Key 無法讀取，請重新輸入後保存。'
 }
+
+const stripeConfigFromApi = item => ({
+  id: item.id, name: item.name || `Stripe (${item.environment === 'production' ? '正式模式' : '測試模式'})`, description: item.description || '', provider: 'Stripe', environment: item.environment, method: 'API', region: '香港',
+  currency: 'HKD', paymentCurrencies: ['HKD'], settlementCurrency: item.settlementCurrency || 'HKD', status: 'draft', scope: 'passenger',
+  connection: ['success', 'warning', 'error'].includes(item.lastTestStatus) ? item.lastTestStatus : 'untested', lastTestMessage: item.lastTestMessage || '',
+  publishableKey: item.publishableKey || '', secretKey: '', secretKeyConfigured: item.secretKeyConfigured, webhookSecret: '', webhookSecretConfigured: Boolean(item.webhookSecretConfigured), lastWebhookAt: item.lastWebhookAt || null, lastWebhookEvent: item.lastWebhookEvent || '', paymentMethods: item.paymentMethods || [], account: item.account || null
+})
 
 export function createPaymentsActions({ api, paymentSettings, paymentCurrencies, paymentSettingsSaved, driverRaceSaving, error, displayError, configs, selectedConfig, editorOpen, editorStep, testResult, editorBusy, editorError }) {
   const editorErrorText = err => { const text = displayError(err); return alipayHkErrorText[text] || alipayHkErrorText[err?.message] || text }
@@ -23,12 +39,39 @@ export function createPaymentsActions({ api, paymentSettings, paymentCurrencies,
     } catch (err) { error.value = displayError(err) } finally { driverRaceSaving.value = false }
   }
   async function loadPaymentConfigs() {
-    const response = await api('/settings/alipayhk')
-    configs.value = response.data.map(item => ({ id: item.id, name: item.name || `香港 AlipayHK (${item.environment})`, provider: 'AlipayHK', environment: item.environment, method: 'WAP', region: '香港', currency: item.paymentCurrency, paymentCurrencies: item.paymentCurrencies || [item.paymentCurrency], settlementCurrency: item.settlementCurrency || 'HKD', status: 'draft', connection: item.lastTestStatus === 'success' ? 'success' : 'untested', scope: 'passenger', capabilities: { trip: true, wallet: false, refund: true, partialRefund: false }, api: { baseUrl: item.gatewayUrl, createUrl: 'create_forex_trade_wap', queryUrl: 'single_trade_query', refundUrl: 'forex_refund' }, merchant: { merchantId: item.partner, appId: item.appId || '' }, secrets: { apiKey: '', apiSecret: '', privateKey: '', publicKey: '', callbackSecret: '' }, privateKeyConfigured: item.privateKeyConfigured, publicKeyConfigured: item.publicKeyConfigured, callbacks: { paymentUrl: item.notifyUrl || '', refundUrl: item.returnUrl || '' }, description: item.description || '' }))
+    // The providers load independently so one failing endpoint does not hide the other's saved configs.
+    const [response, stripeResponse] = await Promise.all([api('/settings/alipayhk'), api('/settings/stripe').catch(err => { error.value = displayError(err); return { data: [] } })])
+    configs.value = [...stripeResponse.data.map(stripeConfigFromApi), ...response.data.map(item => ({ id: item.id, name: item.name || `香港 AlipayHK (${item.environment})`, provider: 'AlipayHK', environment: item.environment, method: 'WAP', region: '香港', currency: item.paymentCurrency, paymentCurrencies: item.paymentCurrencies || [item.paymentCurrency], settlementCurrency: item.settlementCurrency || 'HKD', status: 'draft', connection: item.lastTestStatus === 'success' ? 'success' : 'untested', scope: 'passenger', capabilities: { trip: true, wallet: false, refund: true, partialRefund: false }, api: { baseUrl: item.gatewayUrl, createUrl: 'create_forex_trade_wap', queryUrl: 'single_trade_query', refundUrl: 'forex_refund' }, merchant: { merchantId: item.partner, appId: item.appId || '' }, secrets: { apiKey: '', apiSecret: '', privateKey: '', publicKey: '', callbackSecret: '' }, privateKeyConfigured: item.privateKeyConfigured, publicKeyConfigured: item.publicKeyConfigured, callbacks: { paymentUrl: item.notifyUrl || '', refundUrl: item.returnUrl || '' }, description: item.description || '' }))]
   }
   const closePaymentEditor = () => { editorOpen.value = false; selectedConfig.value = null }
+  const replaceConfig = config => {
+    const index = configs.value.findIndex(item => item.id === config.id)
+    if (index === -1) configs.value.push(config)
+    else configs.value[index] = config
+    selectedConfig.value = JSON.parse(JSON.stringify(config))
+  }
+  // Stripe needs no further input after the keys, so a successful save goes straight on to the connection test.
+  const saveStripeConfig = async value => {
+    try {
+      editorError.value = ''
+      editorBusy.value = 'saving'
+      const response = await api('/settings/stripe', { method: 'POST', body: JSON.stringify({ environment: value.environment, name: value.name, description: value.description, publishableKey: value.publishableKey, secretKey: value.secretKey, webhookSecret: value.webhookSecret, paymentMethods: value.paymentMethods }) })
+      replaceConfig(stripeConfigFromApi(response.data))
+      editorBusy.value = ''
+      await testStripeConfig()
+    } catch (err) { editorError.value = editorErrorText(err) } finally { editorBusy.value = '' }
+  }
+  const testStripeConfig = async () => {
+    try {
+      editorError.value = ''
+      editorBusy.value = 'testing'
+      const result = await api('/settings/stripe/test', { method: 'POST', body: JSON.stringify({ environment: selectedConfig.value.environment }) })
+      replaceConfig(stripeConfigFromApi(result.data))
+    } catch (err) { editorError.value = editorErrorText(err) } finally { editorBusy.value = '' }
+  }
   const savePaymentConfigDraft = async value => {
     if (!value || editorBusy.value) return
+    if (value.provider === 'Stripe') return saveStripeConfig(value)
     try {
       editorError.value = ''
       editorBusy.value = 'saving'
@@ -58,6 +101,7 @@ export function createPaymentsActions({ api, paymentSettings, paymentCurrencies,
   const testPaymentConfig = async () => {
     const configId = selectedConfig.value?.id
     if (editorBusy.value) return
+    if (selectedConfig.value?.provider === 'Stripe' && configId && !configId.startsWith('config-')) return testStripeConfig()
     if (!configId || configId.startsWith('config-') || !selectedConfig.value?.environment) {
       editorError.value = '請先保存技術配置，再執行金鑰格式檢查'
       testResult.value = 'error'

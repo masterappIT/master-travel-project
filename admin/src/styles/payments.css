@@ -109,6 +109,13 @@
 .payment-settings-admin .payment-test>div b { color: var(--payment-ink); font-size: 12px; }
 .payment-settings-admin .payment-test>div b.success { color: var(--payment-success); }
 .payment-settings-admin .payment-test>.payment-button { justify-self: start; margin-top: 6px; }
+.payment-settings-admin .payment-editor>.payment-editor-main { flex: 1; }
+.payment-settings-admin .payment-stripe-result { margin-top: 24px; }
+.payment-settings-admin .payment-webhook-url { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 8px 8px 8px 14px; border: 1px solid var(--payment-border); border-radius: 10px; background: var(--payment-soft); }
+.payment-settings-admin .payment-webhook-url code { flex: 1; min-width: 0; overflow-wrap: anywhere; color: var(--payment-ink); font-size: 12px; }
+.payment-settings-admin .payment-webhook-url .payment-button { flex: 0 0 auto; }
+.payment-settings-admin .payment-field-warning { color: var(--payment-warning); font-size: 11px; font-weight: 400; }
+.payment-settings-admin .payment-provider-wordmark { color: #635bff; font-size: 30px; font-weight: 800; letter-spacing: -.04em; line-height: 1; }
 .payment-settings-admin .payment-editor-feedback { margin: 0; padding: 12px 14px; border-radius: 10px; color: var(--payment-warning); background: var(--payment-warning-soft); font-size: 12px; line-height: 1.6; }
 
 .payment-settings-admin .payment-currency-step { display: grid; gap: 24px; max-width: 760px; }
