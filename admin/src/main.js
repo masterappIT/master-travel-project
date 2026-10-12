@@ -14,6 +14,7 @@ import { promotionKindLabel, promotionDiscountLabel } from './utils/promotions.j
 import { dateTimeInput, formatTripAmount, paymentMethodLabel, formatBenefits } from './utils/display-formatters.js'
 import { createFeedbackController } from './utils/feedback.js'
 import { createErrorDisplay } from './utils/error-display.js'
+import { installStaleChunkRecovery } from './utils/stale-chunk-recovery.js'
 import { generateRandomCouponCodeStr, createTimeOptions } from './utils/entry-helpers.js'
 import { createAdminFormState } from './utils/admin-form-state.js'
 import { createAdminSettingsState } from './utils/admin-settings-state.js'
@@ -88,6 +89,9 @@ const allVehicles = ref([])
 const eligibleVehicleDrivers = computed(() => drivers.value.filter(isEligibleVehicleDriver))
 const { orderUrls, createdOrderUrl, tripCatalog, tripVehicleCategoryId, tripQuote, vehicleCategories, tripBookingStep, tripPaymentMethod, tripPaymentAmount, tripUseFareBalance, tripUseCashBalance, tripLocationKeyword, tripOriginKeyword, tripDestinationKeyword, tripLocationResults, tripLocationSearching, tripLocationTarget } = createAdminInteractionState()
 const { toasts, confirmDialog, dismissToast, notify, requestConfirmation, resolveConfirmation } = createFeedbackController()
+installStaleChunkRecovery().setPrompt(() => requestConfirmation(locale.value === 'zh'
+  ? { title: '後台已更新版本', message: '需要重新整理頁面才能繼續使用。尚未儲存的內容將會遺失，如需先保存請選擇「稍後」。', confirmLabel: '立即重新整理', cancelLabel: '稍後' }
+  : { title: 'Admin console updated', message: 'Refresh the page to continue. Unsaved changes will be lost; choose Later if you need to save first.', confirmLabel: 'Refresh now', cancelLabel: 'Later' }))
 const paymentsPageState = createPaymentsPageState()
 const financePageState = createFinancePageState()
 watch([pricingCurrency, settlementCurrency, passengerDefaultCurrency, driverDefaultCurrency], () => financePageState.syncCurrencySettings({ pricingCurrency: pricingCurrency.value, settlementCurrency: settlementCurrency.value, passengerDefaultCurrency: passengerDefaultCurrency.value, driverDefaultCurrency: driverDefaultCurrency.value }), { immediate: true })

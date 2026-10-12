@@ -1,6 +1,9 @@
+import { STALE_BUILD_ERROR_KIND } from './stale-chunk-recovery.js'
+
 export function createErrorDisplay({ locale, t }) {
   return function displayError(message) {
     const error = typeof message === 'object' && message ? message : null
+    if (error?.kind === STALE_BUILD_ERROR_KIND) return locale.value === 'zh' ? '後台已更新版本，請重新整理頁面後再繼續。' : 'The admin console has been updated. Please refresh the page to continue.'
     if (error?.kind === 'network') return locale.value === 'zh' ? '網路連線失敗，請稍後重試。' : 'Network request failed. Please try again.'
     if (error?.kind === 'unauthorized' || error?.status === 401 || String(error?.message || message).includes('session')) return t('sessionExpired')
     if (error?.kind === 'forbidden' || error?.status === 403) return locale.value === 'zh' ? '您沒有執行此操作的權限。' : 'You do not have permission to perform this action.'

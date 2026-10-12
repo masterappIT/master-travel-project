@@ -1,3 +1,5 @@
+import { installStaleChunkRecovery } from './utils/stale-chunk-recovery.js'
+
 const cacheMigrationKey = 'admin-cache-migration-v1'
 
 async function clearLegacyBrowserCaches() {
@@ -18,6 +20,8 @@ async function clearLegacyBrowserCaches() {
     await new Promise(() => {})
   }
 }
+
+installStaleChunkRecovery()
 
 clearLegacyBrowserCaches()
   .catch(error => {
