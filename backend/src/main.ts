@@ -71,6 +71,7 @@ import { buildDriverOrderUrl, resolveDriverOrderBase } from "./order-url";
 import { isStripePaymentMethod, parseStripeConfigInput, testStripeConnection, verifyStripeWebhookSignature } from "./stripe-channel-config";
 import { WECHAT_PAY_HK_API_BASE, isWechatPayHkMerchantMode, parseWechatPayHkConfigInput, testWechatPayHkConnection } from "./wechat-pay-hk-channel-config";
 import { PAYME_API_BASES, parsePaymeConfigInput, testPaymeConnection } from "./payme-channel-config";
+import { isAlipayCnMerchantMode, parseAlipayCnConfigInput, testAlipayCnConnection } from "./alipay-cn-channel-config";
 import { inviteShareHtml } from "./order-invite-share";
 import { publicDriverOrderChannelFilter } from "./driver-order-channel";
 import { billableExtraSelections, withinImmediateWindow } from "./quote-extras";
@@ -13586,6 +13587,10 @@ function stripeConfigResponse(config: { id: string; displayName: string | null; 
 function wechatPayHkConfigResponse(config: { id: string; displayName: string | null; description: string | null; provider: string; environment: string; merchantMode: string | null; partner: string; appId: string | null; subMerchantId: string | null; subAppId: string | null; certificateSerialNo: string | null; privateKey: string | null; secretKey: string | null; notifyUrl: string | null; providerAccount: Prisma.JsonValue; settlementCurrency: string; configuredAt: Date; lastTestedAt: Date | null; lastTestStatus: string | null; lastTestMessage: string | null }) {
   return { id: config.id, name: config.displayName, description: config.description, provider: config.provider, environment: config.environment, merchantMode: config.merchantMode, merchantId: config.partner, appId: config.appId, subMerchantId: config.subMerchantId, subAppId: config.subAppId, certificateSerialNo: config.certificateSerialNo, privateKeyConfigured: Boolean(config.privateKey), apiV3KeyConfigured: Boolean(config.secretKey), notifyUrl: config.notifyUrl, account: config.providerAccount, settlementCurrency: config.settlementCurrency, configuredAt: config.configuredAt, lastTestedAt: config.lastTestedAt, lastTestStatus: config.lastTestStatus, lastTestMessage: config.lastTestMessage };
 }
+// Mainland Alipay reuses generic columns: appId = App ID, partner = ISV provider ID (PID), secretKey = app auth token, paymentMethods = payment products.
+function alipayCnConfigResponse(config: { id: string; displayName: string | null; description: string | null; provider: string; environment: string; merchantMode: string | null; gatewayUrl: string; partner: string; appId: string | null; privateKey: string | null; publicKey: string | null; secretKey: string | null; paymentMethods: string[]; notifyUrl: string | null; returnUrl: string | null; providerAccount: Prisma.JsonValue; settlementCurrency: string; configuredAt: Date; lastTestedAt: Date | null; lastTestStatus: string | null; lastTestMessage: string | null }) {
+  return { id: config.id, name: config.displayName, description: config.description, provider: config.provider, environment: config.environment, merchantMode: config.merchantMode, gatewayUrl: config.gatewayUrl, appId: config.appId, providerId: config.partner || null, privateKeyConfigured: Boolean(config.privateKey), alipayPublicKeyConfigured: Boolean(config.publicKey), appAuthTokenConfigured: Boolean(config.secretKey), products: config.paymentMethods, notifyUrl: config.notifyUrl, returnUrl: config.returnUrl, account: config.providerAccount, settlementCurrency: config.settlementCurrency, configuredAt: config.configuredAt, lastTestedAt: config.lastTestedAt, lastTestStatus: config.lastTestStatus, lastTestMessage: config.lastTestMessage };
+}
 // PayMe reuses generic columns: partner = client ID, secretKey = client secret, certificateSerialNo = signing key ID, privateKey = signing key.
 function paymeConfigResponse(config: { id: string; displayName: string | null; description: string | null; provider: string; environment: string; partner: string; certificateSerialNo: string | null; privateKey: string | null; secretKey: string | null; providerAccount: Prisma.JsonValue; settlementCurrency: string; configuredAt: Date; lastTestedAt: Date | null; lastTestStatus: string | null; lastTestMessage: string | null }) {
   return { id: config.id, name: config.displayName, description: config.description, provider: config.provider, environment: config.environment, clientId: config.partner, signingKeyId: config.certificateSerialNo, clientSecretConfigured: Boolean(config.secretKey), signingKeyConfigured: Boolean(config.privateKey), account: config.providerAccount, settlementCurrency: config.settlementCurrency, configuredAt: config.configuredAt, lastTestedAt: config.lastTestedAt, lastTestStatus: config.lastTestStatus, lastTestMessage: config.lastTestMessage };
@@ -13744,6 +13749,45 @@ class SettingsController {
       data: { lastTestedAt: new Date(), lastTestStatus: result.status, lastTestMessage: result.message, providerAccount: result.account ?? Prisma.DbNull },
     });
     return { status: result.status, message: result.message, thirdPartyCalled: true, data: paymeConfigResponse(updated) };
+  }
+  @Get("alipay-cn") async alipayCnConfigs(@Req() req: RequestLike) {
+    requireRole(req, ["SUPER_ADMIN", "OPERATOR"]);
+    const configs = await prisma.paymentChannelConfig.findMany({ where: { provider: "ALIPAY_CN" }, orderBy: { environment: "asc" } });
+    return { data: configs.map(alipayCnConfigResponse) };
+  }
+  @Post("alipay-cn") async saveAlipayCnConfig(@Req() req: RequestLike, @Body() body: Record<string, unknown>) {
+    requireRole(req, ["SUPER_ADMIN"]);
+    const environment = body.environment === "production" ? "production" : "sandbox";
+    const existing = await prisma.paymentChannelConfig.findUnique({ where: { provider_environment: { provider: "ALIPAY_CN", environment } } });
+    const parsed = parseAlipayCnConfigInput(body, { privateKey: Boolean(existing?.privateKey), alipayPublicKey: Boolean(existing?.publicKey), appAuthToken: Boolean(existing?.secretKey) });
+    if ("error" in parsed) throw new BadRequestException(parsed.error);
+    const { merchantMode, displayName, description, appId, gatewayUrl, privateKey, alipayPublicKey, appAuthToken, providerId, products, notifyUrl, returnUrl } = parsed.value;
+    // Leaving ISV mode drops the stored merchant authorisation so it cannot be sent by a later merchant-mode request.
+    const tokenUpdate = merchantMode === "merchant" ? { secretKey: null } : appAuthToken ? { secretKey: encryptWechatSecret(appAuthToken) } : {};
+    const shared = { displayName, description, merchantMode, appId, gatewayUrl, partner: providerId, paymentMethods: products, notifyUrl, returnUrl, ...tokenUpdate, ...(privateKey ? { privateKey: encryptWechatSecret(privateKey) } : {}), ...(alipayPublicKey ? { publicKey: encryptWechatSecret(alipayPublicKey) } : {}) };
+    // Any saved field may change which Alipay application the credentials address, so the previous test result no longer applies.
+    const saved = await prisma.paymentChannelConfig.upsert({
+      where: { provider_environment: { provider: "ALIPAY_CN", environment: parsed.value.environment } },
+      create: { ...shared, provider: "ALIPAY_CN", region: "CN", environment: parsed.value.environment, interface: "OPENAPI", paymentCurrency: "RMB", paymentCurrencies: ["RMB"], settlementCurrency: "RMB" },
+      update: { ...shared, configuredAt: new Date(), lastTestedAt: null, lastTestStatus: null, lastTestMessage: null, providerAccount: Prisma.DbNull },
+    });
+    return { data: alipayCnConfigResponse(saved), replacedSecrets: Boolean(existing && (privateKey || alipayPublicKey || appAuthToken)) };
+  }
+  @Post("alipay-cn/test") async testAlipayCnConfig(@Req() req: RequestLike, @Body() body: { environment?: string }) {
+    requireRole(req, ["SUPER_ADMIN"]);
+    const environment = body.environment === "production" ? "production" : "sandbox";
+    const config = await prisma.paymentChannelConfig.findUnique({ where: { provider_environment: { provider: "ALIPAY_CN", environment } } });
+    if (!config?.privateKey || !config.publicKey || !config.appId || !isAlipayCnMerchantMode(config.merchantMode) || (config.merchantMode === "isv" && !config.secretKey)) throw new HttpException("Alipay CN configuration is not saved", HttpStatus.NOT_FOUND);
+    let privateKey: string;
+    let alipayPublicKey: string;
+    let appAuthToken: string | null;
+    try { privateKey = decryptWechatSecret(config.privateKey); alipayPublicKey = decryptWechatSecret(config.publicKey); appAuthToken = config.secretKey ? decryptWechatSecret(config.secretKey) : null; } catch { throw new BadRequestException("Alipay CN saved keys cannot be read"); }
+    const result = await testAlipayCnConnection({ merchantMode: config.merchantMode, appId: config.appId, gatewayUrl: config.gatewayUrl, privateKey, alipayPublicKey, appAuthToken });
+    const updated = await prisma.paymentChannelConfig.update({
+      where: { id: config.id },
+      data: { lastTestedAt: new Date(), lastTestStatus: result.status, lastTestMessage: result.message, providerAccount: result.account ?? Prisma.DbNull },
+    });
+    return { status: result.status, message: result.message, thirdPartyCalled: true, data: alipayCnConfigResponse(updated) };
   }
   @Get("apple/status") async appleStatus(@Req() req: RequestLike) {
     requireRole(req, ["SUPER_ADMIN"]);

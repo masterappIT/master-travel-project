@@ -62,12 +62,12 @@ export const WechatPayHkConfigEditor = {
         <div class="wide payment-provider-hint"><strong>資料來源與安全</strong><span>商戶號、API 證書序號、私鑰及 APIv3 密鑰在微信支付商戶平台「帳戶中心 → API 安全」取得；證書序號與私鑰必須屬於同一張商戶 API 證書。私鑰與 APIv3 密鑰由後端加密保存，保存後不會回傳明文；重新輸入即可輪替。目前只保存配置並測試連線，下單、退款及通知接收待收款流程接入。</span></div>
       </fieldset>
       <div class="payment-test payment-stripe-result" aria-live="polite">
-        <div><span>保存狀態</span><b :class="{success: isSaved && !dirty}">{{busy === 'saving' ? '保存中…' : !isSaved ? '尚未保存' : dirty ? '有未保存的修改' : '已保存'}}</b></div>
-        <div><span>微信支付連線</span><b :class="{success: config.connection === 'success'}">{{busy === 'testing' ? '測試中…' : config.connection === 'success' ? '連線正常' : config.connection === 'warning' ? '已連線，需留意' : config.connection === 'error' ? '測試未通過' : '尚未測試'}}</b></div>
+        <div><span>保存狀態</span><b :class="isSaved && !dirty ? 'success' : isSaved ? 'warning' : 'idle'">{{busy === 'saving' ? '保存中…' : !isSaved ? '尚未保存' : dirty ? '有未保存的修改' : '已保存'}}</b></div>
+        <div><span>微信支付連線</span><b :class="config.connection === 'success' ? 'success' : config.connection === 'warning' || config.connection === 'error' ? 'warning' : 'idle'">{{busy === 'testing' ? '測試中…' : config.connection === 'success' ? '連線正常' : config.connection === 'warning' ? '已連線，需留意' : config.connection === 'error' ? '測試未通過' : '尚未測試'}}</b></div>
         <template v-if="config.account">
           <div><span>已驗證商戶號</span><b>{{config.account.merchantId}}</b></div>
           <div><span>微信支付平台證書</span><b>{{config.account.platformCertificateSerialNo || '—'}}（有效至 {{formatTime(config.account.platformCertificateExpireTime)}}）</b></div>
-          <div v-if="config.account.merchantMode === 'institution'"><span>子商戶</span><b :class="{success: config.account.subMerchant}">{{config.account.subMerchant ? (config.account.subMerchant.name || config.account.subMerchant.id) : '未能確認'}}</b></div>
+          <div v-if="config.account.merchantMode === 'institution'"><span>子商戶</span><b :class="config.account.subMerchant ? 'success' : 'warning'">{{config.account.subMerchant ? (config.account.subMerchant.name || config.account.subMerchant.id) : '未能確認'}}</b></div>
         </template>
         <p v-if="error" class="payment-editor-feedback" role="alert">{{error}}</p>
         <p v-else-if="config.lastTestMessage" :class="config.connection === 'success' ? 'payment-test-note' : 'payment-editor-feedback'">{{config.lastTestMessage}}</p>

@@ -44,11 +44,11 @@ export const PaymeConfigEditor = {
         <div class="wide payment-provider-hint"><strong>資料來源與安全</strong><span>四項憑證由 PayMe for Business 在開通 API 時提供；正式環境憑證需先在 Sandbox 完成整合並通過 PayMe 審核後才會發放。Client Secret 與 Signing Key 由後端加密保存，保存後不會回傳明文；重新輸入即可輪替。目前只保存配置並測試連線，建立付款請求、退款及通知接收待收款流程接入。</span></div>
       </fieldset>
       <div class="payment-test payment-stripe-result" aria-live="polite">
-        <div><span>保存狀態</span><b :class="{success: isSaved && !dirty}">{{busy === 'saving' ? '保存中…' : !isSaved ? '尚未保存' : dirty ? '有未保存的修改' : '已保存'}}</b></div>
-        <div><span>PayMe 連線</span><b :class="{success: config.connection === 'success'}">{{busy === 'testing' ? '測試中…' : config.connection === 'success' ? '連線正常' : config.connection === 'warning' ? '已連線，需留意' : config.connection === 'error' ? '測試未通過' : '尚未測試'}}</b></div>
+        <div><span>保存狀態</span><b :class="isSaved && !dirty ? 'success' : isSaved ? 'warning' : 'idle'">{{busy === 'saving' ? '保存中…' : !isSaved ? '尚未保存' : dirty ? '有未保存的修改' : '已保存'}}</b></div>
+        <div><span>PayMe 連線</span><b :class="config.connection === 'success' ? 'success' : config.connection === 'warning' || config.connection === 'error' ? 'warning' : 'idle'">{{busy === 'testing' ? '測試中…' : config.connection === 'success' ? '連線正常' : config.connection === 'warning' ? '已連線，需留意' : config.connection === 'error' ? '測試未通過' : '尚未測試'}}</b></div>
         <template v-if="config.account">
-          <div><span>Client ID／Client Secret</span><b :class="{success: config.account.tokenIssued}">{{config.account.tokenIssued ? '已取得存取權杖' : '未通過'}}</b></div>
-          <div><span>Signing Key ID／Signing Key</span><b :class="{success: config.account.signatureAccepted}">{{config.account.signatureAccepted ? '簽名已被接受' : '未能確認'}}</b></div>
+          <div><span>Client ID／Client Secret</span><b :class="config.account.tokenIssued ? 'success' : 'warning'">{{config.account.tokenIssued ? '已取得存取權杖' : '未通過'}}</b></div>
+          <div><span>Signing Key ID／Signing Key</span><b :class="config.account.signatureAccepted ? 'success' : 'warning'">{{config.account.signatureAccepted ? '簽名已被接受' : '未能確認'}}</b></div>
         </template>
         <p v-if="error" class="payment-editor-feedback" role="alert">{{error}}</p>
         <p v-else-if="config.lastTestMessage" :class="config.connection === 'success' ? 'payment-test-note' : 'payment-editor-feedback'">{{config.lastTestMessage}}</p>

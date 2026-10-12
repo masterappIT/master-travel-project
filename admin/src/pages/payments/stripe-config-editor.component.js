@@ -65,14 +65,14 @@ export const StripeConfigEditor = {
         <div class="wide payment-provider-hint"><strong>金鑰與安全</strong><span>金鑰在 Stripe 後台「開發人員 → API 金鑰」取得。Secret Key 與 Webhook 簽名密鑰由後端加密保存，保存後不會回傳明文；重新輸入即可輪替。結算貨幣由 Stripe 帳戶決定，連線測試會確認為 HKD。</span></div>
       </fieldset>
       <div class="payment-test payment-stripe-result" aria-live="polite">
-        <div><span>保存狀態</span><b :class="{success: isSaved && !dirty}">{{busy === 'saving' ? '保存中…' : !isSaved ? '尚未保存' : dirty ? '有未保存的修改' : '已保存'}}</b></div>
-        <div><span>Stripe 連線</span><b :class="{success: config.connection === 'success'}">{{busy === 'testing' ? '測試中…' : config.connection === 'success' ? '連線正常' : config.connection === 'warning' ? '已連線，需留意' : config.connection === 'error' ? '測試未通過' : '尚未測試'}}</b></div>
-        <div><span>Webhook</span><b :class="{success: config.lastWebhookAt}">{{!config.webhookSecretConfigured ? '未配置簽名密鑰' : config.lastWebhookAt ? '已收到 ' + config.lastWebhookEvent + '（' + formatTime(config.lastWebhookAt) + '）' : '已配置，尚未收到事件'}}</b></div>
+        <div><span>保存狀態</span><b :class="isSaved && !dirty ? 'success' : isSaved ? 'warning' : 'idle'">{{busy === 'saving' ? '保存中…' : !isSaved ? '尚未保存' : dirty ? '有未保存的修改' : '已保存'}}</b></div>
+        <div><span>Stripe 連線</span><b :class="config.connection === 'success' ? 'success' : config.connection === 'warning' || config.connection === 'error' ? 'warning' : 'idle'">{{busy === 'testing' ? '測試中…' : config.connection === 'success' ? '連線正常' : config.connection === 'warning' ? '已連線，需留意' : config.connection === 'error' ? '測試未通過' : '尚未測試'}}</b></div>
+        <div><span>Webhook</span><b :class="config.lastWebhookAt ? 'success' : 'idle'">{{!config.webhookSecretConfigured ? '未配置簽名密鑰' : config.lastWebhookAt ? '已收到 ' + config.lastWebhookEvent + '（' + formatTime(config.lastWebhookAt) + '）' : '已配置，尚未收到事件'}}</b></div>
         <template v-if="config.account">
           <div><span>Stripe 帳戶</span><b>{{config.account.name || config.account.id}}</b></div>
           <div><span>所在地／結算貨幣</span><b>{{config.account.country || '—'}}／{{(config.account.defaultCurrency || '—').toUpperCase()}}</b></div>
-          <div><span>收款／出款</span><b :class="{success: config.account.chargesEnabled}">{{config.account.chargesEnabled ? '可收款' : '未開通收款'}}／{{config.account.payoutsEnabled ? '可出款' : '未開通出款'}}</b></div>
-          <div v-for="method in methods.filter(item => config.paymentMethods.includes(item.key) && config.account.methods && item.key in config.account.methods)" :key="method.key"><span>{{method.label}}</span><b :class="{success: config.account.methods[method.key]}">{{config.account.methods[method.key] ? 'Stripe 已啟用' : 'Stripe 尚未啟用'}}</b></div>
+          <div><span>收款／出款</span><b :class="config.account.chargesEnabled ? 'success' : 'warning'">{{config.account.chargesEnabled ? '可收款' : '未開通收款'}}／{{config.account.payoutsEnabled ? '可出款' : '未開通出款'}}</b></div>
+          <div v-for="method in methods.filter(item => config.paymentMethods.includes(item.key) && config.account.methods && item.key in config.account.methods)" :key="method.key"><span>{{method.label}}</span><b :class="config.account.methods[method.key] ? 'success' : 'warning'">{{config.account.methods[method.key] ? 'Stripe 已啟用' : 'Stripe 尚未啟用'}}</b></div>
         </template>
         <p v-if="error" class="payment-editor-feedback" role="alert">{{error}}</p>
         <p v-else-if="config.lastTestMessage" :class="config.connection === 'success' ? 'payment-test-note' : 'payment-editor-feedback'">{{config.lastTestMessage}}</p>

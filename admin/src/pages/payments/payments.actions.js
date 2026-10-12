@@ -40,7 +40,22 @@ const alipayHkErrorText = {
   'PayMe signing key is required for new configurations': '新增配置必須提供 Signing Key。',
   'PayMe signing key format is invalid': 'Signing Key 格式不正確：應為 PayMe 提供的 Base64 簽名金鑰。',
   'PayMe configuration is not saved': '找不到已保存的 PayMe 配置，請先保存。',
-  'PayMe saved keys cannot be read': '已保存的金鑰無法讀取，請重新輸入 Client Secret 與 Signing Key 後保存。'
+  'PayMe saved keys cannot be read': '已保存的金鑰無法讀取，請重新輸入 Client Secret 與 Signing Key 後保存。',
+  'Alipay CN environment is invalid': '配置環境不正確，請關閉後重新開啟配置。',
+  'Alipay CN merchant mode is invalid': '請選擇接入模式：自研商戶或服務商模式。',
+  'Alipay CN name or description is too long': '配置名稱不可超過 80 字，說明不可超過 500 字。',
+  'Alipay CN App ID format is invalid': 'App ID 格式不正確：應為 16 位數字。',
+  'Alipay CN gateway URL is invalid': '支付網關不正確：必須是 alipay.com 或 alipaydev.com 的 HTTPS 地址。',
+  'Alipay CN private key and Alipay public key are required for new configurations': '新增配置必須同時提供應用私鑰與支付寶公鑰。',
+  'Alipay CN private key format is invalid': '應用私鑰無法解析：請貼上密鑰工具產生的完整應用私鑰。',
+  'Alipay CN public key format is invalid': '支付寶公鑰無法解析：請從開放平台複製完整的「支付寶公鑰」。',
+  'Alipay CN app auth token is required in ISV mode': '服務商模式必須提供商戶授權令牌（app_auth_token）。',
+  'Alipay CN app auth token format is invalid': '商戶授權令牌格式不正確。',
+  'Alipay CN provider ID format is invalid': '服務商 PID 格式不正確：應為 2088 開頭的 16 位數字。',
+  'Alipay CN products are required': '請至少選擇一種支付產品。',
+  'Alipay CN notify and return URLs must use HTTPS': '通知地址與返回地址必須使用 HTTPS。',
+  'Alipay CN configuration is not saved': '找不到已保存的內地支付寶配置，請先保存。',
+  'Alipay CN saved keys cannot be read': '已保存的金鑰無法讀取，請重新輸入金鑰後保存。'
 }
 
 const stripeConfigFromApi = item => ({
@@ -65,6 +80,14 @@ const paymeConfigFromApi = item => ({
   clientId: item.clientId || '', clientSecret: '', clientSecretConfigured: Boolean(item.clientSecretConfigured), signingKeyId: item.signingKeyId || '', signingKey: '', signingKeyConfigured: Boolean(item.signingKeyConfigured), account: item.account || null
 })
 
+const alipayCnConfigFromApi = item => ({
+  id: item.id, name: item.name || `內地支付寶 (${item.environment === 'production' ? 'Production' : 'Sandbox'})`, description: item.description || '', provider: '內地支付寶', environment: item.environment, method: 'OpenAPI', region: '中國內地',
+  currency: 'RMB', paymentCurrencies: ['RMB'], settlementCurrency: item.settlementCurrency || 'RMB', status: 'draft', scope: 'passenger',
+  connection: ['success', 'warning', 'error'].includes(item.lastTestStatus) ? item.lastTestStatus : 'untested', lastTestMessage: item.lastTestMessage || '',
+  merchantMode: item.merchantMode || 'merchant', appId: item.appId || '', gatewayUrl: item.gatewayUrl || '', privateKey: '', privateKeyConfigured: Boolean(item.privateKeyConfigured), alipayPublicKey: '', alipayPublicKeyConfigured: Boolean(item.alipayPublicKeyConfigured),
+  appAuthToken: '', appAuthTokenConfigured: Boolean(item.appAuthTokenConfigured), providerId: item.providerId || '', products: item.products || [], notifyUrl: item.notifyUrl || '', returnUrl: item.returnUrl || '', account: item.account || null
+})
+
 export function createPaymentsActions({ api, paymentSettings, paymentCurrencies, paymentSettingsSaved, driverRaceSaving, error, displayError, configs, selectedConfig, editorOpen, editorStep, testResult, editorBusy, editorError }) {
   const editorErrorText = err => { const text = displayError(err); return alipayHkErrorText[text] || alipayHkErrorText[err?.message] || text }
   async function savePaymentSettings() {
@@ -80,8 +103,8 @@ export function createPaymentsActions({ api, paymentSettings, paymentCurrencies,
   async function loadPaymentConfigs() {
     // The providers load independently so one failing endpoint does not hide the other's saved configs.
     const optional = path => api(path).catch(err => { error.value = displayError(err); return { data: [] } })
-    const [response, stripeResponse, wechatPayHkResponse, paymeResponse] = await Promise.all([api('/settings/alipayhk'), optional('/settings/stripe'), optional('/settings/wechatpay-hk'), optional('/settings/payme')])
-    configs.value = [...stripeResponse.data.map(stripeConfigFromApi), ...wechatPayHkResponse.data.map(wechatPayHkConfigFromApi), ...paymeResponse.data.map(paymeConfigFromApi), ...response.data.map(item => ({ id: item.id, name: item.name || `香港 AlipayHK (${item.environment})`, provider: 'AlipayHK', environment: item.environment, method: 'WAP', region: '香港', currency: item.paymentCurrency, paymentCurrencies: item.paymentCurrencies || [item.paymentCurrency], settlementCurrency: item.settlementCurrency || 'HKD', status: 'draft', connection: item.lastTestStatus === 'success' ? 'success' : 'untested', scope: 'passenger', capabilities: { trip: true, wallet: false, refund: true, partialRefund: false }, api: { baseUrl: item.gatewayUrl, createUrl: 'create_forex_trade_wap', queryUrl: 'single_trade_query', refundUrl: 'forex_refund' }, merchant: { merchantId: item.partner, appId: item.appId || '' }, secrets: { apiKey: '', apiSecret: '', privateKey: '', publicKey: '', callbackSecret: '' }, privateKeyConfigured: item.privateKeyConfigured, publicKeyConfigured: item.publicKeyConfigured, callbacks: { paymentUrl: item.notifyUrl || '', refundUrl: item.returnUrl || '' }, description: item.description || '' }))]
+    const [response, stripeResponse, wechatPayHkResponse, paymeResponse, alipayCnResponse] = await Promise.all([api('/settings/alipayhk'), optional('/settings/stripe'), optional('/settings/wechatpay-hk'), optional('/settings/payme'), optional('/settings/alipay-cn')])
+    configs.value = [...stripeResponse.data.map(stripeConfigFromApi), ...wechatPayHkResponse.data.map(wechatPayHkConfigFromApi), ...paymeResponse.data.map(paymeConfigFromApi), ...alipayCnResponse.data.map(alipayCnConfigFromApi), ...response.data.map(item => ({ id: item.id, name: item.name || `香港 AlipayHK (${item.environment})`, provider: 'AlipayHK', environment: item.environment, method: 'WAP', region: '香港', currency: item.paymentCurrency, paymentCurrencies: item.paymentCurrencies || [item.paymentCurrency], settlementCurrency: item.settlementCurrency || 'HKD', status: 'draft', connection: item.lastTestStatus === 'success' ? 'success' : 'untested', scope: 'passenger', capabilities: { trip: true, wallet: false, refund: true, partialRefund: false }, api: { baseUrl: item.gatewayUrl, createUrl: 'create_forex_trade_wap', queryUrl: 'single_trade_query', refundUrl: 'forex_refund' }, merchant: { merchantId: item.partner, appId: item.appId || '' }, secrets: { apiKey: '', apiSecret: '', privateKey: '', publicKey: '', callbackSecret: '' }, privateKeyConfigured: item.privateKeyConfigured, publicKeyConfigured: item.publicKeyConfigured, callbacks: { paymentUrl: item.notifyUrl || '', refundUrl: item.returnUrl || '' }, description: item.description || '' }))]
   }
   const closePaymentEditor = () => { editorOpen.value = false; selectedConfig.value = null }
   const replaceConfig = config => {
@@ -146,11 +169,30 @@ export function createPaymentsActions({ api, paymentSettings, paymentCurrencies,
       replaceConfig(paymeConfigFromApi(result.data))
     } catch (err) { editorError.value = editorErrorText(err) } finally { editorBusy.value = '' }
   }
+  const saveAlipayCnConfig = async value => {
+    try {
+      editorError.value = ''
+      editorBusy.value = 'saving'
+      const response = await api('/settings/alipay-cn', { method: 'POST', body: JSON.stringify({ environment: value.environment, merchantMode: value.merchantMode, name: value.name, description: value.description, appId: value.appId, gatewayUrl: value.gatewayUrl, privateKey: value.privateKey, alipayPublicKey: value.alipayPublicKey, appAuthToken: value.appAuthToken, providerId: value.providerId, products: value.products, notifyUrl: value.notifyUrl, returnUrl: value.returnUrl }) })
+      replaceConfig(alipayCnConfigFromApi(response.data))
+      editorBusy.value = ''
+      await testAlipayCnConfig()
+    } catch (err) { editorError.value = editorErrorText(err) } finally { editorBusy.value = '' }
+  }
+  const testAlipayCnConfig = async () => {
+    try {
+      editorError.value = ''
+      editorBusy.value = 'testing'
+      const result = await api('/settings/alipay-cn/test', { method: 'POST', body: JSON.stringify({ environment: selectedConfig.value.environment }) })
+      replaceConfig(alipayCnConfigFromApi(result.data))
+    } catch (err) { editorError.value = editorErrorText(err) } finally { editorBusy.value = '' }
+  }
   const savePaymentConfigDraft = async value => {
     if (!value || editorBusy.value) return
     if (value.provider === 'Stripe') return saveStripeConfig(value)
     if (value.provider === 'WeChat Pay HK') return saveWechatPayHkConfig(value)
     if (value.provider === 'PayMe') return savePaymeConfig(value)
+    if (value.provider === '內地支付寶') return saveAlipayCnConfig(value)
     try {
       editorError.value = ''
       editorBusy.value = 'saving'
@@ -183,6 +225,7 @@ export function createPaymentsActions({ api, paymentSettings, paymentCurrencies,
     if (selectedConfig.value?.provider === 'Stripe' && configId && !configId.startsWith('config-')) return testStripeConfig()
     if (selectedConfig.value?.provider === 'WeChat Pay HK' && configId && !configId.startsWith('config-')) return testWechatPayHkConfig()
     if (selectedConfig.value?.provider === 'PayMe' && configId && !configId.startsWith('config-')) return testPaymeConfig()
+    if (selectedConfig.value?.provider === '內地支付寶' && configId && !configId.startsWith('config-')) return testAlipayCnConfig()
     if (!configId || configId.startsWith('config-') || !selectedConfig.value?.environment) {
       editorError.value = '請先保存技術配置，再執行金鑰格式檢查'
       testResult.value = 'error'
