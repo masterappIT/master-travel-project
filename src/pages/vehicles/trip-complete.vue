@@ -103,7 +103,7 @@ const finishTrip = () => openCachedPage(`/pages/orders/completed-detail?id=${enc
 :global(html), :global(body), :global(#app) { width: 100%; height: 100%; margin: 0; overflow: hidden; background: var(--trip-viewport-background); }
 .page { position: fixed; top: 0; left: 0; width: var(--trip-canvas-width); height: var(--mobile-height, 932px); transform: scale(var(--mobile-scale, 1)); transform-origin: top left; overflow: hidden; font-family: var(--trip-font); }
 .canvas { position: relative; width: var(--trip-canvas-width); height: var(--mobile-height, var(--trip-canvas-height)); border-radius: var(--trip-screen-radius) var(--trip-screen-radius) 0 0; background: var(--trip-background); overflow: hidden; }
-.back-button { position: absolute; z-index: 3; top: var(--trip-back-top); left: var(--trip-back-left); width: var(--trip-back-size); height: var(--trip-back-size); }
+.back-button { position: absolute; z-index: 3; top: calc(var(--nav-center, 79px) - 19px); left: var(--trip-back-left); width: var(--trip-back-size); height: var(--trip-back-size); }
 .back-button image { width: 100%; height: 100%; }
 .complete-panel { position: absolute; top: var(--trip-complete-panel-top); left: 0; width: var(--trip-canvas-width); height: calc(var(--mobile-height, var(--trip-canvas-height)) - var(--trip-complete-panel-top)); border-radius: var(--trip-panel-radius) var(--trip-panel-radius) 0 0; overflow: hidden; background: var(--trip-panel-background); color: var(--trip-surface); }
 .floor-scene { position: absolute; left: var(--trip-complete-floor-left); top: var(--trip-complete-floor-top); width: var(--trip-complete-floor-width); height: var(--trip-complete-floor-height); }

@@ -1,4 +1,5 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { navBarCenterStyle } from './useNavBar'
 
 export const useH5ResponsiveCanvas = () => {
   const viewportWidth = ref(430)
@@ -35,6 +36,7 @@ export const useH5ResponsiveCanvas = () => {
       left: '0',
       margin: '0',
       '--mobile-scale': `${scale}`,
+      ...navBarCenterStyle(),
       '--mobile-height': `${logicalHeight}px`
     }
   })

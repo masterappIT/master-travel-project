@@ -1,8 +1,7 @@
 <template>
   <view class="page" :style="responsiveStyle">
     <view class="header">
-      <image class="back" src="/static/messages/back.svg" mode="aspectFit" @tap="goBack" />
-      <text class="header-title">{{ tx('消息通知') }}</text>
+      <PageNavBar :title="tx('消息通知')" @back="goBack" />
     </view>
     <view class="rows">
       <view v-if="!preferences" class="row" @tap="loadError && loadPreferences()"><text>{{ tx(loadError ? '載入失敗，點擊重試' : '載入中') }}</text></view>
@@ -24,6 +23,7 @@
   </view>
 </template>
 <script setup lang="ts">
+import PageNavBar from '../../components/common/PageNavBar.vue'
 import { tx } from '../../i18n'
 import { onMounted, ref } from 'vue'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
@@ -69,7 +69,7 @@ const goBack = () => closeCachedPage('/pages/settings/settings')
 <style scoped>
 :global(html),:global(body),:global(#app){width:100%;min-width:0;height:100%;margin:0;overflow:hidden;overscroll-behavior:none}
 .page{position:fixed;top:0;left:0;width:430px;height:var(--mobile-height, 932px);overflow:hidden;border-radius:35px;background:#F0F2F5;color:#38434A;font-family:'Noto Sans TC',sans-serif;transform:scale(var(--mobile-scale, 1));transform-origin:top left}
-.header{position:absolute;top:0;left:0;width:430px;height:110px;overflow:hidden;border-radius:25px;background:#fff}.back{position:absolute;top:60px;left:33px;width:12px;height:25px}.header-title{position:absolute;top:58px;left:50%;transform:translateX(-50%);font-size:18px;font-weight:500;white-space:nowrap}
+.header{position:absolute;top:0;left:0;width:430px;height:110px;overflow:hidden;border-radius:25px;background:#fff}
 .rows{position:absolute;top:120px;left:0;width:430px;display:flex;flex-direction:column}
 .type-rows{margin-top:10px;display:flex;flex-direction:column;gap:1px}
 .row{width:430px;height:50px;padding:0 24px 0 30px;display:flex;align-items:center;justify-content:space-between;box-sizing:border-box;background:#fff;font-size:16px;font-weight:350}

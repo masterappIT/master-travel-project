@@ -358,10 +358,12 @@ const handleThirdPartyLogin = async (provider: 'wechat' | 'apple') => {
 .mini-program-login-card--smsOnly .mini-program-login-button { top: 375px; }
 .back-button {
   position: absolute;
-  left: 33px;
-  top: 60px;
-  width: 12px;
-  height: 25px;
+  left: 17px;
+  top: calc(var(--nav-center, 79px) - 22px);
+  width: 44px;
+  height: 44px;
+  padding: 9.5px 16px;
+  box-sizing: border-box;
 }
 
 .login-illustration {

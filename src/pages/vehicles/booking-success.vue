@@ -256,7 +256,7 @@ const showBookingDetail = () => openCachedPage(`/pages/orders/traveling-detail?f
 .back {
   position: absolute;
   z-index: 6;
-  top: 60px;
+  top: calc(var(--nav-center, 79px) - 19px);
   left: 33px;
   width: 38px;
   height: 38px;

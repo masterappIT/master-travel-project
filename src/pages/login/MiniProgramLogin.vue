@@ -398,10 +398,12 @@ const handleLogin = async () => {
 .mini-program-phone-field .phone-input { left: var(--login-phone-number-left); }
 .back-button {
   position: absolute;
-  left: 33px;
-  top: 60px;
-  width: 12px;
-  height: 25px;
+  left: 17px;
+  top: calc(var(--nav-center, 79px) - 22px);
+  width: 44px;
+  height: 44px;
+  padding: 9.5px 16px;
+  box-sizing: border-box;
 }
 
 .login-illustration {

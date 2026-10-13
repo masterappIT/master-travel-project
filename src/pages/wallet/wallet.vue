@@ -1,8 +1,7 @@
 <template>
   <view class="page" :style="responsiveStyle">
     <view class="header">
-      <image class="back" src="/static/wallet/back.svg" mode="aspectFit" @tap="goBack" />
-      <text class="title">{{ tx('我的錢包') }}</text>
+      <PageNavBar :title="tx('我的錢包')" @back="goBack" />
     </view>
 
     <view class="balance-card">
@@ -28,6 +27,7 @@
 </template>
 
 <script setup lang="ts">
+import PageNavBar from '../../components/common/PageNavBar.vue'
 import { tx } from '../../i18n'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { closeCachedPage, openCachedPage } from '../../utils/navigation'
@@ -108,7 +108,7 @@ const goBack = () => closeCachedPage('/pages/trips/trips')
 </script>
 
 <style scoped>
-:global(html),:global(body),:global(#app){width:100%;min-width:0;height:100%;margin:0;overflow:hidden;overscroll-behavior:none}.page{position:fixed;top:0;left:0;width:430px;height:var(--mobile-height, 932px);overflow:hidden;border-radius:35px;background:#F0F2F5;color:#38434A;font-family:'Noto Sans TC',sans-serif;transform:scale(var(--mobile-scale, 1));transform-origin:top left}.header{position:absolute;top:0;left:0;width:430px;height:154px;overflow:hidden;border-radius:25px;background:#fff}.back{position:absolute;top:53px;left:26px;width:26px;height:39px;padding:7px;box-sizing:border-box}.title{position:absolute;top:56px;left:50%;transform:translateX(-50%);font-size:18px;font-weight:500}.balance-card{position:absolute;top:115px;left:15px;width:400px;height:120px;overflow:hidden;border-radius:25px;background:linear-gradient(180deg,#285CFC 113.33%,#758295 213.33%);box-shadow:0 4px 4px rgba(0,0,0,.25);color:#fff}.balance-label{position:absolute;top:14px;left:30px;color:#D9D9D9;font-size:14px;font-weight:350}.balance{position:absolute;top:31px;left:30px;font-size:40px;font-weight:700;line-height:normal}.fare-balance{position:absolute;top:93px;left:30px;font-size:14px;font-weight:500}.actions{position:absolute;top:255px;left:33px;width:364px;height:45px;display:flex;gap:10px}.action{width:177px;height:45px;display:flex;align-items:center;justify-content:center;border-radius:10px;font-size:16px;font-weight:500}.withdraw{background:#fff}.top-up{background:#285CFC;color:#fff}.records-link{position:absolute;top:325px;left:0;width:430px;height:50px;display:flex;align-items:center;background:#fff;box-sizing:border-box;padding-left:30px;font-size:16px;font-weight:350}.records-link image{position:absolute;right:17px;width:84px;height:26px}.settings{position:absolute;bottom:120px;left:187px;width:57px;height:23px;display:flex;align-items:center;gap:5px;font-size:16px;font-weight:700}.settings image{width:20px;height:20px;flex:none}
+:global(html),:global(body),:global(#app){width:100%;min-width:0;height:100%;margin:0;overflow:hidden;overscroll-behavior:none}.page{position:fixed;top:0;left:0;width:430px;height:var(--mobile-height, 932px);overflow:hidden;border-radius:35px;background:#F0F2F5;color:#38434A;font-family:'Noto Sans TC',sans-serif;transform:scale(var(--mobile-scale, 1));transform-origin:top left}.header{position:absolute;top:0;left:0;width:430px;height:154px;overflow:hidden;border-radius:25px;background:#fff}.balance-card{position:absolute;top:115px;left:15px;width:400px;height:120px;overflow:hidden;border-radius:25px;background:linear-gradient(180deg,#285CFC 113.33%,#758295 213.33%);box-shadow:0 4px 4px rgba(0,0,0,.25);color:#fff}.balance-label{position:absolute;top:14px;left:30px;color:#D9D9D9;font-size:14px;font-weight:350}.balance{position:absolute;top:31px;left:30px;font-size:40px;font-weight:700;line-height:normal}.fare-balance{position:absolute;top:93px;left:30px;font-size:14px;font-weight:500}.actions{position:absolute;top:255px;left:33px;width:364px;height:45px;display:flex;gap:10px}.action{width:177px;height:45px;display:flex;align-items:center;justify-content:center;border-radius:10px;font-size:16px;font-weight:500}.withdraw{background:#fff}.top-up{background:#285CFC;color:#fff}.records-link{position:absolute;top:325px;left:0;width:430px;height:50px;display:flex;align-items:center;background:#fff;box-sizing:border-box;padding-left:30px;font-size:16px;font-weight:350}.records-link image{position:absolute;right:17px;width:84px;height:26px}.settings{position:absolute;bottom:120px;left:187px;width:57px;height:23px;display:flex;align-items:center;gap:5px;font-size:16px;font-weight:700}.settings image{width:20px;height:20px;flex:none}
 
 @media (max-width:599px){.page{top:0;left:0;height:var(--mobile-height,100dvh);border-radius:0;transform:scale(var(--mobile-scale, 1));transform-origin:top left}}
 </style>

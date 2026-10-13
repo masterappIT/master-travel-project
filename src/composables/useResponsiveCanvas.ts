@@ -1,4 +1,5 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { navBarCenterStyle } from './useNavBar'
 
 type ResponsiveCanvasOptions = {
   preserveHeightOnKeyboard?: boolean
@@ -101,6 +102,7 @@ export const useResponsiveCanvas = (options: ResponsiveCanvasOptions = {}) => {
       left: '0',
       margin: '0',
       '--mobile-scale': `${scale}`,
+      ...navBarCenterStyle(),
       '--mobile-height': `${logicalHeight}px`,
       '--keyboard-offset': `${keyboardHeight.value / scale}px`,
       '--composer-safe-bottom': keyboardHeight.value > 0 ? '0px' : 'env(safe-area-inset-bottom)'    }

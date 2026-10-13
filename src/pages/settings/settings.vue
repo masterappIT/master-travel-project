@@ -1,8 +1,7 @@
 <template>
   <view class="page" :style="responsiveStyle">
     <view class="header">
-      <image class="back" src="/static/messages/back.svg" mode="aspectFit" @tap="goBack" />
-      <text class="header-title">{{ tx('設定') }}</text>
+      <PageNavBar :title="tx('設定')" @back="goBack" />
     </view>
     <view class="setting-row"><text>{{ tx('語言') }}</text><view class="setting-picker" @tap="openLanguagePicker"><view class="setting-value"><text>{{ tx(languageName) }}</text><text class="chevron">›</text></view></view></view>
     <view class="setting-row"><text>{{ tx('地區') }}</text><view class="setting-picker" @tap="openRegionPicker"><view class="setting-value"><text>{{ tx(region) }}</text><text class="chevron">›</text></view></view></view>
@@ -13,6 +12,7 @@
   </view>
 </template>
 <script setup lang="ts">
+import PageNavBar from '../../components/common/PageNavBar.vue'
 import { language, setLanguage, tx, type Language } from '../../i18n'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { computed, onMounted, ref } from 'vue'
@@ -109,7 +109,7 @@ const goBack = () => closeCachedPage('/pages/trips/trips')
 <style scoped>
 :global(html),:global(body),:global(#app){width:100%;min-width:0;height:100%;margin:0;overflow:hidden;overscroll-behavior:none}
 .page{position:fixed;top:0;left:0;width:430px;height:var(--mobile-height, 932px);overflow:hidden;border-radius:35px;background:#F0F2F5;color:#38434A;font-family:'Noto Sans TC',sans-serif;transform:scale(var(--mobile-scale, 1));transform-origin:top left}
-.header{position:absolute;top:0;left:0;width:430px;height:110px;overflow:hidden;border-radius:25px;background:#fff}.back{position:absolute;top:60px;left:33px;width:12px;height:25px}.header-title{position:absolute;top:58px;left:calc(50% - 18px);font-size:18px;font-weight:500}
+.header{position:absolute;top:0;left:0;width:430px;height:110px;overflow:hidden;border-radius:25px;background:#fff}
 .setting-row{position:absolute;left:0;width:430px;height:50px;display:flex;align-items:center;box-sizing:border-box;background:#fff;font-size:16px;font-weight:350}.setting-row>text:first-child{margin-left:30px}.setting-row:nth-of-type(2){top:120px}.setting-row:nth-of-type(3){top:171px}.setting-row:nth-of-type(4){top:222px}.setting-row:nth-of-type(5){top:282px}.setting-row:nth-of-type(6){top:333px}.setting-picker{position:absolute;inset:0}.setting-value{position:absolute;top:0;right:12px;width:110px;height:50px;display:flex;align-items:center;justify-content:flex-end;box-sizing:border-box;white-space:nowrap;overflow:visible;pointer-events:none}.setting-value>text:first-child{width:84px;text-align:right;font-size:16px;line-height:1.5;flex:none}.setting-value .chevron{flex:none;margin-left:8px;font-size:22px;line-height:20px}.logout{position:absolute;top:403px;left:36px;width:357px;height:50px;display:flex;align-items:center;justify-content:center;border-radius:10px;background:#285CFC;color:#fff;font-size:16px;font-weight:500}
 .logout-pending{opacity:.7;pointer-events:none}
 .logout.logout-guest{top:352px}

@@ -148,7 +148,7 @@ const showPaymentRecords = () => openCachedPage(`/pages/transactions/expense-det
 :global(html), :global(body), :global(#app) { width: 100%; height: 100%; margin: 0; overflow: hidden; }
 .page { position: fixed; inset: 0 auto auto 0; width: 430px; height: var(--mobile-height, 932px); overflow: hidden; background: #f0f2f5; color: #38434a; font-family: 'Noto Sans TC', sans-serif; transform: scale(var(--mobile-scale, 1)); transform-origin: top left; }
 .header { position: absolute; z-index: 2; top: 0; left: 0; width: 430px; height: 110px; border-radius: 0 0 25px 25px; background: #fff; }
-.traveling-title { position: absolute; top: 58px; left: 50%; transform: translateX(-50%); font-size: 18px; font-weight: 500; line-height: 27px; }
+.traveling-title { position: absolute; top:calc(var(--nav-center, 79px) - 13px); left: 50%; transform: translateX(-50%); font-size: 18px; font-weight: 500; line-height: 27px; }
 .traveling-detail-scroll { position: absolute; top: 170px; right: 0; bottom: 0; left: 0; width: 430px; height: calc(var(--mobile-height, 932px) - 170px); }
 .traveling-order-number { display: flex; align-items: center; height: 56px; padding: 0 38px; box-sizing: border-box; background: #edf0f2; font-size: 18px; font-weight: 500; }
 .traveling-status-row { display: flex; height: 23px; padding: 10px 15px 0; box-sizing: content-box; }
@@ -174,7 +174,7 @@ const showPaymentRecords = () => openCachedPage(`/pages/transactions/expense-det
 .traveling-divider { width: 100%; height: 1px; margin-top: 20px; overflow: hidden; }
 .traveling-divider image { width: 100%; height: 1px; }
 .traveling-record image { width: 20px; height: 20px; }
-.number { position: absolute; top: 58px; left: 122px; right: var(--order-header-right, auto); overflow: hidden; font-size: 18px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.number { position: absolute; top:calc(var(--nav-center, 79px) - 13px); left: 122px; right: var(--order-header-right, auto); overflow: hidden; font-size: 18px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
 .passenger view {
   display: flex;
   align-items: center;

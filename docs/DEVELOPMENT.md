@@ -75,6 +75,14 @@ npm run check:passenger-i18n
 
 乘客端文字以繁體撰寫，簡體由 `src/i18n` 依 OpenCC 對照表在顯示時轉換。模板中的文字與插值須經 `tx()`；toast、對話框及動作選單由 `src/i18n` 統一處理。第一個命令重新產生對照表，第二個命令檢查是否有文字繞過 `tx()` 以及對照表是否過期。
 
+修改乘客端頁面標題列或返回按鈕時：
+
+```bash
+npm run check:passenger-nav
+```
+
+返回按鈕與標題的垂直位置以 `--nav-center` 為準（`src/composables/useNavBar.ts`；微信小程序依膠囊按鈕位置計算，H5 與 App 為固定值）。標準標題列使用 `src/components/common/PageNavBar.vue`；版面不同的頁面（叫車流程、登入、客服、地址選擇）各自實作但遵守同一規格，不為個別頁面在共用元件加參數。
+
 ## 驗證命令
 
 ```bash
