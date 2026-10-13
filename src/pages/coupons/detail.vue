@@ -27,9 +27,8 @@
         <view class="detail-row"><text class="label">{{ tx('疊加規則') }}</text><text>{{ tx(stackingRule) }}</text></view>
       </view>
       <text class="hint">{{ tx('實際優惠以行程報價結果為準') }}</text>
-      <view v-if="promotion.couponCode" class="primary-action" :class="{ disabled: selected || claiming }" @tap="claimPromotion">{{ tx(selected ? '已選用' : claiming ? '領取中' : '領取並使用') }}</view>
+      <view v-if="promotion.couponCode" class="primary-action" :class="{ disabled: claiming, secondary: selected && !claiming }" @tap="togglePromotion">{{ tx(selected ? '取消選用' : claiming ? '處理中' : '選用此優惠') }}</view>
       <view v-else class="auto-note">{{ tx('符合使用條件時將自動套用') }}</view>
-      <text v-if="message" class="message">{{ tx(message) }}</text>
     </view>
   </view>
 </template>
@@ -61,6 +60,8 @@ const tripStore = useTripStore()
 const promotion = ref<PublicPromotion | null>(null)
 const loading = ref(false)
 const claiming = ref(false)
+// Only used while the promotion itself cannot be shown. The outcome of choosing it is a toast: the page is
+// full height, and a line under the button ended up beneath the home indicator.
 const message = ref('')
 const promotionId = ref(getCachedPageOrderQuery().id || '')
 const promotionBadge = computed(() => promotion.value?.kind === 'COUPON' ? '現金券' : promotion.value?.kind === 'MEMBER' ? '會員優惠' : '限時優惠')
@@ -135,18 +136,22 @@ const loadPromotion = async () => {
     loading.value = false
   }
 }
-const claimPromotion = async () => {
+const togglePromotion = async () => {
   const code = promotion.value?.couponCode
-  if (!code || selected.value || claiming.value) return
+  if (!code || claiming.value) return
+  if (selected.value) {
+    tripStore.setCouponCode()
+    uni.showToast({ title: '已取消選用', icon: 'none' })
+    return
+  }
   claiming.value = true
   try {
     const result = await redeemPromotionCode(code)
     promotion.value = result.promotion
     tripStore.setCouponCode(result.promotion.couponCode || undefined)
-    message.value = '優惠已領取並選用'
-    uni.showToast({ title: '優惠已領取並選用', icon: 'success' })
+    uni.showToast({ title: '已選用此優惠', icon: 'success' })
   } catch (error) {
-    message.value = error instanceof Error ? error.message : '優惠領取失敗'
+    uni.showToast({ title: error instanceof Error ? error.message : '優惠無法使用', icon: 'none', duration: 3000 })
   } finally {
     claiming.value = false
   }
@@ -159,5 +164,5 @@ const goBack = () => closeCachedPage('/pages/coupons/coupons')
 </script>
 
 <style scoped>
-:global(html),:global(body),:global(#app){width:100%;min-width:0;height:100%;margin:0;overflow:hidden;overscroll-behavior:none}.page{position:fixed;top:0;left:0;width:430px;height:var(--mobile-height,932px);overflow:hidden;border-radius:35px;background:#F0F2F5;color:#38434A;font-family:'Noto Sans TC',sans-serif;transform:scale(var(--mobile-scale,1));transform-origin:top left}.header{position:absolute;top:0;left:0;width:430px;height:110px;border-radius:25px;background:#fff}.state{position:absolute;top:160px;left:22px;width:385px;text-align:center;color:#8B949E;font-size:13px}.detail-content{position:absolute;top:130px;left:22px;width:385px}.coupon-card{position:relative;height:142px;border-radius:10px;background:#fff;overflow:hidden;box-shadow:0 4px 4px rgba(0,0,0,.25)}.badge{position:absolute;left:0;top:0;width:120px;height:142px;background:#E1C6AA;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#CF6B3B;font-size:16px;font-weight:700;line-height:24px}.badge text{display:block}.vehicle{position:absolute;left:273px;top:21px;width:100px;height:100px}.coupon-name{position:absolute;left:141px;top:51px;font-size:16px;font-weight:500}.coupon-period{position:absolute;left:141px;top:74px;max-width:190px;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.status{position:absolute;left:353px;top:111px;width:20px;height:20px}.detail-panel{margin-top:18px;padding:8px 18px;border-radius:10px;background:#fff;box-shadow:0 4px 4px rgba(0,0,0,.12)}.detail-row{min-height:48px;display:flex;align-items:center;justify-content:space-between;gap:18px;border-bottom:1px solid #EEF0F3;font-size:13px;text-align:right}.detail-row text:last-child{max-width:235px;line-height:20px;word-break:break-all}.detail-row:last-child{border-bottom:0}.label{flex:none;color:#8B949E}.hint{display:block;margin-top:14px;color:#8B949E;font-size:12px;text-align:center}.primary-action{height:48px;margin-top:20px;border-radius:24px;background:#285CFC;color:#fff;font-size:16px;line-height:48px;text-align:center}.primary-action.disabled{background:#AEB6C2}.auto-note{height:48px;margin-top:20px;border-radius:24px;background:#fff;color:#8B949E;font-size:14px;line-height:48px;text-align:center}.message{display:block;margin-top:12px;color:#285CFC;font-size:12px;text-align:center}@media (max-width:599px){.page{top:0;left:0;height:var(--mobile-height,100%);border-radius:0;transform:scale(var(--mobile-scale,1));transform-origin:top left}}
+:global(html),:global(body),:global(#app){width:100%;min-width:0;height:100%;margin:0;overflow:hidden;overscroll-behavior:none}.page{position:fixed;top:0;left:0;width:430px;height:var(--mobile-height,932px);overflow:hidden;border-radius:35px;background:#F0F2F5;color:#38434A;font-family:'Noto Sans TC',sans-serif;transform:scale(var(--mobile-scale,1));transform-origin:top left}.header{position:absolute;top:0;left:0;width:430px;height:110px;border-radius:25px;background:#fff}.state{position:absolute;top:160px;left:22px;width:385px;text-align:center;color:#8B949E;font-size:13px}.detail-content{position:absolute;top:130px;left:22px;width:385px}.coupon-card{position:relative;height:142px;border-radius:10px;background:#fff;overflow:hidden;box-shadow:0 4px 4px rgba(0,0,0,.25)}.badge{position:absolute;left:0;top:0;width:120px;height:142px;background:#E1C6AA;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#CF6B3B;font-size:16px;font-weight:700;line-height:24px}.badge text{display:block}.vehicle{position:absolute;left:273px;top:21px;width:100px;height:100px}.coupon-name{position:absolute;left:141px;top:51px;font-size:16px;font-weight:500}.coupon-period{position:absolute;left:141px;top:74px;max-width:190px;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.status{position:absolute;left:353px;top:111px;width:20px;height:20px}.detail-panel{margin-top:18px;padding:8px 18px;border-radius:10px;background:#fff;box-shadow:0 4px 4px rgba(0,0,0,.12)}.detail-row{min-height:48px;display:flex;align-items:center;justify-content:space-between;gap:18px;border-bottom:1px solid #EEF0F3;font-size:13px;text-align:right}.detail-row text:last-child{max-width:235px;line-height:20px;word-break:break-all}.detail-row:last-child{border-bottom:0}.label{flex:none;color:#8B949E}.hint{display:block;margin-top:14px;color:#8B949E;font-size:12px;text-align:center}.primary-action{height:48px;margin-top:20px;border-radius:24px;background:#285CFC;color:#fff;font-size:16px;line-height:48px;text-align:center}.primary-action.disabled{background:#AEB6C2}.auto-note{height:48px;margin-top:20px;border-radius:24px;background:#fff;color:#8B949E;font-size:14px;line-height:48px;text-align:center}.primary-action.secondary{box-sizing:border-box;border:1px solid #285CFC;background:#fff;color:#285CFC;line-height:46px}@media (max-width:599px){.page{top:0;left:0;height:var(--mobile-height,100%);border-radius:0;transform:scale(var(--mobile-scale,1));transform-origin:top left}}
 </style>
