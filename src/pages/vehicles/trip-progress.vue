@@ -9,24 +9,24 @@
       <view class="driver-card">
         <image v-if="vehicleLogo && !logoLoadFailed" class="toyota-logo" :src="vehicleLogo" mode="aspectFit" @error="logoLoadFailed = true" />
         <view class="vehicle-copy">
-          <text class="vehicle-brand">{{ vehicleBrand }}</text>
-          <text class="vehicle-series">{{ vehicleSeries }}</text>
+          <text class="vehicle-brand">{{ tx(vehicleBrand) }}</text>
+          <text class="vehicle-series">{{ tx(vehicleSeries) }}</text>
         </view>
         <image class="vehicle-image" :src="vehicleImage" mode="aspectFit" />
         <view class="driver-info">
           <image class="driver-avatar" src="/static/vehicles/trip-progress/avatar.svg" mode="aspectFit" />
           <view>
-            <text class="driver-name">{{ driverName }}</text>
+            <text class="driver-name">{{ tx(driverName) }}</text>
             <view class="rating">
               <image class="star" src="/static/vehicles/trip-progress/star.svg" mode="aspectFit" />
-              <text>{{ driverRating }}</text>
+              <text>{{ tx(driverRating) }}</text>
             </view>
           </view>
         </view>
         <view class="driver-actions">
-          <view class="pill call" @tap="callDriver"><image src="/static/vehicles/trip-progress/phone.svg" mode="aspectFit" /><text>打電話</text></view>
-          <view class="pill seat"><image src="/static/vehicles/trip-progress/seat.svg" mode="aspectFit" /><text>{{ vehicleSeats }}座</text></view>
-          <view class="pill colour"><text>白色</text></view>
+          <view class="pill call" @tap="callDriver"><image src="/static/vehicles/trip-progress/phone.svg" mode="aspectFit" /><text>{{ tx('打電話') }}</text></view>
+          <view class="pill seat"><image src="/static/vehicles/trip-progress/seat.svg" mode="aspectFit" /><text>{{ tx(vehicleSeats) }}{{ tx('座') }}</text></view>
+          <view class="pill colour"><text>{{ tx('白色') }}</text></view>
         </view>
       </view>
 
@@ -35,30 +35,31 @@
           v-for="plate in vehiclePlates"
           :key="plate.kind"
           :class="[`plate-slot-${plate.slot}`, `plate-${plate.kind}`]"
-        >{{ plate.value }}</text>
+        >{{ tx(plate.value) }}</text>
       </view>
 
       <view class="status-panel">
         <image class="city-scene" src="/static/vehicles/trip-progress/city.svg" mode="scaleToFill" />
-        <view class="quick-actions"><text @tap="showComingSoon('修改目的地')">修改目的地</text><text @tap="contactSupport">聯繫客服</text></view>
+        <view class="quick-actions"><text @tap="showComingSoon('修改目的地')">{{ tx('修改目的地') }}</text><text @tap="contactSupport">{{ tx('聯繫客服') }}</text></view>
         <view class="status-content">
           <image class="status-mark" src="/static/vehicles/trip-progress/status.svg" mode="aspectFit" />
-          <text class="status-title">正在前往目的地</text>
+          <text class="status-title">{{ tx('正在前往目的地') }}</text>
         </view>
       </view>
       <view class="route">
         <image class="place-icon origin-icon" src="/static/vehicles/trip-progress/origin.svg" mode="aspectFit" />
-        <text>{{ originLabel }}</text>
+        <text>{{ tx(originLabel) }}</text>
         <image class="route-arrow" src="/static/vehicles/trip-progress/route-arrow.svg" mode="aspectFit" />
         <image class="place-icon destination-icon" src="/static/vehicles/trip-progress/destination.svg" mode="aspectFit" />
-        <text>{{ destinationLabel }}</text>
+        <text>{{ tx(destinationLabel) }}</text>
       </view>
-      <text class="departure">預計到達時間 ： {{ arrivalTime }}</text>
+      <text class="departure">{{ tx('預計到達時間 ：') }} {{ tx(arrivalTime) }}</text>
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
+import { tx } from '../../i18n'
 import TripRouteMap from '../../components/vehicles/TripRouteMap.vue'
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { isIosApp } from '../../platform'

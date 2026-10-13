@@ -1,14 +1,15 @@
 <template>
   <view class="page" :style="responsiveStyle">
-    <view class="header"><image class="back" src="/static/wallet/back.svg" mode="aspectFit" @tap="goBack" /><text class="title">退款</text></view>
+    <view class="header"><image class="back" src="/static/wallet/back.svg" mode="aspectFit" @tap="goBack" /><text class="title">{{ tx('退款') }}</text></view>
     <image class="refund-icon" src="/static/refund-complete-status.svg" mode="aspectFit" />
-    <text class="refund-title">退款 - 跨境出行 取消訂單</text>
+    <text class="refund-title">{{ tx('退款 - 跨境出行 取消訂單') }}</text>
     <view class="amount"><text class="rmb">RMB </text><text class="yen">¥</text><text class="number">101.00</text></view>
-    <view class="status"><image class="status-check" src="/static/refund-complete-check.svg" mode="aspectFit" /><text>{{ isCompleted ? '已退至餘額' : '審核中' }}</text></view>
-    <view class="details"><text class="section-title">退款方式</text><text class="method">我的錢包 餘額</text><view class="steps"><view class="step"><view class="circle">1</view><view class="step-copy"><text>退款申請已被接納</text><text class="step-time">01/01/2024 12:00:00</text></view></view><image class="step-line line-one" src="/static/refund-complete-line.svg" mode="scaleToFill"/><view class="step"><view class="circle">2</view><view class="step-copy"><text>審核中</text><text v-if="!isCompleted" class="expected">預計到帳時間：01/01/2024 12:00:00</text><text v-else class="step-time">01/01/2024 12:00:00</text></view></view><image class="step-line line-two" src="/static/refund-complete-line.svg" mode="scaleToFill"/><view class="step"><view class="circle">3</view><view class="step-copy"><text>已退款至餘額</text><text v-if="isCompleted" class="step-time">01/01/2024 12:00:00</text></view></view></view><view class="order-link"><text class="order-label">相關訂單紀錄</text><image src="/static/refund-complete-arrow.svg" mode="aspectFit"/></view><text class="arrival-label">退款到帳時間</text><text class="arrival-value">{{ isCompleted ? '01/01/2024 12:00:00' : '01/01/2024' }}</text></view>
+    <view class="status"><image class="status-check" src="/static/refund-complete-check.svg" mode="aspectFit" /><text>{{ tx(isCompleted ? '已退至餘額' : '審核中') }}</text></view>
+    <view class="details"><text class="section-title">{{ tx('退款方式') }}</text><text class="method">{{ tx('我的錢包 餘額') }}</text><view class="steps"><view class="step"><view class="circle">1</view><view class="step-copy"><text>{{ tx('退款申請已被接納') }}</text><text class="step-time">01/01/2024 12:00:00</text></view></view><image class="step-line line-one" src="/static/refund-complete-line.svg" mode="scaleToFill"/><view class="step"><view class="circle">2</view><view class="step-copy"><text>{{ tx('審核中') }}</text><text v-if="!isCompleted" class="expected">{{ tx('預計到帳時間：01/01/2024 12:00:00') }}</text><text v-else class="step-time">01/01/2024 12:00:00</text></view></view><image class="step-line line-two" src="/static/refund-complete-line.svg" mode="scaleToFill"/><view class="step"><view class="circle">3</view><view class="step-copy"><text>{{ tx('已退款至餘額') }}</text><text v-if="isCompleted" class="step-time">01/01/2024 12:00:00</text></view></view></view><view class="order-link"><text class="order-label">{{ tx('相關訂單紀錄') }}</text><image src="/static/refund-complete-arrow.svg" mode="aspectFit"/></view><text class="arrival-label">{{ tx('退款到帳時間') }}</text><text class="arrival-value">{{ tx(isCompleted ? '01/01/2024 12:00:00' : '01/01/2024') }}</text></view>
   </view>
 </template>
 <script setup lang="ts">
+import { tx } from '../../i18n'
 import { ref } from 'vue'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { closeCachedPage } from '../../utils/navigation'

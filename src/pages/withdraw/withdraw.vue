@@ -2,24 +2,25 @@
   <view class="page" :style="responsiveStyle">
     <view class="header">
       <image class="back" src="/static/withdraw/back.svg" mode="aspectFit" @tap="goBack" />
-      <text class="title">提現</text>
+      <text class="title">{{ tx('提現') }}</text>
     </view>
-    <text class="method-title">到帳方式</text>
+    <text class="method-title">{{ tx('到帳方式') }}</text>
     <view class="methods">
-      <view class="method-card method-wechat" :class="{ selected: selectedMethod === 'wechat' }" @tap="selectMethod('wechat')"><image class="method-icon" src="/static/withdraw/wechat.svg" mode="aspectFit" /><text>微信支付</text><view class="check-wrap"><image class="check" :src="selectedMethod === 'wechat' ? '/static/withdraw/check-selected.svg' : '/static/withdraw/check.svg'" mode="aspectFit" /></view></view>
+      <view class="method-card method-wechat" :class="{ selected: selectedMethod === 'wechat' }" @tap="selectMethod('wechat')"><image class="method-icon" src="/static/withdraw/wechat.svg" mode="aspectFit" /><text>{{ tx('微信支付') }}</text><view class="check-wrap"><image class="check" :src="selectedMethod === 'wechat' ? '/static/withdraw/check-selected.svg' : '/static/withdraw/check.svg'" mode="aspectFit" /></view></view>
       <!-- #ifndef MP-WEIXIN || MP-TOUTIAO -->
-<view class="method-card method-alipay" :class="{ selected: selectedMethod === 'alipay' }" @tap="selectMethod('alipay')"><image class="method-icon" src="/static/withdraw/alipay.svg" mode="aspectFit" /><text>支付寶提現（只限內地支付寶）</text><view class="check-wrap"><image class="check" :src="selectedMethod === 'alipay' ? '/static/withdraw/check-selected.svg' : '/static/withdraw/check.svg'" mode="aspectFit" /></view></view>
-      <text class="bank-title">銀行帳戶</text>
-      <view class="method-card method-visa" @tap="selectMethod('visa')"><image class="card-icon" src="/static/withdraw/visa.svg" mode="aspectFit" /><view class="method-copy"><text>VISA Card •••• 2321</text><text class="sub">銀行帳戶</text></view><view class="check-wrap"><image class="check" src="/static/withdraw/check.svg" mode="aspectFit" /></view></view>
-      <view class="method-card method-mastercard" @tap="selectMethod('mastercard')"><image class="card-icon" src="/static/withdraw/mastercard.svg" mode="aspectFit" /><view class="method-copy"><text>MasterCard •••• 2321</text><text class="sub">銀行帳戶</text></view><view class="check-wrap"><image class="check" src="/static/withdraw/check.svg" mode="aspectFit" /></view></view>
-      <view class="method-card method-unionpay" @tap="selectMethod('unionpay')"><image class="card-icon" src="/static/withdraw/unionpay.svg" mode="aspectFit" /><view class="method-copy"><text>銀聯卡 •••• 2321</text><text class="sub">銀行帳戶</text></view><view class="check-wrap"><image class="check" src="/static/withdraw/check.svg" mode="aspectFit" /></view></view>
-      <view class="method-card method-jcb" @tap="selectMethod('jcb')"><image class="card-icon" src="/static/withdraw/jcb.svg" mode="aspectFit" /><view class="method-copy"><text>JCB Card •••• 2321</text><text class="sub">銀行帳戶</text></view><view class="check-wrap"><image class="check" src="/static/withdraw/check.svg" mode="aspectFit" /></view></view>
-      <view class="add-method" @tap="addMethod"><image class="add-card" src="/static/withdraw/add-card.svg" mode="aspectFit" /><text>新增銀行帳戶/信用卡增值</text><image class="add-chevron" src="/static/withdraw/add-arrow.svg" mode="aspectFit" /></view>
+<view class="method-card method-alipay" :class="{ selected: selectedMethod === 'alipay' }" @tap="selectMethod('alipay')"><image class="method-icon" src="/static/withdraw/alipay.svg" mode="aspectFit" /><text>{{ tx('支付寶提現（只限內地支付寶）') }}</text><view class="check-wrap"><image class="check" :src="selectedMethod === 'alipay' ? '/static/withdraw/check-selected.svg' : '/static/withdraw/check.svg'" mode="aspectFit" /></view></view>
+      <text class="bank-title">{{ tx('銀行帳戶') }}</text>
+      <view class="method-card method-visa" @tap="selectMethod('visa')"><image class="card-icon" src="/static/withdraw/visa.svg" mode="aspectFit" /><view class="method-copy"><text>VISA Card •••• 2321</text><text class="sub">{{ tx('銀行帳戶') }}</text></view><view class="check-wrap"><image class="check" src="/static/withdraw/check.svg" mode="aspectFit" /></view></view>
+      <view class="method-card method-mastercard" @tap="selectMethod('mastercard')"><image class="card-icon" src="/static/withdraw/mastercard.svg" mode="aspectFit" /><view class="method-copy"><text>MasterCard •••• 2321</text><text class="sub">{{ tx('銀行帳戶') }}</text></view><view class="check-wrap"><image class="check" src="/static/withdraw/check.svg" mode="aspectFit" /></view></view>
+      <view class="method-card method-unionpay" @tap="selectMethod('unionpay')"><image class="card-icon" src="/static/withdraw/unionpay.svg" mode="aspectFit" /><view class="method-copy"><text>{{ tx('銀聯卡 •••• 2321') }}</text><text class="sub">{{ tx('銀行帳戶') }}</text></view><view class="check-wrap"><image class="check" src="/static/withdraw/check.svg" mode="aspectFit" /></view></view>
+      <view class="method-card method-jcb" @tap="selectMethod('jcb')"><image class="card-icon" src="/static/withdraw/jcb.svg" mode="aspectFit" /><view class="method-copy"><text>JCB Card •••• 2321</text><text class="sub">{{ tx('銀行帳戶') }}</text></view><view class="check-wrap"><image class="check" src="/static/withdraw/check.svg" mode="aspectFit" /></view></view>
+      <view class="add-method" @tap="addMethod"><image class="add-card" src="/static/withdraw/add-card.svg" mode="aspectFit" /><text>{{ tx('新增銀行帳戶/信用卡增值') }}</text><image class="add-chevron" src="/static/withdraw/add-arrow.svg" mode="aspectFit" /></view>
       <!-- #endif -->
     </view>
   </view>
 </template>
 <script setup lang="ts">
+import { tx } from '../../i18n'
 import { ref } from 'vue'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { closeCachedPage, openCachedPage } from '../../utils/navigation'

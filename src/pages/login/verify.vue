@@ -1,10 +1,10 @@
 <template>
   <view class="verify-page" :style="responsiveStyle">
     <image class="verify-back-button" src="/static/login/verify-back.svg" mode="scaleToFill" @tap="handleBack" />
-    <text class="verify-title">輸入驗證碼</text>
+    <text class="verify-title">{{ tx('輸入驗證碼') }}</text>
     <view class="verify-description">
-      <text>我們已將驗證碼短訊發送至您的手機號碼</text>
-      <text>{{ phone }}。請檢查並在下方輸入驗證碼。</text>
+      <text>{{ tx('我們已將驗證碼短訊發送至您的手機號碼') }}</text>
+      <text>{{ tx(phone) }}{{ tx('。請檢查並在下方輸入驗證碼。') }}</text>
     </view>
 
     <view class="code-fields">
@@ -25,16 +25,17 @@
       :class="{ disabled: resendCountdown > 0 || resending }"
       @tap="handleResend"
     >
-      <text>{{ resendLabel }}</text>
+      <text>{{ tx(resendLabel) }}</text>
     </view>
 
     <button class="verify-submit" type="button" :disabled="submitting" @tap="handleSubmit">
-      <text>{{ submitting ? '驗證中…' : '登入' }}</text>
+      <text>{{ tx(submitting ? '驗證中…' : '登入') }}</text>
     </button>
   </view>
 </template>
 
 <script setup lang="ts">
+import { tx } from '../../i18n'
 import { computed, ref } from 'vue'
 import { onLoad, onUnload } from '@dcloudio/uni-app'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'

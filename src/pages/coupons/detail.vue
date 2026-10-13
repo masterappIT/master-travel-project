@@ -2,40 +2,41 @@
   <view class="page" :style="responsiveStyle">
     <view class="header">
       <image class="back" src="/static/coupons/back.svg" mode="aspectFit" @tap="goBack" />
-      <text class="header-title">優惠詳情</text>
+      <text class="header-title">{{ tx('優惠詳情') }}</text>
     </view>
-    <view v-if="loading" class="state">優惠載入中...</view>
-    <view v-else-if="!promotion" class="state" @tap="loadPromotion">{{ message || '優惠不存在，點擊重試' }}</view>
+    <view v-if="loading" class="state">{{ tx('優惠載入中...') }}</view>
+    <view v-else-if="!promotion" class="state" @tap="loadPromotion">{{ tx(message || '優惠不存在，點擊重試') }}</view>
     <view v-else class="detail-content">
       <view class="coupon-card">
-        <view class="badge">{{ promotionBadge }}<text>{{ promotionDiscount }}</text></view>
+        <view class="badge">{{ tx(promotionBadge) }}<text>{{ tx(promotionDiscount) }}</text></view>
         <image class="vehicle" src="/static/coupons/vehicle.svg" mode="aspectFit" />
-        <text class="coupon-name">{{ promotion.name }}</text>
-        <text class="coupon-period">{{ promotionPeriod }}</text>
+        <text class="coupon-name">{{ tx(promotion.name) }}</text>
+        <text class="coupon-period">{{ tx(promotionPeriod) }}</text>
         <image class="status" :src="selected ? '/static/coupons/status-active.svg' : '/static/coupons/status-unused.svg'" mode="aspectFit" />
       </view>
       <view class="detail-panel">
-        <view class="detail-row"><text class="label">優惠類型</text><text>{{ promotionBadge }}</text></view>
-        <view class="detail-row"><text class="label">優惠內容</text><text>{{ promotionDiscount }}</text></view>
-        <view class="detail-row"><text class="label">使用期限</text><text>{{ promotionPeriod }}</text></view>
-        <view class="detail-row"><text class="label">最低消費</text><text>{{ minimumSpend }}</text></view>
-        <view class="detail-row"><text class="label">最高折抵</text><text>{{ maximumDiscount }}</text></view>
-        <view class="detail-row"><text class="label">此客戶剩餘可用次數</text><text>{{ remainingUses }}</text></view>
-        <view class="detail-row"><text class="label">適用行程</text><text>{{ applicableRoute }}</text></view>
-        <view class="detail-row"><text class="label">適用星期</text><text>{{ applicableWeekdays }}</text></view>
-        <view class="detail-row"><text class="label">每日適用時段</text><text>{{ applicableTime }}</text></view>
-        <view v-if="promotion.kind === 'MEMBER'" class="detail-row"><text class="label">適用會員等級</text><text>{{ promotion.membershipLevel || '指定會員' }}</text></view>
-        <view class="detail-row"><text class="label">疊加規則</text><text>{{ stackingRule }}</text></view>
+        <view class="detail-row"><text class="label">{{ tx('優惠類型') }}</text><text>{{ tx(promotionBadge) }}</text></view>
+        <view class="detail-row"><text class="label">{{ tx('優惠內容') }}</text><text>{{ tx(promotionDiscount) }}</text></view>
+        <view class="detail-row"><text class="label">{{ tx('使用期限') }}</text><text>{{ tx(promotionPeriod) }}</text></view>
+        <view class="detail-row"><text class="label">{{ tx('最低消費') }}</text><text>{{ tx(minimumSpend) }}</text></view>
+        <view class="detail-row"><text class="label">{{ tx('最高折抵') }}</text><text>{{ tx(maximumDiscount) }}</text></view>
+        <view class="detail-row"><text class="label">{{ tx('此客戶剩餘可用次數') }}</text><text>{{ tx(remainingUses) }}</text></view>
+        <view class="detail-row"><text class="label">{{ tx('適用行程') }}</text><text>{{ tx(applicableRoute) }}</text></view>
+        <view class="detail-row"><text class="label">{{ tx('適用星期') }}</text><text>{{ tx(applicableWeekdays) }}</text></view>
+        <view class="detail-row"><text class="label">{{ tx('每日適用時段') }}</text><text>{{ tx(applicableTime) }}</text></view>
+        <view v-if="promotion.kind === 'MEMBER'" class="detail-row"><text class="label">{{ tx('適用會員等級') }}</text><text>{{ tx(promotion.membershipLevel || '指定會員') }}</text></view>
+        <view class="detail-row"><text class="label">{{ tx('疊加規則') }}</text><text>{{ tx(stackingRule) }}</text></view>
       </view>
-      <text class="hint">實際優惠以行程報價結果為準</text>
-      <view v-if="promotion.couponCode" class="primary-action" :class="{ disabled: selected || claiming }" @tap="claimPromotion">{{ selected ? '已選用' : claiming ? '領取中' : '領取並使用' }}</view>
-      <view v-else class="auto-note">符合使用條件時將自動套用</view>
-      <text v-if="message" class="message">{{ message }}</text>
+      <text class="hint">{{ tx('實際優惠以行程報價結果為準') }}</text>
+      <view v-if="promotion.couponCode" class="primary-action" :class="{ disabled: selected || claiming }" @tap="claimPromotion">{{ tx(selected ? '已選用' : claiming ? '領取中' : '領取並使用') }}</view>
+      <view v-else class="auto-note">{{ tx('符合使用條件時將自動套用') }}</view>
+      <text v-if="message" class="message">{{ tx(message) }}</text>
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
+import { tx } from '../../i18n'
 import { computed, onMounted, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 // #ifdef H5

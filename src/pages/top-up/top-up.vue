@@ -2,16 +2,16 @@
   <view class="page" :style="responsiveStyle">
     <view class="header">
       <image class="back" src="/static/wallet/back.svg" mode="aspectFit" @tap="goBack" />
-      <text class="title">增值</text>
+      <text class="title">{{ tx('增值') }}</text>
     </view>
 
     <view class="balance-card">
-      <text class="balance-label">車費餘額</text>
-      <text class="balance">{{ formatWalletAmount(wallet.fare, 'RMB') }}</text>
+      <text class="balance-label">{{ tx('車費餘額') }}</text>
+      <text class="balance">{{ tx(formatWalletAmount(wallet.fare, 'RMB')) }}</text>
     </view>
 
     <view class="custom-amount-card">
-      <text class="custom-amount-title">增值金額</text>
+      <text class="custom-amount-title">{{ tx('增值金額') }}</text>
       <view class="custom-amount-divider" />
       <view class="custom-amount-input-row">
         <text class="custom-currency">RMB</text><text class="custom-yen">¥</text>
@@ -27,26 +27,27 @@
         :class="{ selected: selectedAmount === option.amount }"
         @tap="selectAmount(option.amount)"
       >
-        <text class="amount"><text class="currency">RMB：</text>¥ {{ option.amount }} 元</text>
-        <text class="price">售價：{{ option.price }}元</text>
-        <text v-if="option.recommended" class="recommended">推荐</text>
+        <text class="amount"><text class="currency">RMB：</text>¥ {{ tx(option.amount) }} {{ tx('元') }}</text>
+        <text class="price">{{ tx('售價：') }}{{ tx(option.price) }}{{ tx('元') }}</text>
+        <text v-if="option.recommended" class="recommended">{{ tx('推荐') }}</text>
       </view>
     </view>
-    <text class="notice">*車費增值僅限出行使用，不可兌現或退款。</text>
+    <text class="notice">{{ tx('*車費增值僅限出行使用，不可兌現或退款。') }}</text>
 
     <view class="actions">
-      <view class="action query" @tap="showRecords"><text>領取/查詢</text></view>
-      <view class="action top-up" @tap="topUp"><text>增值</text></view>
+      <view class="action query" @tap="showRecords"><text>{{ tx('領取/查詢') }}</text></view>
+      <view class="action top-up" @tap="topUp"><text>{{ tx('增值') }}</text></view>
     </view>
 
     <view class="agreement" @tap="agreed = !agreed">
       <view class="checkbox" :class="{ checked: agreed }"><text v-if="agreed">✓</text></view>
-      <text>已閱讀並同意 </text><text class="link" @tap.stop="showAgreement('增值協議')">增值協議</text><text> 與 </text><text class="link" @tap.stop="showAgreement('使用條款')">使用條款</text>
+      <text>{{ tx('已閱讀並同意') }} </text><text class="link" @tap.stop="showAgreement('增值協議')">{{ tx('增值協議') }}</text><text> {{ tx('與') }} </text><text class="link" @tap.stop="showAgreement('使用條款')">{{ tx('使用條款') }}</text>
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
+import { tx } from '../../i18n'
 import { reactive, ref, onMounted } from 'vue'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { useCurrency } from '../../composables/useCurrency'

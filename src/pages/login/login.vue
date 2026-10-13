@@ -8,16 +8,16 @@
       <view class="login-card">
         <text class="welcome-title">Welcome</text>
         <image class="register-icon" src="/static/login/register.svg" mode="scaleToFill" />
-        <text class="register-label">註冊/登入</text>
+        <text class="register-label">{{ tx('註冊/登入') }}</text>
 
         <view v-if="phoneLoginEnabled" class="phone-field">
-          <picker class="country-picker" mode="selector" :range="countryOptions" :value="countryIndex" @change="handleCountryChange"><view class="country-picker-content"><text class="country-code">{{ countryCode }}</text><image class="phone-mark" src="/static/login/phone-mark.svg" mode="scaleToFill" /></view></picker>
+          <picker class="country-picker" mode="selector" :range="countryOptions" :value="countryIndex" @change="handleCountryChange"><view class="country-picker-content"><text class="country-code">{{ tx(countryCode) }}</text><image class="phone-mark" src="/static/login/phone-mark.svg" mode="scaleToFill" /></view></picker>
           <view class="phone-divider"><image src="/static/login/phone-divider.svg" mode="scaleToFill" /></view><input v-model="phone" class="phone-input" type="number" :maxlength="phoneMaxLength" />
         </view>
-        <view class="agreement"><view class="agreement-checkbox" :class="{ checked: agreed }" @tap="agreed = !agreed"><text v-if="agreed">✓</text></view><text class="agreement-text">同意 </text><text class="agreement-link">私隱協議</text><text class="agreement-text"> 與 </text><text class="agreement-link">使用條款</text></view>
-        <button v-if="phoneLoginEnabled" class="login-button" type="button" :disabled="loginSubmitting" @tap="handleLogin"><text>登入</text></button>
-        <text v-if="availableThirdPartyMethods.length" class="third-party-label">第三方登入</text>
-        <!-- #ifdef MP-WEIXIN --><view v-if="availableThirdPartyMethods.length" class="third-party-options third-party-options-single"><button class="wechat-phone-button" open-type="getPhoneNumber" :disabled="loginSubmitting || !agreed || isPreview" aria-label="微信登入並授權手機號碼" @getphonenumber="handleWechatPhoneNumber"><image class="wechat-icon" src="/static/login/wechat.svg" mode="scaleToFill" /></button></view><!-- #endif -->
+        <view class="agreement"><view class="agreement-checkbox" :class="{ checked: agreed }" @tap="agreed = !agreed"><text v-if="agreed">✓</text></view><text class="agreement-text">{{ tx('同意') }} </text><text class="agreement-link">{{ tx('私隱協議') }}</text><text class="agreement-text"> {{ tx('與') }} </text><text class="agreement-link">{{ tx('使用條款') }}</text></view>
+        <button v-if="phoneLoginEnabled" class="login-button" type="button" :disabled="loginSubmitting" @tap="handleLogin"><text>{{ tx('登入') }}</text></button>
+        <text v-if="availableThirdPartyMethods.length" class="third-party-label">{{ tx('第三方登入') }}</text>
+        <!-- #ifdef MP-WEIXIN --><view v-if="availableThirdPartyMethods.length" class="third-party-options third-party-options-single"><button class="wechat-phone-button" open-type="getPhoneNumber" :disabled="loginSubmitting || !agreed || isPreview" :aria-label="tx('微信登入並授權手機號碼')" @getphonenumber="handleWechatPhoneNumber"><image class="wechat-icon" src="/static/login/wechat.svg" mode="scaleToFill" /></button></view><!-- #endif -->
         <!-- #ifdef H5 --><view v-if="availableThirdPartyMethods.length" class="third-party-options"><image v-for="method in availableThirdPartyMethods" :key="method.provider" :class="method.provider === 'wechat' ? 'wechat-icon' : 'apple-icon'" :src="method.logoUrl || (method.provider === 'wechat' ? '/static/login/wechat.svg' : '/static/login/apple.svg')" mode="scaleToFill" @tap="handleThirdPartyLogin(method.provider as 'wechat' | 'apple')" /></view><!-- #endif -->
         <!-- #ifdef APP-PLUS --><view v-if="availableThirdPartyMethods.length" class="third-party-options"><image v-for="method in availableThirdPartyMethods" :key="method.provider" :class="method.provider === 'wechat' ? 'wechat-icon' : 'apple-icon'" :src="method.logoUrl || (method.provider === 'wechat' ? '/static/login/wechat.svg' : '/static/login/apple.svg')" mode="scaleToFill" @tap="handleThirdPartyLogin(method.provider as 'wechat' | 'apple')" /></view><!-- #endif -->
       </view>
@@ -25,6 +25,7 @@
 </template>
 
 <script setup lang="ts">
+import { tx } from '../../i18n'
 import { computed, ref } from 'vue'
 import MiniProgramLogin from './MiniProgramLogin.vue'
 import { onLoad } from '@dcloudio/uni-app'

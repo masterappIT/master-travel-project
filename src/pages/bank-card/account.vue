@@ -2,39 +2,40 @@
   <view class="page" :style="responsiveStyle">
     <view class="header">
       <image class="back" src="/static/bank-card/account/back.svg" mode="aspectFit" @tap="goBack" />
-      <text class="title">新增銀行帳戶/信用卡</text>
+      <text class="title">{{ tx('新增銀行帳戶/信用卡') }}</text>
     </view>
 
     <view class="card-form">
       <view class="field account-number-field">
-        <text class="label">銀行帳戶卡號</text>
+        <text class="label">{{ tx('銀行帳戶卡號') }}</text>
         <view class="input-row">
           <input v-model="accountNumber" class="card-input" type="text" inputmode="numeric" maxlength="25" placeholder="0000 - 0000 - 0000 - 0000" @input="formatAccountNumber" @keydown="preventNonDigit" />
           <view class="card-list"><image class="jcb" src="/static/bank-card/account/jcb.svg" mode="aspectFit" /><image class="bank-card-icon" src="/static/bank-card/account/bank-card.svg" mode="aspectFit" /></view>
         </view>
-        <text class="error">{{ accountError }}</text>
+        <text class="error">{{ tx(accountError) }}</text>
       </view>
       <view class="field card-kind-field">
-        <text class="label">卡類型</text>
+        <text class="label">{{ tx('卡類型') }}</text>
         <view class="input-row"><input v-model="cardKind" class="card-input" type="text" /></view>
       </view>
       <view class="field holder-field">
-        <text class="label">持卡人姓名</text>
+        <text class="label">{{ tx('持卡人姓名') }}</text>
         <view class="input-row"><input v-model="holderName" class="card-input" type="text" /></view>
-        <text class="error">{{ holderError }}</text>
+        <text class="error">{{ tx(holderError) }}</text>
       </view>
       <view class="field phone-field">
-        <text class="label">銀行留存的手機號碼</text>
+        <text class="label">{{ tx('銀行留存的手機號碼') }}</text>
         <view class="input-row"><input v-model="phone" class="card-input" type="text" inputmode="tel" placeholder="+86 " /></view>
       </view>
     </view>
 
     <view class="card-types"><image v-for="asset in cardTypeAssets" :key="asset" :src="asset" mode="aspectFit" /></view>
-    <view class="next-button" @tap="submit"><text>新增銀行卡</text></view>
+    <view class="next-button" @tap="submit"><text>{{ tx('新增銀行卡') }}</text></view>
   </view>
 </template>
 
 <script setup lang="ts">
+import { tx } from '../../i18n'
 import { computed, ref } from 'vue'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { closeCachedPage, openCachedPage } from '../../utils/navigation'

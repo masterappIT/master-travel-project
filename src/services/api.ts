@@ -71,6 +71,14 @@ const networkError = (error: unknown, fallback: string) => {
   return new Error(readableDetail ? `${fallback}：${readableDetail}` : fallback)
 }
 
+// The WeChat mini-program request API has no PATCH, so updates there go to the POST alias of the same route.
+// #ifdef MP-WEIXIN
+const UPDATE_METHOD: UniApp.RequestOptions['method'] = 'POST'
+// #endif
+// #ifndef MP-WEIXIN
+const UPDATE_METHOD = 'PATCH' as UniApp.RequestOptions['method']
+// #endif
+
 const authHeaders = () => {
   const token = getAuthToken()
   return token ? { Authorization: `Bearer ${token}` } : {}
@@ -157,6 +165,31 @@ export async function listNotifications(): Promise<{ data: Notification[]; unrea
   const response = await uni.request({ url: `${API_BASE_URL}/notifications/me`, header: authHeaders() })
   if (response.statusCode >= 400) throw apiError(response, '無法載入消息')
   return response.data as { data: Notification[]; unread: number }
+}
+
+export async function getNotification(id: string): Promise<Notification> {
+  const response = await uni.request({ url: `${API_BASE_URL}/notifications/${encodeURIComponent(id)}`, header: authHeaders() })
+  if (response.statusCode >= 400) throw apiError(response, '無法載入消息')
+  return response.data as Notification
+}
+
+export async function markAllNotificationsRead(): Promise<void> {
+  const response = await requestWithTimeout({ url: `${API_BASE_URL}/notifications/read-all`, method: 'POST', header: authHeaders() })
+  if (response.statusCode >= 400) throw apiError(response, '消息已讀失敗')
+}
+
+export type NotificationPreferences = { notificationsOn: boolean; orderOn: boolean; paymentOn: boolean; promotionOn: boolean; systemOn: boolean }
+
+export async function getNotificationPreferences(): Promise<NotificationPreferences> {
+  const response = await requestWithTimeout({ url: `${API_BASE_URL}/notifications/preferences`, header: authHeaders() })
+  if (response.statusCode >= 400) throw apiError(response, '無法載入通知設定')
+  return response.data as NotificationPreferences
+}
+
+export async function updateNotificationPreferences(changes: Partial<NotificationPreferences>): Promise<NotificationPreferences> {
+  const response = await requestWithTimeout({ url: `${API_BASE_URL}/notifications/preferences`, method: 'POST', header: authHeaders(), data: changes })
+  if (response.statusCode >= 400) throw apiError(response, '無法保存通知設定')
+  return response.data as NotificationPreferences
 }
 
 export async function markNotificationRead(id: string): Promise<void> {
@@ -326,7 +359,7 @@ export async function getClientSecurity(): Promise<ClientSecurity> {
 }
 
 export async function updateClientSecurity(security: { email: string; password?: string }): Promise<ClientSecurity> {
-  const response = await uni.request({ url: `${API_BASE_URL}/client/security`, method: 'PATCH' as UniApp.RequestOptions['method'], header: authHeaders(), data: security })
+  const response = await uni.request({ url: `${API_BASE_URL}/client/security`, method: UPDATE_METHOD, header: authHeaders(), data: security })
   if (response.statusCode >= 400) throw apiError(response, '安全設定保存失敗')
   return response.data as ClientSecurity
 }
@@ -367,14 +400,24 @@ export function resolveClientAvatarUrl(url: string | null | undefined): string {
   return `${API_BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`
 }
 
+export const AVATAR_MAX_BYTES = 10 * 1024 * 1024
+
+// The server explains a rejected picture in its message; an oversized one is cut off before it gets that far.
+const avatarUploadError = (statusCode: number, body: unknown) => {
+  if (statusCode === 413) return new Error('圖片不可超過 10 MB')
+  const message = body && typeof body === 'object' ? (body as { message?: unknown }).message : undefined
+  if (statusCode === 400 && typeof message === 'string' && message) return new Error(message)
+  return new Error(`頭像上傳失敗（HTTP ${statusCode}）`)
+}
+
 export async function uploadClientAvatar(filePath: string): Promise<ClientProfile> {
   // #ifdef H5
   const source = await fetch(filePath)
   const blob = await source.blob()
   const form = new FormData()
-  form.append('file', blob, 'avatar.jpg')
+  form.append('file', blob, 'avatar')
   const response = await fetch(`${API_BASE_URL}/client/me/avatar`, { method: 'POST', headers: authHeaders(), body: form })
-  if (!response.ok) throw new Error(`頭像上傳失敗（HTTP ${response.status}）`)
+  if (!response.ok) throw avatarUploadError(response.status, await response.json().catch(() => null))
   const profile = await response.json() as ClientProfile
   profile.avatarUrl = resolveClientAvatarUrl(profile.avatarUrl)
   return profile
@@ -382,15 +425,24 @@ export async function uploadClientAvatar(filePath: string): Promise<ClientProfil
   // #ifndef H5
   return new Promise((resolve, reject) => {
     uni.uploadFile({ url: `${API_BASE_URL}/client/me/avatar`, filePath, name: 'file', header: authHeaders(), success: (response) => {
-      if (response.statusCode >= 400) { reject(new Error(`頭像上傳失敗（HTTP ${response.statusCode}）`)); return }
-      try {
-        const profile = JSON.parse(response.data) as ClientProfile
-        profile.avatarUrl = resolveClientAvatarUrl(profile.avatarUrl)
-        resolve(profile)
-      } catch { reject(new Error('頭像回應格式錯誤')) }
-    }, fail: reject })
+      let body: unknown = null
+      try { body = JSON.parse(response.data) } catch { /* handled below */ }
+      if (response.statusCode >= 400) { reject(avatarUploadError(response.statusCode, body)); return }
+      if (!body || typeof body !== 'object') { reject(new Error('頭像回應格式錯誤')); return }
+      const profile = body as ClientProfile
+      profile.avatarUrl = resolveClientAvatarUrl(profile.avatarUrl)
+      resolve(profile)
+    }, fail: () => reject(new Error('網絡異常，頭像未能上傳')) })
   })
   // #endif
+}
+
+export async function removeClientAvatar(): Promise<ClientProfile> {
+  const response = await requestWithTimeout({ url: `${API_BASE_URL}/client/me/avatar`, method: 'DELETE', header: authHeaders() })
+  if (response.statusCode >= 400) throw apiError(response, '頭像移除失敗')
+  const profile = response.data as ClientProfile
+  profile.avatarUrl = resolveClientAvatarUrl(profile.avatarUrl)
+  return profile
 }
 
 export type CommonPassenger = {
@@ -418,7 +470,7 @@ export async function createCommonPassenger(passenger: Partial<CommonPassenger>)
 }
 
 export async function updateCommonPassenger(id: string, passenger: Partial<CommonPassenger>): Promise<CommonPassenger> {
-  const response = await uni.request({ url: `${API_BASE_URL}/client/common-passengers/${encodeURIComponent(id)}`, method: 'PATCH' as UniApp.RequestOptions['method'], header: authHeaders(), data: passenger })
+  const response = await uni.request({ url: `${API_BASE_URL}/client/common-passengers/${encodeURIComponent(id)}`, method: UPDATE_METHOD, header: authHeaders(), data: passenger })
   if (response.statusCode >= 400) throw apiError(response, '常用資料更新失敗')
   return response.data as CommonPassenger
 }
@@ -439,7 +491,7 @@ export type ClientProfileUpdate = {
 }
 
 export async function updateClientProfile(profile: ClientProfileUpdate): Promise<ClientProfile> {
-  const response = await uni.request({ url: `${API_BASE_URL}/client/me`, method: 'PATCH' as UniApp.RequestOptions['method'], header: authHeaders(), data: profile })
+  const response = await uni.request({ url: `${API_BASE_URL}/client/me`, method: UPDATE_METHOD, header: authHeaders(), data: profile })
   if (response.statusCode >= 400) throw apiError(response, '個人資料保存失敗')
   const updated = response.data as ClientProfile
   updated.avatarUrl = resolveClientAvatarUrl(updated.avatarUrl)

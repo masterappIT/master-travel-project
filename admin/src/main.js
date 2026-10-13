@@ -210,7 +210,7 @@ const saveFinanceRateSettings = async () => {
   }
 }
 const notificationsActions = createNotificationsActions({ api, notificationForm, notificationRecipientSearch, notificationTemplates, load, error, displayError, notify, requestConfirmation })
-const { templateActionId, resetNotification, createTemplate, setTemplateEnabled, removeTemplate, clearNotificationRecipients, toggleNotificationRecipient, notificationRecipientChecked, saveNotification } = notificationsActions
+const { templateActionId, notificationSending, resetNotification, createTemplate, setTemplateEnabled, removeTemplate, clearNotificationRecipients, toggleNotificationRecipient, notificationRecipientChecked, saveNotification } = notificationsActions
 const paymentsActions = createPaymentsActions({ api, paymentSettings, paymentCurrencies, paymentSettingsSaved, driverRaceSaving, error, displayError, configs: paymentConfigs, selectedConfig: selectedPaymentConfig, editorOpen: paymentEditorOpen, editorStep: paymentEditorStep, testResult: paymentTestResult, editorBusy: paymentEditorBusy, editorError: paymentEditorError })
 const { savePaymentSettings, loadPaymentConfigs, closePaymentEditor, savePaymentConfigDraft, testPaymentConfig } = paymentsActions
 const { edit: editUser, reset: resetUser, select: selectUser, save: saveUser, saving: userSaving, updateStatus: updateUserStatus, remove: removeUser, openWalletAdjustment, saveWalletAdjustment } = usersActions
@@ -361,6 +361,7 @@ const App = { components: { SupportPage }, setup() {
      notifications,
      notificationTemplates,
      templateActionId,
+     notificationSending,
      notificationForm,
      notificationTemplateForm,
      notificationRecipientSearch,

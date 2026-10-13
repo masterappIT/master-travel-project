@@ -1,7 +1,7 @@
 <template>
   <scroll-view class="business-scroll" scroll-y :show-scrollbar="false" enhanced>
     <view class="business-spacer" />
-    <view class="charter-card" aria-label="商務包車預約">
+    <view class="charter-card" :aria-label="tx('商務包車預約')">
       <view class="booking-card">
         <image class="orb orb-top" src="/static/home/business/orb-top.svg" mode="scaleToFill" />
         <image class="orb orb-bottom" src="/static/home/business/orb-bottom.svg" mode="scaleToFill" />
@@ -9,42 +9,42 @@
         <view class="location-field" @tap="$emit('origin')">
           <image class="pin origin-pin" src="/static/home/business/origin.svg" mode="scaleToFill" />
           <view class="region-select">
-            <text>{{ props.originRegion }}</text>
+            <text>{{ tx(props.originRegion) }}</text>
             <image src="/static/home/business/dropdown.svg" mode="scaleToFill" />
           </view>
-          <text :class="props.originPlace ? 'location-value' : 'location-placeholder'">{{ props.originPlace || '請選擇出發地' }}</text>
+          <text :class="props.originPlace ? 'location-value' : 'location-placeholder'">{{ tx(props.originPlace || '請選擇出發地') }}</text>
         </view>
 
         <view class="location-field destination-field" @tap="$emit('destination')">
           <image class="pin destination-pin" src="/static/home/business/destination.svg" mode="scaleToFill" />
           <view class="region-select">
-            <text>{{ props.destinationRegion }}</text>
+            <text>{{ tx(props.destinationRegion) }}</text>
             <image src="/static/home/business/dropdown.svg" mode="scaleToFill" />
           </view>
-          <text :class="props.destinationPlace ? 'location-value' : 'location-placeholder'">{{ props.destinationPlace || '請選擇最終結束目的地' }}</text>
+          <text :class="props.destinationPlace ? 'location-value' : 'location-placeholder'">{{ tx(props.destinationPlace || '請選擇最終結束目的地') }}</text>
         </view>
 
         <view class="detail-field date-field" @tap="$emit('date-time')">
-          <text class="detail-label">日期時間</text>
+          <text class="detail-label">{{ tx('日期時間') }}</text>
           <text class="detail-value">02-04-2024 AM 9:00</text>
         </view>
         <view class="detail-field duration-field" @tap="$emit('duration')">
-          <text class="detail-label">用車時間</text>
-          <text class="detail-value">4小時（含50公里）</text>
+          <text class="detail-label">{{ tx('用車時間') }}</text>
+          <text class="detail-value">{{ tx('4小時（含50公里）') }}</text>
         </view>
 
-        <view class="book-button" @tap="$emit('book')"><text>立即預約</text></view>
+        <view class="book-button" @tap="$emit('book')"><text>{{ tx('立即預約') }}</text></view>
       </view>
 
       <view class="promo-card">
         <image class="promo-shape" src="/static/home/business/promo-shape.svg" mode="scaleToFill" />
         <image class="promo-arrow" src="/static/home/business/promo-arrow.svg" mode="scaleToFill" />
-        <text class="promo-title">跨境出行限時優惠</text>
-        <text class="promo-copy">單程、往返 一口價</text>
-        <view class="promo-button" @tap="$emit('promo')"><text>預約</text></view>
+        <text class="promo-title">{{ tx('跨境出行限時優惠') }}</text>
+        <text class="promo-copy">{{ tx('單程、往返 一口價') }}</text>
+        <view class="promo-button" @tap="$emit('promo')"><text>{{ tx('預約') }}</text></view>
         <view class="disclaimer">
-          <text>EC Travel僅提供交易平台技術服務、信息發布服務，並不提供網約車/用車/包車</text>
-          <text>服務，車輛預約以及承運其他服務由第三方商戶或個人提供。</text>
+          <text>{{ tx('EC Travel僅提供交易平台技術服務、信息發布服務，並不提供網約車/用車/包車') }}</text>
+          <text>{{ tx('服務，車輛預約以及承運其他服務由第三方商戶或個人提供。') }}</text>
         </view>
       </view>
     </view>
@@ -52,6 +52,7 @@
 </template>
 
 <script setup lang="ts">
+import { tx } from '../../i18n'
 const props = defineProps<{
   originRegion: string
   originPlace: string

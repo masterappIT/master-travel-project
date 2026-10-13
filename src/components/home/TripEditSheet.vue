@@ -4,17 +4,17 @@
       <image class="sheet-logo" src="/static/vehicles/edit/logo.svg" mode="aspectFit" />
       <view class="route-field" @tap="openAddressPicker('origin')">
         <image src="/static/vehicles/edit/origin.svg" mode="aspectFit" />
-        <text class="route-value">{{ draftOrigin }}</text>
+        <text class="route-value">{{ tx(draftOrigin) }}</text>
       </view>
       <view class="route-field" @tap="openAddressPicker('destination')">
         <image src="/static/vehicles/edit/destination.svg" mode="aspectFit" />
-        <text class="route-value">{{ draftDestination }}</text>
+        <text class="route-value">{{ tx(draftDestination) }}</text>
       </view>
       <view class="date-time-row">
-        <view class="date-time-field" @tap="openTimePicker"><text class="field-label">日期</text><text class="field-value date-value">{{ draftDate }}</text></view>
-        <view class="date-time-field" @tap="openTimePicker"><text class="field-label">時間</text><text class="field-value">{{ draftTime }}</text></view>
+        <view class="date-time-field" @tap="openTimePicker"><text class="field-label">{{ tx('日期') }}</text><text class="field-value date-value">{{ tx(draftDate) }}</text></view>
+        <view class="date-time-field" @tap="openTimePicker"><text class="field-label">{{ tx('時間') }}</text><text class="field-value">{{ tx(draftTime) }}</text></view>
       </view>
-      <view class="action-row"><button class="cancel-button" @tap="cancel">取消</button><button class="confirm-button" @tap="confirm">完成修改</button></view>
+      <view class="action-row"><button class="cancel-button" @tap="cancel">{{ tx('取消') }}</button><button class="confirm-button" @tap="confirm">{{ tx('完成修改') }}</button></view>
     </view>
     <BookingTimePicker v-if="timePickerOpen" :value="draftDepartureTime" @close="timePickerOpen = false" @confirm="updateTime" />
     <AddressPicker
@@ -32,6 +32,7 @@
 </template>
 
 <script setup lang="ts">
+import { tx } from '../../i18n'
 import { computed, ref } from 'vue'
 import BookingTimePicker from './BookingTimePicker.vue'
 import AddressPicker, { type AddressSelection } from './AddressPicker.vue'

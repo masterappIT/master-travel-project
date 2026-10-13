@@ -2,22 +2,23 @@
   <view class="page" :style="responsiveStyle">
     <view class="header">
       <image class="back" src="/static/bank-card/detail/back.svg" mode="aspectFit" @tap="goBack" />
-      <text class="title">我的銀行卡</text>
+      <text class="title">{{ tx('我的銀行卡') }}</text>
     </view>
 
     <view class="saved-card">
       <image class="saved-card-logo" src="/static/bank-card/detail/card.svg" mode="aspectFit" />
       <text class="masked-number">**** **** **** 0000</text>
-      <text class="bank-name">中銀</text>
-      <text class="card-type">信用卡</text>
+      <text class="bank-name">{{ tx('中銀') }}</text>
+      <text class="card-type">{{ tx('信用卡') }}</text>
     </view>
 
     <view class="card-types"><image v-for="asset in cardTypeAssets" :key="asset" :src="asset" mode="aspectFit" /></view>
-    <view class="unlink-button" @tap="unlink"><text>取消連結</text></view>
+    <view class="unlink-button" @tap="unlink"><text>{{ tx('取消連結') }}</text></view>
   </view>
 </template>
 
 <script setup lang="ts">
+import { tx } from '../../i18n'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { closeCachedPage } from '../../utils/navigation'
 

@@ -4,100 +4,101 @@
     <view class="back" @tap="goBack"><image src="/static/vehicles/confirm-back.svg" mode="aspectFit" /></view>
     <view class="summary-panel">
       <view class="route" @tap="editSheetOpen = true">
-        <image class="route-dot" src="/static/vehicles/confirm-origin.svg" mode="aspectFit" /><text>{{ originLabel }}</text>
+        <image class="route-dot" src="/static/vehicles/confirm-origin.svg" mode="aspectFit" /><text>{{ tx(originLabel) }}</text>
         <image class="route-arrow" src="/static/vehicles/route.svg" mode="aspectFit" />
-        <image class="route-dot destination" src="/static/vehicles/destination.svg" mode="aspectFit" /><text>{{ destinationLabel }}</text>
-        <text class="booking-time">預約時間 ： {{ bookingTime }}</text>
+        <image class="route-dot destination" src="/static/vehicles/destination.svg" mode="aspectFit" /><text>{{ tx(destinationLabel) }}</text>
+        <text class="booking-time">{{ tx('預約時間 ：') }} {{ tx(bookingTime) }}</text>
       </view>
       <scroll-view class="charge-lines" scroll-y :show-scrollbar="false">
-        <view v-for="(line, index) in summaryLines" :key="`${index}-${line.label}`" :class="['charge-row', { first: index === 0, discount: line.type === 'DISCOUNT' }]"><text class="charge-label">{{ line.label }}</text><text class="charge-price">{{ formatSummaryAmount(line.amount) }}</text></view>
-        <view v-if="!summaryLines.length" class="charge-row"><text class="charge-label">報價</text><text class="charge-price">暫無報價</text></view>
+        <view v-for="(line, index) in summaryLines" :key="`${index}-${line.label}`" :class="['charge-row', { first: index === 0, discount: line.type === 'DISCOUNT' }]"><text class="charge-label">{{ tx(line.label) }}</text><text class="charge-price">{{ tx(formatSummaryAmount(line.amount)) }}</text></view>
+        <view v-if="!summaryLines.length" class="charge-row"><text class="charge-label">{{ tx('報價') }}</text><text class="charge-price">{{ tx('暫無報價') }}</text></view>
       </scroll-view>
       <view class="divider first-divider" />
       <view class="divider second-divider" />
       <image class="coupon-info" src="/static/vehicles/coupon-info.svg" mode="aspectFit" @tap.stop="detailPriceOpen = true" />
       <view class="payment-bar">
-        <view class="available" @tap="openCoupons">可用優惠</view>
-        <view class="total"><text class="price-label">優惠價</text><text class="amount">{{ formatSummaryAmount(total) }}</text></view>
-        <view class="pay" @tap="payNow">立即出行</view>
+        <view class="available" @tap="openCoupons">{{ tx('可用優惠') }}</view>
+        <view class="total"><text class="price-label">{{ tx('優惠價') }}</text><text class="amount">{{ tx(formatSummaryAmount(total)) }}</text></view>
+        <view class="pay" @tap="payNow">{{ tx('立即出行') }}</view>
       </view>
-      <view class="notice"><image src="/static/vehicles/confirm-notice.svg" mode="aspectFit" /><text>訂單成功支付後，若取消或修改訂單規則。</text></view>
+      <view class="notice"><image src="/static/vehicles/confirm-notice.svg" mode="aspectFit" /><text>{{ tx('訂單成功支付後，若取消或修改訂單規則。') }}</text></view>
     </view>
     <view v-if="vehicle" class="selected-card"><VehicleCard :vehicle="vehicle" :quote="selectedFareQuote" :selected="true" selectable /></view>
-    <view class="quick-links"><text class="edit-trip" @tap="editSheetOpen = true">修改行程</text><text @tap="rideForOtherOpen = true">幫人叫車</text><text>聯繫客服</text></view>
+    <view class="quick-links"><text class="edit-trip" @tap="editSheetOpen = true">{{ tx('修改行程') }}</text><text @tap="rideForOtherOpen = true">{{ tx('幫人叫車') }}</text><text>{{ tx('聯繫客服') }}</text></view>
     <view v-if="namePromptOpen" class="passenger-mask" @tap.self="resolveNamePrompt(null)">
       <view class="passenger-dialog" @tap.stop>
-        <text class="passenger-dialog-title">請填寫姓名</text>
-        <input v-model="namePrompt" class="passenger-input" placeholder="乘車人姓名" maxlength="30" />
-        <view class="passenger-actions"><view class="passenger-action cancel" @tap="resolveNamePrompt(null)">取消</view><view class="passenger-action confirm" @tap="resolveNamePrompt(namePrompt.trim() || null)">確定</view></view>
+        <text class="passenger-dialog-title">{{ tx('請填寫姓名') }}</text>
+        <input v-model="namePrompt" class="passenger-input" :placeholder="tx('乘車人姓名')" maxlength="30" />
+        <view class="passenger-actions"><view class="passenger-action cancel" @tap="resolveNamePrompt(null)">{{ tx('取消') }}</view><view class="passenger-action confirm" @tap="resolveNamePrompt(namePrompt.trim() || null)">{{ tx('確定') }}</view></view>
       </view>
     </view>
     <view v-if="passengerChoiceOpen" class="passenger-mask" @tap.self="resolvePassengerChoice(null)">
       <view class="passenger-dialog passenger-choice-dialog" @tap.stop>
-        <text class="passenger-dialog-title">選擇乘車人</text>
-        <view class="passenger-choice" @tap="resolvePassengerChoice(0)"><text>使用我的資料</text><text class="passenger-choice-mark">›</text></view>
-        <view v-for="(item, index) in passengerChoices" :key="item.id" class="passenger-choice" @tap="resolvePassengerChoice(index + 1)"><view><text>{{ item.isDefault ? '預設 · ' : '' }}{{ item.name }}</text><text class="passenger-choice-detail">{{ item.phone }}</text></view><text class="passenger-choice-mark">›</text></view>
-        <view class="passenger-choice-cancel" @tap="resolvePassengerChoice(null)">取消</view>
+        <text class="passenger-dialog-title">{{ tx('選擇乘車人') }}</text>
+        <view class="passenger-choice" @tap="resolvePassengerChoice(0)"><text>{{ tx('使用我的資料') }}</text><text class="passenger-choice-mark">›</text></view>
+        <view v-for="(item, index) in passengerChoices" :key="item.id" class="passenger-choice" @tap="resolvePassengerChoice(index + 1)"><view><text>{{ tx(item.isDefault ? '預設 · ' : '') }}{{ tx(item.name) }}</text><text class="passenger-choice-detail">{{ tx(item.phone) }}</text></view><text class="passenger-choice-mark">›</text></view>
+        <view class="passenger-choice-cancel" @tap="resolvePassengerChoice(null)">{{ tx('取消') }}</view>
       </view>
     </view>
 
     <view v-if="rideForOtherOpen" class="ride-for-other-mask" @tap="rideForOtherOpen = false">
       <view class="ride-for-other-sheet" @tap.stop>
         <image class="ride-for-other-graphic" src="/static/vehicles/ride-for-other-graphic.svg" mode="aspectFit" />
-        <text class="ride-for-other-title">幫人叫車</text>
+        <text class="ride-for-other-title">{{ tx('幫人叫車') }}</text>
         <image class="ride-for-other-close" src="/static/vehicles/ride-for-other-close.svg" mode="aspectFit" @tap="rideForOtherOpen = false" />
-        <input class="ride-for-other-field" type="number" placeholder="請輸入乘車人手機號碼" placeholder-class="ride-for-other-placeholder" />
-        <input class="ride-for-other-field name" type="text" placeholder="乘車人姓名" placeholder-class="ride-for-other-placeholder" />
-        <button class="ride-for-other-confirm">確認</button>
+        <input class="ride-for-other-field" type="number" :placeholder="tx('請輸入乘車人手機號碼')" placeholder-class="ride-for-other-placeholder" />
+        <input class="ride-for-other-field name" type="text" :placeholder="tx('乘車人姓名')" placeholder-class="ride-for-other-placeholder" />
+        <button class="ride-for-other-confirm">{{ tx('確認') }}</button>
       </view>
     </view>
     <view v-if="paymentOpen" class="payment-mask" @tap="closePayment">
       <view class="payment-sheet" @tap.stop>
         <image class="payment-close" src="/static/vehicles/payment/payment-close.svg" mode="aspectFit" @tap="closePayment" />
         <image class="payment-back" src="/static/vehicles/payment/payment-back.svg" mode="aspectFit" @tap="closePayment" />
-        <text class="payment-title">訂單詳細</text>
-        <text class="payment-countdown">交易時間剩餘：{{ formattedCountdown }}</text>
-        <view class="payment-amount"><text class="payment-currency">{{ quoteCurrency }}</text><text class="payment-number">{{ formatQuoteNumber(total) }}</text></view>
-        <text class="payment-method-label">支付方式</text>
+        <text class="payment-title">{{ tx('訂單詳細') }}</text>
+        <text class="payment-countdown">{{ tx('交易時間剩餘：') }}{{ tx(formattedCountdown) }}</text>
+        <view class="payment-amount"><text class="payment-currency">{{ tx(quoteCurrency) }}</text><text class="payment-number">{{ tx(formatQuoteNumber(total)) }}</text></view>
+        <text class="payment-method-label">{{ tx('支付方式') }}</text>
         <scroll-view class="payment-method-list" scroll-y>
           <template v-for="row in paymentSheetRows" :key="row.id">
-            <view v-if="row.kind === 'EXTERNAL'" class="payment-row" @tap="notifyExternalPaymentUnavailable"><image class="payment-row-icon" :src="row.iconPath" mode="aspectFit" /><text>{{ row.label }}</text><image class="payment-radio" src="/static/vehicles/payment/payment-radio-unselected.svg" mode="aspectFit" /></view>
-            <view v-else class="payment-row payment-row-wallet" @tap="toggleWallet(walletRowState(row).key)"><image class="payment-row-icon" :src="row.iconPath" mode="aspectFit" /><view class="payment-option-copy"><text>{{ row.label }}</text><text class="payment-balance">（{{ formatWalletAmount(walletRowState(row).balance, 'RMB') }}）</text></view><image class="payment-radio" :src="walletRowState(row).selected ? '/static/vehicles/payment/payment-radio-selected.svg' : '/static/vehicles/payment/payment-radio-unselected.svg'" mode="aspectFit" /></view>
+            <view v-if="row.kind === 'EXTERNAL'" class="payment-row" @tap="notifyExternalPaymentUnavailable"><image class="payment-row-icon" :src="row.iconPath" mode="aspectFit" /><text>{{ tx(row.label) }}</text><image class="payment-radio" src="/static/vehicles/payment/payment-radio-unselected.svg" mode="aspectFit" /></view>
+            <view v-else class="payment-row payment-row-wallet" @tap="toggleWallet(walletRowState(row).key)"><image class="payment-row-icon" :src="row.iconPath" mode="aspectFit" /><view class="payment-option-copy"><text>{{ tx(row.label) }}</text><text class="payment-balance">（{{ tx(formatWalletAmount(walletRowState(row).balance, 'RMB')) }}）</text></view><image class="payment-radio" :src="walletRowState(row).selected ? '/static/vehicles/payment/payment-radio-selected.svg' : '/static/vehicles/payment/payment-radio-unselected.svg'" mode="aspectFit" /></view>
           </template>
         </scroll-view>
-        <view class="payment-confirm" @tap="confirmPayment">{{ paymentConfirmLabel }}</view>
+        <view class="payment-confirm" @tap="confirmPayment">{{ tx(paymentConfirmLabel) }}</view>
       </view>
     </view>
     <view v-if="paymentSuccessOpen" class="payment-success-mask" @tap="closePaymentSuccess">
       <view class="payment-success-dialog" @tap.stop>
         <image class="payment-success-icon" src="/static/vehicles/payment/payment-success.svg" mode="aspectFit" />
-        <text class="payment-success-message">支付成功 {{ formatQuoteAmount(total) }}</text>
-        <view class="payment-success-button" @tap="closePaymentSuccess">完成</view>
+        <text class="payment-success-message">{{ tx('支付成功') }} {{ tx(formatQuoteAmount(total)) }}</text>
+        <view class="payment-success-button" @tap="closePaymentSuccess">{{ tx('完成') }}</view>
       </view>
     </view>
     <TripEditSheet v-if="editSheetOpen" :origin="tripStore.activeTrip?.origin || '香港 · 九龍站'" :destination="tripStore.activeTrip?.destination || '廣東 · 深圳灣口岸'" :departure-time="tripStore.departureTime" :origin-selection="originSelection" :destination-selection="destinationSelection" @close="editSheetOpen = false" @confirm="saveTripChanges" />
     <view v-if="detailPriceOpen" class="detail-price-page">
-      <text class="detail-price-title">詳細價格</text>
+      <text class="detail-price-title">{{ tx('詳細價格') }}</text>
       <image class="detail-price-back" src="/static/vehicles/detail-price-back.svg" mode="aspectFit" @tap="detailPriceOpen = false" />
-      <view class="detail-price-amount"><text class="amount-number">{{ formatDetailAmount(total) }}</text></view>
-      <text class="detail-price-time-label">用車時間</text><text class="detail-price-time">{{ bookingTime }}</text>
-      <view v-for="(line, index) in detailLines" :key="`${line.order}-${line.sourceId || line.label}`" :class="['detail-price-row', line.type.toLowerCase()]" :style="{ top: `${detailRowTop(line, index)}px` }"><text>{{ line.label }}</text><text class="detail-price-value">{{ formatDetailAmount(line.totalAmount) }}</text></view>
-      <view v-if="!detailLines.length" class="detail-price-row vehicle" :style="{ top: `${detailRowTop(null, 0)}px` }"><text>報價</text><text class="detail-price-value">暫無報價</text></view>
+      <view class="detail-price-amount"><text class="amount-number">{{ tx(formatDetailAmount(total)) }}</text></view>
+      <text class="detail-price-time-label">{{ tx('用車時間') }}</text><text class="detail-price-time">{{ tx(bookingTime) }}</text>
+      <view v-for="(line, index) in detailLines" :key="`${line.order}-${line.sourceId || line.label}`" :class="['detail-price-row', line.type.toLowerCase()]" :style="{ top: `${detailRowTop(line, index)}px` }"><text>{{ tx(line.label) }}</text><text class="detail-price-value">{{ tx(formatDetailAmount(line.totalAmount)) }}</text></view>
+      <view v-if="!detailLines.length" class="detail-price-row vehicle" :style="{ top: `${detailRowTop(null, 0)}px` }"><text>{{ tx('報價') }}</text><text class="detail-price-value">{{ tx('暫無報價') }}</text></view>
       <view class="detail-price-line first"></view>
-      <text class="detail-price-service" :style="{ top: `${detailFooterTop}px` }">用車服務費（包含高速費、停車費、路橋費）</text>
+      <text class="detail-price-service" :style="{ top: `${detailFooterTop}px` }">{{ tx('用車服務費（包含高速費、停車費、路橋費）') }}</text>
       <view class="detail-price-line second" :style="{ top: `${detailFooterTop + 19}px` }"></view>
-      <text class="detail-price-total" :style="{ top: `${detailFooterTop + 30}px` }">Total： {{ formatDetailAmount(total) }}</text>
+      <text class="detail-price-total" :style="{ top: `${detailFooterTop + 30}px` }">Total： {{ tx(formatDetailAmount(total)) }}</text>
     </view>
-    <view v-if="confirmLoading" class="confirm-loading"><text>載入確認資料…</text></view>
+    <view v-if="confirmLoading" class="confirm-loading"><text>{{ tx('載入確認資料…') }}</text></view>
     <view v-if="confirmError" class="confirm-error" @tap="returnToVehicleSelection">
-      <text class="confirm-error-title">確認資料暫時無法載入</text>
-      <text class="confirm-error-message">{{ confirmError }}</text>
-      <text class="confirm-error-action">返回選擇車型</text>
+      <text class="confirm-error-title">{{ tx('確認資料暫時無法載入') }}</text>
+      <text class="confirm-error-message">{{ tx(confirmError) }}</text>
+      <text class="confirm-error-action">{{ tx('返回選擇車型') }}</text>
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
+import { tx } from '../../i18n'
 import { computed, onMounted, ref, nextTick } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { isIosApp } from '../../platform'

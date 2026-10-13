@@ -2,28 +2,28 @@
   <view class="page" :style="responsiveStyle">
     <view class="header">
       <OrdersBackButton @tap="goBack" />
-      <text class="title">全部訂單</text>
+      <text class="title">{{ tx('全部訂單') }}</text>
       <view class="tabs">
         <view v-for="tab in tabs" :key="tab.value" :class="['tab', { active: activeTab === tab.value }]" @tap="selectTab(tab.value)">
-          <text>{{ tab.label }}</text><image v-if="activeTab === tab.value" src="/static/orders/tab-line.svg" mode="fill" />
+          <text>{{ tx(tab.label) }}</text><image v-if="activeTab === tab.value" src="/static/orders/tab-line.svg" mode="fill" />
         </view>
       </view>
     </view>
     <scroll-view class="content" scroll-y :show-scrollbar="false" @scrolltolower="loadMoreOrders">
       <view v-if="orderGroups.length" class="order-groups">
         <view v-for="group in orderGroups" :key="group.key" class="order-group">
-          <text class="date">{{ group.label }}</text>
+          <text class="date">{{ tx(group.label) }}</text>
           <view class="orders-list">
             <view v-for="order in group.orders" :key="order.id" class="order-card" @tap="openOrder(order)">
-              <view class="status"><image :src="statusIcon(order.status)" mode="aspectFit" /><text :class="{ 'in-progress': order.status === '進行中', 'pending-status': order.status === '待確認', 'cancelled-status': order.status === '取消', 'traveling-status': order.status === '待出行' }">{{ order.status }}</text></view>
-              <text v-if="order.status === '待確認'" class="countdown">交易時間剩餘：{{ order.countdown }}</text>
-              <view v-if="order.status === '待確認'" class="payment">待付款</view>
-              <text v-else-if="order.status === '待出行' || order.status === '已完成'" class="price">{{ formatAmount(order.total, order.currency) }}</text>
-              <view v-else-if="order.status === '取消' && order.payment" :class="['payment', { refunded: order.payment === '已退款', 'refund-pending': order.payment === '退款申請中' }]">{{ order.payment }}</view>
-              <view class="route"><text>{{ order.origin || '香港' }}</text><image src="/static/orders/route-arrow.svg" mode="aspectFit" /><text>{{ order.destination || '深圳' }}</text><text :class="['order-kind', { urgent: order.kind === '加急訂單' }]">（{{ order.kind }}）</text></view>
-              <text class="pickup">預約時間 ：{{ formatDateTime(order.scheduledAt) }}</text>
-              <text class="arrival">預計到達時間 ：{{ formatDateTime(order.estimatedArrivalAt || order.scheduledAt) }}</text>
-              <view class="divider" /><text class="vehicle">{{ order.vehicleTitle || '高級跨境商務車' }}（{{ order.seats || 7 }}座）</text>
+              <view class="status"><image :src="statusIcon(order.status)" mode="aspectFit" /><text :class="{ 'in-progress': order.status === '進行中', 'pending-status': order.status === '待確認', 'cancelled-status': order.status === '取消', 'traveling-status': order.status === '待出行' }">{{ tx(order.status) }}</text></view>
+              <text v-if="order.status === '待確認'" class="countdown">{{ tx('交易時間剩餘：') }}{{ tx(order.countdown) }}</text>
+              <view v-if="order.status === '待確認'" class="payment">{{ tx('待付款') }}</view>
+              <text v-else-if="order.status === '待出行' || order.status === '已完成'" class="price">{{ tx(formatAmount(order.total, order.currency)) }}</text>
+              <view v-else-if="order.status === '取消' && order.payment" :class="['payment', { refunded: order.payment === '已退款', 'refund-pending': order.payment === '退款申請中' }]">{{ tx(order.payment) }}</view>
+              <view class="route"><text>{{ tx(order.origin || '香港') }}</text><image src="/static/orders/route-arrow.svg" mode="aspectFit" /><text>{{ tx(order.destination || '深圳') }}</text><text :class="['order-kind', { urgent: order.kind === '加急訂單' }]">（{{ tx(order.kind) }}）</text></view>
+              <text class="pickup">{{ tx('預約時間 ：') }}{{ tx(formatDateTime(order.scheduledAt)) }}</text>
+              <text class="arrival">{{ tx('預計到達時間 ：') }}{{ tx(formatDateTime(order.estimatedArrivalAt || order.scheduledAt)) }}</text>
+              <view class="divider" /><text class="vehicle">{{ tx(order.vehicleTitle || '高級跨境商務車') }}（{{ tx(order.seats || 7) }}{{ tx('座）') }}</text>
             </view>
           </view>
         </view>
@@ -32,6 +32,7 @@
   </view>
 </template>
 <script setup lang="ts">
+import { tx } from '../../i18n'
 import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'

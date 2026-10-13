@@ -66,6 +66,7 @@ import {
   type AdminTripDetail,
   type TripDriverSummary,
 } from "./trip-payload";
+import { AVATAR_MAX_INPUT_BYTES, AvatarImageError, normalizeAvatarImage } from "./avatar-image";
 import { matchesSearchCity } from "./location-search";
 import { buildDriverOrderUrl, resolveDriverOrderBase } from "./order-url";
 import { isStripePaymentMethod, parseStripeConfigInput, testStripeConnection, verifyStripeWebhookSignature } from "./stripe-channel-config";
@@ -849,6 +850,15 @@ function pruneDriverEventTickets() {
     if (value.expiresAt <= now) driverEventTickets.delete(ticket);
   }
 }
+const userNotificationPreferenceFields = ["notificationsOn", "orderOn", "paymentOn", "promotionOn", "systemOn"] as const;
+type UserNotificationPreferenceField = (typeof userNotificationPreferenceFields)[number];
+// Which passenger switch governs a message of this template type; anything unrecognised counts as a system message.
+function userNotificationPreferenceField(templateType: string): Exclude<UserNotificationPreferenceField, "notificationsOn"> {
+  if (templateType === "order") return "orderOn";
+  if (["payment", "refund", "top-up", "withdrawal"].includes(templateType)) return "paymentOn";
+  if (templateType === "promotion") return "promotionOn";
+  return "systemOn";
+}
 function pruneNotificationEventTickets() {
   const now = Date.now();
   for (const [ticket, value] of notificationEventTickets) {
@@ -868,11 +878,12 @@ function startNotificationWebSocketServer(server: ReturnType<NestExpressApplicat
       return;
     }
     notificationEventTickets.delete(ticket);
+    const heartbeat = url.searchParams.get("heartbeat") === "1";
     socketServer.handleUpgrade(request as never, socket as never, head, (client) => {
-      socketServer.emit("connection", client, request, entry);
+      socketServer.emit("connection", client, request, { ...entry, heartbeat });
     });
   });
-  socketServer.on("connection", (client: WebSocket, request: IncomingMessage, entry: { recipientId: string }) => {
+  socketServer.on("connection", (client: WebSocket, request: IncomingMessage, entry: { recipientId: string; heartbeat: boolean }) => {
     const cleanupPresence = addPresenceConnection({
       headers: {
         "x-client-platform": typeof request.headers["x-client-platform"] === "string" ? request.headers["x-client-platform"] : undefined,
@@ -891,8 +902,14 @@ function startNotificationWebSocketServer(server: ReturnType<NestExpressApplicat
       if (event.recipientType !== "user" || !event.recipientIds.includes(entry.recipientId) || client.readyState !== WebSocket.OPEN) return;
       client.send(JSON.stringify(event));
     });
-    client.on("close", () => { cleanupPresence(); subscription.unsubscribe(); });
-    client.on("error", () => { cleanupPresence(); subscription.unsubscribe(); });
+    // Clients cannot see protocol-level pings, so liveness is an application message like the SSE heartbeat.
+    // Only clients that ask for it get one: older builds treat every message as a new notification.
+    const heartbeat = entry.heartbeat ? setInterval(() => {
+      if (client.readyState === WebSocket.OPEN) client.send(JSON.stringify({ type: "heartbeat", at: Date.now() }));
+    }, 25_000) : undefined;
+    const cleanup = () => { clearInterval(heartbeat); cleanupPresence(); subscription.unsubscribe(); };
+    client.on("close", cleanup);
+    client.on("error", cleanup);
   });
   return socketServer;
 }
@@ -2368,20 +2385,25 @@ function loginMethods(user: ManagedUser) {
     if (identity.provider === "apple") methods.push("Apple");
   return [...new Set(methods)];
 }
-const avatarUrlLifetimeMs = 5 * 60 * 1000;
-function avatarUrlFor(userId: string) {
-  const expires = Date.now() + avatarUrlLifetimeMs;
-  const payload = `${userId}.${expires}`;
+// The avatar link carries a short hash of the picture and expires on an hourly boundary, so it stays the same
+// between profile refreshes and the client can cache the picture instead of downloading it on every refresh.
+const avatarUrlWindowMs = 60 * 60 * 1000;
+const legacyAvatarUrlLifetimeMs = 5 * 60 * 1000;
+function avatarUrlFor(userId: string, avatarData: Uint8Array) {
+  const expires = (Math.floor(Date.now() / avatarUrlWindowMs) + 2) * avatarUrlWindowMs;
+  const version = createHash("sha256").update(avatarData).digest("base64url").slice(0, 12);
   const signature = createHmac("sha256", clientSecret())
-    .update(payload)
+    .update(`${userId}.${expires}.${version}`)
     .digest("base64url");
-  return `/client/avatar/${encodeURIComponent(userId)}?expires=${expires}&signature=${signature}`;
+  return `/client/avatar/${encodeURIComponent(userId)}?v=${version}&expires=${expires}&signature=${signature}`;
 }
-function validAvatarSignature(userId: string, expires: number, signature: string) {
+function validAvatarSignature(userId: string, expires: number, signature: string, version?: string) {
   const now = Date.now();
-  if (!Number.isSafeInteger(expires) || expires <= now || expires > now + avatarUrlLifetimeMs) return false;
+  // Links issued before versioning have no hash and keep their original five-minute life.
+  const lifetime = version ? 2 * avatarUrlWindowMs : legacyAvatarUrlLifetimeMs;
+  if (!Number.isSafeInteger(expires) || expires <= now || expires > now + lifetime) return false;
   const expected = createHmac("sha256", clientSecret())
-    .update(`${userId}.${expires}`)
+    .update(version ? `${userId}.${expires}.${version}` : `${userId}.${expires}`)
     .digest("base64url");
   const actualBuffer = Buffer.from(signature);
   const expectedBuffer = Buffer.from(expected);
@@ -2395,7 +2417,7 @@ function userResponse(user: ManagedUser) {
     phone: `${user.countryCode} ${user.phoneNumber}`,
     name: user.name,
     displayName: user.displayName,
-    avatarUrl: user.avatarData ? avatarUrlFor(user.id) : null,
+    avatarUrl: user.avatarData ? avatarUrlFor(user.id, user.avatarData) : null,
     email: user.email,
     gender: user.gender,
     region: user.region,
@@ -5090,7 +5112,9 @@ class ClientAuthController {
       await prisma.user.update({ where: { id: user.id }, data: { countryCode, phoneNumber, ...(submittedNickname && (!user.name || user.name === "WeChat User") ? { name: submittedNickname } : {}) } });
     }
     if (wechatAvatar) {
-      await prisma.user.update({ where: { id: user.id }, data: { avatarUrl: null, avatarData: Buffer.from(wechatAvatar.data), avatarMimeType: wechatAvatar.mimeType } });
+      // Stored like an uploaded avatar; if it cannot be normalised it is kept as WeChat sent it, as before.
+      const avatar = await normalizeAvatarImage(Buffer.from(wechatAvatar.data)).catch(() => ({ data: Buffer.from(wechatAvatar.data), mimeType: wechatAvatar.mimeType }));
+      await prisma.user.update({ where: { id: user.id }, data: { avatarUrl: null, avatarData: new Uint8Array(avatar.data), avatarMimeType: avatar.mimeType } });
     }
     if (!identity) await prisma.authIdentity.create({ data: { provider: "wechat", providerId, userId: user.id } });
     const loggedInUser = await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
@@ -6926,6 +6950,7 @@ class DriverAuthController {
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
     res.flushHeaders();
     const cleanupPresence = addPresenceConnection(req, "driver", entry.recipientId);
     const subscription = notificationEvents.subscribe((event) => {
@@ -6949,6 +6974,7 @@ class DriverAuthController {
     const items = await prisma.notification.findMany({
       where: { driverId: session.sub },
       orderBy: { createdAt: "desc" },
+      take: 100,
     });
     return items.map((item) => ({
       ...item,
@@ -6998,6 +7024,7 @@ class DriverAuthController {
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
     res.flushHeaders();
     const cleanupPresence = addPresenceConnection(req, "driver", entry.driverId);
     const subscription = driverOrderEvents.subscribe((event) => {
@@ -9887,6 +9914,20 @@ class AdminController {
         return preference.systemOn;
       });
     }
+    const uniqueUserIds = [...new Set(userIds)];
+    let eligibleUserIds = uniqueUserIds;
+    if (!important && uniqueUserIds.length) {
+      // Only users who switched something off have a blocking row, so this stays small even for a send to everyone.
+      const blocked = new Set(
+        (
+          await prisma.userNotificationPreference.findMany({
+            where: { OR: [{ notificationsOn: false }, { [userNotificationPreferenceField(templateType)]: false }] },
+            select: { userId: true },
+          })
+        ).map((preference) => preference.userId),
+      );
+      eligibleUserIds = uniqueUserIds.filter((userId) => !blocked.has(userId));
+    }
     const records: Array<{
       title: string;
       content: string;
@@ -9896,7 +9937,7 @@ class AdminController {
       userId?: string;
       driverId?: string;
     }> = [
-      ...[...new Set(userIds)].map((userId) => ({
+      ...eligibleUserIds.map((userId) => ({
         title,
         content,
         audience: "USER",
@@ -9913,7 +9954,7 @@ class AdminController {
         driverId,
       })),
     ];
-    await prisma.notification.createMany({ data: records });
+    if (records.length) await prisma.notification.createMany({ data: records });
     await Promise.all([
       publishNotificationEvent({
         recipientType: "user",
@@ -9924,7 +9965,7 @@ class AdminController {
         recipientIds: records.map((record) => record.driverId).filter((id): id is string => Boolean(id)),
       }),
     ]);
-    return { ok: true, count: records.length };
+    return { ok: true, count: records.length, skippedUsers: uniqueUserIds.length - eligibleUserIds.length, skippedDrivers: uniqueDriverIds.length - eligibleDriverIds.length };
   }
 
   @Get("promotions") async listPromotions(@Req() req: RequestLike) {
@@ -12560,6 +12601,7 @@ class NotificationsController {
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
     res.flushHeaders();
     const cleanupPresence = addPresenceConnection(req, "passenger", entry.recipientId);
     const subscription = notificationEvents.subscribe((event) => {
@@ -12581,20 +12623,61 @@ class NotificationsController {
     if (!auth) throw new UnauthorizedException("Authentication required");
     const session = await clientSessionFrom(req).catch(() => null);
     if (session) {
-      const data = await prisma.notification.findMany({
-        where: { OR: [{ userId: session.sub }, { audience: "ALL_USERS" }] },
-        orderBy: { createdAt: "desc" },
-        take: 100,
-      });
-      return { data, unread: data.filter((item) => !item.readAt).length };
+      const where = { OR: [{ userId: session.sub }, { audience: "ALL_USERS" }] };
+      const [data, unread] = await Promise.all([
+        prisma.notification.findMany({ where, orderBy: { createdAt: "desc" }, take: 100 }),
+        prisma.notification.count({ where: { ...where, readAt: null } }),
+      ]);
+      return { data, unread };
     }
     const driver = await driverSessionFrom(req);
-    const data = await prisma.notification.findMany({
-      where: { OR: [{ driverId: driver.sub }, { audience: "ALL_DRIVERS" }] },
-      orderBy: { createdAt: "desc" },
-      take: 100,
+    const where = { OR: [{ driverId: driver.sub }, { audience: "ALL_DRIVERS" }] };
+    const [data, unread] = await Promise.all([
+      prisma.notification.findMany({ where, orderBy: { createdAt: "desc" }, take: 100 }),
+      prisma.notification.count({ where: { ...where, readAt: null } }),
+    ]);
+    return { data, unread };
+  }
+  @Get("preferences") async preferences(@Req() req: RequestLike) {
+    const session = await clientSessionFrom(req);
+    const preference = await prisma.userNotificationPreference.findUnique({ where: { userId: session.sub } });
+    return Object.fromEntries(userNotificationPreferenceFields.map((field) => [field, preference?.[field] ?? true]));
+  }
+  // POST rather than PATCH: the WeChat mini-program request API has no PATCH.
+  @Post("preferences") async updatePreferences(
+    @Req() req: RequestLike,
+    @Body() body: Partial<Record<UserNotificationPreferenceField, unknown>>,
+  ) {
+    const session = await clientSessionFrom(req);
+    const data: Partial<Record<UserNotificationPreferenceField, boolean>> = {};
+    for (const field of userNotificationPreferenceFields) {
+      const value = body?.[field];
+      if (value === undefined) continue;
+      if (typeof value !== "boolean") throw new BadRequestException(`${field} must be a boolean`);
+      data[field] = value;
+    }
+    const preference = await prisma.userNotificationPreference.upsert({
+      where: { userId: session.sub },
+      create: { userId: session.sub, ...data },
+      update: data,
     });
-    return { data, unread: data.filter((item) => !item.readAt).length };
+    return Object.fromEntries(userNotificationPreferenceFields.map((field) => [field, preference[field]]));
+  }
+  @Post("read-all") async markAllRead(@Req() req: RequestLike) {
+    const session = await clientSessionFrom(req);
+    const result = await prisma.notification.updateMany({
+      where: { userId: session.sub, readAt: null },
+      data: { readAt: new Date() },
+    });
+    return { count: result.count };
+  }
+  @Get(":id") async getMine(@Req() req: RequestLike, @Param("id") id: string) {
+    const session = await clientSessionFrom(req);
+    const item = await prisma.notification.findFirst({
+      where: { id, OR: [{ userId: session.sub }, { audience: "ALL_USERS" }] },
+    });
+    if (!item) throw new HttpException("Notification not found", HttpStatus.NOT_FOUND);
+    return item;
   }
   @Post(":id/read") async markRead(
     @Req() req: RequestLike,
@@ -16191,9 +16274,8 @@ class ClientOrdersController {
   @Post("me/avatar")
   @UseInterceptors(
     FileInterceptor("file", {
-      limits: { fileSize: 1024 * 1024 },
-      fileFilter: (_req, file, cb) =>
-        cb(null, /^image\/(png|jpeg|webp|gif)$/.test(file.mimetype)),
+      limits: { fileSize: AVATAR_MAX_INPUT_BYTES },
+      fileFilter: (_req, file, cb) => cb(null, file.mimetype.startsWith("image/")),
     }),
   )
   async uploadAvatar(
@@ -16203,13 +16285,28 @@ class ClientOrdersController {
     const session = await clientSessionFrom(req);
     if (!file)
       throw new HttpException("只接受圖片檔案", HttpStatus.BAD_REQUEST);
+    // The declared type is whatever the client says; the picture itself decides, and is stored as a small square.
+    const avatar = await normalizeAvatarImage(file.buffer).catch((error: unknown) => {
+      if (error instanceof AvatarImageError) throw new BadRequestException(error.message);
+      throw error;
+    });
     const user = await prisma.user.update({
       where: { id: session.sub },
       data: {
         avatarUrl: null,
-        avatarData: new Uint8Array(file.buffer),
-        avatarMimeType: file.mimetype,
+        avatarData: new Uint8Array(avatar.data),
+        avatarMimeType: avatar.mimeType,
       },
+    });
+    return userResponse(user);
+  }
+
+  @Delete("me/avatar")
+  async removeAvatar(@Req() req: RequestLike) {
+    const session = await clientSessionFrom(req);
+    const user = await prisma.user.update({
+      where: { id: session.sub },
+      data: { avatarUrl: null, avatarData: null, avatarMimeType: null },
     });
     return userResponse(user);
   }
@@ -16222,7 +16319,8 @@ class ClientOrdersController {
   ) {
     const expires = Number(req.query?.expires);
     const signature = req.query?.signature || "";
-    if (!validAvatarSignature(userId, expires, signature))
+    const version = req.query?.v || undefined;
+    if (!validAvatarSignature(userId, expires, signature, version))
       throw new UnauthorizedException("Valid avatar URL required");
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -16230,7 +16328,8 @@ class ClientOrdersController {
     });
     if (!user?.avatarData || !user.avatarMimeType)
       throw new HttpException("Avatar not found", HttpStatus.NOT_FOUND);
-    response.setHeader("Cache-Control", "private, no-store");
+    // A versioned link changes whenever the picture does, so it is safe to keep for the life of the link.
+    response.setHeader("Cache-Control", version ? "private, max-age=3600" : "private, no-store");
     response.type(user.avatarMimeType).send(Buffer.from(user.avatarData));
   }
 
@@ -16242,6 +16341,16 @@ class ClientOrdersController {
     return userResponse(user);
   }
 
+  // POST aliases of the PATCH updates in this controller: the WeChat mini-program request API has no PATCH.
+  @Post("me") updateProfileViaPost(@Req() req: RequestLike, @Body() body: Parameters<ClientOrdersController["updateProfile"]>[1]) {
+    return this.updateProfile(req, body);
+  }
+  @Post("common-passengers/:id") updateCommonPassengerViaPost(@Req() req: RequestLike, @Param("id") id: string, @Body() body: Parameters<ClientOrdersController["updateCommonPassenger"]>[2]) {
+    return this.updateCommonPassenger(req, id, body);
+  }
+  @Post("security") updateSecurityViaPost(@Req() req: RequestLike, @Body() body: Parameters<ClientOrdersController["updateSecurity"]>[1]) {
+    return this.updateSecurity(req, body);
+  }
   @Patch("me")
   async updateProfile(
     @Req() req: RequestLike,

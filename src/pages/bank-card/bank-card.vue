@@ -2,12 +2,12 @@
   <view class="page" :style="responsiveStyle">
     <view class="header">
       <image class="back" src="/static/bank-card/add/back.svg" mode="aspectFit" @tap="goBack" />
-      <text class="title">新增銀行卡</text>
+      <text class="title">{{ tx('新增銀行卡') }}</text>
     </view>
 
     <view class="card-form">
       <view class="field card-number-field">
-        <text class="label">信用卡卡號</text>
+        <text class="label">{{ tx('信用卡卡號') }}</text>
         <view class="input-row">
           <input v-model="cardNumber" class="card-input" type="text" inputmode="numeric" maxlength="25" placeholder="0000 - 0000 - 0000 - 0000" @input="formatCardNumber" @keydown="preventNonDigit" />
           <view class="card-list">
@@ -16,22 +16,23 @@
             <image src="/static/bank-card/add/card-type-2.svg" mode="aspectFit" />
           </view>
         </view>
-        <text class="error">{{ cardError }}</text>
+        <text class="error">{{ tx(cardError) }}</text>
       </view>
-      <view class="field expiry-field"><text class="label">有效期限</text><view class="input-row"><input v-model="expiry" class="card-input" type="text" inputmode="numeric" maxlength="5" placeholder="MM/YY" @input="formatExpiry" /></view><text class="error">{{ expiryError }}</text></view>
-      <view class="field cvc-field"><text class="label">卡片背面末三碼</text><view class="input-row"><input v-model="cvc" class="card-input" type="text" inputmode="numeric" maxlength="3" placeholder="780" @input="formatCvc" /><image class="cvc" src="/static/bank-card/add/cvc-card.svg" mode="aspectFit" /></view><text class="error">{{ cvcError }}</text></view>
-      <view class="field name-field"><text class="label">持卡人姓名</text><view class="input-row"><input v-model="holderName" class="card-input" type="text" placeholder="" /></view><text class="error">{{ nameError }}</text></view>
-      <view class="field email-field"><text class="label">e-mail</text><view class="input-row"><input v-model="email" class="card-input" type="text" placeholder="" /></view><text class="error">{{ emailError }}</text></view>
+      <view class="field expiry-field"><text class="label">{{ tx('有效期限') }}</text><view class="input-row"><input v-model="expiry" class="card-input" type="text" inputmode="numeric" maxlength="5" placeholder="MM/YY" @input="formatExpiry" /></view><text class="error">{{ tx(expiryError) }}</text></view>
+      <view class="field cvc-field"><text class="label">{{ tx('卡片背面末三碼') }}</text><view class="input-row"><input v-model="cvc" class="card-input" type="text" inputmode="numeric" maxlength="3" placeholder="780" @input="formatCvc" /><image class="cvc" src="/static/bank-card/add/cvc-card.svg" mode="aspectFit" /></view><text class="error">{{ tx(cvcError) }}</text></view>
+      <view class="field name-field"><text class="label">{{ tx('持卡人姓名') }}</text><view class="input-row"><input v-model="holderName" class="card-input" type="text" placeholder="" /></view><text class="error">{{ tx(nameError) }}</text></view>
+      <view class="field email-field"><text class="label">e-mail</text><view class="input-row"><input v-model="email" class="card-input" type="text" placeholder="" /></view><text class="error">{{ tx(emailError) }}</text></view>
     </view>
 
     <view class="card-types">
       <image v-for="asset in cardTypeAssets" :key="asset" :src="asset" mode="aspectFit" />
     </view>
-    <view class="next-button" @tap="submitCard"><text>新增銀行卡</text></view>
+    <view class="next-button" @tap="submitCard"><text>{{ tx('新增銀行卡') }}</text></view>
   </view>
 </template>
 
 <script setup lang="ts">
+import { tx } from '../../i18n'
 import { computed, ref } from 'vue'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { identifyPaymentCard, type CardNetwork } from '../../services/api'

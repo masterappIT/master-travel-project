@@ -40,6 +40,27 @@ export function createNotificationsActions({ api, notificationForm, notification
   function clearNotificationRecipients() { if (!notificationForm.value) return; notificationForm.value.userIds = []; notificationForm.value.driverIds = [] }
   function toggleNotificationRecipient(type, id, checked) { if (!notificationForm.value) return; const key = type === 'user' ? 'userIds' : 'driverIds'; const ids = new Set(notificationForm.value[key] || []); if (checked) ids.add(id); else ids.delete(id); notificationForm.value[key] = [...ids] }
   function notificationRecipientChecked(type, id) { const key = type === 'user' ? 'userIds' : 'driverIds'; return Boolean(notificationForm.value?.[key]?.includes(id)) }
-  async function saveNotification() { if (!notificationForm.value) return; try { await api('/admin/notifications', { method: 'POST', body: JSON.stringify(notificationForm.value) }); notificationForm.value = null; await load() } catch (err) { error.value = displayError(err) } }
-  return { templateActionId, resetNotification, createTemplate, setTemplateEnabled, removeTemplate, clearNotificationRecipients, toggleNotificationRecipient, notificationRecipientChecked, saveNotification }
+  const notificationSending = ref(false)
+  // A second submit while the confirmation is open would replace the dialog and orphan the first one.
+  let confirmingSend = false
+  async function saveNotification() {
+    const form = notificationForm.value
+    if (!form || notificationSending.value || confirmingSend) return
+    const target = form.audience === 'ALL_USERS' ? '全體用戶端' : form.audience === 'ALL_DRIVERS' ? '全體司機端' : `指定的 ${(form.userIds?.length || 0) + (form.driverIds?.length || 0)} 位收件人`
+    confirmingSend = true
+    const confirmed = await requestConfirmation({ title: '發送消息', message: `確定向${target}發送「${form.title}」？發送後無法撤回。`, confirmLabel: '發送' }).finally(() => { confirmingSend = false })
+    if (!confirmed) return
+    notificationSending.value = true
+    try {
+      const result = await api('/admin/notifications', { method: 'POST', body: JSON.stringify(form) })
+      const skippedParts = [result?.skippedUsers ? `${result.skippedUsers} 位用戶` : '', result?.skippedDrivers ? `${result.skippedDrivers} 位司機` : ''].filter(Boolean)
+      const skipped = skippedParts.length ? `；${skippedParts.join('、')}已關閉此類通知，未發送` : ''
+      if (!result?.count) { notify(`沒有發送任何消息${skipped}`, 'error'); return }
+      notificationForm.value = null
+      notify(`已發送 ${result.count} 筆消息${skipped}`)
+      await load()
+    } catch (err) { error.value = displayError(err); notify(error.value, 'error') }
+    finally { notificationSending.value = false }
+  }
+  return { templateActionId, notificationSending, resetNotification, createTemplate, setTemplateEnabled, removeTemplate, clearNotificationRecipients, toggleNotificationRecipient, notificationRecipientChecked, saveNotification }
 }

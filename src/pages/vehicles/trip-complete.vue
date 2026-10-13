@@ -10,32 +10,33 @@
         <image class="floor-scene" src="/static/vehicles/trip-complete/floor.svg" mode="scaleToFill" />
         <view class="status-content">
           <image src="/static/vehicles/trip-complete/arrived.svg" mode="aspectFit" />
-          <text>已到達</text>
+          <text>{{ tx('已到達') }}</text>
         </view>
 
         <view class="trip-summary">
           <view class="route-row">
             <image class="origin-icon" src="/static/vehicles/trip-complete/origin.svg" mode="aspectFit" />
-            <text class="origin-label">{{ originLabel }}</text>
+            <text class="origin-label">{{ tx(originLabel) }}</text>
             <image class="route-arrow" src="/static/vehicles/trip-complete/route-arrow.svg" mode="aspectFit" />
             <image class="destination-icon" src="/static/vehicles/trip-complete/destination.svg" mode="aspectFit" />
-            <text class="destination-label">{{ destinationLabel }}</text>
+            <text class="destination-label">{{ tx(destinationLabel) }}</text>
           </view>
-          <text class="time departure-time">出發時間 ： {{ departureTime }}</text>
-          <text class="time arrival-time">到達時間 ： {{ arrivalTime }}</text>
+          <text class="time departure-time">{{ tx('出發時間 ：') }} {{ tx(departureTime) }}</text>
+          <text class="time arrival-time">{{ tx('到達時間 ：') }} {{ tx(arrivalTime) }}</text>
           <view class="rating-prompt">
-            <text>您對此次行程滿意嗎？</text>
+            <text>{{ tx('您對此次行程滿意嗎？') }}</text>
             <image src="/static/vehicles/trip-complete/rating-stars.svg" mode="aspectFit" />
           </view>
         </view>
 
-        <view class="complete-button" @tap="finishTrip">完成</view>
+        <view class="complete-button" @tap="finishTrip">{{ tx('完成') }}</view>
       </view>
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
+import { tx } from '../../i18n'
 import TripRouteMap from '../../components/vehicles/TripRouteMap.vue'
 import { computed, ref, watch } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'

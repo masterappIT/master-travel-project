@@ -2,32 +2,33 @@
   <view class="page" :style="responsiveStyle">
     <view class="header">
       <image class="back" src="/static/wallet/back.svg" mode="aspectFit" @tap="goBack" />
-      <text class="title">提現</text>
+      <text class="title">{{ tx('提現') }}</text>
     </view>
     <image class="withdraw-icon" src="/static/withdraw-detail/status.svg" mode="aspectFit" />
-    <text class="withdraw-title">餘額兌現</text>
-    <view class="amount"><text class="rmb">RMB</text><text class="yen">¥</text><text class="number">{{ formattedAmount }}</text></view>
-    <view class="status"><image src="/static/withdraw-detail/status-check.svg" mode="aspectFit" /><text>成功</text></view>
+    <text class="withdraw-title">{{ tx('餘額兌現') }}</text>
+    <view class="amount"><text class="rmb">RMB</text><text class="yen">¥</text><text class="number">{{ tx(formattedAmount) }}</text></view>
+    <view class="status"><image src="/static/withdraw-detail/status-check.svg" mode="aspectFit" /><text>{{ tx('成功') }}</text></view>
     <view class="details">
-      <text class="section-title">到帳方式</text>
+      <text class="section-title">{{ tx('到帳方式') }}</text>
       <view class="payment-card">
         <image class="method-icon" src="/static/withdraw/alipay.svg" mode="aspectFit" />
-        <view class="method-copy"><text>支付寶支付</text><text class="sub">{{ accountNumber }}</text></view>
+        <view class="method-copy"><text>{{ tx('支付寶支付') }}</text><text class="sub">{{ tx(accountNumber) }}</text></view>
         <image class="check" src="/static/withdraw/check-selected.svg" mode="aspectFit" />
       </view>
       <view class="steps">
-        <view class="step step-one"><view class="step-circle"><text class="step-number">1</text></view><view><text>兌現申請已被接納</text><text class="step-time">01/01/2024 12:00:00</text></view></view>
+        <view class="step step-one"><view class="step-circle"><text class="step-number">1</text></view><view><text>{{ tx('兌現申請已被接納') }}</text><text class="step-time">01/01/2024 12:00:00</text></view></view>
         <view class="step-line" />
-        <view class="step step-two"><view class="step-circle"><text class="step-number">2</text></view><view><text>已到帳</text><text class="step-time">01/01/2024 12:00:00</text></view></view>
+        <view class="step step-two"><view class="step-circle"><text class="step-number">2</text></view><view><text>{{ tx('已到帳') }}</text><text class="step-time">01/01/2024 12:00:00</text></view></view>
       </view>
-      <text class="label amount-label">到帳金額</text><text class="value amount-value">RMB ¥ 100.00</text>
-      <text class="label fee-label">手續費</text><text class="value fee-value">RMB ¥ 0.00</text>
-      <text class="label arrival-label">到帳時間</text><text class="value arrival-value">01/01/2024 12:00:00</text>
+      <text class="label amount-label">{{ tx('到帳金額') }}</text><text class="value amount-value">RMB ¥ 100.00</text>
+      <text class="label fee-label">{{ tx('手續費') }}</text><text class="value fee-value">RMB ¥ 0.00</text>
+      <text class="label arrival-label">{{ tx('到帳時間') }}</text><text class="value arrival-value">01/01/2024 12:00:00</text>
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
+import { tx } from '../../i18n'
 import { computed } from 'vue'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { closeCachedPage } from '../../utils/navigation'

@@ -1,49 +1,50 @@
 <template>
   <view class="page" :style="responsiveStyle">
-    <view v-if="loadError" class="load-error">訂單不存在或無權查看</view>
+    <view v-if="loadError" class="load-error">{{ tx('訂單不存在或無權查看') }}</view>
     <template v-else>
     <view :class="['header', { 'traveling-header': isTraveling }]">
       <OrdersBackButton icon-src="/static/orders/traveling-back.svg" @tap="goBack" />
-      <text class="number">訂單編號：{{ orderNumber }}</text>
+      <text class="number">{{ tx('訂單編號：') }}{{ tx(orderNumber) }}</text>
     </view>
     <template v-if="isTraveling">
-      <view class="status traveling-page-status"><image src="/static/orders/status-blue.svg" mode="aspectFit" /><text>待出行</text></view>
-      <view class="assist traveling-assist" role="button" aria-label="就此訂單聯繫客服" @tap="openOrderSupport(storedOrder)"><image src="/static/orders/help.svg" mode="aspectFit" /><text>訂單協助</text></view>
+      <view class="status traveling-page-status"><image src="/static/orders/status-blue.svg" mode="aspectFit" /><text>{{ tx('待出行') }}</text></view>
+      <view class="assist traveling-assist" role="button" :aria-label="tx('就此訂單聯繫客服')" @tap="openOrderSupport(storedOrder)"><image src="/static/orders/help.svg" mode="aspectFit" /><text>{{ tx('訂單協助') }}</text></view>
       <scroll-view class="traveling-scroll" scroll-y>
       <view class="card traveling-card">
-        <view class="locations"><view><image src="/static/orders/origin.svg" mode="aspectFit" /><text>{{ formatOrderDetailAddressLine(originLabel) }}</text></view><view><image src="/static/orders/destination.svg" mode="aspectFit" /><text>{{ formatOrderDetailAddressLine(destinationLabel) }}</text></view></view>
-        <view class="times"><text>預約時間 ：{{ bookingTime }}</text><text>預計到達時間 ：{{ arrivalTime }}</text></view>
-        <view class="passenger-title">乘客及聯絡資料：</view><view class="passenger"><view><image src="/static/orders/passenger.svg" mode="aspectFit" /><text>{{ passengerLabel }}</text></view><view><image src="/static/orders/phone.svg" mode="aspectFit" /><text>{{ passengerPhoneLabel }}</text></view></view>
+        <view class="locations"><view><image src="/static/orders/origin.svg" mode="aspectFit" /><text>{{ tx(formatOrderDetailAddressLine(originLabel)) }}</text></view><view><image src="/static/orders/destination.svg" mode="aspectFit" /><text>{{ tx(formatOrderDetailAddressLine(destinationLabel)) }}</text></view></view>
+        <view class="times"><text>{{ tx('預約時間 ：') }}{{ tx(bookingTime) }}</text><text>{{ tx('預計到達時間 ：') }}{{ tx(arrivalTime) }}</text></view>
+        <view class="passenger-title">{{ tx('乘客及聯絡資料：') }}</view><view class="passenger"><view><image src="/static/orders/passenger.svg" mode="aspectFit" /><text>{{ tx(passengerLabel) }}</text></view><view><image src="/static/orders/phone.svg" mode="aspectFit" /><text>{{ tx(passengerPhoneLabel) }}</text></view></view>
         <view class="payment completed">
-          <text class="amount">{{ amountLabel }}</text>
-          <view class="paid-tag">已付款</view>
+          <text class="amount">{{ tx(amountLabel) }}</text>
+          <view class="paid-tag">{{ tx('已付款') }}</view>
         </view>
-        <view class="detail traveling-detail"><text class="detail-title">訂單詳細</text><text class="detail-date">{{ detailDateLabel }}</text><view class="line"/><view class="row"><text>{{ selectedVehicle.title }}（{{ selectedVehicle.seats }}/8座）</text><text>{{ currencyLabel }} {{ baseFareTotal.toFixed(2) }}</text></view><view v-for="item in surchargeItems" :key="item.label" class="row"><text>{{ item.label }}</text><text>{{ formatLineAmount(item) }}</text></view><view class="row"><text>優惠券抵扣</text><text>{{ discountLabel }}</text></view><view class="total completed-total">Total： {{ currencyLabel }} {{ paymentTotal.toFixed(2) }}</view><view v-if="storedOrder?.payment" class="completed-payment"><view v-if="storedOrder.payment.fareAmount > 0" class="payment-record wallet-record"><image src="/static/vehicles/payment/payment-wallet-fare.svg" mode="aspectFit" /><text>我的錢包 餘額</text><text class="record-amount">-{{ currencyLabel }} {{ storedOrder.payment.fareAmount.toFixed(2) }}</text></view><view v-if="storedOrder.payment.externalAmount > 0" class="payment-record wechat-record"><image src="/static/withdraw/visa.svg" mode="aspectFit" /><view><text>VISA Card •••• 2321</text><text class="payment-subtitle">銀行帳戶</text></view><text class="record-amount">-{{ currencyLabel }} {{ storedOrder.payment.externalAmount.toFixed(2) }}</text></view><view class="payment-divider" /><view class="record-link" @tap="showPaymentRecords">相關支付紀錄 <text>›</text></view></view></view>
+        <view class="detail traveling-detail"><text class="detail-title">{{ tx('訂單詳細') }}</text><text class="detail-date">{{ tx(detailDateLabel) }}</text><view class="line"/><view class="row"><text>{{ tx(selectedVehicle.title) }}（{{ tx(selectedVehicle.seats) }}{{ tx('/8座）') }}</text><text>{{ tx(currencyLabel) }} {{ tx(baseFareTotal.toFixed(2)) }}</text></view><view v-for="item in surchargeItems" :key="item.label" class="row"><text>{{ tx(item.label) }}</text><text>{{ tx(formatLineAmount(item)) }}</text></view><view class="row"><text>{{ tx('優惠券抵扣') }}</text><text>{{ tx(discountLabel) }}</text></view><view class="total completed-total">Total： {{ tx(currencyLabel) }} {{ tx(paymentTotal.toFixed(2)) }}</view><view v-if="storedOrder?.payment" class="completed-payment"><view v-if="storedOrder.payment.fareAmount > 0" class="payment-record wallet-record"><image src="/static/vehicles/payment/payment-wallet-fare.svg" mode="aspectFit" /><text>{{ tx('我的錢包 餘額') }}</text><text class="record-amount">-{{ tx(currencyLabel) }} {{ tx(storedOrder.payment.fareAmount.toFixed(2)) }}</text></view><view v-if="storedOrder.payment.externalAmount > 0" class="payment-record wechat-record"><image src="/static/withdraw/visa.svg" mode="aspectFit" /><view><text>VISA Card •••• 2321</text><text class="payment-subtitle">{{ tx('銀行帳戶') }}</text></view><text class="record-amount">-{{ tx(currencyLabel) }} {{ tx(storedOrder.payment.externalAmount.toFixed(2)) }}</text></view><view class="payment-divider" /><view class="record-link" @tap="showPaymentRecords">{{ tx('相關支付紀錄') }} <text>›</text></view></view></view>
       </view>
       </scroll-view>
     </template>
     <template v-else>
-      <view class="assist" role="button" aria-label="就此訂單聯繫客服" @tap="openOrderSupport(storedOrder)"><image src="/static/orders/help.svg" mode="aspectFit" /><text>訂單協助</text></view>
+      <view class="assist" role="button" :aria-label="tx('就此訂單聯繫客服')" @tap="openOrderSupport(storedOrder)"><image src="/static/orders/help.svg" mode="aspectFit" /><text>{{ tx('訂單協助') }}</text></view>
       <view :class="['status', { 'completed-status': isCompleted }]">
-        <image :src="statusIcon" mode="aspectFit" /><text>{{ statusLabel }}</text>
+        <image :src="statusIcon" mode="aspectFit" /><text>{{ tx(statusLabel) }}</text>
       </view>
       <view :class="['card', { 'pending-card': !isCompleted, 'completed-card': isCompleted }]">
-      <view class="locations"><view><image src="/static/orders/origin.svg" mode="aspectFit" /><text>{{ formatOrderDetailAddressLine(originLabel) }}</text></view><view><image src="/static/orders/destination.svg" mode="aspectFit" /><text>{{ formatOrderDetailAddressLine(destinationLabel) }}</text></view></view>
-      <view class="times"><text>預約時間 ：{{ bookingTime }}</text><text>預計到達時間 ：{{ arrivalTime }}</text></view>
-      <view class="passenger-title">乘客及聯絡資料：</view><view class="passenger"><view><image src="/static/orders/passenger.svg" mode="aspectFit" /><text>{{ passengerLabel }}</text></view><view><image src="/static/orders/phone.svg" mode="aspectFit" /><text>{{ passengerPhoneLabel }}</text></view></view>
+      <view class="locations"><view><image src="/static/orders/origin.svg" mode="aspectFit" /><text>{{ tx(formatOrderDetailAddressLine(originLabel)) }}</text></view><view><image src="/static/orders/destination.svg" mode="aspectFit" /><text>{{ tx(formatOrderDetailAddressLine(destinationLabel)) }}</text></view></view>
+      <view class="times"><text>{{ tx('預約時間 ：') }}{{ tx(bookingTime) }}</text><text>{{ tx('預計到達時間 ：') }}{{ tx(arrivalTime) }}</text></view>
+      <view class="passenger-title">{{ tx('乘客及聯絡資料：') }}</view><view class="passenger"><view><image src="/static/orders/passenger.svg" mode="aspectFit" /><text>{{ tx(passengerLabel) }}</text></view><view><image src="/static/orders/phone.svg" mode="aspectFit" /><text>{{ tx(passengerPhoneLabel) }}</text></view></view>
       <view :class="['payment', { completed: isCompleted, pending: !isCompleted }]">
-        <text v-if="!isCompleted">交易時間剩餘：05:00</text>
-        <text class="amount">{{ amountLabel }}</text>
-        <view v-if="!isCompleted" class="pay-tag">待付款</view>
-        <view v-else class="paid-tag">已付款</view>
+        <text v-if="!isCompleted">{{ tx('交易時間剩餘：05:00') }}</text>
+        <text class="amount">{{ tx(amountLabel) }}</text>
+        <view v-if="!isCompleted" class="pay-tag">{{ tx('待付款') }}</view>
+        <view v-else class="paid-tag">{{ tx('已付款') }}</view>
       </view>
-      <view class="detail"><text class="detail-title">訂單詳細</text><text class="detail-date">{{ bookingTime }}</text><view class="line"/><view class="row"><text>{{ vehicleLabel }}</text><text>{{ currencyLabel }} {{ baseFareTotal.toFixed(2) }}</text></view><view v-for="(item, index) in surchargeItems" :key="`extra-${item.sourceId || item.label}-${index}`" class="row"><text>{{ item.label }}</text><text>{{ formatLineAmount(item) }}</text></view><view class="row"><text>優惠券抵扣</text><text>{{ discountLabel }}</text></view><view class="total">Total： {{ currencyLabel }} {{ paymentTotal.toFixed(2) }}</view><view v-if="isCompleted && storedOrder?.payment" class="completed-payment"><view v-if="storedOrder.payment.fareAmount > 0" class="payment-record wallet-record"><image src="/static/vehicles/payment/payment-wallet-fare.svg" mode="aspectFit" /><text>車費餘額</text><text class="record-amount">-{{ currencyLabel }} {{ storedOrder.payment.fareAmount.toFixed(2) }}</text></view><view v-if="storedOrder.payment.cashAmount > 0" class="payment-record wallet-record"><image src="/static/vehicles/payment/payment-wallet-cash.svg" mode="aspectFit" /><text>現金餘額</text><text class="record-amount">-{{ currencyLabel }} {{ storedOrder.payment.cashAmount.toFixed(2) }}</text></view><view v-if="storedOrder.payment.externalAmount > 0" class="payment-record wechat-record"><image src="/static/vehicles/payment/payment-wechat.svg" mode="aspectFit" /><text>{{ paymentMethodLabel }}</text><text class="record-amount">-{{ currencyLabel }} {{ storedOrder.payment.externalAmount.toFixed(2) }}</text></view><view class="payment-divider" /><view class="record-link" @tap="showPaymentRecords">相關支付紀錄 <text>›</text></view></view><button v-if="!isCompleted" class="cancel" @tap="cancelOrder">取消</button></view>
+      <view class="detail"><text class="detail-title">{{ tx('訂單詳細') }}</text><text class="detail-date">{{ tx(bookingTime) }}</text><view class="line"/><view class="row"><text>{{ tx(vehicleLabel) }}</text><text>{{ tx(currencyLabel) }} {{ tx(baseFareTotal.toFixed(2)) }}</text></view><view v-for="(item, index) in surchargeItems" :key="`extra-${item.sourceId || item.label}-${index}`" class="row"><text>{{ tx(item.label) }}</text><text>{{ tx(formatLineAmount(item)) }}</text></view><view class="row"><text>{{ tx('優惠券抵扣') }}</text><text>{{ tx(discountLabel) }}</text></view><view class="total">Total： {{ tx(currencyLabel) }} {{ tx(paymentTotal.toFixed(2)) }}</view><view v-if="isCompleted && storedOrder?.payment" class="completed-payment"><view v-if="storedOrder.payment.fareAmount > 0" class="payment-record wallet-record"><image src="/static/vehicles/payment/payment-wallet-fare.svg" mode="aspectFit" /><text>{{ tx('車費餘額') }}</text><text class="record-amount">-{{ tx(currencyLabel) }} {{ tx(storedOrder.payment.fareAmount.toFixed(2)) }}</text></view><view v-if="storedOrder.payment.cashAmount > 0" class="payment-record wallet-record"><image src="/static/vehicles/payment/payment-wallet-cash.svg" mode="aspectFit" /><text>{{ tx('現金餘額') }}</text><text class="record-amount">-{{ tx(currencyLabel) }} {{ tx(storedOrder.payment.cashAmount.toFixed(2)) }}</text></view><view v-if="storedOrder.payment.externalAmount > 0" class="payment-record wechat-record"><image src="/static/vehicles/payment/payment-wechat.svg" mode="aspectFit" /><text>{{ tx(paymentMethodLabel) }}</text><text class="record-amount">-{{ tx(currencyLabel) }} {{ tx(storedOrder.payment.externalAmount.toFixed(2)) }}</text></view><view class="payment-divider" /><view class="record-link" @tap="showPaymentRecords">{{ tx('相關支付紀錄') }} <text>›</text></view></view><button v-if="!isCompleted" class="cancel" @tap="cancelOrder">{{ tx('取消') }}</button></view>
       </view>
     </template>
     </template>
   </view>
 </template>
 <script setup lang="ts">
+import { tx } from '../../i18n'
 import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'

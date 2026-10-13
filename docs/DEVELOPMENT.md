@@ -66,6 +66,15 @@ npm run check:scope -- --scope cross-cutting
 npm run check:dependencies
 ```
 
+修改乘客端 `src/` 的顯示文字時：
+
+```bash
+node scripts/build-zh-hans-map.mjs
+npm run check:passenger-i18n
+```
+
+乘客端文字以繁體撰寫，簡體由 `src/i18n` 依 OpenCC 對照表在顯示時轉換。模板中的文字與插值須經 `tx()`；toast、對話框及動作選單由 `src/i18n` 統一處理。第一個命令重新產生對照表，第二個命令檢查是否有文字繞過 `tx()` 以及對照表是否過期。
+
 ## 驗證命令
 
 ```bash

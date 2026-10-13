@@ -2,24 +2,25 @@
   <view class="address-page" @tap="regionMenuOpen = false">
     <view class="address-header">
       <image class="back" src="/static/messages/back.svg" mode="aspectFit" @tap.stop="$emit('close')" />
-      <text class="title">地址選擇</text>
+      <text class="title">{{ tx('地址選擇') }}</text>
       <view class="city-search">
-        <view class="region-trigger" @tap.stop="handleRegionTriggerTap"><text class="city">{{ selectedCityLabel || selectedRegion || '城市' }}</text><image class="city-location" :class="{ 'city-location--open': !selectedRegion && regionMenuOpen }" :src="selectedRegion || selectedCity ? '/static/home/address/region-clear.svg' : '/static/home/address/city-location.svg'" mode="aspectFit" /></view>
-        <view class="search-box"><image class="search-icon" src="/static/home/address/search.svg" mode="aspectFit" /><input v-model="keyword" class="search-input" placeholder="搜尋地點" confirm-type="search" @confirm="runSearch" @blur="hideKeyboard" /></view><text class="search-action" @tap="runSearch">{{ searching ? '搜尋中' : '搜索' }}</text>
+        <view class="region-trigger" @tap.stop="handleRegionTriggerTap"><text class="city">{{ tx(selectedCityLabel || selectedRegion || '城市') }}</text><image class="city-location" :class="{ 'city-location--open': !selectedRegion && regionMenuOpen }" :src="selectedRegion || selectedCity ? '/static/home/address/region-clear.svg' : '/static/home/address/city-location.svg'" mode="aspectFit" /></view>
+        <view class="search-box"><image class="search-icon" src="/static/home/address/search.svg" mode="aspectFit" /><input v-model="keyword" class="search-input" :placeholder="tx('搜尋地點')" confirm-type="search" @confirm="runSearch" @blur="hideKeyboard" /></view><text class="search-action" @tap="runSearch">{{ tx(searching ? '搜尋中' : '搜索') }}</text>
       </view>
     </view>
     <scroll-view class="address-scroll" scroll-y :show-scrollbar="false">
-      <view class="current-card"><text class="current-title">當前定位城市：{{ regionData.currentCity }}</text><view class="current-place" @tap="$emit('use-current')"><image src="/static/home/address/current.svg" mode="aspectFit" /><view><text class="place-name">{{ formatVisibleAddress(regionData.currentName) }}</text><view v-if="locationLoading" class="place-loading" aria-label="位置獲取中"><view class="loading-dots" aria-hidden="true"><view class="loading-dot" /><view class="loading-dot" /><view class="loading-dot" /></view></view><text v-else class="place-address">{{ formatVisibleAddress(regionData.currentAddress) }}</text></view></view></view>
-      <view class="recommend-list"><view class="recommend-content"><view class="recommend-title"><image src="/static/home/address/recommend.svg" mode="aspectFit" /><text>{{ searchResults === null ? '推薦地點' : '搜尋結果' }}</text></view><view v-for="place in filteredPlaces" :key="place.id || place.name" class="place-row" @tap="selectPlace(place)"><image src="/static/home/address/place.svg" mode="aspectFit" /><view><text class="place-name">{{ formatVisibleAddress(place.name) }}</text><text class="place-address">{{ formatVisibleAddress(place.displayAddress || place.address) }}</text></view></view><text v-if="searchResults?.length === 0" class="empty-result">{{ selectedCityLabel || selectedRegion ? `${selectedCityLabel || selectedRegion}找不到相關地點` : '找不到相關地點' }}</text></view></view>
+      <view class="current-card"><text class="current-title">{{ tx('當前定位城市：') }}{{ tx(regionData.currentCity) }}</text><view class="current-place" @tap="$emit('use-current')"><image src="/static/home/address/current.svg" mode="aspectFit" /><view><text class="place-name">{{ tx(formatVisibleAddress(regionData.currentName)) }}</text><view v-if="locationLoading" class="place-loading" :aria-label="tx('位置獲取中')"><view class="loading-dots" aria-hidden="true"><view class="loading-dot" /><view class="loading-dot" /><view class="loading-dot" /></view></view><text v-else class="place-address">{{ tx(formatVisibleAddress(regionData.currentAddress)) }}</text></view></view></view>
+      <view class="recommend-list"><view class="recommend-content"><view class="recommend-title"><image src="/static/home/address/recommend.svg" mode="aspectFit" /><text>{{ tx(searchResults === null ? '推薦地點' : '搜尋結果') }}</text></view><view v-for="place in filteredPlaces" :key="place.id || place.name" class="place-row" @tap="selectPlace(place)"><image src="/static/home/address/place.svg" mode="aspectFit" /><view><text class="place-name">{{ tx(formatVisibleAddress(place.name)) }}</text><text class="place-address">{{ tx(formatVisibleAddress(place.displayAddress || place.address)) }}</text></view></view><text v-if="searchResults?.length === 0" class="empty-result">{{ tx(selectedCityLabel || selectedRegion ? `${selectedCityLabel || selectedRegion}找不到相關地點` : '找不到相關地點') }}</text></view></view>
     </scroll-view>
     <view v-if="regionMenuOpen" class="region-menu" @tap.stop>
       <view class="region-menu-panel">
-        <view v-for="option in regionOptions" :key="option.value" class="region-option" @tap="selectRegion(option.value)">{{ option.label }}</view>
+        <view v-for="option in regionOptions" :key="option.value" class="region-option" @tap="selectRegion(option.value)">{{ tx(option.label) }}</view>
       </view>
     </view>
   </view>
 </template>
 <script setup lang="ts">
+import { tx } from '../../i18n'
 import { computed, onMounted, ref, watch } from 'vue'
 import { listMainlandCities, listRecommendedAddresses, searchPlaces, type PlaceSearchResult } from '../../services/api'
 const props = defineProps<{ selecting: 'origin' | 'destination'; locationLabel: string; detailedAddress: string; initialSelection?: AddressSelection | null; canUseCurrent?: boolean }>()

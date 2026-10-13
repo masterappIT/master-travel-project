@@ -3,20 +3,20 @@
     <view class="header">
       <view class="back-button" @tap.stop="goBack"><image src="/static/vehicles/back.svg" mode="aspectFit" /></view>
       <view class="route-summary" @tap="editSheetOpen = true">
-        <image class="origin-icon" src="/static/vehicles/origin.svg" mode="aspectFit" /><text class="origin">{{ originLabel }}</text>
+        <image class="origin-icon" src="/static/vehicles/origin.svg" mode="aspectFit" /><text class="origin">{{ tx(originLabel) }}</text>
         <image class="route-icon" src="/static/vehicles/route.svg" mode="aspectFit" />
-        <image class="destination-icon" src="/static/vehicles/destination.svg" mode="aspectFit" /><text class="destination">{{ destinationLabel }}</text>
-        <text class="booking-time">預約時間 ： {{ bookingTime }}</text>
+        <image class="destination-icon" src="/static/vehicles/destination.svg" mode="aspectFit" /><text class="destination">{{ tx(destinationLabel) }}</text>
+        <text class="booking-time">{{ tx('預約時間 ：') }} {{ tx(bookingTime) }}</text>
       </view>
-      <view class="tabs"><view v-for="tab in tabs" :key="tab.value" :class="['tab',{active:activeCategory===tab.value}]" @tap="activeCategory=tab.value"><text>{{ tab.label }}</text><image v-if="activeCategory===tab.value" src="/static/vehicles/tab-line.svg" mode="scaleToFill" /></view></view>
+      <view class="tabs"><view v-for="tab in tabs" :key="tab.value" :class="['tab',{active:activeCategory===tab.value}]" @tap="activeCategory=tab.value"><text>{{ tx(tab.label) }}</text><image v-if="activeCategory===tab.value" src="/static/vehicles/tab-line.svg" mode="scaleToFill" /></view></view>
     </view>
-    <view v-if="catalogLoading" class="page-state"><text>正在載入車型</text></view>
-    <view v-else-if="catalogError" class="page-state page-state-error"><text>{{ catalogError }}</text><button @tap="loadCatalog">重新載入</button></view>
-    <view v-else-if="!visibleGroups.length" class="page-state"><text>目前沒有可選車型</text><button @tap="loadCatalog">重新載入</button></view>
+    <view v-if="catalogLoading" class="page-state"><text>{{ tx('正在載入車型') }}</text></view>
+    <view v-else-if="catalogError" class="page-state page-state-error"><text>{{ tx(catalogError) }}</text><button @tap="loadCatalog">{{ tx('重新載入') }}</button></view>
+    <view v-else-if="!visibleGroups.length" class="page-state"><text>{{ tx('目前沒有可選車型') }}</text><button @tap="loadCatalog">{{ tx('重新載入') }}</button></view>
     <scroll-view v-show="!catalogLoading && !catalogError && visibleGroups.length" class="vehicle-scroll" scroll-y :show-scrollbar="false">
-      <view v-if="quoteError" class="quote-message"><text>{{ quoteError }}</text><button @tap="loadQuotes">重試報價</button></view>
+      <view v-if="quoteError" class="quote-message"><text>{{ tx(quoteError) }}</text><button @tap="loadQuotes">{{ tx('重試報價') }}</button></view>
       <view v-for="group in visibleGroups" :key="group.category" class="vehicle-group">
-        <view class="group-label"><text>{{ group.title }}</text></view>
+        <view class="group-label"><text>{{ tx(group.title) }}</text></view>
         <VehicleCard v-for="vehicle in group.vehicles" :key="`${group.category}-${vehicle.id}`" :vehicle="vehicle" :quote="tripStore.fareQuotes[vehicle.id]" :quote-status="quoteStatusFor(vehicle.id)" :selectable="vehicle.selectable" :selected="selectedVehicleId === vehicle.id" @select="selectVehicle(vehicle)" />
       </view><view class="bottom-space" />
     </scroll-view>
@@ -33,6 +33,7 @@
   </view>
 </template>
 <script setup lang="ts">
+import { tx } from '../../i18n'
 import { computed, onMounted, ref, watch } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'

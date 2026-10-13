@@ -1,5 +1,5 @@
 <template>
-  <view class="route-panel" :class="{ 'airport-mode': mode === 'airport', 'cross-border-mode': mode === 'cross-border' }" aria-label="路線查詢">
+  <view class="route-panel" :class="{ 'airport-mode': mode === 'airport', 'cross-border-mode': mode === 'cross-border' }" :aria-label="tx('路線查詢')">
     <image
       class="panel-surface"
       :src="mode === 'airport' ? '/static/home/route/airport-panel.svg' : '/static/home/route/cross-panel.svg'"
@@ -8,44 +8,44 @@
 
     <view class="ride-tab cross-border" @tap="$emit('update:mode', 'cross-border')">
       <image class="ride-tab-icon" :src="mode === 'cross-border' ? '/static/home/route/cross-active.svg' : '/static/home/route/cross-inactive.svg'" mode="scaleToFill" />
-      <text>{{ '跨境出行' }}</text>
+      <text>{{ tx('跨境出行') }}</text>
     </view>
     <view class="ride-tab airport" @tap="selectAirportMode">
       <image class="ride-tab-icon" :src="mode === 'airport' ? '/static/home/route/airport-active.svg' : '/static/home/route/airport-inactive.svg'" mode="scaleToFill" />
-      <text>{{ '接送機' }}</text>
+      <text>{{ tx('接送機') }}</text>
     </view>
 
     <view v-if="mode === 'cross-border'" class="cross-fields">
       <view class="route-field" @tap="$emit('origin')">
         <image class="origin-icon" src="/static/home/route/origin.svg" mode="scaleToFill" />
-        <text>{{ formatRouteValue(origin, '出發地') }}</text>
+        <text>{{ tx(formatRouteValue(origin, '出發地')) }}</text>
       </view>
       <view class="route-field destination-field" @tap="$emit('destination')">
         <image class="destination-icon" src="/static/home/route/destination.svg" mode="scaleToFill" />
-        <text>{{ formatRouteValue(destination, '目的地') }}</text>
+        <text>{{ tx(formatRouteValue(destination, '目的地')) }}</text>
       </view>
       <view class="route-field time-field" @tap="$emit('departure-time')">
         <image class="time-icon" src="/static/home/route/time.svg" mode="scaleToFill" />
-        <text>{{ formattedDepartureTime }}</text>
+        <text>{{ tx(formattedDepartureTime) }}</text>
       </view>
     </view>
 
     <view v-else class="airport-fields">
       <view class="route-field flight-field">
         <image class="flight-icon" src="/static/home/route/flight.svg" mode="scaleToFill" />
-        <input class="flight-input" :value="flightNumber" type="text" placeholder="航班號" maxlength="8" confirm-type="done" @input="handleFlightInput" @confirm="handleFlightConfirm" @blur="handleFlightBlur" />
+        <input class="flight-input" :value="flightNumber" type="text" :placeholder="tx('航班號')" maxlength="8" confirm-type="done" @input="handleFlightInput" @confirm="handleFlightConfirm" @blur="handleFlightBlur" />
       </view>
       <view class="route-field airport-origin-field" @tap="$emit('origin')">
         <image class="origin-icon" src="/static/home/route/airport-origin.svg" mode="scaleToFill" />
-        <text>{{ formatRouteValue(origin, '出發地') }}</text>
+        <text>{{ tx(formatRouteValue(origin, '出發地')) }}</text>
       </view>
       <view class="route-field airport-destination-field" @tap="$emit('destination')">
         <image class="destination-icon" src="/static/home/route/airport-destination.svg" mode="scaleToFill" />
-        <text>{{ formatRouteValue(destination, '目的地') }}</text>
+        <text>{{ tx(formatRouteValue(destination, '目的地')) }}</text>
       </view>
       <view class="route-field airport-time-field" @tap="$emit('departure-time')">
         <image class="time-icon" src="/static/home/route/airport-time.svg" mode="scaleToFill" />
-        <text>{{ formattedDepartureTime }}</text>
+        <text>{{ tx(formattedDepartureTime) }}</text>
       </view>
     </view>
 
@@ -53,6 +53,7 @@
 </template>
 
 <script setup lang="ts">
+import { tx } from '../../i18n'
 import { computed } from 'vue'
 
 type TravelMode = 'cross-border' | 'airport'

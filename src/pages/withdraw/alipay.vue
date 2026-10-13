@@ -1,41 +1,42 @@
 <template>
   <!-- #ifndef MP-WEIXIN || MP-TOUTIAO -->
   <view class="page" :style="responsiveStyle">
-    <view class="header"><image class="back" src="/static/wallet/back.svg" mode="aspectFit" @tap="goBack" /><text class="title">提現</text></view>
-    <text class="method-title">到帳方式</text>
-    <view class="payment-card"><image class="method-icon" src="/static/withdraw/alipay.svg" mode="aspectFit" /><text>支付寶支付</text><image class="check" src="/static/withdraw/check-selected.svg" mode="aspectFit" /></view>
-    <view class="account-card"><view class="account-row name-row"><text>支付寶帳戶姓名</text><input v-model="accountName" class="field" placeholder="請輸入支付寶帳戶姓名" placeholder-class="placeholder" /></view><view class="account-row number-row"><text>支付寶帳號</text><input v-model="accountNumber" class="field" placeholder="請輸入支付寶帳號" placeholder-class="placeholder" /></view></view>
-    <view class="amount-card"><text class="amount-title">提取金額</text><view class="divider" /><view class="amount-input"><text class="currency currency-rmb">RMB</text><text class="currency currency-yen">¥</text><input v-model="amount" type="digit" placeholder="請輸入兌現金額" placeholder-class="amount-placeholder" /></view><view class="amount-meta"><text>可用金額 ¥ 0.00</text><text>手續費 ¥ 1.00</text></view></view>
-    <view class="submit" @tap="submit"><text>提交申請</text></view>
+    <view class="header"><image class="back" src="/static/wallet/back.svg" mode="aspectFit" @tap="goBack" /><text class="title">{{ tx('提現') }}</text></view>
+    <text class="method-title">{{ tx('到帳方式') }}</text>
+    <view class="payment-card"><image class="method-icon" src="/static/withdraw/alipay.svg" mode="aspectFit" /><text>{{ tx('支付寶支付') }}</text><image class="check" src="/static/withdraw/check-selected.svg" mode="aspectFit" /></view>
+    <view class="account-card"><view class="account-row name-row"><text>{{ tx('支付寶帳戶姓名') }}</text><input v-model="accountName" class="field" :placeholder="tx('請輸入支付寶帳戶姓名')" placeholder-class="placeholder" /></view><view class="account-row number-row"><text>{{ tx('支付寶帳號') }}</text><input v-model="accountNumber" class="field" :placeholder="tx('請輸入支付寶帳號')" placeholder-class="placeholder" /></view></view>
+    <view class="amount-card"><text class="amount-title">{{ tx('提取金額') }}</text><view class="divider" /><view class="amount-input"><text class="currency currency-rmb">RMB</text><text class="currency currency-yen">¥</text><input v-model="amount" type="digit" :placeholder="tx('請輸入兌現金額')" placeholder-class="amount-placeholder" /></view><view class="amount-meta"><text>{{ tx('可用金額 ¥ 0.00') }}</text><text>{{ tx('手續費 ¥ 1.00') }}</text></view></view>
+    <view class="submit" @tap="submit"><text>{{ tx('提交申請') }}</text></view>
 
     <view v-if="showConfirm" class="confirm-overlay" @tap="closeConfirm">
       <view class="confirm-modal" @tap.stop>
-        <text class="confirm-title">請確認兌現金額</text>
+        <text class="confirm-title">{{ tx('請確認兌現金額') }}</text>
         <image class="confirm-close" src="/static/withdraw/close.svg" mode="aspectFit" @tap="closeConfirm" />
         <view class="confirm-amount">
           <text class="confirm-rmb">RMB </text>
           <text class="confirm-yen">¥</text>
-          <text class="confirm-value">{{ formattedAmount }}</text>
+          <text class="confirm-value">{{ tx(formattedAmount) }}</text>
         </view>
-        <text class="confirm-fee">手續費 ¥ 1.00</text>
-        <text class="confirm-method-label">到帳方式</text>
+        <text class="confirm-fee">{{ tx('手續費 ¥ 1.00') }}</text>
+        <text class="confirm-method-label">{{ tx('到帳方式') }}</text>
         <view class="confirm-method-card">
           <view class="confirm-method-main">
             <image class="confirm-method-icon" src="/static/withdraw/alipay.svg" mode="aspectFit" />
             <view class="confirm-method-text">
-              <text>支付寶支付 </text>
+              <text>{{ tx('支付寶支付') }} </text>
               <text>139112384374</text>
             </view>
           </view>
           <image class="confirm-method-check" src="/static/withdraw/check-selected.svg" mode="aspectFit" />
         </view>
-        <view class="confirm-button" @tap="confirmWithdraw"><text>確認</text></view>
+        <view class="confirm-button" @tap="confirmWithdraw"><text>{{ tx('確認') }}</text></view>
       </view>
     </view>
   </view>
   <!-- #endif -->
 </template>
 <script setup lang="ts">
+import { tx } from '../../i18n'
 import { computed, ref } from 'vue'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { closeCachedPage, openCachedPage } from '../../utils/navigation'

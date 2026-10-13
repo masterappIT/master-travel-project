@@ -2,40 +2,41 @@
   <view class="page" :style="responsiveStyle">
     <view class="header">
       <OrdersBackButton icon-src="/static/orders/traveling-back.svg" @tap="goBack" />
-      <text class="number">訂單編號：{{ orderNumber }}</text>
+      <text class="number">{{ tx('訂單編號：') }}{{ tx(orderNumber) }}</text>
     </view>
-    <view class="assist" role="button" aria-label="就此訂單聯繫客服" @tap="openOrderSupport(storedOrder)"><image src="/static/orders/help.svg" mode="aspectFit" /><text>訂單協助</text></view>
-      <view class="status"><image src="/static/orders/status-pending.svg" mode="aspectFit" /><text>待確認</text></view>
+    <view class="assist" role="button" :aria-label="tx('就此訂單聯繫客服')" @tap="openOrderSupport(storedOrder)"><image src="/static/orders/help.svg" mode="aspectFit" /><text>{{ tx('訂單協助') }}</text></view>
+      <view class="status"><image src="/static/orders/status-pending.svg" mode="aspectFit" /><text>{{ tx('待確認') }}</text></view>
       <view class="traveling-card standard-detail-card pending-card" :class="{ 'long-addresses': hasLongAddress }">
-      <view class="locations"><view :class="{ 'long-location': isLongAddress(originLabel) }"><image src="/static/orders/origin.svg" mode="aspectFit" /><text>{{ formatOrderDetailAddressLine(originLabel) }}</text></view><view :class="{ 'long-location': isLongAddress(destinationLabel) }"><image src="/static/orders/destination.svg" mode="aspectFit" /><text>{{ formatOrderDetailAddressLine(destinationLabel) }}</text></view></view>
-      <view class="times"><text>預約時間 ：{{ bookingTime }}</text><text>預計到達時間 ：{{ arrivalTime }}</text></view>
-      <view class="passenger-title">乘客及聯絡資料：</view><view class="passenger"><view><image src="/static/orders/passenger.svg" mode="aspectFit" /><text>{{ passengerLabel }}</text></view><view><image src="/static/orders/phone.svg" mode="aspectFit" /><text>{{ passengerPhoneLabel }}</text></view></view>
+      <view class="locations"><view :class="{ 'long-location': isLongAddress(originLabel) }"><image src="/static/orders/origin.svg" mode="aspectFit" /><text>{{ tx(formatOrderDetailAddressLine(originLabel)) }}</text></view><view :class="{ 'long-location': isLongAddress(destinationLabel) }"><image src="/static/orders/destination.svg" mode="aspectFit" /><text>{{ tx(formatOrderDetailAddressLine(destinationLabel)) }}</text></view></view>
+      <view class="times"><text>{{ tx('預約時間 ：') }}{{ tx(bookingTime) }}</text><text>{{ tx('預計到達時間 ：') }}{{ tx(arrivalTime) }}</text></view>
+      <view class="passenger-title">{{ tx('乘客及聯絡資料：') }}</view><view class="passenger"><view><image src="/static/orders/passenger.svg" mode="aspectFit" /><text>{{ tx(passengerLabel) }}</text></view><view><image src="/static/orders/phone.svg" mode="aspectFit" /><text>{{ tx(passengerPhoneLabel) }}</text></view></view>
       <view :class="['payment', { completed: isCompleted, pending: !isCompleted }]">
-        <text v-if="!isCompleted">交易時間剩餘：{{ pendingCountdownLabel }}</text>
-        <text class="amount">{{ amountLabel }}</text>
-        <view v-if="!isCompleted && !paymentExpired" class="pay-tag" @tap.stop="openPayment">待付款</view>
-        <view v-else-if="!isCompleted && paymentExpired" class="expired-tag">取消處理中</view>
-        <view v-else class="paid-tag">已付款</view>
+        <text v-if="!isCompleted">{{ tx('交易時間剩餘：') }}{{ tx(pendingCountdownLabel) }}</text>
+        <text class="amount">{{ tx(amountLabel) }}</text>
+        <view v-if="!isCompleted && !paymentExpired" class="pay-tag" @tap.stop="openPayment">{{ tx('待付款') }}</view>
+        <view v-else-if="!isCompleted && paymentExpired" class="expired-tag">{{ tx('取消處理中') }}</view>
+        <view v-else class="paid-tag">{{ tx('已付款') }}</view>
       </view>
-      <view class="detail"><text class="detail-title">訂單詳細</text><text class="detail-date">{{ detailDateLabel }}</text><view class="line"/><view class="row"><text>{{ vehicleLabel }}</text><text>{{ currencyLabel }} {{ baseFareTotal.toFixed(2) }}</text></view><view v-for="(item, index) in surchargeItems" :key="`extra-${item.sourceId || item.label}-${index}`" class="row"><text>{{ item.label }}</text><text>{{ formatLineAmount(item) }}</text></view><view class="row"><text>優惠券抵扣</text><text>{{ discountLabel }}</text></view><view class="total">Total： {{ currencyLabel }} {{ paymentTotal.toFixed(2) }}</view><view v-if="isCompleted && storedOrder?.payment" class="completed-payment"><view v-if="storedOrder.payment.fareAmount > 0" class="payment-record wallet-record"><image src="/static/vehicles/payment/payment-wallet-fare.svg" mode="aspectFit" /><text>車費餘額</text><text class="record-amount">-¥{{ storedOrder.payment.fareAmount.toFixed(2) }}</text></view><view v-if="storedOrder.payment.cashAmount > 0" class="payment-record wallet-record"><image src="/static/vehicles/payment/payment-wallet-cash.svg" mode="aspectFit" /><text>現金餘額</text><text class="record-amount">-¥{{ storedOrder.payment.cashAmount.toFixed(2) }}</text></view><view v-if="storedOrder.payment.externalAmount > 0" class="payment-record wechat-record"><image src="/static/vehicles/payment/payment-wechat.svg" mode="aspectFit" /><text>{{ paymentMethodLabel }}</text><text class="record-amount">-{{ currencyLabel }} {{ storedOrder.payment.externalAmount.toFixed(2) }}</text></view><view class="record-link" @tap="showPaymentRecords">相關支付紀錄 <text>›</text></view></view><button v-if="!isCompleted" class="cancel" @tap="cancelOrder">取消</button></view>
+      <view class="detail"><text class="detail-title">{{ tx('訂單詳細') }}</text><text class="detail-date">{{ tx(detailDateLabel) }}</text><view class="line"/><view class="row"><text>{{ tx(vehicleLabel) }}</text><text>{{ tx(currencyLabel) }} {{ tx(baseFareTotal.toFixed(2)) }}</text></view><view v-for="(item, index) in surchargeItems" :key="`extra-${item.sourceId || item.label}-${index}`" class="row"><text>{{ tx(item.label) }}</text><text>{{ tx(formatLineAmount(item)) }}</text></view><view class="row"><text>{{ tx('優惠券抵扣') }}</text><text>{{ tx(discountLabel) }}</text></view><view class="total">Total： {{ tx(currencyLabel) }} {{ tx(paymentTotal.toFixed(2)) }}</view><view v-if="isCompleted && storedOrder?.payment" class="completed-payment"><view v-if="storedOrder.payment.fareAmount > 0" class="payment-record wallet-record"><image src="/static/vehicles/payment/payment-wallet-fare.svg" mode="aspectFit" /><text>{{ tx('車費餘額') }}</text><text class="record-amount">-¥{{ tx(storedOrder.payment.fareAmount.toFixed(2)) }}</text></view><view v-if="storedOrder.payment.cashAmount > 0" class="payment-record wallet-record"><image src="/static/vehicles/payment/payment-wallet-cash.svg" mode="aspectFit" /><text>{{ tx('現金餘額') }}</text><text class="record-amount">-¥{{ tx(storedOrder.payment.cashAmount.toFixed(2)) }}</text></view><view v-if="storedOrder.payment.externalAmount > 0" class="payment-record wechat-record"><image src="/static/vehicles/payment/payment-wechat.svg" mode="aspectFit" /><text>{{ tx(paymentMethodLabel) }}</text><text class="record-amount">-{{ tx(currencyLabel) }} {{ tx(storedOrder.payment.externalAmount.toFixed(2)) }}</text></view><view class="record-link" @tap="showPaymentRecords">{{ tx('相關支付紀錄') }} <text>›</text></view></view><button v-if="!isCompleted" class="cancel" @tap="cancelOrder">{{ tx('取消') }}</button></view>
       </view>
     <view v-if="paymentOpen" class="payment-mask" @tap="closePayment">
       <view class="payment-sheet" @tap.stop>
         <image class="payment-close" src="/static/vehicles/payment/payment-close.svg" mode="aspectFit" @tap="closePayment" />
-        <text class="payment-title">訂單詳細</text>
-        <text class="payment-countdown">交易時間剩餘：{{ pendingCountdownLabel }}</text>
-        <view class="payment-amount"><text class="payment-currency">{{ currencyLabel }}</text><text class="payment-number">{{ paymentTotal.toFixed(2) }}</text></view>
-        <text class="payment-method-label">支付方式</text>
+        <text class="payment-title">{{ tx('訂單詳細') }}</text>
+        <text class="payment-countdown">{{ tx('交易時間剩餘：') }}{{ tx(pendingCountdownLabel) }}</text>
+        <view class="payment-amount"><text class="payment-currency">{{ tx(currencyLabel) }}</text><text class="payment-number">{{ tx(paymentTotal.toFixed(2)) }}</text></view>
+        <text class="payment-method-label">{{ tx('支付方式') }}</text>
         <view class="payment-options">
-          <view class="payment-option" @tap="walletSelections.fare = !walletSelections.fare"><image src="/static/vehicles/payment/payment-wallet-fare.svg" mode="aspectFit" /><view class="payment-option-copy"><text>車費餘額</text><text class="payment-balance">（{{ formatCurrencyAmount(wallet.fare, 'RMB') }}）</text></view><image class="payment-radio" :src="walletSelections.fare ? '/static/vehicles/payment/payment-radio-selected.svg' : '/static/vehicles/payment/payment-radio-unselected.svg'" mode="aspectFit" /></view>
-          <view class="payment-option" @tap="walletSelections.cash = !walletSelections.cash"><image src="/static/vehicles/payment/payment-wallet-cash.svg" mode="aspectFit" /><view class="payment-option-copy"><text>現金餘額</text><text class="payment-balance">（{{ formatCurrencyAmount(wallet.withdrawable, 'RMB') }}）</text></view><image class="payment-radio" :src="walletSelections.cash ? '/static/vehicles/payment/payment-radio-selected.svg' : '/static/vehicles/payment/payment-radio-unselected.svg'" mode="aspectFit" /></view>
+          <view class="payment-option" @tap="walletSelections.fare = !walletSelections.fare"><image src="/static/vehicles/payment/payment-wallet-fare.svg" mode="aspectFit" /><view class="payment-option-copy"><text>{{ tx('車費餘額') }}</text><text class="payment-balance">（{{ tx(formatCurrencyAmount(wallet.fare, 'RMB')) }}）</text></view><image class="payment-radio" :src="walletSelections.fare ? '/static/vehicles/payment/payment-radio-selected.svg' : '/static/vehicles/payment/payment-radio-unselected.svg'" mode="aspectFit" /></view>
+          <view class="payment-option" @tap="walletSelections.cash = !walletSelections.cash"><image src="/static/vehicles/payment/payment-wallet-cash.svg" mode="aspectFit" /><view class="payment-option-copy"><text>{{ tx('現金餘額') }}</text><text class="payment-balance">（{{ tx(formatCurrencyAmount(wallet.withdrawable, 'RMB')) }}）</text></view><image class="payment-radio" :src="walletSelections.cash ? '/static/vehicles/payment/payment-radio-selected.svg' : '/static/vehicles/payment/payment-radio-unselected.svg'" mode="aspectFit" /></view>
         </view>
-        <view class="payment-confirm" @tap="confirmPayment">確認支付</view>
+        <view class="payment-confirm" @tap="confirmPayment">{{ tx('確認支付') }}</view>
       </view>
     </view>
   </view>
 </template>
 <script setup lang="ts">
+import { tx } from '../../i18n'
 import { computed, ref, onMounted, onUnmounted, reactive, watch } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'

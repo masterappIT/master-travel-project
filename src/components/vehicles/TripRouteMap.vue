@@ -1,15 +1,15 @@
 <template>
-  <view class="trip-route-map" :style="{ height: `${mapHeight}px` }" aria-label="行程路線地圖">
+  <view class="trip-route-map" :style="{ height: `${mapHeight}px` }" :aria-label="tx('行程路線地圖')">
     <!-- #ifdef APP-PLUS || MP-WEIXIN || MP-TOUTIAO -->
     <map :id="mapId" class="native-map" :latitude="mapCenter.latitude" :longitude="mapCenter.longitude" :scale="mapScale" :markers="nativeMarkers" :polyline="nativePolyline" show-location />
     <cover-view v-if="routePoints.length > 1" class="native-callout pickup-callout">
-      <cover-view class="callout-title">上車位置</cover-view>
-      <cover-view class="callout-value">{{ pickupLabel || '目前定位' }}</cover-view>
+      <cover-view class="callout-title">{{ tx('上車位置') }}</cover-view>
+      <cover-view class="callout-value">{{ tx(pickupLabel || '目前定位') }}</cover-view>
     </cover-view>
     <cover-view v-if="routePoints.length > 1 && routeSummary" class="native-callout destination-callout">
-      <cover-view class="callout-title">目的地 · 行程資訊</cover-view>
-      <cover-view class="callout-value">{{ destinationLabel || '目的地' }}</cover-view>
-      <cover-view class="callout-summary">{{ routeSummary }}</cover-view>
+      <cover-view class="callout-title">{{ tx('目的地 · 行程資訊') }}</cover-view>
+      <cover-view class="callout-value">{{ tx(destinationLabel || '目的地') }}</cover-view>
+      <cover-view class="callout-summary">{{ tx(routeSummary) }}</cover-view>
     </cover-view>
     <!-- #endif -->
     <!-- #ifdef H5 -->
@@ -17,14 +17,15 @@
       <svg v-if="projectedRoute" class="route-preview" :viewBox="`0 0 430 ${mapHeight}`" preserveAspectRatio="none"><polyline :points="projectedRoute" fill="none" stroke="#285CFC" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" /></svg>
       <view v-if="projectedPoints" class="map-pin pickup-pin" :style="pinStyle(projectedPoints.origin)" />
       <view v-if="projectedPoints" class="map-pin destination-pin" :style="pinStyle(projectedPoints.destination)" />
-      <view v-if="projectedPoints" class="map-callout pickup-callout"><text class="callout-title">上車位置</text><text class="callout-value">{{ pickupLabel || '目前定位' }}</text></view>
-      <view v-if="projectedPoints && routeSummary" class="map-callout destination-callout"><text class="callout-title">目的地 · 行程資訊</text><text class="callout-value">{{ destinationLabel || '目的地' }}</text><text class="callout-summary">{{ routeSummary }}</text></view>
+      <view v-if="projectedPoints" class="map-callout pickup-callout"><text class="callout-title">{{ tx('上車位置') }}</text><text class="callout-value">{{ tx(pickupLabel || '目前定位') }}</text></view>
+      <view v-if="projectedPoints && routeSummary" class="map-callout destination-callout"><text class="callout-title">{{ tx('目的地 · 行程資訊') }}</text><text class="callout-value">{{ tx(destinationLabel || '目的地') }}</text><text class="callout-summary">{{ tx(routeSummary) }}</text></view>
     </view>
     <!-- #endif -->
   </view>
 </template>
 
 <script setup lang="ts">
+import { tx } from '../../i18n'
 import { computed } from 'vue'
 
 type Point = { latitude: number; longitude: number }

@@ -4,26 +4,27 @@
       <image class="back" src="/static/transactions/expense/back.svg" mode="aspectFit" @tap="goBack" />
     </view>
     <image class="success-icon" src="/static/transactions/expense/success.svg" mode="aspectFit" />
-    <text class="title">支出 - 跨境出行 {{ paymentMethodLabel }}</text>
-    <view class="amount"><text class="currency">{{ currencyLabel }}</text><text class="yen">{{ currencySymbol }}</text><text class="number">{{ expenseAmount.toFixed(2) }}</text></view>
-    <view class="status"><image src="/static/transactions/expense/status-check.svg" mode="aspectFit" /><text>成功</text></view>
+    <text class="title">{{ tx('支出 - 跨境出行') }} {{ tx(paymentMethodLabel) }}</text>
+    <view class="amount"><text class="currency">{{ tx(currencyLabel) }}</text><text class="yen">{{ tx(currencySymbol) }}</text><text class="number">{{ tx(expenseAmount.toFixed(2)) }}</text></view>
+    <view class="status"><image src="/static/transactions/expense/status-check.svg" mode="aspectFit" /><text>{{ tx('成功') }}</text></view>
     <view class="details">
-      <text class="section-title">付款方式</text>
+      <text class="section-title">{{ tx('付款方式') }}</text>
       <view class="payment-card">
-        <view class="payment-copy"><image class="wallet-icon" src="/static/transactions/expense/wallet.svg" mode="aspectFit" /><view><text>{{ paymentMethodLabel }}</text><text class="muted">{{ paymentMethodDescription }}</text></view></view>
+        <view class="payment-copy"><image class="wallet-icon" src="/static/transactions/expense/wallet.svg" mode="aspectFit" /><view><text>{{ tx(paymentMethodLabel) }}</text><text class="muted">{{ tx(paymentMethodDescription) }}</text></view></view>
         <image class="selected" src="/static/transactions/expense/selected.svg" mode="aspectFit" />
       </view>
-      <view class="order-total"><text>訂單總金額</text><text>{{ currencyLabel }} {{ currencySymbol }}{{ expenseAmount.toFixed(2) }}</text></view>
-      <view v-if="payment?.externalAmount" class="allocation cash"><image src="/static/transactions/expense/wallet-small.svg" mode="aspectFit" /><text>{{ paymentMethodLabel }}</text><text>-{{ currencyLabel }} {{ currencySymbol }}{{ payment.externalAmount.toFixed(2) }}</text></view>
-      <view v-if="payment?.fareAmount" class="allocation fare"><image src="/static/transactions/expense/wallet-small.svg" mode="aspectFit" /><text>車費餘額</text><text>-{{ currencyLabel }} {{ currencySymbol }}{{ payment.fareAmount.toFixed(2) }}</text></view>
-      <view v-if="payment?.cashAmount" class="allocation fare" :class="{ 'fare-with-external': payment?.fareAmount }"><image src="/static/transactions/expense/wallet-small.svg" mode="aspectFit" /><text>現金餘額</text><text>-{{ currencyLabel }} {{ currencySymbol }}{{ payment.cashAmount.toFixed(2) }}</text></view>
-      <view class="order-link" @tap="openOrder"><text>相關訂單紀錄</text><image src="/static/transactions/expense/arrow.svg" mode="aspectFit" /></view>
-      <view class="success-time"><text>支付成功時間</text><text>{{ paymentTime }}</text></view>
+      <view class="order-total"><text>{{ tx('訂單總金額') }}</text><text>{{ tx(currencyLabel) }} {{ tx(currencySymbol) }}{{ tx(expenseAmount.toFixed(2)) }}</text></view>
+      <view v-if="payment?.externalAmount" class="allocation cash"><image src="/static/transactions/expense/wallet-small.svg" mode="aspectFit" /><text>{{ tx(paymentMethodLabel) }}</text><text>-{{ tx(currencyLabel) }} {{ tx(currencySymbol) }}{{ tx(payment.externalAmount.toFixed(2)) }}</text></view>
+      <view v-if="payment?.fareAmount" class="allocation fare"><image src="/static/transactions/expense/wallet-small.svg" mode="aspectFit" /><text>{{ tx('車費餘額') }}</text><text>-{{ tx(currencyLabel) }} {{ tx(currencySymbol) }}{{ tx(payment.fareAmount.toFixed(2)) }}</text></view>
+      <view v-if="payment?.cashAmount" class="allocation fare" :class="{ 'fare-with-external': payment?.fareAmount }"><image src="/static/transactions/expense/wallet-small.svg" mode="aspectFit" /><text>{{ tx('現金餘額') }}</text><text>-{{ tx(currencyLabel) }} {{ tx(currencySymbol) }}{{ tx(payment.cashAmount.toFixed(2)) }}</text></view>
+      <view class="order-link" @tap="openOrder"><text>{{ tx('相關訂單紀錄') }}</text><image src="/static/transactions/expense/arrow.svg" mode="aspectFit" /></view>
+      <view class="success-time"><text>{{ tx('支付成功時間') }}</text><text>{{ tx(paymentTime) }}</text></view>
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
+import { tx } from '../../i18n'
 import { computed, ref, watch } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'

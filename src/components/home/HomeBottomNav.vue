@@ -1,5 +1,5 @@
 <template>
-  <view class="bottom-nav" aria-label="首頁導覽">
+  <view class="bottom-nav" :aria-label="tx('首頁導覽')">
     <view class="nav-link active">
       <image src="/static/home/nav/services.svg" mode="aspectFit" />
     </view>
@@ -13,6 +13,7 @@
 </template>
 
 <script setup lang="ts">
+import { tx } from '../../i18n'
 defineEmits<{ services: []; trips: [] }>()
 </script>
 

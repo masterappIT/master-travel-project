@@ -3,24 +3,24 @@
     <view class="header">
       <view class="back-button" @tap="goBack"><image src="/static/vehicles/back.svg" mode="aspectFit" /></view>
       <view class="route-summary" @tap="editSheetOpen = true">
-        <image class="origin-icon" src="/static/vehicles/origin.svg" mode="aspectFit" /><text class="origin-label">{{ originLabel }}</text>
+        <image class="origin-icon" src="/static/vehicles/origin.svg" mode="aspectFit" /><text class="origin-label">{{ tx(originLabel) }}</text>
         <image class="route-icon" src="/static/vehicles/route.svg" mode="aspectFit" />
-        <image class="destination-icon" src="/static/vehicles/destination.svg" mode="aspectFit" /><text class="destination-label">{{ destinationLabel }}</text>
-        <text class="booking-time">預約時間 ： {{ bookingTime }}</text>
+        <image class="destination-icon" src="/static/vehicles/destination.svg" mode="aspectFit" /><text class="destination-label">{{ tx(destinationLabel) }}</text>
+        <text class="booking-time">{{ tx('預約時間 ：') }} {{ tx(bookingTime) }}</text>
       </view>
-      <view class="tabs"><view v-for="tab in tabs" :key="tab.label" :class="['tab',{active:tab.active}]"><text>{{ tab.label }}</text><image v-if="tab.active" src="/static/vehicles/tab-line.svg" mode="scaleToFill" /></view></view>
+      <view class="tabs"><view v-for="tab in tabs" :key="tab.label" :class="['tab',{active:tab.active}]"><text>{{ tx(tab.label) }}</text><image v-if="tab.active" src="/static/vehicles/tab-line.svg" mode="scaleToFill" /></view></view>
     </view>
 
-    <view class="vehicle-tag">{{ selectedCategoryName }}</view>
+    <view class="vehicle-tag">{{ tx(selectedCategoryName) }}</view>
     <view v-if="vehicle" class="selected-vehicle-card"><VehicleCard :vehicle="vehicle" :quote="tripStore.selectedFareQuote" selectable :selected="true" /></view>
-    <view v-if="showPromoCard" class="promo-card"><text class="promo-copy">{{ promoCopy }}</text><view class="promo-action" :class="{ 'used-action': promoApplied }" @tap="togglePromo"><text>{{ promoLoading ? '載入中' : promoApplied ? '取消使用' : '立即使用' }}</text></view></view>
+    <view v-if="showPromoCard" class="promo-card"><text class="promo-copy">{{ tx(promoCopy) }}</text><view class="promo-action" :class="{ 'used-action': promoApplied }" @tap="togglePromo"><text>{{ tx(promoLoading ? '載入中' : promoApplied ? '取消使用' : '立即使用') }}</text></view></view>
 
     <scroll-view v-if="visibleExtras.length" class="extras" :class="{ 'without-promo': !showPromoCard }" scroll-y :show-scrollbar="false">
-      <view class="extras-title"><image src="/static/vehicles/extra-cart.svg" mode="aspectFit" /><text>額外選擇</text></view>
-      <view v-for="extra in visibleExtras" :key="extra.id" class="extra-row" :aria-disabled="isRequiredExtra(extra) ? 'true' : 'false'" @tap="handleExtraTap(extra)"><image :src="(isTriggerExtra(extra) ? quoteExtraIds.has(extra.id) : selectedExtras.includes(extra.id)) ? '/static/vehicles/extra-selected.svg' : '/static/vehicles/extra-radio.svg'" mode="aspectFit" /><text>{{ extra.label }}</text><text class="extra-price">{{ formatExtraPrice(extra.price, extra.currency) }}</text></view>
+      <view class="extras-title"><image src="/static/vehicles/extra-cart.svg" mode="aspectFit" /><text>{{ tx('額外選擇') }}</text></view>
+      <view v-for="extra in visibleExtras" :key="extra.id" class="extra-row" :aria-disabled="isRequiredExtra(extra) ? 'true' : 'false'" @tap="handleExtraTap(extra)"><image :src="(isTriggerExtra(extra) ? quoteExtraIds.has(extra.id) : selectedExtras.includes(extra.id)) ? '/static/vehicles/extra-selected.svg' : '/static/vehicles/extra-radio.svg'" mode="aspectFit" /><text>{{ tx(extra.label) }}</text><text class="extra-price">{{ tx(formatExtraPrice(extra.price, extra.currency)) }}</text></view>
     </scroll-view>
-    <view v-if="!vehicle" class="selected-vehicle-card" @tap="goBack">請重新選擇車型</view>
-    <view class="next-button" @tap="goNext">下一步</view>
+    <view v-if="!vehicle" class="selected-vehicle-card" @tap="goBack">{{ tx('請重新選擇車型') }}</view>
+    <view class="next-button" @tap="goNext">{{ tx('下一步') }}</view>
     <TripEditSheet
       v-if="editSheetOpen"
       :origin="tripStore.activeTrip?.origin || '香港 · 九龍站'"
@@ -35,6 +35,7 @@
 </template>
 
 <script setup lang="ts">
+import { tx } from '../../i18n'
 import { computed, onMounted, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'

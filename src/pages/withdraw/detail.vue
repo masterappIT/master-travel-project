@@ -1,20 +1,21 @@
 <template>
   <view class="page" :style="responsiveStyle">
-    <view class="header"><image class="back" src="/static/wallet/back.svg" mode="aspectFit" @tap="goBack" /><text class="title">提現</text></view>
+    <view class="header"><image class="back" src="/static/wallet/back.svg" mode="aspectFit" @tap="goBack" /><text class="title">{{ tx('提現') }}</text></view>
     <image class="withdraw-icon" src="/static/withdraw-detail/status.svg" mode="aspectFit" />
-    <text class="withdraw-title">餘額提現</text>
-    <view class="amount"><text class="rmb">{{ formatOriginal(101, 'RMB', 2) }}</text></view>
-    <view class="status"><image src="/static/withdraw-detail/status-check.svg" mode="aspectFit" /><text>成功</text></view>
+    <text class="withdraw-title">{{ tx('餘額提現') }}</text>
+    <view class="amount"><text class="rmb">{{ tx(formatOriginal(101, 'RMB', 2)) }}</text></view>
+    <view class="status"><image src="/static/withdraw-detail/status-check.svg" mode="aspectFit" /><text>{{ tx('成功') }}</text></view>
     <view class="details">
-      <text class="section-title">到帳方式</text>
-      <view class="payment-card"><image src="/static/withdraw-detail/payment-methods.svg" mode="aspectFit" /><view><text>MasterCard •••• 2321</text><text class="sub">銀行帳戶</text></view><image class="check" src="/static/withdraw-detail/check.svg" mode="aspectFit" /></view>
-      <view class="steps"><view class="step step-one"><view class="step-circle"><image class="step-icon" src="/static/withdraw-detail/step-active.svg" mode="aspectFit" /><text class="step-number">1</text></view><text>兌現申請已被接納</text></view><image class="step-line line-one" src="/static/withdraw-detail/step-line.svg" mode="aspectFit" /><view class="step step-two"><view class="step-circle"><image class="step-icon" src="/static/withdraw-detail/step-active.svg" mode="aspectFit" /><text class="step-number">2</text></view><text>預計到帳時間</text></view><image class="step-line line-two" src="/static/withdraw-detail/step-line.svg" mode="aspectFit" /><view class="step step-three"><view class="step-circle"><image class="step-icon" src="/static/withdraw-detail/step-active.svg" mode="aspectFit" /><text class="step-number">3</text></view><text>到帳時間</text></view></view>
+      <text class="section-title">{{ tx('到帳方式') }}</text>
+      <view class="payment-card"><image src="/static/withdraw-detail/payment-methods.svg" mode="aspectFit" /><view><text>MasterCard •••• 2321</text><text class="sub">{{ tx('銀行帳戶') }}</text></view><image class="check" src="/static/withdraw-detail/check.svg" mode="aspectFit" /></view>
+      <view class="steps"><view class="step step-one"><view class="step-circle"><image class="step-icon" src="/static/withdraw-detail/step-active.svg" mode="aspectFit" /><text class="step-number">1</text></view><text>{{ tx('兌現申請已被接納') }}</text></view><image class="step-line line-one" src="/static/withdraw-detail/step-line.svg" mode="aspectFit" /><view class="step step-two"><view class="step-circle"><image class="step-icon" src="/static/withdraw-detail/step-active.svg" mode="aspectFit" /><text class="step-number">2</text></view><text>{{ tx('預計到帳時間') }}</text></view><image class="step-line line-two" src="/static/withdraw-detail/step-line.svg" mode="aspectFit" /><view class="step step-three"><view class="step-circle"><image class="step-icon" src="/static/withdraw-detail/step-active.svg" mode="aspectFit" /><text class="step-number">3</text></view><text>{{ tx('到帳時間') }}</text></view></view>
       <text class="time time-one">01/01/2024 12:00:00</text><text class="time time-two">01/01/2024 12:00:00</text><text class="time time-three">01/01/2024 12:00:00</text>
-      <text class="label amount-label">到帳金額</text><text class="value amount-value">{{ formatOriginal(100, 'RMB', 2) }}</text><text class="label fee-label">手續費</text><text class="value fee-value">{{ formatOriginal(0, 'RMB', 2) }}</text><text class="label arrival-label">到帳時間</text><text class="value arrival-value">01/01/2024 12:00:00</text>
+      <text class="label amount-label">{{ tx('到帳金額') }}</text><text class="value amount-value">{{ tx(formatOriginal(100, 'RMB', 2)) }}</text><text class="label fee-label">{{ tx('手續費') }}</text><text class="value fee-value">{{ tx(formatOriginal(0, 'RMB', 2)) }}</text><text class="label arrival-label">{{ tx('到帳時間') }}</text><text class="value arrival-value">01/01/2024 12:00:00</text>
     </view>
   </view>
 </template>
 <script setup lang="ts">
+import { tx } from '../../i18n'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { useCurrency } from '../../composables/useCurrency'
 import { closeCachedPage } from '../../utils/navigation'

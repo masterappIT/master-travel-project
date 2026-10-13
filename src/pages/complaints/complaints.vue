@@ -1,20 +1,21 @@
 <template>
   <view class="page" :style="responsiveStyle">
-    <view class="header"><image class="back" src="/static/messages/back.svg" mode="aspectFit" @tap="goBack" /><text class="header-title">我的投訴</text></view>
+    <view class="header"><image class="back" src="/static/messages/back.svg" mode="aspectFit" @tap="goBack" /><text class="header-title">{{ tx('我的投訴') }}</text></view>
     <scroll-view class="content" scroll-y>
-      <view class="intro"><view class="intro-icon">訴</view><view><text class="intro-title">遇到問題？我們會跟進</text><text class="intro-copy">提交投訴後，客服團隊會於 1–2 個工作天內回覆。</text></view></view>
-      <view class="section"><text class="section-title">提交新投訴</text><text class="section-note">請選擇與行程相關的問題類型</text><view class="category-grid"><view v-for="item in categories" :key="item.title" class="category" @tap="startComplaint(item.title)"><view :class="['category-icon', item.tone]">{{ item.icon }}</view><text>{{ item.title }}</text><text class="category-desc">{{ item.desc }}</text></view></view></view>
+      <view class="intro"><view class="intro-icon">{{ tx('訴') }}</view><view><text class="intro-title">{{ tx('遇到問題？我們會跟進') }}</text><text class="intro-copy">{{ tx('提交投訴後，客服團隊會於 1–2 個工作天內回覆。') }}</text></view></view>
+      <view class="section"><text class="section-title">{{ tx('提交新投訴') }}</text><text class="section-note">{{ tx('請選擇與行程相關的問題類型') }}</text><view class="category-grid"><view v-for="item in categories" :key="item.title" class="category" @tap="startComplaint(item.title)"><view :class="['category-icon', item.tone]">{{ tx(item.icon) }}</view><text>{{ tx(item.title) }}</text><text class="category-desc">{{ tx(item.desc) }}</text></view></view></view>
       <view v-if="selectedCategory" class="form-card">
-        <view class="section-head"><view><text class="section-title">提交投訴</text><text class="section-note">{{ selectedCategory }}</text></view><text class="close" @tap="cancelComplaint">取消</text></view>
-        <textarea v-model="complaintText" class="complaint-input" maxlength="500" placeholder="請描述遇到的問題（最少 10 個字）" />
-        <view class="form-footer"><text>{{ complaintText.length }}/500</text><view class="submit" @tap="submitComplaint">提交投訴</view></view>
+        <view class="section-head"><view><text class="section-title">{{ tx('提交投訴') }}</text><text class="section-note">{{ tx(selectedCategory) }}</text></view><text class="close" @tap="cancelComplaint">{{ tx('取消') }}</text></view>
+        <textarea v-model="complaintText" class="complaint-input" maxlength="500" :placeholder="tx('請描述遇到的問題（最少 10 個字）')" />
+        <view class="form-footer"><text>{{ tx(complaintText.length) }}/500</text><view class="submit" @tap="submitComplaint">{{ tx('提交投訴') }}</view></view>
       </view>
-      <view class="section records"><view class="section-head"><text class="section-title">投訴紀錄</text><text class="filter">近 90 天⌄</text></view><view v-for="record in records" :key="record.id" class="record-row"><view class="record-icon">{{ record.icon }}</view><view class="record-copy"><text class="record-title">{{ record.title }}</text><text class="record-meta">{{ record.id }} · {{ record.date }}</text></view><view :class="['status', record.statusTone]">{{ record.status }}</view></view></view>
-      <view class="notice"><text class="notice-title">溫馨提示</text><text>如涉及即時安全或遺失物品，請直接聯絡客服，我們會優先處理。</text></view><view class="bottom-space" />
+      <view class="section records"><view class="section-head"><text class="section-title">{{ tx('投訴紀錄') }}</text><text class="filter">{{ tx('近 90 天⌄') }}</text></view><view v-for="record in records" :key="record.id" class="record-row"><view class="record-icon">{{ tx(record.icon) }}</view><view class="record-copy"><text class="record-title">{{ tx(record.title) }}</text><text class="record-meta">{{ tx(record.id) }} · {{ tx(record.date) }}</text></view><view :class="['status', record.statusTone]">{{ tx(record.status) }}</view></view></view>
+      <view class="notice"><text class="notice-title">{{ tx('溫馨提示') }}</text><text>{{ tx('如涉及即時安全或遺失物品，請直接聯絡客服，我們會優先處理。') }}</text></view><view class="bottom-space" />
     </scroll-view>
   </view>
 </template>
 <script setup lang="ts">
+import { tx } from '../../i18n'
 import { ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'

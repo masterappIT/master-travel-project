@@ -1,11 +1,11 @@
 <template>
   <view class="booking-mask" @tap="close">
     <view class="booking-sheet" @tap.stop>
-      <view class="sheet-head"><text class="sheet-title">預約時間</text><text class="sheet-close" @tap="close">×</text></view>
+      <view class="sheet-head"><text class="sheet-title">{{ tx('預約時間') }}</text><text class="sheet-close" @tap="close">×</text></view>
       <view class="picker-labels" aria-hidden="true">
-        <text class="picker-label">日期</text>
-        <text class="picker-label">小時</text>
-        <text class="picker-label">分鐘</text>
+        <text class="picker-label">{{ tx('日期') }}</text>
+        <text class="picker-label">{{ tx('小時') }}</text>
+        <text class="picker-label">{{ tx('分鐘') }}</text>
       </view>
       <picker-view
         class="booking-picker"
@@ -15,22 +15,23 @@
         @change="changePicker"
       >
         <picker-view-column>
-          <view v-for="(option, index) in dateOptions" :key="option" class="picker-item" :class="{ 'picker-item-selected': index === dateIndex }">{{ option }}</view>
+          <view v-for="(option, index) in dateOptions" :key="option" class="picker-item" :class="{ 'picker-item-selected': index === dateIndex }">{{ tx(option) }}</view>
         </picker-view-column>
         <picker-view-column>
-          <view v-for="(option, index) in hourOptions" :key="option" class="picker-item time-item" :class="{ 'picker-item-selected': index === hourIndex }">{{ option }}</view>
+          <view v-for="(option, index) in hourOptions" :key="option" class="picker-item time-item" :class="{ 'picker-item-selected': index === hourIndex }">{{ tx(option) }}</view>
         </picker-view-column>
         <picker-view-column>
-          <view v-for="(option, index) in minuteOptions" :key="option" class="picker-item time-item" :class="{ 'picker-item-selected': index === minuteIndex }">{{ option }}</view>
+          <view v-for="(option, index) in minuteOptions" :key="option" class="picker-item time-item" :class="{ 'picker-item-selected': index === minuteIndex }">{{ tx(option) }}</view>
         </picker-view-column>
       </picker-view>
-      <text class="booking-hint">已選 {{ selectedDate }} {{ selectedTime }} · 最早提前 1 小時</text>
-      <button class="confirm-button" @tap="confirm">確認預約時間</button>
+      <text class="booking-hint">{{ tx('已選') }} {{ tx(selectedDate) }} {{ tx(selectedTime) }} {{ tx('· 最早提前 1 小時') }}</text>
+      <button class="confirm-button" @tap="confirm">{{ tx('確認預約時間') }}</button>
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
+import { tx } from '../../i18n'
 import { computed, ref } from 'vue'
 
 const props = withDefaults(defineProps<{ value?: string }>(), { value: '' })

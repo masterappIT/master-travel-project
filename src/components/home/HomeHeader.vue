@@ -1,5 +1,5 @@
 <template>
-  <view class="home-header" aria-label="首頁頂部資訊">
+  <view class="home-header" :aria-label="tx('首頁頂部資訊')">
     <image class="header-wave" src="/static/home/header-wave.svg" mode="scaleToFill" />
     <image class="header-orb" src="/static/home/header-orb.svg" mode="scaleToFill" />
     <view class="brand-mark">
@@ -10,14 +10,15 @@
     <view class="location-copy">
       <view class="location-row">
         <image class="location-pin" src="/static/home/location-pin.svg" mode="scaleToFill" />
-        <text class="location-title">{{ locationLabel }}</text>
+        <text class="location-title">{{ tx(locationLabel) }}</text>
       </view>
-      <text class="location-subtitle">您的最近上車位置</text>
+      <text class="location-subtitle">{{ tx('您的最近上車位置') }}</text>
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
+import { tx } from '../../i18n'
 defineProps<{ logoSrc?: string; locationLabel?: string }>()
 </script>
 

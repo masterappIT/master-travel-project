@@ -10,9 +10,9 @@
         <!-- #endif -->
         <view class="home-foreground">
           <!-- #ifdef MP-WEIXIN -->
-          <view v-if="homeMapState === 'error'" class="map-status" aria-label="地圖顯示失敗">
-            <text>地圖暫時無法顯示</text>
-            <text class="map-status-retry" @tap="retryHomeMap">重新載入地圖</text>
+          <view v-if="homeMapState === 'error'" class="map-status" :aria-label="tx('地圖顯示失敗')">
+            <text>{{ tx('地圖暫時無法顯示') }}</text>
+            <text class="map-status-retry" @tap="retryHomeMap">{{ tx('重新載入地圖') }}</text>
           </view>
           <!-- #endif -->
           <HomeHeader :location-label="locationLabel" />
@@ -55,63 +55,63 @@
         <!-- #ifndef H5 -->
         <BookingTimePicker v-if="bookingTimePicker" @close="bookingTimePicker = false" @confirm="confirmDepartureTime" />
         <!-- #endif -->
-       <view v-if="flightCandidates.length" class="flight-modal" role="dialog" aria-label="航班選擇">
+       <view v-if="flightCandidates.length" class="flight-modal" role="dialog" :aria-label="tx('航班選擇')">
          <view class="flight-modal-mask" @tap="closeFlightCandidates" />
          <view class="flight-modal-card">
-           <view class="flight-modal-title">選擇航班</view>
-           <view class="flight-modal-number">{{ flightNumber }}</view>
-           <view class="flight-modal-question">找到多筆航班資料，請選擇正確的行程</view>
+           <view class="flight-modal-title">{{ tx('選擇航班') }}</view>
+           <view class="flight-modal-number">{{ tx(flightNumber) }}</view>
+           <view class="flight-modal-question">{{ tx('找到多筆航班資料，請選擇正確的行程') }}</view>
            <view class="flight-candidate-list">
              <button v-for="(candidate, index) in flightCandidates" :key="`${candidate.direction}-${candidate.scheduledTime}-${index}`" class="flight-candidate" @tap="selectFlightCandidate(candidate)">
                <view class="flight-candidate-main">
-                 <text class="flight-candidate-route">{{ candidate.origin.iata }} → {{ candidate.destination.iata }}</text>
-                 <text class="flight-candidate-time">{{ candidate.scheduledTime || '時間待定' }}</text>
+                 <text class="flight-candidate-route">{{ tx(candidate.origin.iata) }} → {{ tx(candidate.destination.iata) }}</text>
+                 <text class="flight-candidate-time">{{ tx(candidate.scheduledTime || '時間待定') }}</text>
                </view>
                <view class="flight-candidate-detail">
-                 <text>{{ candidate.direction === 'arrival' ? '抵港香港' : '離港香港' }}</text>
-                 <text>{{ candidate.status || '航班資料已更新' }}</text>
+                 <text>{{ tx(candidate.direction === 'arrival' ? '抵港香港' : '離港香港') }}</text>
+                 <text>{{ tx(candidate.status || '航班資料已更新') }}</text>
                </view>
              </button>
            </view>
-           <text class="flight-modal-cancel" @tap="closeFlightCandidates">返回修改</text>
+           <text class="flight-modal-cancel" @tap="closeFlightCandidates">{{ tx('返回修改') }}</text>
          </view>
        </view>
-       <view v-if="flightLookup" class="flight-modal" role="dialog" aria-label="航班資訊確認">
+       <view v-if="flightLookup" class="flight-modal" role="dialog" :aria-label="tx('航班資訊確認')">
          <view class="flight-modal-mask" @tap="closeFlightLookup" />
          <view class="flight-modal-card">
-           <view class="flight-modal-title">航班資訊</view>
-           <view class="flight-modal-number">{{ flightLookup.flightNumber }}</view>
-           <view class="flight-modal-status">{{ flightLookup.status || '航班資料已更新' }} · {{ flightLookup.scheduledTime }}</view>
+           <view class="flight-modal-title">{{ tx('航班資訊') }}</view>
+           <view class="flight-modal-number">{{ tx(flightLookup.flightNumber) }}</view>
+           <view class="flight-modal-status">{{ tx(flightLookup.status || '航班資料已更新') }} · {{ tx(flightLookup.scheduledTime) }}</view>
            <view class="flight-modal-route">
              <view class="flight-modal-airport">
-               <text class="flight-modal-label">出發地</text>
-               <text class="flight-modal-iata">{{ flightLookup.origin.iata }}</text>
-               <text>{{ airportSummary(flightLookup.origin) }}</text>
+               <text class="flight-modal-label">{{ tx('出發地') }}</text>
+               <text class="flight-modal-iata">{{ tx(flightLookup.origin.iata) }}</text>
+               <text>{{ tx(airportSummary(flightLookup.origin)) }}</text>
              </view>
              <text class="flight-modal-arrow">→</text>
              <view class="flight-modal-airport flight-modal-airport--right">
-               <text class="flight-modal-label">到達地</text>
-               <text class="flight-modal-iata">{{ flightLookup.destination.iata }}</text>
-               <text>{{ airportSummary(flightLookup.destination) }}</text>
+               <text class="flight-modal-label">{{ tx('到達地') }}</text>
+               <text class="flight-modal-iata">{{ tx(flightLookup.destination.iata) }}</text>
+               <text>{{ tx(airportSummary(flightLookup.destination)) }}</text>
              </view>
            </view>
-           <view class="flight-modal-question">請選擇接送方向</view>
-           <view v-if="!canGoToAirport" class="flight-modal-notice">航班出發機場不在廣東省、香港或澳門服務範圍，只能選擇從航班到達機場出發</view>
+           <view class="flight-modal-question">{{ tx('請選擇接送方向') }}</view>
+           <view v-if="!canGoToAirport" class="flight-modal-notice">{{ tx('航班出發機場不在廣東省、香港或澳門服務範圍，只能選擇從航班到達機場出發') }}</view>
            <view class="flight-modal-actions">
-             <button class="flight-modal-action" :class="{ 'flight-modal-action--disabled': !canGoToAirport }" :disabled="!canGoToAirport" @tap="confirmFlightDirection('to-airport')">去機場</button>
-             <button class="flight-modal-action flight-modal-action--primary" @tap="confirmFlightDirection('from-airport')">從機場出發</button>
+             <button class="flight-modal-action" :class="{ 'flight-modal-action--disabled': !canGoToAirport }" :disabled="!canGoToAirport" @tap="confirmFlightDirection('to-airport')">{{ tx('去機場') }}</button>
+             <button class="flight-modal-action flight-modal-action--primary" @tap="confirmFlightDirection('from-airport')">{{ tx('從機場出發') }}</button>
            </view>
-           <text class="flight-modal-cancel" @tap="closeFlightLookup">返回修改</text>
+           <text class="flight-modal-cancel" @tap="closeFlightLookup">{{ tx('返回修改') }}</text>
          </view>
        </view>
        <!-- #ifdef H5 || APP-PLUS || MP-WEIXIN -->
-       <view v-if="airportModeHintVisible" class="airport-hint-modal" role="dialog" aria-label="接送機功能提示">
+       <view v-if="airportModeHintVisible" class="airport-hint-modal" role="dialog" :aria-label="tx('接送機功能提示')">
          <view class="airport-hint-mask" @tap="closeAirportModeHint" />
          <view class="airport-hint-card">
            <view class="airport-hint-icon">✈</view>
-           <view class="airport-hint-title">接送機服務</view>
-           <view class="airport-hint-content">輸入航班號後，系統會自動定位出發機場、到達機場及航班時間。</view>
-           <button class="airport-hint-button" @tap="closeAirportModeHint">知道了</button>
+           <view class="airport-hint-title">{{ tx('接送機服務') }}</view>
+           <view class="airport-hint-content">{{ tx('輸入航班號後，系統會自動定位出發機場、到達機場及航班時間。') }}</view>
+           <button class="airport-hint-button" @tap="closeAirportModeHint">{{ tx('知道了') }}</button>
          </view>
        </view>
        <!-- #endif -->
@@ -179,6 +179,7 @@
   <TripCompletePage v-if="activePagePath === '/pages/vehicles/trip-complete'" :key="cachedPageUrl" />
   <AccountPage v-if="activePagePath === '/pages/account/account'" />
   <SettingsPage v-if="activePagePath === '/pages/settings/settings'" />
+  <NotificationSettingsPage v-if="activePagePath === '/pages/settings/notifications'" />
   <WalletPage v-if="activePagePath === '/pages/wallet/wallet'" />
   <TopUpPage v-if="activePagePath === '/pages/top-up/top-up'" />
   <TopUpDetailPage v-if="activePagePath === '/pages/top-up/detail/detail'" :key="cachedPageUrl" />
@@ -204,6 +205,7 @@
 </template>
 
 <script setup lang="ts">
+import { tx } from '../../i18n'
 import { ref, computed, nextTick, watch } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 // #ifdef MP-WEIXIN
@@ -274,6 +276,7 @@ import TripProgressPage from '../vehicles/trip-progress.vue'
 import TripCompletePage from '../vehicles/trip-complete.vue'
 import AccountPage from '../account/account.vue'
 import SettingsPage from '../settings/settings.vue'
+import NotificationSettingsPage from '../settings/notifications.vue'
 import WalletPage from '../wallet/wallet.vue'
 import TopUpPage from '../top-up/top-up.vue'
 import TopUpDetailPage from '../top-up/detail/detail.vue'

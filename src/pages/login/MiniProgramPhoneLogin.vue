@@ -4,7 +4,7 @@
           <view  class="phone-field mini-program-phone-field">
             <picker class="country-picker" mode="selector" :range="countryOptions" :value="countryIndex" @change="emit('country-change', $event)">
               <view class="country-picker-content">
-                <text class="country-code">{{ countryCode }}</text>
+                <text class="country-code">{{ tx(countryCode) }}</text>
                 <image class="phone-mark" src="/static/login/mini-program/phone-mark.svg" mode="scaleToFill" />
               </view>
             </picker>
@@ -14,13 +14,14 @@
 
           <view  class="mini-program-agreement agreement">
             <view class="agreement-checkbox" :class="{ checked: agreed }" @tap="emit('update:agreed', !agreed)"><text v-if="agreed">✓</text></view>
-            <text class="agreement-text">同意 </text><text class="agreement-link">私隱協議</text><text class="agreement-text"> 與 </text><text class="agreement-link">使用條款</text>
+            <text class="agreement-text">{{ tx('同意') }} </text><text class="agreement-link">{{ tx('私隱協議') }}</text><text class="agreement-text"> {{ tx('與') }} </text><text class="agreement-link">{{ tx('使用條款') }}</text>
           </view>
-          <button  class="mini-program-login-button" type="button" :disabled="loginSubmitting" @tap="emit('phone-login')"><text>登入</text></button>
+          <button  class="mini-program-login-button" type="button" :disabled="loginSubmitting" @tap="emit('phone-login')"><text>{{ tx('登入') }}</text></button>
         </view>
 </template>
 
 <script setup lang="ts">
+import { tx } from '../../i18n'
 defineProps<{
   countryOptions: string[]
   countryIndex: number

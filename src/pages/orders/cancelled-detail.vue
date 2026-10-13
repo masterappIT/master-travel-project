@@ -1,57 +1,58 @@
 <template>
   <view :class="['page', { 'has-load-error': loadError }]" :style="responsiveStyle">
-    <view v-if="loadError" class="load-error">訂單不存在或無權查看</view>
+    <view v-if="loadError" class="load-error">{{ tx('訂單不存在或無權查看') }}</view>
     <template v-else-if="loading">
-      <view class="loading-state">載入中…</view>
+      <view class="loading-state">{{ tx('載入中…') }}</view>
     </template>
     <view v-if="!loadError && !loading" class="header">
       <OrdersBackButton icon-src="/static/orders/traveling-back.svg" @tap="goBack" />
-      <text v-if="isTraveling" class="traveling-title">待出行</text>
-      <text v-else class="number">訂單編號：{{ orderNumber }}</text>
+      <text v-if="isTraveling" class="traveling-title">{{ tx('待出行') }}</text>
+      <text v-else class="number">{{ tx('訂單編號：') }}{{ tx(orderNumber) }}</text>
     </view>
     <template v-if="!loadError && !loading && isTraveling">
-      <text class="traveling-order-number">訂單編號：{{ orderNumber }}</text>
+      <text class="traveling-order-number">{{ tx('訂單編號：') }}{{ tx(orderNumber) }}</text>
       <view class="traveling-card">
         <view class="traveling-status-row">
-          <view class="traveling-waiting"><view class="waiting-mark"><image src="/static/orders/traveling-wait-ring.svg" mode="aspectFit" /><image class="waiting-dot" src="/static/orders/traveling-wait-dot.svg" mode="aspectFit" /></view><text>等待中</text></view>
+          <view class="traveling-waiting"><view class="waiting-mark"><image src="/static/orders/traveling-wait-ring.svg" mode="aspectFit" /><image class="waiting-dot" src="/static/orders/traveling-wait-dot.svg" mode="aspectFit" /></view><text>{{ tx('等待中') }}</text></view>
         </view>
         <view class="traveling-summary">
           <image src="/static/orders/traveling-status.svg" mode="aspectFit" />
-          <text>正在為您安排司機</text>
-          <view class="traveling-confirm"><image src="/static/orders/traveling-clock.svg" mode="aspectFit" /><text>三小時內確認</text></view>
+          <text>{{ tx('正在為您安排司機') }}</text>
+          <view class="traveling-confirm"><image src="/static/orders/traveling-clock.svg" mode="aspectFit" /><text>{{ tx('三小時內確認') }}</text></view>
         </view>
         <view class="traveling-info">
           <image class="traveling-tesla" src="/static/orders/traveling-tesla.svg" mode="aspectFit" />
-          <text class="traveling-pickup">預約時間 ：{{ bookingTime }}</text>
-          <view class="traveling-locations"><view><image src="/static/orders/traveling-origin.svg" mode="aspectFit" /><text>{{ formatOrderDetailAddressLine(originLabel) }}</text></view><view><image src="/static/orders/traveling-destination.svg" mode="aspectFit" /><text>{{ formatOrderDetailAddressLine(destinationLabel) }}</text></view></view>
-          <text class="traveling-vehicle">{{ vehicleLabel }}</text>
-          <view class="traveling-passenger"><text>乘客及聯絡資料：</text><view><image src="/static/orders/traveling-passenger.svg" mode="aspectFit" /><text>{{ passengerLabel }}</text></view><view><image src="/static/orders/traveling-phone.svg" mode="aspectFit" /><text>{{ passengerPhoneLabel }}</text></view></view>
+          <text class="traveling-pickup">{{ tx('預約時間 ：') }}{{ tx(bookingTime) }}</text>
+          <view class="traveling-locations"><view><image src="/static/orders/traveling-origin.svg" mode="aspectFit" /><text>{{ tx(formatOrderDetailAddressLine(originLabel)) }}</text></view><view><image src="/static/orders/traveling-destination.svg" mode="aspectFit" /><text>{{ tx(formatOrderDetailAddressLine(destinationLabel)) }}</text></view></view>
+          <text class="traveling-vehicle">{{ tx(vehicleLabel) }}</text>
+          <view class="traveling-passenger"><text>{{ tx('乘客及聯絡資料：') }}</text><view><image src="/static/orders/traveling-passenger.svg" mode="aspectFit" /><text>{{ tx(passengerLabel) }}</text></view><view><image src="/static/orders/traveling-phone.svg" mode="aspectFit" /><text>{{ tx(passengerPhoneLabel) }}</text></view></view>
           <view class="traveling-divider"><image src="/static/orders/traveling-divider.svg" mode="aspectFit" /></view>
           <view class="traveling-divider second"><image src="/static/orders/traveling-divider.svg" mode="aspectFit" /></view>
-          <view class="traveling-record" @tap="showPaymentRecords">相關支付紀錄 <image src="/static/orders/traveling-arrow.svg" mode="aspectFit" /></view>
+          <view class="traveling-record" @tap="showPaymentRecords">{{ tx('相關支付紀錄') }} <image src="/static/orders/traveling-arrow.svg" mode="aspectFit" /></view>
         </view>
       </view>
     </template>
     <template v-else-if="!loadError && !loading && isCancelled">
-      <view class="assist" role="button" aria-label="就此訂單聯繫客服" @tap="openOrderSupport(storedOrder)"><image src="/static/orders/help.svg" mode="aspectFit" /><text>訂單協助</text></view>
-      <view class="status"><image :src="statusIcon" mode="aspectFit" /><text>取消</text></view>
+      <view class="assist" role="button" :aria-label="tx('就此訂單聯繫客服')" @tap="openOrderSupport(storedOrder)"><image src="/static/orders/help.svg" mode="aspectFit" /><text>{{ tx('訂單協助') }}</text></view>
+      <view class="status"><image :src="statusIcon" mode="aspectFit" /><text>{{ tx('取消') }}</text></view>
       <view class="traveling-card standard-detail-card">
-      <view class="locations"><view><image src="/static/orders/origin.svg" mode="aspectFit" /><text>{{ formatOrderDetailAddressLine(originLabel) }}</text></view><view><image src="/static/orders/destination.svg" mode="aspectFit" /><text>{{ formatOrderDetailAddressLine(destinationLabel) }}</text></view></view>
-      <view class="times"><text>預約時間 ：{{ bookingTime }}</text><text>預計到達時間 ：{{ arrivalTime }}</text></view>
-      <view class="passenger-title">乘客及聯絡資料：</view><view class="passenger"><view><image src="/static/orders/passenger.svg" mode="aspectFit" /><text>{{ passengerLabel }}</text></view><view><image src="/static/orders/phone.svg" mode="aspectFit" /><text>{{ passengerPhoneLabel }}</text></view></view>
+      <view class="locations"><view><image src="/static/orders/origin.svg" mode="aspectFit" /><text>{{ tx(formatOrderDetailAddressLine(originLabel)) }}</text></view><view><image src="/static/orders/destination.svg" mode="aspectFit" /><text>{{ tx(formatOrderDetailAddressLine(destinationLabel)) }}</text></view></view>
+      <view class="times"><text>{{ tx('預約時間 ：') }}{{ tx(bookingTime) }}</text><text>{{ tx('預計到達時間 ：') }}{{ tx(arrivalTime) }}</text></view>
+      <view class="passenger-title">{{ tx('乘客及聯絡資料：') }}</view><view class="passenger"><view><image src="/static/orders/passenger.svg" mode="aspectFit" /><text>{{ tx(passengerLabel) }}</text></view><view><image src="/static/orders/phone.svg" mode="aspectFit" /><text>{{ tx(passengerPhoneLabel) }}</text></view></view>
       <view :class="['payment', { completed: isCompleted, cancelled: isCancelled, pending: !isCompleted && !isCancelled }]">
-        <text v-if="!isCompleted && !isCancelled">交易時間剩餘：05:00</text>
-        <text v-if="!isCancelled" class="amount">{{ amountLabel }}</text>
-        <view v-if="!isCompleted && !isCancelled" class="pay-tag">待付款</view>
-        <view v-else-if="isCancelled && refundStatus" class="cancelled-tag">{{ refundStatus }}</view>
-        <view v-else-if="isCompleted" class="paid-tag">已付款</view>
+        <text v-if="!isCompleted && !isCancelled">{{ tx('交易時間剩餘：05:00') }}</text>
+        <text v-if="!isCancelled" class="amount">{{ tx(amountLabel) }}</text>
+        <view v-if="!isCompleted && !isCancelled" class="pay-tag">{{ tx('待付款') }}</view>
+        <view v-else-if="isCancelled && refundStatus" class="cancelled-tag">{{ tx(refundStatus) }}</view>
+        <view v-else-if="isCompleted" class="paid-tag">{{ tx('已付款') }}</view>
       </view>
-      <view class="detail"><text class="detail-title">訂單詳細</text><text class="detail-date">{{ detailDateLabel }}</text><view class="line"/><view class="row"><text>{{ vehicleLabel }}</text><text>{{ currencyLabel }} {{ baseFareTotal.toFixed(2) }}</text></view><view v-for="(item, index) in surchargeItems" :key="`extra-${item.sourceId || item.label}-${index}`" class="row"><text>{{ item.label }}</text><text>{{ formatLineAmount(item) }}</text></view><view class="row"><text>優惠券抵扣</text><text>{{ discountLabel }}</text></view><view class="total">Total： {{ currencyLabel }} {{ paymentTotal.toFixed(2) }}</view><view v-if="isCancelled && storedOrder?.payment" class="completed-payment"><view v-if="storedOrder.payment.fareAmount > 0" class="payment-record wallet-record"><image src="/static/vehicles/payment/payment-wallet-fare.svg" mode="aspectFit" /><text>車費餘額</text><text class="record-amount">-{{ currencyLabel }} {{ storedOrder.payment.fareAmount.toFixed(2) }}</text></view><view v-if="storedOrder.payment.cashAmount > 0" class="payment-record wallet-record"><image src="/static/vehicles/payment/payment-wallet-cash.svg" mode="aspectFit" /><text>現金餘額</text><text class="record-amount">-{{ currencyLabel }} {{ storedOrder.payment.cashAmount.toFixed(2) }}</text></view><view v-if="storedOrder.payment.externalAmount > 0" class="payment-record wechat-record"><image src="/static/vehicles/payment/payment-wechat.svg" mode="aspectFit" /><text>{{ paymentMethodLabel }}</text><text class="record-amount">-{{ currencyLabel }} {{ storedOrder.payment.externalAmount.toFixed(2) }}</text></view><view class="record-link" @tap="showPaymentRecords">相關支付紀錄 <text>›</text></view></view><button v-if="!isCompleted && !isCancelled" class="cancel" @tap="cancelOrder">取消</button></view>
+      <view class="detail"><text class="detail-title">{{ tx('訂單詳細') }}</text><text class="detail-date">{{ tx(detailDateLabel) }}</text><view class="line"/><view class="row"><text>{{ tx(vehicleLabel) }}</text><text>{{ tx(currencyLabel) }} {{ tx(baseFareTotal.toFixed(2)) }}</text></view><view v-for="(item, index) in surchargeItems" :key="`extra-${item.sourceId || item.label}-${index}`" class="row"><text>{{ tx(item.label) }}</text><text>{{ tx(formatLineAmount(item)) }}</text></view><view class="row"><text>{{ tx('優惠券抵扣') }}</text><text>{{ tx(discountLabel) }}</text></view><view class="total">Total： {{ tx(currencyLabel) }} {{ tx(paymentTotal.toFixed(2)) }}</view><view v-if="isCancelled && storedOrder?.payment" class="completed-payment"><view v-if="storedOrder.payment.fareAmount > 0" class="payment-record wallet-record"><image src="/static/vehicles/payment/payment-wallet-fare.svg" mode="aspectFit" /><text>{{ tx('車費餘額') }}</text><text class="record-amount">-{{ tx(currencyLabel) }} {{ tx(storedOrder.payment.fareAmount.toFixed(2)) }}</text></view><view v-if="storedOrder.payment.cashAmount > 0" class="payment-record wallet-record"><image src="/static/vehicles/payment/payment-wallet-cash.svg" mode="aspectFit" /><text>{{ tx('現金餘額') }}</text><text class="record-amount">-{{ tx(currencyLabel) }} {{ tx(storedOrder.payment.cashAmount.toFixed(2)) }}</text></view><view v-if="storedOrder.payment.externalAmount > 0" class="payment-record wechat-record"><image src="/static/vehicles/payment/payment-wechat.svg" mode="aspectFit" /><text>{{ tx(paymentMethodLabel) }}</text><text class="record-amount">-{{ tx(currencyLabel) }} {{ tx(storedOrder.payment.externalAmount.toFixed(2)) }}</text></view><view class="record-link" @tap="showPaymentRecords">{{ tx('相關支付紀錄') }} <text>›</text></view></view><button v-if="!isCompleted && !isCancelled" class="cancel" @tap="cancelOrder">{{ tx('取消') }}</button></view>
       </view>
     </template>
   </view>
 </template>
 <script setup lang="ts">
+import { tx } from '../../i18n'
 import { computed, ref, watch, onMounted } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'

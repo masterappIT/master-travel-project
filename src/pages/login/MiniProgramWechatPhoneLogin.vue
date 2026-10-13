@@ -2,17 +2,17 @@
         <view class="mini-program-login-card" >
           <button v-if="phoneCapability" class="mini-program-wechat-button" open-type="getPhoneNumber" :disabled="wechatSubmitting" :class="{ 'is-preview': isPreview }" @getphonenumber="emit('wechat-phone', $event)">
             <image class="mini-program-wechat-icon" src="/static/login/mini-program/wechat-auth-icon.svg" mode="scaleToFill" />
-            <text class="mini-program-wechat-label">微信授權登录</text>
+            <text class="mini-program-wechat-label">{{ tx('微信授權登录') }}</text>
           </button>
           <button v-else class="mini-program-wechat-button" :disabled="wechatSubmitting" :class="{ 'is-preview': isPreview }" @tap="emit('wechat-login')">
             <image class="mini-program-wechat-icon" src="/static/login/mini-program/wechat-auth-icon.svg" mode="scaleToFill" />
-            <text class="mini-program-wechat-label">微信授權登录</text>
+            <text class="mini-program-wechat-label">{{ tx('微信授權登录') }}</text>
           </button>
 
           <view  class="phone-field mini-program-phone-field">
             <picker class="country-picker" mode="selector" :range="countryOptions" :value="countryIndex" @change="emit('country-change', $event)">
               <view class="country-picker-content">
-                <text class="country-code">{{ countryCode }}</text>
+                <text class="country-code">{{ tx(countryCode) }}</text>
                 <image class="phone-mark" src="/static/login/mini-program/phone-mark.svg" mode="scaleToFill" />
               </view>
             </picker>
@@ -20,16 +20,17 @@
             <input :value="phone" @input="emit('update:phone', $event.detail.value)" class="phone-input" type="number" :maxlength="phoneMaxLength" />
           </view>
 
-          <view  class="mini-program-other-login">其他登入方式</view>
+          <view  class="mini-program-other-login">{{ tx('其他登入方式') }}</view>
           <view  class="mini-program-agreement agreement">
             <view class="agreement-checkbox" :class="{ checked: agreed }" @tap="emit('update:agreed', !agreed)"><text v-if="agreed">✓</text></view>
-            <text class="agreement-text">同意 </text><text class="agreement-link">私隱協議</text><text class="agreement-text"> 與 </text><text class="agreement-link">使用條款</text>
+            <text class="agreement-text">{{ tx('同意') }} </text><text class="agreement-link">{{ tx('私隱協議') }}</text><text class="agreement-text"> {{ tx('與') }} </text><text class="agreement-link">{{ tx('使用條款') }}</text>
           </view>
-          <button  class="mini-program-login-button" type="button" :disabled="loginSubmitting" @tap="emit('phone-login')"><text>登入</text></button>
+          <button  class="mini-program-login-button" type="button" :disabled="loginSubmitting" @tap="emit('phone-login')"><text>{{ tx('登入') }}</text></button>
         </view>
 </template>
 
 <script setup lang="ts">
+import { tx } from '../../i18n'
 defineProps<{
   countryOptions: string[]
   countryIndex: number

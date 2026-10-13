@@ -1,36 +1,37 @@
 <template>
   <view class="page" :style="responsiveStyle">
     <view class="header">
-      <image class="back" src="/static/messages/back.svg" mode="aspectFit" role="button" aria-label="返回上一頁" @tap="closeCachedPage('/pages/index/index')" />
-      <view class="header-copy"><text class="eyebrow">MASTER SUPPORT</text><text class="title">聯繫客服</text><text class="header-subtitle">我們會在這裡協助您</text></view>
+      <image class="back" src="/static/messages/back.svg" mode="aspectFit" role="button" :aria-label="tx('返回上一頁')" @tap="closeCachedPage('/pages/index/index')" />
+      <view class="header-copy"><text class="eyebrow">MASTER SUPPORT</text><text class="title">{{ tx('聯繫客服') }}</text><text class="header-subtitle">{{ tx('我們會在這裡協助您') }}</text></view>
     </view>
 
     <view class="conversation">
-      <view class="conversation-status" :class="{ 'conversation-status--error': error }"><view class="status-icon">{{ error ? '!' : '✓' }}</view><view><text class="conversation-status-title">文字客服</text><text class="conversation-status-copy">訊息會保存在此對話，客服回覆也會顯示在這裡</text></view><text class="conversation-status-state">{{ loading ? '載入中' : error ? '暫不可用' : conversationId ? '對話已開啟' : '準備開啟' }}</text></view>
+      <view class="conversation-status" :class="{ 'conversation-status--error': error }"><view class="status-icon">{{ tx(error ? '!' : '✓') }}</view><view><text class="conversation-status-title">{{ tx('文字客服') }}</text><text class="conversation-status-copy">{{ tx('訊息會保存在此對話，客服回覆也會顯示在這裡') }}</text></view><text class="conversation-status-state">{{ tx(loading ? '載入中' : error ? '暫不可用' : conversationId ? '對話已開啟' : '準備開啟') }}</text></view>
       <view v-if="orderContext.id" class="order-context">
-        <view class="context-heading"><view class="context-title-wrap"><view class="context-icon">訂</view><text>關於此訂單／行程</text></view><text class="context-status">{{ orderContext.status }}</text></view>
-        <text class="context-id">訂單 ID：{{ orderContext.id }}</text>
-        <text class="context-hint">客服可先參考此情境，訂單權限仍由系統核對。</text>
+        <view class="context-heading"><view class="context-title-wrap"><view class="context-icon">{{ tx('訂') }}</view><text>{{ tx('關於此訂單／行程') }}</text></view><text class="context-status">{{ tx(orderContext.status) }}</text></view>
+        <text class="context-id">{{ tx('訂單 ID：') }}{{ tx(orderContext.id) }}</text>
+        <text class="context-hint">{{ tx('客服可先參考此情境，訂單權限仍由系統核對。') }}</text>
       </view>
       <view v-if="!messages.length && !loading && !error" class="welcome-card">
         <view class="welcome-avatar"><image src="/static/customer-service.svg" mode="aspectFit" /></view>
-        <text class="welcome-title">您好，有甚麼可以幫您？</text>
-        <text class="welcome-copy">請描述您的問題，客服人員會在這裡回覆您。</text>
-        <view class="welcome-tips"><text>行程問題</text><text>訂單查詢</text><text>付款協助</text></view>
+        <text class="welcome-title">{{ tx('您好，有甚麼可以幫您？') }}</text>
+        <text class="welcome-copy">{{ tx('請描述您的問題，客服人員會在這裡回覆您。') }}</text>
+        <view class="welcome-tips"><text>{{ tx('行程問題') }}</text><text>{{ tx('訂單查詢') }}</text><text>{{ tx('付款協助') }}</text></view>
       </view>
-      <template v-for="(item, index) in messages" :key="item.id"><text v-if="index === 0 || formatMessageDate(messages[index - 1].createdAt) !== formatMessageDate(item.createdAt)" class="message-day">{{ formatMessageDate(item.createdAt) }}</text><view class="message-row" :class="{ 'message-row--mine': isMine(item.senderType) }"><text v-if="!isMine(item.senderType)" class="message-sender">{{ senderLabel(item.senderType) }}</text><view class="message" :class="{ 'message--mine': isMine(item.senderType) }"><text class="message-copy">{{ item.text }}</text></view><text class="message-footer">{{ formatMessageTime(item.createdAt) }}</text></view></template>
-      <view v-if="loading" class="notice notice--loading" role="status"><view class="loading-dot" /><text>正在載入客服對話…</text></view>
-      <view v-if="error" class="notice notice--error" role="alert"><text class="notice-title">{{ error }}</text><text class="retry" role="button" @tap="initialize">重新載入</text></view>
+      <template v-for="(item, index) in messages" :key="item.id"><text v-if="index === 0 || formatMessageDate(messages[index - 1].createdAt) !== formatMessageDate(item.createdAt)" class="message-day">{{ tx(formatMessageDate(item.createdAt)) }}</text><view class="message-row" :class="{ 'message-row--mine': isMine(item.senderType) }"><text v-if="!isMine(item.senderType)" class="message-sender">{{ tx(senderLabel(item.senderType)) }}</text><view class="message" :class="{ 'message--mine': isMine(item.senderType) }"><text class="message-copy">{{ tx(item.text) }}</text></view><text class="message-footer">{{ tx(formatMessageTime(item.createdAt)) }}</text></view></template>
+      <view v-if="loading" class="notice notice--loading" role="status"><view class="loading-dot" /><text>{{ tx('正在載入客服對話…') }}</text></view>
+      <view v-if="error" class="notice notice--error" role="alert"><text class="notice-title">{{ tx(error) }}</text><text class="retry" role="button" @tap="initialize">{{ tx('重新載入') }}</text></view>
     </view>
 
     <view class="composer">
-      <view class="composer-heading"><text>回覆客服</text><text>{{ draft.length }}/4000</text></view>
-      <view class="composer-row"><input v-model="draft" class="input" :disabled="!conversationId || sending" maxlength="4000" placeholder="輸入訊息…" confirm-type="send" adjust-position="false" @confirm="send" /><view class="send" :class="{ 'send--active': draft.trim() && !sending }" role="button" :aria-disabled="!draft.trim() || sending" @tap="send"><text>{{ sending ? '發送中' : '發送' }}</text><text v-if="!sending" class="send-arrow">↑</text></view></view>
+      <view class="composer-heading"><text>{{ tx('回覆客服') }}</text><text>{{ tx(draft.length) }}/4000</text></view>
+      <view class="composer-row"><input v-model="draft" class="input" :disabled="!conversationId || sending" maxlength="4000" :placeholder="tx('輸入訊息…')" confirm-type="send" adjust-position="false" @confirm="send" /><view class="send" :class="{ 'send--active': draft.trim() && !sending }" role="button" :aria-disabled="!draft.trim() || sending" @tap="send"><text>{{ tx(sending ? '發送中' : '發送') }}</text><text v-if="!sending" class="send-arrow">↑</text></view></view>
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
+import { tx } from '../../i18n'
 import { onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { onLoad, onShow, onHide } from '@dcloudio/uni-app'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'

@@ -2,123 +2,66 @@
   <view class="page" :style="responsiveStyle">
     <view class="header">
       <image class="back" src="/static/messages/back.svg" mode="aspectFit" @tap="goBack" />
-      <text class="header-title">消息詳情</text>
+      <text class="header-title">{{ tx('消息詳情') }}</text>
     </view>
 
     <view class="content">
       <view class="status-card">
         <image class="type-icon" :src="detail.icon" mode="aspectFit" />
-        <text class="title">{{ detail.title }}</text>
-        <text class="status">{{ detail.status }}</text>
-        <text class="time">{{ detail.time }}</text>
+        <text class="title">{{ tx(detail.title) }}</text>
+        <text class="status">{{ tx(detail.status) }}</text>
+        <text class="time">{{ tx(detail.time) }}</text>
       </view>
 
-      <view class="detail-card">
+      <view v-if="detail.rows.length" class="detail-card">
         <view v-for="row in detail.rows" :key="row.label" class="detail-row">
-          <text class="label">{{ row.label }}</text>
-          <text class="value">{{ row.value }}</text>
+          <text class="label">{{ tx(row.label) }}</text>
+          <text class="value">{{ tx(row.value) }}</text>
         </view>
       </view>
 
-      <view class="notice-card">
-        <text class="notice-title">溫馨提示</text>
-        <text class="notice-text">{{ detail.notice }}</text>
+      <view v-if="detail.notice" class="notice-card">
+        <text class="notice-title">{{ tx('溫馨提示') }}</text>
+        <text class="notice-text">{{ tx(detail.notice) }}</text>
       </view>
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
+import { tx } from '../../i18n'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 
 import { closeCachedPage } from '../../utils/navigation'
 import { computed, onMounted, ref } from 'vue'
-import { formatCurrencyAmount } from '../../composables/useCurrency'
 import { onLoad } from '@dcloudio/uni-app'
-import { markNotificationRead, type Notification } from '../../services/api'
+import { getNotification, markNotificationRead, type Notification } from '../../services/api'
 import { notificationIcon } from './notificationIcon'
 
-type MessageType = 'order' | 'top-up' | 'withdrawal' | 'refund'
-
-const hkd = (amount: number) => formatCurrencyAmount(amount, 'HKD')
-
-const details = {
-  order: {
-    title: '您的跨境出行訂單已確認',
-    status: '訂單已確認',
-    icon: '/static/messages/order.svg',
-    rows: [
-      { label: '訂單編號', value: 'A82678634' },
-      { label: '出發地', value: '香港' },
-      { label: '目的地', value: '深圳機場' },
-      { label: '出發時間', value: '2024年3月15日 10:30' },
-      { label: '訂單狀態', value: '司機接單中' }
-    ],
-    notice: '司機資料確認後將透過消息通知，請留意最新行程狀態。'
-  },
-  'top-up': {
-    title: '您的餘額增值已到帳',
-    status: '增值成功',
-    icon: '/static/messages/top-up.svg',
-    rows: [
-      { label: '交易編號', value: 'TOP282678634' },
-      { label: '增值金額', value: hkd(500) },
-      { label: '付款方式', value: '信用卡' },
-      { label: '到帳時間', value: '2024年1月1日 10:30' },
-      { label: '錢包餘額', value: hkd(500) }
-    ],
-    notice: '增值金額已存入您的錢包，可於下次行程付款時使用。'
-  },
-  withdrawal: {
-    title: '您的餘額提現已到帳',
-    status: '提現成功',
-    icon: '/static/messages/wallet.svg',
-    rows: [
-      { label: '交易編號', value: 'OUT282678634' },
-      { label: '提現金額', value: hkd(500) },
-      { label: '收款方式', value: '銀行帳戶' },
-      { label: '到帳時間', value: '2024年1月1日 10:30' },
-      { label: '錢包餘額', value: hkd(0) }
-    ],
-    notice: '款項已轉入指定收款帳戶，實際入帳時間以銀行處理進度為準。'
-  },
-  refund: {
-    title: '您的訂單退款已到帳',
-    status: '退款成功',
-    icon: '/static/messages/wallet.svg',
-    rows: [
-      { label: '訂單編號', value: 'A82678634' },
-      { label: '行程', value: '香港 - 深圳機場' },
-      { label: '退款金額', value: hkd(320) },
-      { label: '退款方式', value: '原付款方式' },
-      { label: '到帳時間', value: '2024年1月1日 10:30' }
-    ],
-    notice: '退款已按原付款方式退回，實際到帳時間以支付機構為準。'
-  }
-} as const
-
-const requestedType = uni.getStorageSync('selected-message-type') as MessageType
-const type = ref<MessageType>(requestedType && requestedType in details ? requestedType : 'order')
 const { responsiveStyle } = useResponsiveCanvas()
 
 const notification = ref<Notification | null>(null)
+const loadError = ref(false)
 const detail = computed(() => notification.value ? {
   title: notification.value.title,
   status: notification.value.readAt ? '已讀' : '新消息',
   icon: notificationIcon(notification.value.templateType, notification.value.audience),
   time: new Date(notification.value.createdAt).toLocaleString(),
-  rows: [{ label: '受眾', value: notification.value.audience.includes('DRIVER') ? '司機端' : '用戶端' }, { label: '發送時間', value: new Date(notification.value.createdAt).toLocaleString() }],
+  rows: [{ label: '發送時間', value: new Date(notification.value.createdAt).toLocaleString() }],
   notice: notification.value.content
-} : { ...details[type.value], time: '2024年1月1日 10:30' })
+} : { title: loadError.value ? '無法載入消息' : '載入消息中', status: '', icon: notificationIcon(null, ''), time: '', rows: [], notice: '' })
 
 let detailLoaded = false
 const loadDetail = async (options?: Record<string, string>) => {
   if (detailLoaded) return
   detailLoaded = true
   const stored = uni.getStorageSync('selected-notification')
-  if (stored?.id) notification.value = stored as Notification
-  const requestedType = options?.type as MessageType
-  if (requestedType && requestedType in details) type.value = requestedType
+  const requestedId = options?.id || ''
+  if (requestedId && stored?.id !== requestedId) {
+    notification.value = await getNotification(requestedId).catch(() => null)
+  }
+  if (!notification.value && stored?.id) notification.value = stored as Notification
+  if (!notification.value) loadError.value = true
   if (notification.value?.id && !notification.value.readAt) {
     await markNotificationRead(notification.value.id).catch(() => undefined)
     notification.value.readAt = new Date().toISOString()

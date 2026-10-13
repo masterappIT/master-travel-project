@@ -1,28 +1,29 @@
 <template>
   <view class="page" :style="responsiveStyle">
-    <view class="header"><image class="back" src="/static/coupons/back.svg" mode="aspectFit" @tap="goBack" /><text class="header-title">我的優惠</text></view>
+    <view class="header"><image class="back" src="/static/coupons/back.svg" mode="aspectFit" @tap="goBack" /><text class="header-title">{{ tx('我的優惠') }}</text></view>
     <view class="coupon-content">
-      <view class="code-input"><input v-model="couponCode" :disabled="redeeming" placeholder="輸入優惠代碼" confirm-type="done" @confirm="applyCode" /><text class="apply" :class="{ disabled: redeeming }" @tap="applyCode">{{ redeeming ? '領取中' : '兌換' }}</text></view>
-      <view v-if="message" class="message">{{ message }}</view>
+      <view class="code-input"><input v-model="couponCode" :disabled="redeeming" :placeholder="tx('輸入優惠代碼')" confirm-type="done" @confirm="applyCode" /><text class="apply" :class="{ disabled: redeeming }" @tap="applyCode">{{ tx(redeeming ? '領取中' : '兌換') }}</text></view>
+      <view v-if="message" class="message">{{ tx(message) }}</view>
       <scroll-view class="coupon-list" scroll-y :show-scrollbar="false">
-        <view v-if="loading" class="empty-note">優惠載入中...</view>
+        <view v-if="loading" class="empty-note">{{ tx('優惠載入中...') }}</view>
         <template v-else>
           <view v-for="(promotion, index) in promotions" :key="promotion.id" class="coupon-card" :class="{ featured: index === 0, 'selected-card': isSelected(promotion) }" @tap="openPromotion(promotion)">
-            <view class="badge">{{ promotionBadge(promotion) }}<text>{{ promotionDiscount(promotion) }}</text></view>
+            <view class="badge">{{ tx(promotionBadge(promotion)) }}<text>{{ tx(promotionDiscount(promotion)) }}</text></view>
             <image class="vehicle" src="/static/coupons/vehicle.svg" mode="aspectFit" />
-            <text class="coupon-name">{{ promotion.name }}</text>
-            <text class="coupon-period">{{ promotionPeriod(promotion) }}</text>
-            <view v-if="promotion.couponCode" class="coupon-action use-action" :class="{ selected: isSelected(promotion), disabled: isClaiming(promotion) }" @tap.stop="claimPromotion(promotion)">{{ isSelected(promotion) ? '已選用' : isClaiming(promotion) ? '領取中' : '領取' }}</view>
-            <view v-else class="coupon-action" @tap.stop="openPromotion(promotion)">查看詳情</view>
+            <text class="coupon-name">{{ tx(promotion.name) }}</text>
+            <text class="coupon-period">{{ tx(promotionPeriod(promotion)) }}</text>
+            <view v-if="promotion.couponCode" class="coupon-action use-action" :class="{ selected: isSelected(promotion), disabled: isClaiming(promotion) }" @tap.stop="claimPromotion(promotion)">{{ tx(isSelected(promotion) ? '已選用' : isClaiming(promotion) ? '領取中' : '領取') }}</view>
+            <view v-else class="coupon-action" @tap.stop="openPromotion(promotion)">{{ tx('查看詳情') }}</view>
           </view>
-          <view v-if="!promotions.length" class="empty-note" @tap="loadPromotions">{{ loadFailed ? '優惠載入失敗，點擊重試' : '目前沒有可用優惠' }}</view>
-          <view v-else class="empty-note">優惠券可於預約行程時使用</view>
+          <view v-if="!promotions.length" class="empty-note" @tap="loadPromotions">{{ tx(loadFailed ? '優惠載入失敗，點擊重試' : '目前沒有可用優惠') }}</view>
+          <view v-else class="empty-note">{{ tx('優惠券可於預約行程時使用') }}</view>
         </template>
       </scroll-view>
     </view>
   </view>
 </template>
 <script setup lang="ts">
+import { tx } from '../../i18n'
 import { onMounted, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 // #ifdef H5

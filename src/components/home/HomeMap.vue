@@ -1,5 +1,5 @@
 <template>
-  <view class="map-layer" :class="{ 'full-screen': fullScreen }" :style="mapLayerStyle" aria-label="地圖區域">
+  <view class="map-layer" :class="{ 'full-screen': fullScreen }" :style="mapLayerStyle" :aria-label="tx('地圖區域')">
     <!-- #ifdef APP-PLUS || MP-WEIXIN || MP-TOUTIAO -->
     <map
       :id="mapId"
@@ -20,22 +20,23 @@
     />
     <!-- #endif -->
     <!-- #ifdef H5 -->
-    <view class="map-fallback" aria-label="地圖區域">
+    <view class="map-fallback" :aria-label="tx('地圖區域')">
       <svg v-if="projectedRoute" class="route-preview" viewBox="0 0 430 519" preserveAspectRatio="none" aria-hidden="true">
         <polyline :points="projectedRoute" fill="none" stroke="#285CFC" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
       </svg>
-      <view v-if="routeBounds" class="map-pin pickup-pin" :style="pinStyle(routeBounds.origin)" aria-label="上車位置"></view>
-      <view v-if="routeBounds" class="map-pin destination-pin" :style="pinStyle(routeBounds.destination)" aria-label="目的地"></view>
-      <view v-if="routeBounds" class="map-callout pickup-callout" :style="markerStyle(routeBounds.origin)"><text class="callout-title">上車位置</text><text class="callout-value">{{ pickupCalloutLabel }}</text></view>
-      <view v-else-if="nativeMarkers.length" class="map-callout pickup-callout pickup-callout--center"><text class="callout-title">上車位置</text><text class="callout-value">{{ pickupCalloutLabel }}</text></view>
-      <view v-if="routeBounds && props.routeSummary" class="map-callout destination-callout" :style="markerStyle(routeBounds.destination)"><text class="callout-title">目的地 · 行程資訊</text><text class="callout-value">{{ destinationCalloutLabel }}</text><text class="callout-summary">{{ routeSummaryLabel }}</text></view>
-      <text v-if="!projectedRoute">{{ props.pickupLabel || '目前定位' }}</text>
+      <view v-if="routeBounds" class="map-pin pickup-pin" :style="pinStyle(routeBounds.origin)" :aria-label="tx('上車位置')"></view>
+      <view v-if="routeBounds" class="map-pin destination-pin" :style="pinStyle(routeBounds.destination)" :aria-label="tx('目的地')"></view>
+      <view v-if="routeBounds" class="map-callout pickup-callout" :style="markerStyle(routeBounds.origin)"><text class="callout-title">{{ tx('上車位置') }}</text><text class="callout-value">{{ tx(pickupCalloutLabel) }}</text></view>
+      <view v-else-if="nativeMarkers.length" class="map-callout pickup-callout pickup-callout--center"><text class="callout-title">{{ tx('上車位置') }}</text><text class="callout-value">{{ tx(pickupCalloutLabel) }}</text></view>
+      <view v-if="routeBounds && props.routeSummary" class="map-callout destination-callout" :style="markerStyle(routeBounds.destination)"><text class="callout-title">{{ tx('目的地 · 行程資訊') }}</text><text class="callout-value">{{ tx(destinationCalloutLabel) }}</text><text class="callout-summary">{{ tx(routeSummaryLabel) }}</text></view>
+      <text v-if="!projectedRoute">{{ tx(props.pickupLabel || '目前定位') }}</text>
     </view>
     <!-- #endif -->
   </view>
 </template>
 
 <script setup lang="ts">
+import { tx } from '../../i18n'
 import { computed, getCurrentInstance, nextTick, watch } from 'vue'
 
 type MapMarker = { id: number; latitude: number; longitude: number; title?: string; iconPath?: string; width?: number; height?: number; callout?: { content: string; display?: 'ALWAYS' | 'BYCLICK'; color?: string; fontSize?: number; borderRadius?: number; bgColor?: string; padding?: number; textAlign?: 'left' | 'center'; anchorY?: number } }
@@ -101,7 +102,7 @@ const nativeMarkers = computed<MapMarker[]>(() => (props.markers || [])
     height: marker.height || (marker.id === 2 ? 15 : 18)
   }
   return content
-    ? { ...sizedMarker, callout: { content, display: 'ALWAYS', color: '#263238', fontSize: 14, borderRadius: 8, bgColor: '#FFFFFF', padding: 10, textAlign: 'center', ...(marker.id === 2 && calloutSeparationRequired.value ? { anchorY: destinationCalloutHeight.value + (sizedMarker.height || 15) + 12 } : {}) } }
+    ? { ...sizedMarker, callout: { content: tx(content), display: 'ALWAYS', color: '#263238', fontSize: 14, borderRadius: 8, bgColor: '#FFFFFF', padding: 10, textAlign: 'center', ...(marker.id === 2 && calloutSeparationRequired.value ? { anchorY: destinationCalloutHeight.value + (sizedMarker.height || 15) + 12 } : {}) } }
     : sizedMarker
 }))
 const nativePolyline = computed<MapPolyline[]>(() => (props.polyline || [])

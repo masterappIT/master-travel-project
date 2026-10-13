@@ -2,11 +2,11 @@
   <view class="page" :style="responsiveStyle">
     <view class="header">
       <image class="back" src="/static/messages/back.svg" mode="aspectFit" @tap="goBack" />
-      <text class="header-title">個人帳戶</text>
+      <text class="header-title">{{ tx('個人帳戶') }}</text>
       <view class="tabs">
-        <text class="tab" :class="{ active: activeTab === 'profile' }" @tap="activeTab = 'profile'">個人資料</text>
-        <text class="tab" :class="{ active: activeTab === 'security' }" @tap="activeTab = 'security'">安全</text>
-        <text class="tab" @tap="comingSoon('私隱和其他')">私隱和其他</text>
+        <text class="tab" :class="{ active: activeTab === 'profile' }" @tap="activeTab = 'profile'">{{ tx('個人資料') }}</text>
+        <text class="tab" :class="{ active: activeTab === 'security' }" @tap="activeTab = 'security'">{{ tx('安全') }}</text>
+        <text class="tab" @tap="comingSoon('私隱和其他')">{{ tx('私隱和其他') }}</text>
         <view class="active-line" :class="activeTab" />
       </view>
     </view>
@@ -14,51 +14,52 @@
     <template v-if="activeTab === 'profile'">
       <view class="avatar-wrap" @tap="chooseAvatar"><image class="avatar" :src="avatarUrl || '/static/account/avatar.svg'" mode="aspectFill" @error="avatarUrl = ''" /></view>
       <view class="form-card">
-        <view class="field"><image src="/static/account/name.svg" mode="aspectFit" /><text>姓名</text><input class="value-input" :class="{ filled: !!form.name.trim(), empty: !form.name.trim() }" v-model="form.name" /></view>
-        <view class="field"><image src="/static/account/display-name.svg" mode="aspectFit" /><text>顯示名稱</text><input class="value-input" :class="{ filled: !!form.displayName.trim(), empty: !form.displayName.trim() }" v-model="form.displayName" /></view>
-        <view class="field"><image src="/static/account/gender.svg" mode="aspectFit" /><text>性別</text><view class="gender"><text :class="{ selected: form.gender === '先生', empty: !form.gender }" @tap="form.gender = '先生'">先生</text><text :class="{ selected: form.gender === '女士', empty: !form.gender }" @tap="form.gender = '女士'">女士</text></view></view>
-        <view class="field" @tap="chooseRegion"><image src="/static/account/region.svg" mode="aspectFit" /><text>地區</text><text class="value" :class="{ filled: !!form.region, empty: !form.region }">{{ form.region || '請選擇' }}</text></view>
-        <picker mode="date" :value="form.birthday" @change="changeBirthday"><view class="field"><image src="/static/account/birthday.svg" mode="aspectFit" /><text>生日</text><text class="value" :class="{ filled: !!form.birthday, empty: !form.birthday }">{{ form.birthday || '請選擇' }}</text></view></picker>
+        <view class="field"><image src="/static/account/name.svg" mode="aspectFit" /><text>{{ tx('姓名') }}</text><input class="value-input" :class="{ filled: !!form.name.trim(), empty: !form.name.trim() }" v-model="form.name" /></view>
+        <view class="field"><image src="/static/account/display-name.svg" mode="aspectFit" /><text>{{ tx('顯示名稱') }}</text><input class="value-input" :class="{ filled: !!form.displayName.trim(), empty: !form.displayName.trim() }" v-model="form.displayName" /></view>
+        <view class="field"><image src="/static/account/gender.svg" mode="aspectFit" /><text>{{ tx('性別') }}</text><view class="gender"><text :class="{ selected: form.gender === '先生', empty: !form.gender }" @tap="form.gender = '先生'">{{ tx('先生') }}</text><text :class="{ selected: form.gender === '女士', empty: !form.gender }" @tap="form.gender = '女士'">{{ tx('女士') }}</text></view></view>
+        <view class="field" @tap="chooseRegion"><image src="/static/account/region.svg" mode="aspectFit" /><text>{{ tx('地區') }}</text><text class="value" :class="{ filled: !!form.region, empty: !form.region }">{{ tx(form.region || '請選擇') }}</text></view>
+        <picker mode="date" :value="form.birthday" @change="changeBirthday"><view class="field"><image src="/static/account/birthday.svg" mode="aspectFit" /><text>{{ tx('生日') }}</text><text class="value" :class="{ filled: !!form.birthday, empty: !form.birthday }">{{ tx(form.birthday || '請選擇') }}</text></view></picker>
       </view>
-      <view class="save" @tap="save"><text>保存</text></view>
+      <view class="save" @tap="save"><text>{{ tx('保存') }}</text></view>
     </template>
 
     <template v-else>
       <view class="security-card">
-        <view class="security-row phone-row" @tap="startPhoneChange"><image class="security-icon phone" src="/static/security/phone.svg" mode="aspectFit" /><text class="security-label">已連接電話：</text><view class="country-picker"><view class="country-code">{{ countryCode }}</view></view><input class="security-input phone-input" v-model="phoneNumber" type="number" readonly /><view class="verified"><image src="/static/security/verified.svg" mode="aspectFit" /><text>已獲驗證</text></view></view>
-        <view class="security-row email-row" @tap="startEmailSetup"><image class="security-icon email" src="/static/security/email.svg" mode="aspectFit" /><text class="security-label">已連接email：</text><text class="email-status" :class="{ connected: emailConnected }">{{ emailConnected ? security.email : '未連接' }}</text></view>
-        <view class="security-row password-row" @tap="startPasswordSetup"><image class="security-icon password" src="/static/security/password.svg" mode="aspectFit" /><text class="security-label">密碼：</text><text class="password-status" :class="{ connected: passwordConnected }">{{ passwordConnected ? '已設定' : '未設定' }}</text></view>
+        <view class="security-row phone-row" @tap="startPhoneChange"><image class="security-icon phone" src="/static/security/phone.svg" mode="aspectFit" /><text class="security-label">{{ tx('已連接電話：') }}</text><view class="country-picker"><view class="country-code">{{ tx(countryCode) }}</view></view><input class="security-input phone-input" v-model="phoneNumber" type="number" readonly /><view class="verified"><image src="/static/security/verified.svg" mode="aspectFit" /><text>{{ tx('已獲驗證') }}</text></view></view>
+        <view class="security-row email-row" @tap="startEmailSetup"><image class="security-icon email" src="/static/security/email.svg" mode="aspectFit" /><text class="security-label">{{ tx('已連接email：') }}</text><text class="email-status" :class="{ connected: emailConnected }">{{ tx(emailConnected ? security.email : '未連接') }}</text></view>
+        <view class="security-row password-row" @tap="startPasswordSetup"><image class="security-icon password" src="/static/security/password.svg" mode="aspectFit" /><text class="security-label">{{ tx('密碼：') }}</text><text class="password-status" :class="{ connected: passwordConnected }">{{ tx(passwordConnected ? '已設定' : '未設定') }}</text></view>
       </view>
       <view class="third-party-card">
-        <text class="third-party-title">第三方登入帳戶</text>
-        <view v-if="appleLinkSupported" class="provider-row apple-row"><image class="provider-icon apple" src="/static/security/apple.svg" mode="aspectFit" /><text>Apple</text><view class="link-button linked" @tap="toggleProvider('apple')"><text>{{ security.appleLinked ? '解除連結' : '連結' }}</text></view></view>
-        <view class="provider-row"><image class="provider-icon wechat" src="/static/security/wechat.svg" mode="aspectFit" /><text>Wechat</text><view class="link-button" :class="{ linked: security.wechatLinked }" @tap="toggleProvider('wechat')"><text>{{ security.wechatLinked ? '解除連結' : '連結' }}</text></view></view>
+        <text class="third-party-title">{{ tx('第三方登入帳戶') }}</text>
+        <view v-if="appleLinkSupported" class="provider-row apple-row"><image class="provider-icon apple" src="/static/security/apple.svg" mode="aspectFit" /><text>Apple</text><view class="link-button linked" @tap="toggleProvider('apple')"><text>{{ tx(security.appleLinked ? '解除連結' : '連結') }}</text></view></view>
+        <view class="provider-row"><image class="provider-icon wechat" src="/static/security/wechat.svg" mode="aspectFit" /><text>Wechat</text><view class="link-button" :class="{ linked: security.wechatLinked }" @tap="toggleProvider('wechat')"><text>{{ tx(security.wechatLinked ? '解除連結' : '連結') }}</text></view></view>
       </view>
     </template>
     <view v-if="passwordDialogVisible" class="email-dialog-mask" @tap="closePasswordDialog">
       <view class="email-dialog" @tap.stop>
-        <view class="email-dialog-header"><text class="email-dialog-title">設定密碼</text><text class="email-dialog-close" @tap="closePasswordDialog">×</text></view>
-        <view class="email-dialog-body"><text class="email-dialog-hint">{{ passwordConnected ? '請輸入新的密碼' : '尚未設定密碼，請先輸入密碼' }}</text><input class="email-input-dialog" v-model="passwordDialogValue" password placeholder="請輸入密碼" @input="passwordDialogError = ''" /><text v-if="passwordDialogError" class="email-dialog-error">{{ passwordDialogError }}</text><view class="email-dialog-actions"><view class="email-dialog-button secondary" @tap="closePasswordDialog">取消</view><view class="email-dialog-button primary" @tap="savePasswordSetup">保存</view></view></view>
+        <view class="email-dialog-header"><text class="email-dialog-title">{{ tx('設定密碼') }}</text><text class="email-dialog-close" @tap="closePasswordDialog">×</text></view>
+        <view class="email-dialog-body"><text class="email-dialog-hint">{{ tx(passwordConnected ? '請輸入新的密碼' : '尚未設定密碼，請先輸入密碼') }}</text><input class="email-input-dialog" v-model="passwordDialogValue" password :placeholder="tx('請輸入密碼')" @input="passwordDialogError = ''" /><text v-if="passwordDialogError" class="email-dialog-error">{{ tx(passwordDialogError) }}</text><view class="email-dialog-actions"><view class="email-dialog-button secondary" @tap="closePasswordDialog">{{ tx('取消') }}</view><view class="email-dialog-button primary" @tap="savePasswordSetup">{{ tx('保存') }}</view></view></view>
       </view>
     </view>
     <view v-if="emailDialogVisible" class="email-dialog-mask" @tap="closeEmailDialog">
       <view class="email-dialog" @tap.stop>
-        <view class="email-dialog-header"><text class="email-dialog-title">連接 email</text><text class="email-dialog-close" @tap="closeEmailDialog">×</text></view>
-        <view class="email-dialog-body"><text class="email-dialog-hint">{{ emailConnected ? '請輸入 email 地址' : '尚未連接 email，請填寫 email 地址' }}</text><input class="email-input-dialog" v-model="emailDialogValue" type="text" placeholder="請輸入 email" @input="emailDialogError = ''" /><text v-if="emailDialogError" class="email-dialog-error">{{ emailDialogError }}</text><view class="email-dialog-actions"><view class="email-dialog-button secondary" @tap="closeEmailDialog">取消</view><view class="email-dialog-button primary" @tap="saveEmailSetup">保存</view></view></view>
+        <view class="email-dialog-header"><text class="email-dialog-title">{{ tx('連接 email') }}</text><text class="email-dialog-close" @tap="closeEmailDialog">×</text></view>
+        <view class="email-dialog-body"><text class="email-dialog-hint">{{ tx(emailConnected ? '請輸入 email 地址' : '尚未連接 email，請填寫 email 地址') }}</text><input class="email-input-dialog" v-model="emailDialogValue" type="text" :placeholder="tx('請輸入 email')" @input="emailDialogError = ''" /><text v-if="emailDialogError" class="email-dialog-error">{{ tx(emailDialogError) }}</text><view class="email-dialog-actions"><view class="email-dialog-button secondary" @tap="closeEmailDialog">{{ tx('取消') }}</view><view class="email-dialog-button primary" @tap="saveEmailSetup">{{ tx('保存') }}</view></view></view>
       </view>
     </view>
     <view v-if="phoneDialogVisible" class="phone-dialog-mask" @tap="closePhoneDialog">
       <view class="phone-dialog" @tap.stop>
-        <view class="phone-dialog-header"><text class="phone-dialog-title">{{ phoneDialogStep === 'confirm' ? '修改登入電話' : phoneDialogStep === 'country' ? '選擇區號' : phoneDialogStep === 'phone' ? '填寫電話號碼' : '輸入驗證碼' }}</text><text class="phone-dialog-close" @tap="closePhoneDialog">×</text></view>
-        <view v-if="phoneDialogStep === 'confirm'" class="phone-dialog-body"><text class="phone-dialog-message">修改登入電話後，需要重新接收驗證碼驗證。驗證成功後才會完成更新。</text><view class="phone-dialog-actions"><view class="phone-dialog-button secondary" @tap="closePhoneDialog">取消</view><view class="phone-dialog-button primary" @tap="continuePhoneChange">開始修改</view></view></view>
-        <view v-else-if="phoneDialogStep === 'country'" class="phone-dialog-body"><text class="phone-dialog-hint">請選擇新電話的國家或地區號碼</text><view class="country-options"><view v-for="code in countryCodes" :key="code" class="country-option" :class="{ selected: phoneDialogCountry === code }" @tap="selectPhoneCountry(code)"><text>{{ code }}</text><text v-if="phoneDialogCountry === code">✓</text></view></view></view>
-        <view v-else-if="phoneDialogStep === 'phone'" class="phone-dialog-body"><text class="phone-dialog-hint">電話號碼將發送驗證碼</text><view class="phone-entry"><text>{{ phoneDialogCountry }}</text><input v-model="phoneDialogNumber" type="number" :maxlength="phoneLength" placeholder="請輸入電話號碼" /></view><text v-if="phoneDialogError" class="phone-dialog-error">{{ phoneDialogError }}</text><view class="phone-dialog-actions"><view class="phone-dialog-button secondary" @tap="backToCountry">返回</view><view class="phone-dialog-button primary" @tap="requestPhoneCode">{{ phoneDialogBusy ? '發送中...' : '接收驗證碼' }}</view></view></view>
-        <view v-else class="phone-dialog-body"><text class="phone-dialog-hint">驗證碼已發送至 {{ phoneDialogCountry }} {{ phoneDialogNumber }}</text><input class="verification-input" v-model="phoneDialogCode" type="number" maxlength="6" placeholder="請輸入驗證碼" /><text v-if="phoneDialogError" class="phone-dialog-error">{{ phoneDialogError }}</text><view class="phone-dialog-actions"><view class="phone-dialog-button secondary" @tap="backToPhone">返回</view><view class="phone-dialog-button primary" @tap="verifyPhoneCode">{{ phoneDialogBusy ? '驗證中...' : '確認驗證' }}</view></view></view>
+        <view class="phone-dialog-header"><text class="phone-dialog-title">{{ tx(phoneDialogStep === 'confirm' ? '修改登入電話' : phoneDialogStep === 'country' ? '選擇區號' : phoneDialogStep === 'phone' ? '填寫電話號碼' : '輸入驗證碼') }}</text><text class="phone-dialog-close" @tap="closePhoneDialog">×</text></view>
+        <view v-if="phoneDialogStep === 'confirm'" class="phone-dialog-body"><text class="phone-dialog-message">{{ tx('修改登入電話後，需要重新接收驗證碼驗證。驗證成功後才會完成更新。') }}</text><view class="phone-dialog-actions"><view class="phone-dialog-button secondary" @tap="closePhoneDialog">{{ tx('取消') }}</view><view class="phone-dialog-button primary" @tap="continuePhoneChange">{{ tx('開始修改') }}</view></view></view>
+        <view v-else-if="phoneDialogStep === 'country'" class="phone-dialog-body"><text class="phone-dialog-hint">{{ tx('請選擇新電話的國家或地區號碼') }}</text><view class="country-options"><view v-for="code in countryCodes" :key="code" class="country-option" :class="{ selected: phoneDialogCountry === code }" @tap="selectPhoneCountry(code)"><text>{{ tx(code) }}</text><text v-if="phoneDialogCountry === code">✓</text></view></view></view>
+        <view v-else-if="phoneDialogStep === 'phone'" class="phone-dialog-body"><text class="phone-dialog-hint">{{ tx('電話號碼將發送驗證碼') }}</text><view class="phone-entry"><text>{{ tx(phoneDialogCountry) }}</text><input v-model="phoneDialogNumber" type="number" :maxlength="phoneLength" :placeholder="tx('請輸入電話號碼')" /></view><text v-if="phoneDialogError" class="phone-dialog-error">{{ tx(phoneDialogError) }}</text><view class="phone-dialog-actions"><view class="phone-dialog-button secondary" @tap="backToCountry">{{ tx('返回') }}</view><view class="phone-dialog-button primary" @tap="requestPhoneCode">{{ tx(phoneDialogBusy ? '發送中...' : '接收驗證碼') }}</view></view></view>
+        <view v-else class="phone-dialog-body"><text class="phone-dialog-hint">{{ tx('驗證碼已發送至') }} {{ tx(phoneDialogCountry) }} {{ tx(phoneDialogNumber) }}</text><input class="verification-input" v-model="phoneDialogCode" type="number" maxlength="6" :placeholder="tx('請輸入驗證碼')" /><text v-if="phoneDialogError" class="phone-dialog-error">{{ tx(phoneDialogError) }}</text><view class="phone-dialog-actions"><view class="phone-dialog-button secondary" @tap="backToPhone">{{ tx('返回') }}</view><view class="phone-dialog-button primary" @tap="verifyPhoneCode">{{ tx(phoneDialogBusy ? '驗證中...' : '確認驗證') }}</view></view></view>
       </view>
     </view>
   </view>
 </template>
 <script setup lang="ts">
+import { tx } from '../../i18n'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 
 import { closeCachedPage } from '../../utils/navigation'
@@ -67,7 +68,7 @@ const { responsiveStyle } = useResponsiveCanvas()
 import { onShow } from '@dcloudio/uni-app'
 import { computed, reactive, ref, onMounted } from 'vue'
 import { getAuthToken, getAuthUser, isAuthSessionCurrent, setAuthenticated } from '../../utils/auth'
-import { getClientProfile, updateClientProfile, uploadClientAvatar, getClientSecurity, updateClientSecurity, requestClientPhoneChange, verifyClientPhoneChange, linkClientProvider, unlinkClientProvider } from '../../services/api'
+import { AVATAR_MAX_BYTES, getClientProfile, removeClientAvatar, updateClientProfile, uploadClientAvatar, type ClientProfile, getClientSecurity, updateClientSecurity, requestClientPhoneChange, verifyClientPhoneChange, linkClientProvider, unlinkClientProvider } from '../../services/api'
 import { isAppleSignInSupported, signInWithApple } from '../../utils/appleSignIn'
 type Provider = 'apple' | 'wechat'
 const stored = uni.getStorageSync('account-profile') || {}
@@ -227,19 +228,45 @@ const toggleProvider = async (provider: Provider) => {
 }
 const chooseRegion = () => uni.showActionSheet({ itemList: ['香港', '澳門', '中國內地'], success: ({ tapIndex }) => { form.region = ['香港', '澳門', '中國內地'][tapIndex] } })
 const changeBirthday = (event: { detail: { value: string } }) => { form.birthday = event.detail.value }
-const chooseAvatar = () => uni.chooseImage({ count: 1, sizeType: ['compressed'], sourceType: ['album', 'camera'], success: async ({ tempFilePaths }) => {
-  const filePath = tempFilePaths[0]
-  if (!filePath) return
+const avatarBusy = ref(false)
+// Shared by upload and removal: show progress, apply the returned profile everywhere, report the outcome.
+const changeAvatar = async (pending: string, done: string, failed: string, change: () => Promise<ClientProfile>) => {
+  if (avatarBusy.value) return
+  avatarBusy.value = true
+  uni.showLoading({ title: pending, mask: true })
   try {
-    const user = await uploadClientAvatar(filePath)
+    const user = await change()
     avatarUrl.value = user.avatarUrl || ''
     uni.setStorageSync('account-profile', cachedProfile())
     setAuthenticated(undefined, user)
-    uni.showToast({ title: '頭像已更新', icon: 'success' })
+    uni.hideLoading()
+    uni.showToast({ title: done, icon: 'success' })
   } catch (error) {
-    uni.showToast({ title: error instanceof Error ? error.message : '頭像上傳失敗', icon: 'none' })
+    uni.hideLoading()
+    uni.showToast({ title: error instanceof Error && error.message ? error.message : failed, icon: 'none' })
+  } finally {
+    avatarBusy.value = false
   }
+}
+const pickAvatar = () => uni.chooseImage({ count: 1, sizeType: ['compressed'], sourceType: ['album', 'camera'], success: ({ tempFilePaths, tempFiles }) => {
+  const filePath = tempFilePaths[0]
+  if (!filePath) return
+  const file = Array.isArray(tempFiles) ? tempFiles[0] : tempFiles
+  if (file && typeof file.size === 'number' && file.size > AVATAR_MAX_BYTES) {
+    uni.showToast({ title: '圖片不可超過 10 MB', icon: 'none' })
+    return
+  }
+  void changeAvatar('上傳中', '頭像已更新', '頭像上傳失敗', () => uploadClientAvatar(filePath))
 } })
+// Without an avatar the default picture stays and a tap goes straight to choosing one.
+const chooseAvatar = () => {
+  if (avatarBusy.value) return
+  if (!avatarUrl.value) { pickAvatar(); return }
+  uni.showActionSheet({ itemList: ['更換頭像', '移除頭像'], success: ({ tapIndex }) => {
+    if (tapIndex === 0) pickAvatar()
+    else void changeAvatar('移除中', '已恢復預設頭像', '頭像移除失敗', removeClientAvatar)
+  } })
+}
 const save = async () => {
   try {
     const user = await updateClientProfile({ ...form, email: security.email })

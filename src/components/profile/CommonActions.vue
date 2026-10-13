@@ -1,5 +1,6 @@
-<template><view class="common card"><view v-for="item in items" :key="item.label" class="common-item" @tap="$emit('select', item.label)"><image :src="item.icon" mode="aspectFit" /><text>{{ item.label }}</text></view></view></template>
+<template><view class="common card"><view v-for="item in items" :key="item.label" class="common-item" @tap="$emit('select', item.label)"><image :src="item.icon" mode="aspectFit" /><text>{{ tx(item.label) }}</text></view></view></template>
 <script setup lang="ts">
+import { tx } from '../../i18n'
 defineEmits<{ select: [label: string] }>()
 
 const items = [

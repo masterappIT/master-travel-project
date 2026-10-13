@@ -1,17 +1,18 @@
 <template>
   <view class="vehicle-card" @tap="selectable && emit('select')">
-    <view class="vehicle-name"><text v-if="vehicle.brand" class="brand">{{ vehicle.brand }}</text><text>{{ vehicle.model }}</text><text v-if="vehicle.series" class="series">{{ vehicle.series }}</text></view>
+    <view class="vehicle-name"><text v-if="vehicle.brand" class="brand">{{ tx(vehicle.brand) }}</text><text>{{ tx(vehicle.model) }}</text><text v-if="vehicle.series" class="series">{{ tx(vehicle.series) }}</text></view>
     <image v-if="vehicle.logo && !logoLoadFailed" class="radio" :src="vehicle.logo" mode="aspectFit" @error="logoLoadFailed = true" />
     <view class="vehicle-image-frame">
       <image class="vehicle-image" :class="`vehicle-${vehicle.id}`" :src="vehicle.image" mode="scaleToFill" />
     </view>
-    <view class="spec seat"><image src="/static/vehicles/seat.svg" mode="aspectFit"/><text>{{ vehicle.seats }}座</text></view><view class="spec color">{{ vehicle.colorLabel || '不限颜色' }}</view><view v-if="vehicle.modelChoice" class="spec model-choice">{{ vehicle.modelChoiceLabel || '不限車款' }}</view>
-    <view v-if="payableFare !== undefined" class="price">{{ formatPayableFare(payableFare, payableFareCurrency) }}</view>
-    <view v-else class="price quote-price">{{ quoteStatusLabel }}</view>
-    <view v-if="discountAmount > 0" class="discount">已減 {{ formatPayableFare(discountAmount, payableFareCurrency) }}</view>
+    <view class="spec seat"><image src="/static/vehicles/seat.svg" mode="aspectFit"/><text>{{ tx(vehicle.seats) }}{{ tx('座') }}</text></view><view class="spec color">{{ tx(vehicle.colorLabel || '不限颜色') }}</view><view v-if="vehicle.modelChoice" class="spec model-choice">{{ tx(vehicle.modelChoiceLabel || '不限車款') }}</view>
+    <view v-if="payableFare !== undefined" class="price">{{ tx(formatPayableFare(payableFare, payableFareCurrency)) }}</view>
+    <view v-else class="price quote-price">{{ tx(quoteStatusLabel) }}</view>
+    <view v-if="discountAmount > 0" class="discount">{{ tx('已減') }} {{ tx(formatPayableFare(discountAmount, payableFareCurrency)) }}</view>
   </view>
 </template>
 <script setup lang="ts">
+import { tx } from '../../i18n'
 import { computed, ref, watch } from 'vue'
 import type { FareQuote } from '../../services/api'
 import type { Vehicle } from '../../types/vehicle'

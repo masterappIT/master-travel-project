@@ -1,5 +1,6 @@
-<template><view class="wallet card"><view class="stats"><view v-for="item in stats" :key="item.label" @tap.stop="$emit('select', item.label)"><text class="value">{{ item.value }}</text><text>{{ item.label }}</text></view></view><view class="wallet-divider" /><view class="wallet-link" @tap.stop="$emit('select', '錢包')"><image src="/static/profile/wallet.svg" mode="aspectFit" /><text>我的錢包</text></view><view class="detail" @tap.stop="$emit('select', '錢包詳細')">詳細 <text>›</text></view></view></template>
+<template><view class="wallet card"><view class="stats"><view v-for="item in stats" :key="item.label" @tap.stop="$emit('select', item.label)"><text class="value">{{ tx(item.value) }}</text><text>{{ tx(item.label) }}</text></view></view><view class="wallet-divider" /><view class="wallet-link" @tap.stop="$emit('select', '錢包')"><image src="/static/profile/wallet.svg" mode="aspectFit" /><text>{{ tx('我的錢包') }}</text></view><view class="detail" @tap.stop="$emit('select', '錢包詳細')">{{ tx('詳細') }} <text>›</text></view></view></template>
 <script setup lang="ts">
+import { tx } from '../../i18n'
 import { computed } from 'vue'
 import { useCurrency } from '../../composables/useCurrency'
 

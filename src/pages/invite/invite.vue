@@ -1,50 +1,51 @@
 <template>
   <view class="page" :style="responsiveStyle">
-    <view class="header"><view class="back" @tap="goBack"><image src="/static/orders/traveling-back.svg" mode="aspectFit" /></view><text class="header-title">邀請好友</text></view>
+    <view class="header"><view class="back" @tap="goBack"><image src="/static/orders/traveling-back.svg" mode="aspectFit" /></view><text class="header-title">{{ tx('邀請好友') }}</text></view>
     <scroll-view class="content" scroll-y>
       <view class="hero">
         <view class="hero-orb orb-one"/><view class="hero-orb orb-two"/>
-        <text class="eyebrow">INVITE & RIDE TOGETHER</text><text class="hero-title">好友同行，雙向有禮</text><text class="hero-copy">每成功邀請 1 位好友完成首趟跨境行程</text>
-        <view class="reward-pair"><view><text>你可獲得</text><strong>{{ inviterMileage }} KM</strong><span>會員里程</span></view><view class="gift-mark">＋</view><view><text>好友可獲得</text><strong>{{ fareReward }}</strong><span>車資餘額</span></view></view>
+        <text class="eyebrow">INVITE & RIDE TOGETHER</text><text class="hero-title">{{ tx('好友同行，雙向有禮') }}</text><text class="hero-copy">{{ tx('每成功邀請 1 位好友完成首趟跨境行程') }}</text>
+        <view class="reward-pair"><view><text>{{ tx('你可獲得') }}</text><strong>{{ tx(inviterMileage) }} KM</strong><span>{{ tx('會員里程') }}</span></view><view class="gift-mark">＋</view><view><text>{{ tx('好友可獲得') }}</text><strong>{{ tx(fareReward) }}</strong><span>{{ tx('車資餘額') }}</span></view></view>
       </view>
 
       <view class="invite-card">
-        <text class="invite-label">我的專屬邀請碼</text>
-        <view v-if="loading" class="invite-state">載入中...</view>
-        <view v-else-if="loadError" class="invite-state error-state" @tap="loadDashboard">載入失敗，點此重試</view>
+        <text class="invite-label">{{ tx('我的專屬邀請碼') }}</text>
+        <view v-if="loading" class="invite-state">{{ tx('載入中...') }}</view>
+        <view v-else-if="loadError" class="invite-state error-state" @tap="loadDashboard">{{ tx('載入失敗，點此重試') }}</view>
         <template v-else>
-          <view v-if="dashboard?.enabled" class="code-row"><text class="invite-code">{{ dashboard.code }}</text><view class="copy-button" @tap="copyCode">複製</view></view>
-          <view v-else class="activity-paused"><strong>邀請活動暫停</strong><text>目前不接受新的邀請碼綁定，既有邀請紀錄及獎勵不受影響。</text></view>
-          <text v-if="dashboard?.enabled" class="invite-note">好友註冊時輸入邀請碼，完成首趟後獎勵自動到帳</text>
-          <view v-if="dashboard?.enabled" class="share-button" @tap="shareInvite"><text class="share-icon">↗</text><text>立即邀請好友</text></view>
-          <view v-if="dashboard?.enabled" class="share-methods"><view v-for="method in methods" :key="method.name" @tap="shareBy(method.name)"><view :class="['method-icon',method.tone]">{{method.icon}}</view><text>{{method.name}}</text></view></view>
+          <view v-if="dashboard?.enabled" class="code-row"><text class="invite-code">{{ tx(dashboard.code) }}</text><view class="copy-button" @tap="copyCode">{{ tx('複製') }}</view></view>
+          <view v-else class="activity-paused"><strong>{{ tx('邀請活動暫停') }}</strong><text>{{ tx('目前不接受新的邀請碼綁定，既有邀請紀錄及獎勵不受影響。') }}</text></view>
+          <text v-if="dashboard?.enabled" class="invite-note">{{ tx('好友註冊時輸入邀請碼，完成首趟後獎勵自動到帳') }}</text>
+          <view v-if="dashboard?.enabled" class="share-button" @tap="shareInvite"><text class="share-icon">↗</text><text>{{ tx('立即邀請好友') }}</text></view>
+          <view v-if="dashboard?.enabled" class="share-methods"><view v-for="method in methods" :key="method.name" @tap="shareBy(method.name)"><view :class="['method-icon',method.tone]">{{tx(method.icon)}}</view><text>{{tx(method.name)}}</text></view></view>
         </template>
       </view>
 
       <view class="section progress-section">
-        <view class="section-head"><view><text class="section-title">本月邀請進度</text><text class="section-subtitle">好友完成首單後，獎勵自動入帳</text></view><view class="month-pill">{{ summary.month }} 月</view></view>
-        <view class="progress-summary"><view><strong>{{ summary.invited }}</strong><text>已邀請好友</text></view><view><strong>{{ summary.mileageEarned }}</strong><text>已獲得里程</text></view><view><strong>{{ summary.pending }}</strong><text>待完成首單</text></view></view>
-        <view class="milestone-track"><view class="track-line"><view class="track-value" :style="{width: progressWidth}"/></view><view v-for="(step,index) in milestones" :key="step.count" :class="['milestone',{done:summary.rewarded>=step.count,current:summary.rewarded+1===step.count}]" :style="{left:`${index*33.33}%`}"><view class="milestone-dot">{{summary.rewarded>=step.count?'✓':step.count}}</view><text>{{step.reward}}</text></view></view>
-        <view class="bonus"><view class="bonus-icon">禮</view><view><text>持續邀請好友</text><text>每位完成首單可獲 {{ dashboard?.rewards.inviterMileage || 300 }} KM</text></view><view class="bonus-status">{{ summary.pending }} 位待首單</view></view>
+        <view class="section-head"><view><text class="section-title">{{ tx('本月邀請進度') }}</text><text class="section-subtitle">{{ tx('好友完成首單後，獎勵自動入帳') }}</text></view><view class="month-pill">{{ tx(summary.month) }} {{ tx('月') }}</view></view>
+        <view class="progress-summary"><view><strong>{{ tx(summary.invited) }}</strong><text>{{ tx('已邀請好友') }}</text></view><view><strong>{{ tx(summary.mileageEarned) }}</strong><text>{{ tx('已獲得里程') }}</text></view><view><strong>{{ tx(summary.pending) }}</strong><text>{{ tx('待完成首單') }}</text></view></view>
+        <view class="milestone-track"><view class="track-line"><view class="track-value" :style="{width: progressWidth}"/></view><view v-for="(step,index) in milestones" :key="step.count" :class="['milestone',{done:summary.rewarded>=step.count,current:summary.rewarded+1===step.count}]" :style="{left:`${index*33.33}%`}"><view class="milestone-dot">{{tx(summary.rewarded>=step.count?'✓':step.count)}}</view><text>{{tx(step.reward)}}</text></view></view>
+        <view class="bonus"><view class="bonus-icon">{{ tx('禮') }}</view><view><text>{{ tx('持續邀請好友') }}</text><text>{{ tx('每位完成首單可獲') }} {{ tx(dashboard?.rewards.inviterMileage || 300) }} KM</text></view><view class="bonus-status">{{ tx(summary.pending) }} {{ tx('位待首單') }}</view></view>
       </view>
 
-      <view class="section steps-section"><text class="section-title">如何獲得獎勵</text><view class="steps"><view v-for="(step,index) in steps" :key="step.title" class="step"><view class="step-number">{{index+1}}</view><view class="step-copy"><text>{{step.title}}</text><text>{{step.desc}}</text></view><view v-if="index<steps.length-1" class="step-line"/></view></view></view>
+      <view class="section steps-section"><text class="section-title">{{ tx('如何獲得獎勵') }}</text><view class="steps"><view v-for="(step,index) in steps" :key="step.title" class="step"><view class="step-number">{{tx(index+1)}}</view><view class="step-copy"><text>{{tx(step.title)}}</text><text>{{tx(step.desc)}}</text></view><view v-if="index<steps.length-1" class="step-line"/></view></view></view>
 
-      <view class="section records-section"><view class="section-head"><text class="section-title">邀請紀錄</text><text v-if="dashboard && dashboard.records.length > 3" class="more" @tap="showAllRecords">{{ showAll ? '收起' : '查看全部 ›' }}</text></view><view v-if="!visibleRecords.length" class="empty-records">尚未有邀請紀錄</view><view v-for="record in visibleRecords" :key="record.id" class="record-row"><view class="avatar">{{record.name.slice(0,1)}}</view><view class="record-copy"><text>{{record.name}}</text><text>{{formatRecordDate(record)}}</text></view><view :class="['record-status',record.status==='REWARDED'?'completed':'pending']"><text>{{record.status==='REWARDED'?'已完成':record.status==='EXPIRED'?'已失效':'待首單'}}</text><span>{{record.status==='REWARDED'?`+${record.reward} KM`:record.status==='EXPIRED'?'未達條件':'等待中'}}</span></view></view></view>
+      <view class="section records-section"><view class="section-head"><text class="section-title">{{ tx('邀請紀錄') }}</text><text v-if="dashboard && dashboard.records.length > 3" class="more" @tap="showAllRecords">{{ tx(showAll ? '收起' : '查看全部 ›') }}</text></view><view v-if="!visibleRecords.length" class="empty-records">{{ tx('尚未有邀請紀錄') }}</view><view v-for="record in visibleRecords" :key="record.id" class="record-row"><view class="avatar">{{tx(record.name.slice(0,1))}}</view><view class="record-copy"><text>{{tx(record.name)}}</text><text>{{tx(formatRecordDate(record))}}</text></view><view :class="['record-status',record.status==='REWARDED'?'completed':'pending']"><text>{{tx(record.status==='REWARDED'?'已完成':record.status==='EXPIRED'?'已失效':'待首單')}}</text><span>{{tx(record.status==='REWARDED'?`+${record.reward} KM`:record.status==='EXPIRED'?'未達條件':'等待中')}}</span></view></view></view>
 
       <view class="section rules-section">
-        <text class="section-title">活動規則</text>
-        <view class="rule-row"><text>1</text><text>好友須為首次註冊用戶，並使用你的專屬邀請碼完成註冊。</text></view>
-        <view class="rule-row"><text>2</text><text>好友須於註冊後 {{ qualificationDays }} 天內完成首趟有效跨境行程。</text></view>
-        <view class="rule-row"><text>3</text><text>完成條件後，你可獲 {{ inviterMileage }} KM，好友可獲 {{ fareReward }} 車資餘額，可用於下次行程。</text></view>
-        <view class="rule-row"><text>4</text><text>每位好友只可綁定一次邀請關係，獎勵通常於行程完成後 24 小時內發放。</text></view>
+        <text class="section-title">{{ tx('活動規則') }}</text>
+        <view class="rule-row"><text>1</text><text>{{ tx('好友須為首次註冊用戶，並使用你的專屬邀請碼完成註冊。') }}</text></view>
+        <view class="rule-row"><text>2</text><text>{{ tx('好友須於註冊後') }} {{ tx(qualificationDays) }} {{ tx('天內完成首趟有效跨境行程。') }}</text></view>
+        <view class="rule-row"><text>3</text><text>{{ tx('完成條件後，你可獲') }} {{ tx(inviterMileage) }} {{ tx('KM，好友可獲') }} {{ tx(fareReward) }} {{ tx('車資餘額，可用於下次行程。') }}</text></view>
+        <view class="rule-row"><text>4</text><text>{{ tx('每位好友只可綁定一次邀請關係，獎勵通常於行程完成後 24 小時內發放。') }}</text></view>
       </view>
 
-      <view class="notice"><text>溫馨提示</text><text>好友需為首次註冊用戶，並於註冊後 {{ qualificationDays }} 天內完成首趟有效行程。獎勵通常於行程完成後 24 小時內發放，獎勵里程有效期為 {{ mileageValidityMonths }} 個月。</text></view><view class="bottom-space"/>
+      <view class="notice"><text>{{ tx('溫馨提示') }}</text><text>{{ tx('好友需為首次註冊用戶，並於註冊後') }} {{ tx(qualificationDays) }} {{ tx('天內完成首趟有效行程。獎勵通常於行程完成後 24 小時內發放，獎勵里程有效期為') }} {{ tx(mileageValidityMonths) }} {{ tx('個月。') }}</text></view><view class="bottom-space"/>
     </scroll-view>
   </view>
 </template>
 <script setup lang="ts">
+import { tx } from '../../i18n'
 import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'

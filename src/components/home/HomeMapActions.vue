@@ -1,9 +1,10 @@
 <template>
-  <view class="map-actions" aria-label="地圖操作">
+  <view class="map-actions" :aria-label="tx('地圖操作')">
     <view class="map-tool locate" @tap="$emit('location')"><view class="locate-ring" /></view>
   </view>
 </template>
 <script setup lang="ts">
+import { tx } from '../../i18n'
 defineEmits<{ location: [] }>()
 </script>
 <style scoped>

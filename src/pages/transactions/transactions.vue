@@ -2,13 +2,13 @@
   <view class="page" :style="responsiveStyle">
     <view class="header">
       <image class="back" src="/static/wallet/back.svg" mode="aspectFit" @tap="goBack" />
-      <text class="title">交易紀錄</text>
-      <view class="filter" @tap="openFilter"><text>{{ filterTitle }}</text><image src="/static/transactions/caret-down.svg" mode="aspectFit" /></view>
+      <text class="title">{{ tx('交易紀錄') }}</text>
+      <view class="filter" @tap="openFilter"><text>{{ tx(filterTitle) }}</text><image src="/static/transactions/caret-down.svg" mode="aspectFit" /></view>
     </view>
-    <view class="month current-month"><text>本月</text><image src="/static/transactions/section-mark.svg" mode="aspectFit" /></view>
-    <view class="summary current-summary"><text>支出 {{ expenseSummary }}</text><view class="summary-divider" /><text>收入 {{ incomeSummary }}</text></view>
+    <view class="month current-month"><text>{{ tx('本月') }}</text><image src="/static/transactions/section-mark.svg" mode="aspectFit" /></view>
+    <view class="summary current-summary"><text>{{ tx('支出') }} {{ tx(expenseSummary) }}</text><view class="summary-divider" /><text>{{ tx('收入') }} {{ tx(incomeSummary) }}</text></view>
     <view class="records-card">
-      <view class="table-head"><text>類型</text><text>詳細</text><text>金額</text></view>
+      <view class="table-head"><text>{{ tx('類型') }}</text><text>{{ tx('詳細') }}</text><text>{{ tx('金額') }}</text></view>
       <scroll-view class="records-scroll" scroll-y :show-scrollbar="false" :scroll-with-animation="true">
         <view
           v-for="(record, index) in visibleRecords"
@@ -17,31 +17,31 @@
           @tap="openRecord(record)"
         >
           <image v-if="index < visibleRecords.length - 1" class="row-divider" src="/static/transactions/row-divider.svg" mode="aspectFit" />
-          <text class="record-kind">{{ record.kind }}</text>
-          <view class="record-detail"><text>{{ record.detail }}</text><text class="record-time">{{ record.time }}</text></view>
-          <view :class="['record-amount', record.amountTone]"><text>{{ record.amount }}</text></view>
-          <text v-if="record.status" class="record-status">{{ record.status }}</text>
-          <text v-if="record.order" class="record-order">{{ record.order }}</text>
+          <text class="record-kind">{{ tx(record.kind) }}</text>
+          <view class="record-detail"><text>{{ tx(record.detail) }}</text><text class="record-time">{{ tx(record.time) }}</text></view>
+          <view :class="['record-amount', record.amountTone]"><text>{{ tx(record.amount) }}</text></view>
+          <text v-if="record.status" class="record-status">{{ tx(record.status) }}</text>
+          <text v-if="record.order" class="record-order">{{ tx(record.order) }}</text>
         </view>
       </scroll-view>
     </view>
     <view v-if="filterOpen" class="filter-layer" @tap="closeFilter">
       <image class="filter-mask" src="/static/transactions/filter-overlay.svg" mode="scaleToFill" />
       <view class="filter-sheet" @tap.stop>
-        <view class="filter-actions"><view class="filter-action cancel" @tap="closeFilter"><text>取消</text></view><view class="filter-action confirm" @tap="applyFilter"><text>確定</text></view></view>
+        <view class="filter-actions"><view class="filter-action cancel" @tap="closeFilter"><text>{{ tx('取消') }}</text></view><view class="filter-action confirm" @tap="applyFilter"><text>{{ tx('確定') }}</text></view></view>
         <view class="filter-group income-group">
-          <text class="filter-label">收支類型</text>
-          <view :class="['filter-option', 'income-all-option', { selected: pendingIncomeType === 'all' }]" @tap="pendingIncomeType = 'all'"><text>全部</text></view>
-          <view :class="['filter-option', 'income-income-option', { selected: pendingIncomeType === 'income', disabled: !isIncomeTypeAllowed('income') }]" @tap="selectIncomeType('income')"><text>收入</text></view>
-          <view :class="['filter-option', 'income-expense-option', { selected: pendingIncomeType === 'expense', disabled: !isIncomeTypeAllowed('expense') }]" @tap="selectIncomeType('expense')"><text>支出</text></view>
+          <text class="filter-label">{{ tx('收支類型') }}</text>
+          <view :class="['filter-option', 'income-all-option', { selected: pendingIncomeType === 'all' }]" @tap="pendingIncomeType = 'all'"><text>{{ tx('全部') }}</text></view>
+          <view :class="['filter-option', 'income-income-option', { selected: pendingIncomeType === 'income', disabled: !isIncomeTypeAllowed('income') }]" @tap="selectIncomeType('income')"><text>{{ tx('收入') }}</text></view>
+          <view :class="['filter-option', 'income-expense-option', { selected: pendingIncomeType === 'expense', disabled: !isIncomeTypeAllowed('expense') }]" @tap="selectIncomeType('expense')"><text>{{ tx('支出') }}</text></view>
         </view>
-        <text class="filter-label transaction-label">交易類型</text>
+        <text class="filter-label transaction-label">{{ tx('交易類型') }}</text>
         <view class="transaction-options">
-          <view :class="['filter-option', { selected: pendingTransactionType === 'all' }]" @tap="selectTransactionType('all')"><text>全部</text></view>
-          <view :class="['filter-option', { selected: pendingTransactionType === 'travel-order' }]" @tap="selectTransactionType('travel-order')"><text>出行訂單</text></view>
-          <view :class="['filter-option', { selected: pendingTransactionType === 'withdraw' }]" @tap="selectTransactionType('withdraw')"><text>餘額提現</text></view>
-          <view :class="['filter-option', { selected: pendingTransactionType === 'topup' }]" @tap="selectTransactionType('topup')"><text>餘額增值</text></view>
-          <view :class="['filter-option', { selected: pendingTransactionType === 'cancel-order' }]" @tap="selectTransactionType('cancel-order')"><text>取消訂單</text></view>
+          <view :class="['filter-option', { selected: pendingTransactionType === 'all' }]" @tap="selectTransactionType('all')"><text>{{ tx('全部') }}</text></view>
+          <view :class="['filter-option', { selected: pendingTransactionType === 'travel-order' }]" @tap="selectTransactionType('travel-order')"><text>{{ tx('出行訂單') }}</text></view>
+          <view :class="['filter-option', { selected: pendingTransactionType === 'withdraw' }]" @tap="selectTransactionType('withdraw')"><text>{{ tx('餘額提現') }}</text></view>
+          <view :class="['filter-option', { selected: pendingTransactionType === 'topup' }]" @tap="selectTransactionType('topup')"><text>{{ tx('餘額增值') }}</text></view>
+          <view :class="['filter-option', { selected: pendingTransactionType === 'cancel-order' }]" @tap="selectTransactionType('cancel-order')"><text>{{ tx('取消訂單') }}</text></view>
         </view>
       </view>
     </view>
@@ -49,6 +49,7 @@
 </template>
 
 <script setup lang="ts">
+import { tx } from '../../i18n'
 import { computed, ref, watch, onMounted } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'

@@ -1,27 +1,27 @@
 <template>
   <view class="page" :style="responsiveStyle">
-    <view v-if="loadError" class="load-error">訂單不存在或無權查看</view>
+    <view v-if="loadError" class="load-error">{{ tx('訂單不存在或無權查看') }}</view>
     <template v-else>
       <view class="header" :style="headerStyle">
         <OrdersBackButton icon-src="/static/orders/traveling-back.svg" @tap="goBack" />
-        <text class="number">訂單編號：{{ orderNumber }}</text>
+        <text class="number">{{ tx('訂單編號：') }}{{ tx(orderNumber) }}</text>
       </view>
-      <view class="assist" role="button" aria-label="就此訂單聯繫客服" @tap="openOrderSupport(storedOrder)"><image src="/static/orders/help.svg" mode="aspectFit" /><text>訂單協助</text></view>
-      <view class="status"><image src="/static/orders/status-blue.svg" mode="aspectFit" /><text>待出行</text></view>
+      <view class="assist" role="button" :aria-label="tx('就此訂單聯繫客服')" @tap="openOrderSupport(storedOrder)"><image src="/static/orders/help.svg" mode="aspectFit" /><text>{{ tx('訂單協助') }}</text></view>
+      <view class="status"><image src="/static/orders/status-blue.svg" mode="aspectFit" /><text>{{ tx('待出行') }}</text></view>
       <scroll-view class="traveling-detail-scroll" scroll-y>
         <view class="traveling-detail-content">
           <view class="traveling-detail-card">
-            <view class="card-top"><view class="locations"><view :class="{ 'long-location': isLongAddress(originLabel) }"><image src="/static/orders/origin.svg" mode="aspectFit" /><text>{{ formatOrderDetailAddressLine(originLabel) }}</text></view><view :class="{ 'long-location': isLongAddress(destinationLabel) }"><image src="/static/orders/destination.svg" mode="aspectFit" /><text>{{ formatOrderDetailAddressLine(destinationLabel) }}</text></view></view><view class="payment completed"><view class="paid-tag">已付款</view></view></view>
-            <view class="times"><text>預約時間 ：{{ bookingTime }}</text><text>預計到達時間 ：{{ arrivalTime }}</text></view>
-            <view class="passenger-title">乘客及聯絡資料：</view>
-            <view class="passenger"><view><image src="/static/orders/passenger.svg" mode="aspectFit" /><text>{{ passengerLabel }}</text></view><view><image src="/static/orders/phone.svg" mode="aspectFit" /><text>{{ passengerPhoneLabel }}</text></view>            </view>
+            <view class="card-top"><view class="locations"><view :class="{ 'long-location': isLongAddress(originLabel) }"><image src="/static/orders/origin.svg" mode="aspectFit" /><text>{{ tx(formatOrderDetailAddressLine(originLabel)) }}</text></view><view :class="{ 'long-location': isLongAddress(destinationLabel) }"><image src="/static/orders/destination.svg" mode="aspectFit" /><text>{{ tx(formatOrderDetailAddressLine(destinationLabel)) }}</text></view></view><view class="payment completed"><view class="paid-tag">{{ tx('已付款') }}</view></view></view>
+            <view class="times"><text>{{ tx('預約時間 ：') }}{{ tx(bookingTime) }}</text><text>{{ tx('預計到達時間 ：') }}{{ tx(arrivalTime) }}</text></view>
+            <view class="passenger-title">{{ tx('乘客及聯絡資料：') }}</view>
+            <view class="passenger"><view><image src="/static/orders/passenger.svg" mode="aspectFit" /><text>{{ tx(passengerLabel) }}</text></view><view><image src="/static/orders/phone.svg" mode="aspectFit" /><text>{{ tx(passengerPhoneLabel) }}</text></view>            </view>
             <view class="detail">
-              <text class="detail-title">訂單詳細</text><text class="detail-date">{{ detailDateLabel }}</text><view class="line" />
-              <view class="row"><text>{{ vehicleLabel }}</text><text>{{ currencyLabel }} {{ baseFareTotal.toFixed(2) }}</text></view>
-              <view v-for="item in surchargeItems" :key="item.label" class="row"><text>{{ item.label }}</text><text>{{ formatLineAmount(item) }}</text></view>
-              <view class="row"><text>優惠券抵扣</text><text>{{ discountLabel }}</text></view>
-              <view class="total">Total： {{ currencyLabel }} {{ paymentTotal.toFixed(2) }}</view>
-              <view v-if="storedOrder?.payment" class="completed-payment"><view v-if="storedOrder.payment.fareAmount > 0" class="payment-record"><image src="/static/vehicles/payment/payment-wallet-fare.svg" mode="aspectFit" /><text>車費餘額</text><text class="record-amount">-{{ currencyLabel }} {{ storedOrder.payment.fareAmount.toFixed(2) }}</text></view><view v-if="storedOrder.payment.cashAmount > 0" class="payment-record"><image src="/static/vehicles/payment/payment-wallet-cash.svg" mode="aspectFit" /><text>現金餘額</text><text class="record-amount">-{{ currencyLabel }} {{ storedOrder.payment.cashAmount.toFixed(2) }}</text></view><view class="payment-divider" /><view class="record-link" @tap="showPaymentRecords">相關支付紀錄 <text>›</text></view></view>
+              <text class="detail-title">{{ tx('訂單詳細') }}</text><text class="detail-date">{{ tx(detailDateLabel) }}</text><view class="line" />
+              <view class="row"><text>{{ tx(vehicleLabel) }}</text><text>{{ tx(currencyLabel) }} {{ tx(baseFareTotal.toFixed(2)) }}</text></view>
+              <view v-for="item in surchargeItems" :key="item.label" class="row"><text>{{ tx(item.label) }}</text><text>{{ tx(formatLineAmount(item)) }}</text></view>
+              <view class="row"><text>{{ tx('優惠券抵扣') }}</text><text>{{ tx(discountLabel) }}</text></view>
+              <view class="total">Total： {{ tx(currencyLabel) }} {{ tx(paymentTotal.toFixed(2)) }}</view>
+              <view v-if="storedOrder?.payment" class="completed-payment"><view v-if="storedOrder.payment.fareAmount > 0" class="payment-record"><image src="/static/vehicles/payment/payment-wallet-fare.svg" mode="aspectFit" /><text>{{ tx('車費餘額') }}</text><text class="record-amount">-{{ tx(currencyLabel) }} {{ tx(storedOrder.payment.fareAmount.toFixed(2)) }}</text></view><view v-if="storedOrder.payment.cashAmount > 0" class="payment-record"><image src="/static/vehicles/payment/payment-wallet-cash.svg" mode="aspectFit" /><text>{{ tx('現金餘額') }}</text><text class="record-amount">-{{ tx(currencyLabel) }} {{ tx(storedOrder.payment.cashAmount.toFixed(2)) }}</text></view><view class="payment-divider" /><view class="record-link" @tap="showPaymentRecords">{{ tx('相關支付紀錄') }} <text>›</text></view></view>
             </view>
           </view>
         </view>
@@ -31,6 +31,7 @@
 </template>
 
 <script setup lang="ts">
+import { tx } from '../../i18n'
 import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'

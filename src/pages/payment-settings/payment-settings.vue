@@ -2,17 +2,18 @@
   <view class="page" :style="responsiveStyle">
     <view class="header">
       <image class="back" src="/static/payment-settings/back.svg" mode="aspectFit" @tap="goBack" />
-      <text class="title">支付設定</text>
+      <text class="title">{{ tx('支付設定') }}</text>
     </view>
-    <view class="setting-row first-row" @tap="showComingSoon('修改支付密碼')"><text>修改支付密碼</text><image src="/static/payment-settings/action-enabled.svg" mode="scaleToFill" /></view>
-    <view class="setting-row" @tap="showComingSoon('忘記支付密碼')"><text>忘記支付密碼</text><image src="/static/payment-settings/action-disabled.svg" mode="scaleToFill" /></view>
+    <view class="setting-row first-row" @tap="showComingSoon('修改支付密碼')"><text>{{ tx('修改支付密碼') }}</text><image src="/static/payment-settings/action-enabled.svg" mode="scaleToFill" /></view>
+    <view class="setting-row" @tap="showComingSoon('忘記支付密碼')"><text>{{ tx('忘記支付密碼') }}</text><image src="/static/payment-settings/action-disabled.svg" mode="scaleToFill" /></view>
     <view class="setting-row" @tap="showComingSoon('Face ID')"><text>Face ID</text><image src="/static/payment-settings/action-disabled.svg" mode="scaleToFill" /></view>
-    <view class="setting-row" @tap="showComingSoon('免密支付')"><text>免密支付</text><image src="/static/payment-settings/action-disabled.svg" mode="scaleToFill" /></view>
-    <view class="setting-row" @tap="showComingSoon('自動續費')"><text>自動續費</text><image src="/static/payment-settings/action-disabled.svg" mode="scaleToFill" /></view>
+    <view class="setting-row" @tap="showComingSoon('免密支付')"><text>{{ tx('免密支付') }}</text><image src="/static/payment-settings/action-disabled.svg" mode="scaleToFill" /></view>
+    <view class="setting-row" @tap="showComingSoon('自動續費')"><text>{{ tx('自動續費') }}</text><image src="/static/payment-settings/action-disabled.svg" mode="scaleToFill" /></view>
   </view>
 </template>
 
 <script setup lang="ts">
+import { tx } from '../../i18n'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { closeCachedPage } from '../../utils/navigation'
 

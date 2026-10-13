@@ -2,7 +2,7 @@
   <view class="page" :style="responsiveStyle">
     <view class="header">
       <image class="back" src="/static/wallet/back.svg" mode="aspectFit" @tap="goBack" />
-      <text class="title">領取/查詢</text>
+      <text class="title">{{ tx('領取/查詢') }}</text>
     </view>
 
     <template v-if="pendingVoucher">
@@ -11,26 +11,26 @@
         <image class="wave wave-back" src="/static/voucher/wave-back.svg" mode="scaleToFill" />
         <image class="wave wave-front" src="/static/voucher/wave-front.svg" mode="scaleToFill" />
         <view class="voucher-overlay" />
-        <view class="voucher-amount"><text class="currency">¥ </text><text class="amount">{{ pendingVoucher.amount }}</text></view>
+        <view class="voucher-amount"><text class="currency">¥ </text><text class="amount">{{ tx(pendingVoucher.amount) }}</text></view>
         <image class="voucher-mark" src="/static/voucher/voucher-mark.svg" mode="aspectFit" />
         <image class="voucher-arrow" src="/static/voucher/voucher-arrow.svg" mode="aspectFit" />
-        <text class="voucher-expiry">有效期：{{ pendingVoucher.expiry }}</text>
+        <text class="voucher-expiry">{{ tx('有效期：') }}{{ tx(pendingVoucher.expiry) }}</text>
       </view>
 
       <view class="claim-details">
-        <text class="detail-serial">序號： {{ formatCode(pendingVoucher.serial) }}</text>
+        <text class="detail-serial">{{ tx('序號：') }} {{ tx(formatCode(pendingVoucher.serial)) }}</text>
         <image class="claim-decoration" src="/static/voucher/claim-decoration.svg" mode="aspectFit" />
         <view class="mask-line mask-long" />
         <view class="mask-line mask-medium" />
         <view class="mask-line mask-short" />
         <image class="claim-lock" src="/static/voucher/claim-lock.svg" mode="aspectFit" />
-        <text class="detail-code">代碼： {{ formatCode(pendingVoucher.code) }}</text>
-        <text class="detail-password">密碼： {{ pendingVoucher.password }}</text>
+        <text class="detail-code">{{ tx('代碼：') }} {{ tx(formatCode(pendingVoucher.code)) }}</text>
+        <text class="detail-password">{{ tx('密碼：') }} {{ tx(pendingVoucher.password) }}</text>
       </view>
 
       <view class="confirm-actions">
-        <view class="action cancel" @tap="cancelClaim"><text>取消</text></view>
-        <view class="action claim" @tap="confirmClaim"><text>領取</text></view>
+        <view class="action cancel" @tap="cancelClaim"><text>{{ tx('取消') }}</text></view>
+        <view class="action claim" @tap="confirmClaim"><text>{{ tx('領取') }}</text></view>
       </view>
     </template>
 
@@ -42,21 +42,21 @@
       </view>
 
       <view class="actions">
-        <view class="action query" @tap="queryVoucher"><text>查詢</text></view>
-        <view class="action claim" @tap="claimVoucher"><text>領取</text></view>
+        <view class="action query" @tap="queryVoucher"><text>{{ tx('查詢') }}</text></view>
+        <view class="action claim" @tap="claimVoucher"><text>{{ tx('領取') }}</text></view>
       </view>
       <view v-if="queriedVoucher" class="result-section">
-        <text class="result-title">查詢結果：</text>
+        <text class="result-title">{{ tx('查詢結果：') }}</text>
         <view class="voucher-card">
           <view class="voucher-gradient" />
           <image class="wave wave-back" src="/static/voucher/wave-back.svg" mode="scaleToFill" />
           <image class="wave wave-front" src="/static/voucher/wave-front.svg" mode="scaleToFill" />
           <view class="voucher-overlay" />
-          <view class="voucher-amount"><text class="currency">¥ </text><text class="amount">{{ queriedVoucher.amount }}</text></view>
+          <view class="voucher-amount"><text class="currency">¥ </text><text class="amount">{{ tx(queriedVoucher.amount) }}</text></view>
           <image class="voucher-mark" src="/static/voucher/voucher-mark.svg" mode="aspectFit" />
           <image class="voucher-arrow" src="/static/voucher/voucher-arrow.svg" mode="aspectFit" />
-          <text class="voucher-code">代碼：{{ formatCode(queriedVoucher.code) }}</text>
-          <text class="voucher-expiry">有效期：{{ queriedVoucher.expiry }}</text>
+          <text class="voucher-code">{{ tx('代碼：') }}{{ tx(formatCode(queriedVoucher.code)) }}</text>
+          <text class="voucher-expiry">{{ tx('有效期：') }}{{ tx(queriedVoucher.expiry) }}</text>
         </view>
       </view>
     </template>
@@ -64,15 +64,16 @@
     <view v-if="claimedVoucher" class="success-layer">
       <view class="success-mask" />
       <view class="success-dialog">
-        <text class="success-message">成功領取 ¥{{ claimedVoucher.amount.toFixed(2) }}</text>
+        <text class="success-message">{{ tx('成功領取 ¥') }}{{ tx(claimedVoucher.amount.toFixed(2)) }}</text>
         <image class="success-icon" src="/static/voucher/success-icon.svg" mode="aspectFit" />
-        <view class="success-button" @tap="finishClaim"><text>完成</text></view>
+        <view class="success-button" @tap="finishClaim"><text>{{ tx('完成') }}</text></view>
       </view>
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
+import { tx } from '../../i18n'
 import { reactive, ref } from 'vue'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { closeCachedPage, openCachedPage } from '../../utils/navigation'

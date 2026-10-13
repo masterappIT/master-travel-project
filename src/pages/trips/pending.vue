@@ -2,47 +2,48 @@
   <view class="page" :style="responsiveStyle">
     <view class="header">
       <OrdersBackButton icon-src="/static/orders/traveling-back.svg" @tap="goBack" />
-      <text class="title">待出行</text>
+      <text class="title">{{ tx('待出行') }}</text>
     </view>
-    <text class="order-number">訂單編號：{{ orderNumber }}</text>
+    <text class="order-number">{{ tx('訂單編號：') }}{{ tx(orderNumber) }}</text>
     <view :class="['trip-card', { accepted: hasDriver }]">
-      <view :class="['waiting', { progress: isTripInProgress }]"><view class="waiting-mark"><image :src="isTripInProgress ? '/static/vehicles/trip-progress/pending-status-ring.svg' : '/static/orders/traveling-wait-ring.svg'" mode="aspectFit" /><image class="waiting-dot" :src="isTripInProgress ? '/static/vehicles/trip-progress/status-dot.svg' : '/static/orders/traveling-wait-dot.svg'" mode="aspectFit" /></view><text>{{ isTripInProgress ? '進行中' : '等待中' }}</text></view>
+      <view :class="['waiting', { progress: isTripInProgress }]"><view class="waiting-mark"><image :src="isTripInProgress ? '/static/vehicles/trip-progress/pending-status-ring.svg' : '/static/orders/traveling-wait-ring.svg'" mode="aspectFit" /><image class="waiting-dot" :src="isTripInProgress ? '/static/vehicles/trip-progress/status-dot.svg' : '/static/orders/traveling-wait-dot.svg'" mode="aspectFit" /></view><text>{{ tx(isTripInProgress ? '進行中' : '等待中') }}</text></view>
       <view v-if="!hasDriver" class="assignment-summary">
         <image src="/static/orders/traveling-status.svg" mode="aspectFit" />
-        <text>正在為您安排司機</text>
-        <view class="confirmation"><image src="/static/orders/traveling-clock.svg" mode="aspectFit" /><text>三小時內確認</text></view>
-        <text class="countdown">{{ confirmationCountdownLabel }}</text>
+        <text>{{ tx('正在為您安排司機') }}</text>
+        <view class="confirmation"><image src="/static/orders/traveling-clock.svg" mode="aspectFit" /><text>{{ tx('三小時內確認') }}</text></view>
+        <text class="countdown">{{ tx(confirmationCountdownLabel) }}</text>
       </view>
       <view v-else class="accepted-driver">
         <image v-if="acceptedVehicleLogo && !logoLoadFailed" class="accepted-logo" :src="acceptedVehicleLogo" mode="aspectFit" @error="logoLoadFailed = true" />
-        <view class="accepted-vehicle-copy"><text>{{ acceptedVehicleBrand }}</text><text>{{ acceptedVehicleSeries }}</text></view>
-        <view class="accepted-driver-info"><image src="/static/vehicles/trip-waiting/avatar.svg" mode="aspectFit" /><view><text>{{ acceptedDriverName }}</text><view><image src="/static/vehicles/trip-waiting/star.svg" mode="aspectFit" /><text>5.0</text></view></view></view>
-        <view class="accepted-actions"><view @tap="callAcceptedDriver"><image src="/static/vehicles/trip-waiting/phone.svg" mode="aspectFit" /><text>打電話</text></view><view><image src="/static/vehicles/trip-waiting/seat.svg" mode="aspectFit" /><text>{{ acceptedVehicleSeats }}座</text></view><view><text>白色</text></view></view>
+        <view class="accepted-vehicle-copy"><text>{{ tx(acceptedVehicleBrand) }}</text><text>{{ tx(acceptedVehicleSeries) }}</text></view>
+        <view class="accepted-driver-info"><image src="/static/vehicles/trip-waiting/avatar.svg" mode="aspectFit" /><view><text>{{ tx(acceptedDriverName) }}</text><view><image src="/static/vehicles/trip-waiting/star.svg" mode="aspectFit" /><text>5.0</text></view></view></view>
+        <view class="accepted-actions"><view @tap="callAcceptedDriver"><image src="/static/vehicles/trip-waiting/phone.svg" mode="aspectFit" /><text>{{ tx('打電話') }}</text></view><view><image src="/static/vehicles/trip-waiting/seat.svg" mode="aspectFit" /><text>{{ tx(acceptedVehicleSeats) }}{{ tx('座') }}</text></view><view><text>{{ tx('白色') }}</text></view></view>
         <view v-if="acceptedVehiclePlates.length" class="accepted-plate">
           <text
             v-for="plate in acceptedVehiclePlates"
             :key="plate.kind"
             :class="[`plate-slot-${plate.slot}`, `plate-${plate.kind}`]"
-          >{{ plate.value }}</text>
+          >{{ tx(plate.value) }}</text>
         </view>
       </view>
       <view class="trip-info">
         <image class="vehicle-icon" src="/static/orders/traveling-tesla.svg" mode="aspectFit" />
-        <text class="pickup-time">{{ hasDriver ? '上車時間' : '出發時間' }} ：{{ bookingTime }}</text>
-        <view class="locations"><view><image src="/static/orders/traveling-origin.svg" mode="aspectFit" /><text>{{ originLabel }}</text></view><view><image src="/static/orders/traveling-destination.svg" mode="aspectFit" /><text>{{ destinationLabel }}</text></view></view>
-        <text class="vehicle-label">{{ vehicleLabel }}</text>
-        <view class="passenger"><text>乘客及聯絡資料：</text><view><image src="/static/orders/traveling-passenger.svg" mode="aspectFit" /><text>{{ passengerLabel }}</text></view><view><image src="/static/orders/traveling-phone.svg" mode="aspectFit" /><text>{{ passengerPhoneLabel }}</text></view></view>
+        <text class="pickup-time">{{ tx(hasDriver ? '上車時間' : '出發時間') }} ：{{ tx(bookingTime) }}</text>
+        <view class="locations"><view><image src="/static/orders/traveling-origin.svg" mode="aspectFit" /><text>{{ tx(originLabel) }}</text></view><view><image src="/static/orders/traveling-destination.svg" mode="aspectFit" /><text>{{ tx(destinationLabel) }}</text></view></view>
+        <text class="vehicle-label">{{ tx(vehicleLabel) }}</text>
+        <view class="passenger"><text>{{ tx('乘客及聯絡資料：') }}</text><view><image src="/static/orders/traveling-passenger.svg" mode="aspectFit" /><text>{{ tx(passengerLabel) }}</text></view><view><image src="/static/orders/traveling-phone.svg" mode="aspectFit" /><text>{{ tx(passengerPhoneLabel) }}</text></view></view>
         <view class="divider first"><image src="/static/orders/traveling-divider.svg" mode="aspectFit" /></view>
         <view class="divider second"><image src="/static/orders/traveling-divider.svg" mode="aspectFit" /></view>
-        <view class="payment-records" @tap="showPaymentRecords">相關支付紀錄 <image src="/static/orders/traveling-arrow.svg" mode="aspectFit" /></view>
+        <view class="payment-records" @tap="showPaymentRecords">{{ tx('相關支付紀錄') }} <image src="/static/orders/traveling-arrow.svg" mode="aspectFit" /></view>
         <view class="divider third"><image src="/static/orders/traveling-divider.svg" mode="aspectFit" /></view>
-        <view class="related-trip" @tap="showRelatedTrip">相關行程 <image src="/static/orders/traveling-arrow.svg" mode="aspectFit" /></view>
+        <view class="related-trip" @tap="showRelatedTrip">{{ tx('相關行程') }} <image src="/static/orders/traveling-arrow.svg" mode="aspectFit" /></view>
       </view>
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
+import { tx } from '../../i18n'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import OrdersBackButton from '../../components/orders/OrdersBackButton.vue'

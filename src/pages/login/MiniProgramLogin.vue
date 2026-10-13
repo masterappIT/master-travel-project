@@ -7,10 +7,10 @@
       <view class="mini-program-login-shell">
         <text class="mini-program-welcome">Welcome</text>
         <image class="mini-program-register-icon" src="/static/login/mini-program/register.svg" mode="scaleToFill" />
-        <text class="mini-program-register-label">註冊/登入</text>
+        <text class="mini-program-register-label">{{ tx('註冊/登入') }}</text>
         <view v-if="miniProgramMode === null && loginConfigFailed" class="mini-program-login-status">
-          <text>登入配置載入失敗</text>
-          <text class="mini-program-login-retry" @tap="loadLoginConfiguration">重試</text>
+          <text>{{ tx('登入配置載入失敗') }}</text>
+          <text class="mini-program-login-retry" @tap="loadLoginConfiguration">{{ tx('重試') }}</text>
         </view>
         <MiniProgramWechatLogin
           v-if="miniProgramMode === 'wechatOnly'"
@@ -67,6 +67,7 @@
 </template>
 
 <script setup lang="ts">
+import { tx } from '../../i18n'
 import { computed, ref, onMounted } from 'vue'
 import MiniProgramWechatLogin from './MiniProgramWechatLogin.vue'
 import MiniProgramPhoneLogin from './MiniProgramPhoneLogin.vue'

@@ -2,32 +2,33 @@
   <view class="page" :style="responsiveStyle">
     <view class="header">
       <image class="back" src="/static/wallet/back.svg" mode="aspectFit" @tap="goBack" />
-      <text class="title">我的錢包</text>
+      <text class="title">{{ tx('我的錢包') }}</text>
     </view>
 
     <view class="balance-card">
-      <text class="balance-label">現金餘額</text>
-      <text class="balance">{{ formatWalletAmount(wallet.withdrawable, 'RMB') }}</text>
-      <text class="fare-balance">車費餘額：{{ formatWalletAmount(wallet.fare, 'RMB') }}</text>
+      <text class="balance-label">{{ tx('現金餘額') }}</text>
+      <text class="balance">{{ tx(formatWalletAmount(wallet.withdrawable, 'RMB')) }}</text>
+      <text class="fare-balance">{{ tx('車費餘額：') }}{{ tx(formatWalletAmount(wallet.fare, 'RMB')) }}</text>
     </view>
 
     <view class="actions">
-      <view class="action withdraw" @tap="openAmountDialog('withdraw')"><text>提現</text></view>
-      <view class="action top-up" @tap="openTopUp"><text>增值</text></view>
+      <view class="action withdraw" @tap="openAmountDialog('withdraw')"><text>{{ tx('提現') }}</text></view>
+      <view class="action top-up" @tap="openTopUp"><text>{{ tx('增值') }}</text></view>
     </view>
 
     <view class="records-link" @tap="showRecords">
-      <text>交易紀錄</text>
+      <text>{{ tx('交易紀錄') }}</text>
       <image src="/static/wallet/records.svg" mode="aspectFit" />
     </view>
 
     <view class="settings" @tap="openSettings">
-      <image src="/static/wallet/settings.svg" mode="aspectFit" /><text>設定</text>
+      <image src="/static/wallet/settings.svg" mode="aspectFit" /><text>{{ tx('設定') }}</text>
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
+import { tx } from '../../i18n'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { closeCachedPage, openCachedPage } from '../../utils/navigation'
 import { reactive, onMounted } from 'vue'

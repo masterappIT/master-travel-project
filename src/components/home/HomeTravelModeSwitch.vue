@@ -1,5 +1,5 @@
 <template>
-  <view class="travel-mode-switch" :class="{ 'business-layout': layout === 'business' }" role="tablist" aria-label="打車方式">
+  <view class="travel-mode-switch" :class="{ 'business-layout': layout === 'business' }" role="tablist" :aria-label="tx('打車方式')">
     <view
       v-for="option in options"
       :key="option.value"
@@ -9,12 +9,13 @@
       :aria-selected="mode === option.value"
       @tap="selectMode(option.value)"
     >
-      <text>{{ option.label }}</text>
+      <text>{{ tx(option.label) }}</text>
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
+import { tx } from '../../i18n'
 type TravelMode = 'cross-border' | 'business'
 
 defineProps<{

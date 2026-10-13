@@ -1,38 +1,39 @@
 <template>
   <view class="page" :style="responsiveStyle">
-    <view class="header"><view class="back" @tap="goBack"><image src="/static/orders/traveling-back.svg" mode="aspectFit" /></view><text class="title">會員中心</text></view>
+    <view class="header"><view class="back" @tap="goBack"><image src="/static/orders/traveling-back.svg" mode="aspectFit" /></view><text class="title">{{ tx('會員中心') }}</text></view>
     <scroll-view class="content" scroll-y>
-      <view v-if="loading" class="state-card">會員資料載入中</view>
-      <view v-else-if="errorMessage" class="state-card"><text>{{ errorMessage }}</text><button @tap="loadMembership">重新載入</button></view>
+      <view v-if="loading" class="state-card">{{ tx('會員資料載入中') }}</view>
+      <view v-else-if="errorMessage" class="state-card"><text>{{ tx(errorMessage) }}</text><button @tap="loadMembership">{{ tx('重新載入') }}</button></view>
       <template v-else-if="summary">
         <view class="member-card">
           <view class="card-glow" />
-          <view class="member-top"><view class="avatar">{{ memberInitial }}</view><view class="member-info"><text class="member-name">Hi, {{ summary.user.name }}</text><text class="member-level">{{ activePlan?.name || '一般會員' }}</text></view><view class="member-badge">{{ activePlan?.level || 'MEMBER' }}</view></view>
-          <view class="growth-copy"><text>{{ subscriptionStatus }}</text><text v-if="summary.subscription"><strong>{{ formatDate(summary.subscription.currentPeriodEndsAt) }}</strong></text></view>
+          <view class="member-top"><view class="avatar">{{ tx(memberInitial) }}</view><view class="member-info"><text class="member-name">Hi, {{ tx(summary.user.name) }}</text><text class="member-level">{{ tx(activePlan?.name || '一般會員') }}</text></view><view class="member-badge">{{ tx(activePlan?.level || 'MEMBER') }}</view></view>
+          <view class="growth-copy"><text>{{ tx(subscriptionStatus) }}</text><text v-if="summary.subscription"><strong>{{ tx(formatDate(summary.subscription.currentPeriodEndsAt)) }}</strong></text></view>
           <view class="growth-track"><view class="growth-value" :style="{ width: summary.subscription ? '100%' : '0%' }" /></view>
-          <view class="growth-foot"><text>{{ summary.subscription ? (summary.subscription.cancelAtPeriodEnd ? '到期後不再續期' : '會籍權益使用中') : '選擇方案開通會員權益' }}</text><text>{{ activePlan?.currency || 'HKD' }}</text></view>
+          <view class="growth-foot"><text>{{ tx(summary.subscription ? (summary.subscription.cancelAtPeriodEnd ? '到期後不再續期' : '會籍權益使用中') : '選擇方案開通會員權益') }}</text><text>{{ tx(activePlan?.currency || 'HKD') }}</text></view>
         </view>
-        <view class="quick-stats"><view><strong>{{ activePlan?.voucherCount || 0 }}</strong><text>每期乘車券</text></view><view><strong>{{ activePlan?.benefits.length || 0 }}</strong><text>目前權益</text></view><view><strong>{{ (activePlan?.mileageRate || 1).toFixed(1) }}×</strong><text>里程倍率</text></view></view>
-        <view v-if="summary.pendingOrder" class="pending-card"><view><text class="section-title">待確認會員訂單</text><text class="section-subtitle">{{ summary.pendingOrder.plan.name }} · {{ periodLabel(summary.pendingOrder.billingPeriod) }} · {{ summary.pendingOrder.currency }} {{ summary.pendingOrder.amount }}</text></view><button :disabled="submitting" @tap="cancelPendingOrder">取消訂單</button></view>
-        <view class="upgrade-history" @tap="historyOpen=!historyOpen"><text>會員紀錄</text><text class="history-arrow">{{ historyOpen ? '⌃' : '›' }}</text></view>
-        <view v-if="historyOpen" class="history-list"><view v-for="event in summary.events" :key="event.id" class="history-item"><text>{{ event.title }}</text><text>{{ formatDate(event.createdAt) }}</text></view><text v-if="!summary.events.length" class="empty-copy">暫無會員紀錄</text></view>
-        <view class="section-head"><view><text class="section-title">{{ summary.subscription ? '變更會員方案' : '開通會員' }}</text><text class="section-subtitle">方案申請將由後台確認後生效</text></view><view class="period-switch"><view :class="['period',{active:period==='month'}]" @tap="period='month'">月付</view><view :class="['period',{active:period==='year'}]" @tap="period='year'">年付</view></view></view>
+        <view class="quick-stats"><view><strong>{{ tx(activePlan?.voucherCount || 0) }}</strong><text>{{ tx('每期乘車券') }}</text></view><view><strong>{{ tx(activePlan?.benefits.length || 0) }}</strong><text>{{ tx('目前權益') }}</text></view><view><strong>{{ tx((activePlan?.mileageRate || 1).toFixed(1)) }}×</strong><text>{{ tx('里程倍率') }}</text></view></view>
+        <view v-if="summary.pendingOrder" class="pending-card"><view><text class="section-title">{{ tx('待確認會員訂單') }}</text><text class="section-subtitle">{{ tx(summary.pendingOrder.plan.name) }} · {{ tx(periodLabel(summary.pendingOrder.billingPeriod)) }} · {{ tx(summary.pendingOrder.currency) }} {{ tx(summary.pendingOrder.amount) }}</text></view><button :disabled="submitting" @tap="cancelPendingOrder">{{ tx('取消訂單') }}</button></view>
+        <view class="upgrade-history" @tap="historyOpen=!historyOpen"><text>{{ tx('會員紀錄') }}</text><text class="history-arrow">{{ tx(historyOpen ? '⌃' : '›') }}</text></view>
+        <view v-if="historyOpen" class="history-list"><view v-for="event in summary.events" :key="event.id" class="history-item"><text>{{ tx(event.title) }}</text><text>{{ tx(formatDate(event.createdAt)) }}</text></view><text v-if="!summary.events.length" class="empty-copy">{{ tx('暫無會員紀錄') }}</text></view>
+        <view class="section-head"><view><text class="section-title">{{ tx(summary.subscription ? '變更會員方案' : '開通會員') }}</text><text class="section-subtitle">{{ tx('方案申請將由後台確認後生效') }}</text></view><view class="period-switch"><view :class="['period',{active:period==='month'}]" @tap="period='month'">{{ tx('月付') }}</view><view :class="['period',{active:period==='year'}]" @tap="period='year'">{{ tx('年付') }}</view></view></view>
         <view class="plan-list">
           <view v-for="plan in summary.plans" :key="plan.id" :class="['plan-card',{selected:selectedPlan===plan.id}]" @tap="selectedPlan=plan.id">
-            <view :class="['plan-mark',plan.id]">{{ plan.name.slice(0,1) }}</view>
-            <view class="plan-copy"><view class="plan-title-row"><text class="plan-name">{{ plan.name }}</text><text v-if="plan.recommended" class="recommend">推薦</text></view><text class="plan-benefit">{{ plan.benefits.join(' · ') }}</text></view>
-            <view class="plan-price"><view><text>{{ plan.currency }}</text><strong>{{ period==='month' ? plan.monthly : plan.yearly }}</strong></view><text>/{{ period==='month' ? '月' : '年' }}</text></view><view class="selector"><view /></view>
+            <view :class="['plan-mark',plan.id]">{{ tx(plan.name.slice(0,1)) }}</view>
+            <view class="plan-copy"><view class="plan-title-row"><text class="plan-name">{{ tx(plan.name) }}</text><text v-if="plan.recommended" class="recommend">{{ tx('推薦') }}</text></view><text class="plan-benefit">{{ tx(plan.benefits.join(' · ')) }}</text></view>
+            <view class="plan-price"><view><text>{{ tx(plan.currency) }}</text><strong>{{ tx(period==='month' ? plan.monthly : plan.yearly) }}</strong></view><text>/{{ tx(period==='month' ? '月' : '年') }}</text></view><view class="selector"><view /></view>
           </view>
         </view>
-        <view v-if="activePlan" class="benefits-card"><view class="card-title-row"><text class="section-title">目前會員權益</text><text class="more">{{ activePlan.name }}</text></view><view class="benefit-lines"><text v-for="benefit in activePlan.benefits" :key="benefit">• {{ benefit }}</text></view></view>
-        <view v-if="summary.subscription && !summary.subscription.cancelAtPeriodEnd" class="renewal-row"><view><text class="section-title">會籍續期</text><text class="section-subtitle">取消後仍可使用至本期結束</text></view><button :disabled="submitting" @tap="cancelRenewal">取消續期</button></view>
-        <view class="agreement">提交即表示同意《會員服務協議》；方案經後台確認後生效</view><view class="bottom-space" />
+        <view v-if="activePlan" class="benefits-card"><view class="card-title-row"><text class="section-title">{{ tx('目前會員權益') }}</text><text class="more">{{ tx(activePlan.name) }}</text></view><view class="benefit-lines"><text v-for="benefit in activePlan.benefits" :key="benefit">• {{ tx(benefit) }}</text></view></view>
+        <view v-if="summary.subscription && !summary.subscription.cancelAtPeriodEnd" class="renewal-row"><view><text class="section-title">{{ tx('會籍續期') }}</text><text class="section-subtitle">{{ tx('取消後仍可使用至本期結束') }}</text></view><button :disabled="submitting" @tap="cancelRenewal">{{ tx('取消續期') }}</button></view>
+        <view class="agreement">{{ tx('提交即表示同意《會員服務協議》；方案經後台確認後生效') }}</view><view class="bottom-space" />
       </template>
     </scroll-view>
-    <view v-if="summary && !summary.pendingOrder" class="checkout"><view class="checkout-price"><text>方案金額</text><view><small>{{ selectedPlanData?.currency || 'HKD' }}</small><strong>{{ currentPrice }}</strong><small>/{{ period==='month'?'月':'年' }}</small></view></view><view :class="['upgrade-button',{disabled:submitting||!selectedPlanData}]" @tap="submitOrder"><text>{{ submitting ? '提交中' : (summary.subscription ? '申請變更' : '立即開通') }}</text><text>›</text></view></view>
+    <view v-if="summary && !summary.pendingOrder" class="checkout"><view class="checkout-price"><text>{{ tx('方案金額') }}</text><view><small>{{ tx(selectedPlanData?.currency || 'HKD') }}</small><strong>{{ tx(currentPrice) }}</strong><small>/{{ tx(period==='month'?'月':'年') }}</small></view></view><view :class="['upgrade-button',{disabled:submitting||!selectedPlanData}]" @tap="submitOrder"><text>{{ tx(submitting ? '提交中' : (summary.subscription ? '申請變更' : '立即開通')) }}</text><text>›</text></view></view>
   </view>
 </template>
 <script setup lang="ts">
+import { tx } from '../../i18n'
 import { computed, onMounted, ref } from 'vue'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { closeCachedPage } from '../../utils/navigation'

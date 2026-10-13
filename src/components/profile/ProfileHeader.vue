@@ -2,19 +2,20 @@
   <view class="profile-header">
     <image class="avatar" :class="{ 'avatar-guest': !authenticated }" :src="resolvedAvatarUrl" mode="aspectFit" @error="avatarFailed = true" @tap="$emit(authenticated ? 'avatar' : 'login')" />
     <text class="profile-title">Profile</text>
-    <view class="settings-button" aria-label="設定" @tap="$emit('settings')">
+    <view class="settings-button" :aria-label="tx('設定')" @tap="$emit('settings')">
       <image class="notification" src="/static/profile/notification.svg" mode="aspectFit" />
     </view>
-    <text class="greeting" :class="{ 'guest-login': !authenticated }" @tap="!authenticated && $emit('login')">{{ authenticated ? greeting : '請登入/註冊' }}</text>
-    <view class="bell" aria-label="我的消息" @tap="$emit('notifications')">
+    <text class="greeting" :class="{ 'guest-login': !authenticated }" @tap="!authenticated && $emit('login')">{{ tx(authenticated ? greeting : '請登入/註冊') }}</text>
+    <view class="bell" :aria-label="tx('我的消息')" @tap="$emit('notifications')">
       <image class="bell-icon" src="/static/profile/notification-bell.svg" mode="aspectFit" />
       <image class="bell-tail" src="/static/profile/notification-bell-tail.svg" mode="aspectFit" />
       <image v-if="unreadCount > 0" class="badge" :class="{ 'guest-badge': !authenticated }" src="/static/profile/notification-badge.svg" mode="aspectFit" />
-      <text v-if="authenticated && unreadCount > 0" class="badge-count">{{ unreadCount > 99 ? '99+' : unreadCount }}</text>
+      <text v-if="authenticated && unreadCount > 0" class="badge-count">{{ tx(unreadCount > 99 ? '99+' : unreadCount) }}</text>
     </view>
   </view>
 </template>
 <script setup lang="ts">
+import { tx } from '../../i18n'
 import { computed, ref, toRefs, watch } from 'vue'
 
 const props = withDefaults(defineProps<{ avatarUrl?: string; displayName?: string; unreadCount?: number; authenticated?: boolean }>(), { avatarUrl: '', displayName: '', unreadCount: 0, authenticated: true })

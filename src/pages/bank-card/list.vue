@@ -2,22 +2,23 @@
   <view class="page" :style="responsiveStyle">
     <view class="header">
       <image class="back" src="/static/bank-card/list/back.svg" mode="aspectFit" @tap="goBack" />
-      <text class="title">我的銀行卡</text>
+      <text class="title">{{ tx('我的銀行卡') }}</text>
     </view>
 
     <view v-for="(card, index) in cards" :key="card.bank + card.type" class="saved-card" :class="{ selected: index % 2 === 1 }" :style="{ top: `${130 + index * 73}px` }" @tap="openCard">
       <image class="saved-card-logo" :src="card.logo" mode="aspectFit" />
       <text class="masked-number">**** **** **** 0000</text>
-      <text class="bank-name">{{ card.bank }}</text>
-      <text class="card-type">{{ card.type }}</text>
+      <text class="bank-name">{{ tx(card.bank) }}</text>
+      <text class="card-type">{{ tx(card.type) }}</text>
     </view>
 
     <view class="card-types"><image v-for="asset in cardTypeAssets" :key="asset" :src="asset" mode="aspectFit" /></view>
-    <view class="add-button" @tap="addCard"><text>新增銀行卡</text></view>
+    <view class="add-button" @tap="addCard"><text>{{ tx('新增銀行卡') }}</text></view>
   </view>
 </template>
 
 <script setup lang="ts">
+import { tx } from '../../i18n'
 import { useResponsiveCanvas } from '../../composables/useResponsiveCanvas'
 import { closeCachedPage, openCachedPage } from '../../utils/navigation'
 

@@ -5,23 +5,24 @@
     <view class="status-panel">
       <view class="route-card">
         <view class="route-row">
-          <image class="origin-icon" src="/static/vehicles/booking-success/origin.svg" mode="aspectFit" /><text class="origin-label">{{ originLabel }}</text>
+          <image class="origin-icon" src="/static/vehicles/booking-success/origin.svg" mode="aspectFit" /><text class="origin-label">{{ tx(originLabel) }}</text>
           <image class="route-arrow" src="/static/vehicles/booking-success/route-arrow.svg" mode="aspectFit" />
-          <image class="destination-icon" src="/static/vehicles/booking-success/destination.svg" mode="aspectFit" /><text class="destination-label">{{ destinationLabel }}</text>
+          <image class="destination-icon" src="/static/vehicles/booking-success/destination.svg" mode="aspectFit" /><text class="destination-label">{{ tx(destinationLabel) }}</text>
         </view>
-        <text class="booking-time">預約時間 ： {{ bookingTime }}</text>
+        <text class="booking-time">{{ tx('預約時間 ：') }} {{ tx(bookingTime) }}</text>
       </view>
-      <view class="status-heading"><image class="status-icon" src="/static/vehicles/booking-success/status-icon.svg" mode="scaleToFill" /><text>正在為您安排司機</text></view>
-      <view class="confirmation-time"><image class="confirmation-clock" src="/static/vehicles/booking-success/clock.svg" mode="aspectFit" /><text>三小時內確認</text></view>
+      <view class="status-heading"><image class="status-icon" src="/static/vehicles/booking-success/status-icon.svg" mode="scaleToFill" /><text>{{ tx('正在為您安排司機') }}</text></view>
+      <view class="confirmation-time"><image class="confirmation-clock" src="/static/vehicles/booking-success/clock.svg" mode="aspectFit" /><text>{{ tx('三小時內確認') }}</text></view>
       <image class="vehicle-illustration" src="/static/vehicles/booking-success/vehicle-scene.png" mode="scaleToFill" />
-      <text class="confirmation-countdown">{{ confirmationCountdownLabel }}</text>
-      <view class="cancel-action" @tap="cancelBooking"><image src="/static/vehicles/booking-success/cancel.svg" mode="aspectFit" /><text>取消用車</text></view>
-      <view class="detail-action" @tap="showBookingDetail">訂單詳細</view>
+      <text class="confirmation-countdown">{{ tx(confirmationCountdownLabel) }}</text>
+      <view class="cancel-action" @tap="cancelBooking"><image src="/static/vehicles/booking-success/cancel.svg" mode="aspectFit" /><text>{{ tx('取消用車') }}</text></view>
+      <view class="detail-action" @tap="showBookingDetail">{{ tx('訂單詳細') }}</view>
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
+import { tx } from '../../i18n'
 import TripRouteMap from '../../components/vehicles/TripRouteMap.vue'
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { isIosApp } from '../../platform'

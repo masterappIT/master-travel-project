@@ -5,67 +5,68 @@
         <image class="success-back" src="/static/wallet/back.svg" mode="aspectFit" @tap="goBack" />
       </view>
       <image class="success-icon" src="/static/top-up/success.svg" mode="aspectFit" />
-      <text class="success-title">餘額增值</text>
-      <view class="success-amount"><text class="success-rmb">RMB</text><text class="success-yen">¥</text><text class="success-number">{{ selectedAmount.toFixed(2) }}</text></view>
-      <text class="fee-free">免手續費</text>
-      <text class="payment-title">付款方式</text>
+      <text class="success-title">{{ tx('餘額增值') }}</text>
+      <view class="success-amount"><text class="success-rmb">RMB</text><text class="success-yen">¥</text><text class="success-number">{{ tx(selectedAmount.toFixed(2)) }}</text></view>
+      <text class="fee-free">{{ tx('免手續費') }}</text>
+      <text class="payment-title">{{ tx('付款方式') }}</text>
       <view class="payment-card">
         <image class="payment-icon" :src="paymentIcon" mode="aspectFit" />
-        <view class="payment-copy"><text>{{ paymentName }}</text><text class="payment-subtitle">{{ paymentSubtitle }}</text></view>
+        <view class="payment-copy"><text>{{ tx(paymentName) }}</text><text class="payment-subtitle">{{ tx(paymentSubtitle) }}</text></view>
         <image class="payment-check" src="/static/top-up/check.svg" mode="aspectFit" />
       </view>
-      <text class="arrival">到帳時間：{{ successTime }}</text>
+      <text class="arrival">{{ tx('到帳時間：') }}{{ tx(successTime) }}</text>
     </view>
     <view v-else-if="failed" class="failure-screen">
       <view class="failure-header">
         <image class="failure-back" src="/static/wallet/back.svg" mode="aspectFit" @tap="goBack" />
       </view>
       <image class="failure-icon" src="/static/top-up/no.svg" mode="aspectFit" />
-      <text class="failure-title">餘額增值</text>
-      <view class="failure-amount"><text class="failure-rmb">RMB</text><text class="failure-yen">¥</text><text class="failure-number">{{ failureAmount.toFixed(2) }}</text></view>
-      <text class="failure-status">失敗</text>
-      <text class="failure-payment-title">付款方式</text>
+      <text class="failure-title">{{ tx('餘額增值') }}</text>
+      <view class="failure-amount"><text class="failure-rmb">RMB</text><text class="failure-yen">¥</text><text class="failure-number">{{ tx(failureAmount.toFixed(2)) }}</text></view>
+      <text class="failure-status">{{ tx('失敗') }}</text>
+      <text class="failure-payment-title">{{ tx('付款方式') }}</text>
       <view class="failure-payment-card">
         <image class="failure-payment-icon" :src="paymentIcon" mode="aspectFit" />
-        <view class="failure-payment-copy"><text>{{ paymentName }}</text><text class="failure-payment-subtitle">{{ paymentSubtitle }}</text></view>
+        <view class="failure-payment-copy"><text>{{ tx(paymentName) }}</text><text class="failure-payment-subtitle">{{ tx(paymentSubtitle) }}</text></view>
         <image class="failure-payment-check" src="/static/top-up/check.svg" mode="aspectFit" />
       </view>
-      <text class="failure-created">創建時間：01/01/24 12:00:00</text>
+      <text class="failure-created">{{ tx('創建時間：01/01/24 12:00:00') }}</text>
     </view>
     <view v-else>
       <view class="header">
         <image class="back" src="/static/wallet/back.svg" mode="aspectFit" @tap="goBack" />
-        <text class="title">增值</text>
+        <text class="title">{{ tx('增值') }}</text>
       </view>
 
       <view class="balance-card">
-        <text class="balance-label">車費餘額</text>
-        <text class="balance">RMB ¥ {{ wallet.fare.toFixed(2) }}</text>
+        <text class="balance-label">{{ tx('車費餘額') }}</text>
+        <text class="balance">RMB ¥ {{ tx(wallet.fare.toFixed(2)) }}</text>
       </view>
 
       <view class="amount-panel">
         <view v-for="option in amountOptions" :key="option.amount" class="amount-option" :class="{ selected: selectedAmount === option.amount }" @tap="selectedAmount = option.amount">
-          <text class="amount"><text class="currency">RMB：</text>¥ {{ option.amount }} 元</text>
-          <text class="price">售價：{{ option.price }}元</text>
-          <text v-if="option.recommended" class="recommended">推荐</text>
+          <text class="amount"><text class="currency">RMB：</text>¥ {{ tx(option.amount) }} {{ tx('元') }}</text>
+          <text class="price">{{ tx('售價：') }}{{ tx(option.price) }}{{ tx('元') }}</text>
+          <text v-if="option.recommended" class="recommended">{{ tx('推荐') }}</text>
         </view>
       </view>
-      <text class="notice">*車費增值僅限出行使用，不可兌現或退款。</text>
+      <text class="notice">{{ tx('*車費增值僅限出行使用，不可兌現或退款。') }}</text>
 
       <view class="actions">
-        <view class="action query" @tap="showRecords"><text>領取/查詢</text></view>
-        <view class="action top-up" @tap="topUp"><text>增值</text></view>
+        <view class="action query" @tap="showRecords"><text>{{ tx('領取/查詢') }}</text></view>
+        <view class="action top-up" @tap="topUp"><text>{{ tx('增值') }}</text></view>
       </view>
 
       <view class="agreement" @tap="agreed = !agreed">
         <view class="checkbox" :class="{ checked: agreed }"><text v-if="agreed">✓</text></view>
-        <text>已閱讀並同意 </text><text class="link" @tap.stop="showAgreement('增值協議')">增值協議</text><text> 與 </text><text class="link" @tap.stop="showAgreement('使用條款')">使用條款</text>
+        <text>{{ tx('已閱讀並同意') }} </text><text class="link" @tap.stop="showAgreement('增值協議')">{{ tx('增值協議') }}</text><text> {{ tx('與') }} </text><text class="link" @tap.stop="showAgreement('使用條款')">{{ tx('使用條款') }}</text>
       </view>
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
+import { tx } from '../../../i18n'
 import { computed, reactive, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { useResponsiveCanvas } from '../../../composables/useResponsiveCanvas'

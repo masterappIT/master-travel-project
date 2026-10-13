@@ -1,8 +1,8 @@
 <template>
   <view class="app-shell" @touchstart="handleTouchStart" @touchend="handleTouchEnd">
     <slot />
-    <view class="currency-switch" @tap.stop><text class="currency-label">{{ label }}</text><view class="currency-options"><view class="currency-option" :class="{ active: currency === 'HKD' }" @tap.stop="switchCurrency('HKD')">HKD</view><view class="currency-option" :class="{ active: currency === 'RMB' }" @tap.stop="switchCurrency('RMB')">RMB</view></view></view>
-    <view v-if="showSplash" class="splash-screen" :class="{ 'splash-leaving': splashLeaving }" aria-label="Master Travel Project 啟動畫面">
+    <view class="currency-switch" @tap.stop><text class="currency-label">{{ tx(label) }}</text><view class="currency-options"><view class="currency-option" :class="{ active: currency === 'HKD' }" @tap.stop="switchCurrency('HKD')">HKD</view><view class="currency-option" :class="{ active: currency === 'RMB' }" @tap.stop="switchCurrency('RMB')">RMB</view></view></view>
+    <view v-if="showSplash" class="splash-screen" :class="{ 'splash-leaving': splashLeaving }" :aria-label="tx('Master Travel Project 啟動畫面')">
       <image class="splash-circle splash-circle-left" src="/static/splash/ellipse-left.svg" mode="aspectFit" />
       <image class="splash-circle splash-circle-right" src="/static/splash/ellipse-right.svg" mode="aspectFit" />
       <image class="splash-wave" src="/static/splash/wave.svg" mode="scaleToFill" />
@@ -18,6 +18,7 @@ import { isAdminPreview, adminPreviewLoginHash } from './utils/adminPreview'
 import { startNotificationRealtime, stopNotificationRealtime } from './utils/notificationRealtime'
 
 import { useCurrency } from './composables/useCurrency'
+import { tx } from './i18n'
 
 export default {
   data() {
@@ -31,6 +32,7 @@ export default {
     return { showSplash: initialShowSplash, splashLeaving: false, swipeStartX: 0, swipeStartY: 0, currency, label, switchCurrency: setCurrency }
   },
   methods: {
+    tx,
     handleTouchStart(event) {
       const touch = event.touches?.[0]
       if (touch) {
