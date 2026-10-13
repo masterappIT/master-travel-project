@@ -13372,8 +13372,9 @@ class PublicQuotesController {
           discountItems: [{ promotion, discount }],
         };
       });
-      const combinations = couponCode
-        ? promotionDiscounts.flatMap((first, index) =>
+      // Stackable promotions combine for every quote, two at most. This used to happen only when the request
+      // carried a coupon code, so whether a customer got the second discount depended on having picked a coupon.
+      const combinations = promotionDiscounts.flatMap((first, index) =>
             promotionDiscounts
               .slice(index + 1)
               .map((second) => {
@@ -13453,8 +13454,7 @@ class PublicQuotesController {
                 ];
               })
               .flat(),
-          )
-        : [];
+          );
       const applicableDiscounts = [
         ...promotionDiscounts.map((item) => ({
           ...item,

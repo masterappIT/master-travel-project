@@ -386,10 +386,21 @@ const goNext = async () => {
   }
   const requestedCouponCode = tripStore.activeDraft.couponCode
   const couponId = requestedCouponCode ? cashCoupon.value?.id : undefined
-  if (!await refreshQuote(true) || !tripStore.selectedFareQuote ||
-      (requestedCouponCode && (!couponId || !tripStore.selectedFareQuote.lines.some(line => line.type === 'DISCOUNT' && line.sourceId === couponId)))) {
+  if (!await refreshQuote(true) || !tripStore.selectedFareQuote) {
     uni.showToast({ title: requestedCouponCode ? '優惠已失效，請重新選擇優惠' : '報價暫時無法取得', icon: 'none' })
     return
+  }
+  const discountLines = tripStore.selectedFareQuote.lines.filter(line => line.type === 'DISCOUNT' && line.totalAmount < 0)
+  if (requestedCouponCode && !(couponId && discountLines.some(line => line.sourceId === couponId))) {
+    // refreshQuote clears the coupon itself when nothing at all was applied; that case still stops here.
+    if (!couponId || !tripStore.activeDraft.couponCode || !discountLines.length) {
+      uni.showToast({ title: '優惠已失效，請重新選擇優惠', icon: 'none' })
+      return
+    }
+    // Other promotions together save more than any pair with this coupon, so the quote already carries the
+    // best price without it. The coupon was not used or reserved; drop it from the trip and carry on.
+    tripStore.setCouponCode()
+    uni.showToast({ title: '已套用最優惠的組合，此行程未使用優惠券', icon: 'none' })
   }
   openCachedPage('/pages/vehicles/confirm')
 }
