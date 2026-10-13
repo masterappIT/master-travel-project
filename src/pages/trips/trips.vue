@@ -54,17 +54,22 @@ const authenticated = ref(false)
 let profilePollTimer: ReturnType<typeof setInterval> | undefined
 let walletStatsRequest: Promise<void> | undefined
 let walletStatsToken = ''
+let couponCountStale = true
 
 const refreshWalletStats = (authToken: string) => {
   if (walletStatsRequest && walletStatsToken === authToken) return walletStatsRequest
   walletStatsToken = authToken
+  // The promotion list changes rarely, so it is read when the page is shown rather than on every 15-second refresh.
+  const readCoupons = couponCountStale
   const request = (async () => {
-    const [mileage, promotions] = await Promise.allSettled([getMileageSummary(), listPublicPromotions()])
+    const [mileage, promotions] = await Promise.allSettled([getMileageSummary(), readCoupons ? listPublicPromotions() : Promise.resolve(null)])
     if (!isAuthSessionCurrent(authToken)) return
     mileageBalance.value = mileage.status === 'fulfilled' ? Number(mileage.value.balance) || 0 : 0
-    couponCount.value = promotions.status === 'fulfilled'
-      ? promotions.value.filter((promotion) => promotion.kind === 'COUPON').length
-      : 0
+    if (!readCoupons) return
+    if (promotions.status === 'fulfilled' && promotions.value) {
+      couponCount.value = promotions.value.filter((promotion) => promotion.kind === 'COUPON').length
+      couponCountStale = false
+    } else couponCount.value = 0
   })()
   walletStatsRequest = request
   void request.finally(() => { if (walletStatsRequest === request) walletStatsRequest = undefined })
@@ -103,6 +108,7 @@ const refreshProfile = async () => {
     unreadCount.value = 0
     mileageBalance.value = 0
     couponCount.value = 0
+    couponCountStale = true
   }
   const wallet = readWallet()
   cashBalance.value = wallet.withdrawable
@@ -120,6 +126,7 @@ const unsubscribeAuthUser = subscribeAuthUser((user) => {
     fareBalance.value = 0
     mileageBalance.value = 0
     couponCount.value = 0
+    couponCountStale = true
     if (profilePollTimer) clearInterval(profilePollTimer)
     profilePollTimer = undefined
   }
@@ -129,6 +136,7 @@ const unsubscribeNotifications = subscribeNotificationChanges(() => { void refre
 onUnmounted(unsubscribeNotifications)
 
 onShow(() => {
+  couponCountStale = true
   void refreshProfile()
   if (profilePollTimer) clearInterval(profilePollTimer)
   if (isAuthenticated()) profilePollTimer = setInterval(() => { void refreshProfile() }, 15000)

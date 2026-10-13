@@ -12816,14 +12816,37 @@ class PublicPromotionsController {
     };
   }
 
+  // How many slots each coupon has taken: `reserved` across everyone, `customer` for one user (reserved or used).
+  // A reservation whose quote has expired no longer holds a slot. It is left out here rather than rewritten,
+  // so reading promotions never writes; the quote flow is what marks expired reservations RELEASED.
+  private async couponUsage(promotionIds: string[], now: Date, userId?: string) {
+    const reserved = new Map<string, number>();
+    const customer = new Map<string, number>();
+    if (!promotionIds.length) return { reserved, customer };
+    const live = { status: "RESERVED" as const, quote: { expiresAt: { gt: now } } };
+    const [reservedRows, customerRows] = await Promise.all([
+      prisma.promotionUsage.groupBy({
+        by: ["promotionId"],
+        where: { promotionId: { in: promotionIds }, ...live },
+        _count: { _all: true },
+      }),
+      userId
+        ? prisma.promotionUsage.groupBy({
+            by: ["promotionId"],
+            where: { promotionId: { in: promotionIds }, userId, OR: [{ status: "USED" }, live] },
+            _count: { _all: true },
+          })
+        : [],
+    ]);
+    for (const row of reservedRows) reserved.set(row.promotionId, row._count._all);
+    for (const row of customerRows) customer.set(row.promotionId, row._count._all);
+    return { reserved, customer };
+  }
+
   @Get()
   async list(@Req() req: RequestLike) {
     const session = await clientSessionFrom(req).catch(() => null);
     const now = new Date();
-    await prisma.promotionUsage.updateMany({
-      where: { status: "RESERVED", quote: { expiresAt: { lte: now } } },
-      data: { status: "RELEASED", releasedAt: now },
-    });
     const promotions = await prisma.promotion.findMany({
       where: {
         enabled: true,
@@ -12834,28 +12857,19 @@ class PublicPromotionsController {
       },
       orderBy: [{ priority: "asc" }, { createdAt: "desc" }],
     });
-    const couponPromotions = promotions.filter((promotion) => promotion.kind === "COUPON");
-    const usageCounts = new Map(await Promise.all(couponPromotions.map(async (promotion) => [
-      promotion.id,
-      await prisma.promotionUsage.count({ where: { promotionId: promotion.id, status: "RESERVED" } }),
-    ] as const)));
-    const customerCounts = session
-      ? new Map(await Promise.all(couponPromotions.map(async (promotion) => [
-        promotion.id,
-        await prisma.promotionUsage.count({ where: { promotionId: promotion.id, userId: session.sub, status: { in: ["RESERVED", "USED"] } } }),
-      ] as const)))
-      : new Map<string, number>();
+    const couponIds = promotions.filter((promotion) => promotion.kind === "COUPON").map((promotion) => promotion.id);
+    const { reserved, customer } = await this.couponUsage(couponIds, now, session?.sub);
     const availablePromotions = promotions.filter((promotion) =>
       promotion.kind !== "COUPON" || (
-        (promotion.usageLimit === null || promotion.usageCount + (usageCounts.get(promotion.id) || 0) < promotion.usageLimit) &&
-        (promotion.perCustomerLimit === null || (session !== null && (customerCounts.get(promotion.id) || 0) < promotion.perCustomerLimit))
+        (promotion.usageLimit === null || promotion.usageCount + (reserved.get(promotion.id) || 0) < promotion.usageLimit) &&
+        (promotion.perCustomerLimit === null || (session !== null && (customer.get(promotion.id) || 0) < promotion.perCustomerLimit))
       ),
     );
     return {
       data: availablePromotions.map((promotion) => this.publicPromotion(
         promotion,
         promotion.kind === "COUPON" && promotion.perCustomerLimit !== null && session
-          ? Math.max(0, promotion.perCustomerLimit - (customerCounts.get(promotion.id) || 0))
+          ? Math.max(0, promotion.perCustomerLimit - (customer.get(promotion.id) || 0))
           : null,
       )),
     };
@@ -12871,10 +12885,6 @@ class PublicPromotionsController {
     if (!couponCode)
       throw new HttpException("請輸入優惠代碼", HttpStatus.BAD_REQUEST);
     const now = new Date();
-    await prisma.promotionUsage.updateMany({
-      where: { status: "RESERVED", quote: { expiresAt: { lte: now } } },
-      data: { status: "RELEASED", releasedAt: now },
-    });
     const promotion = await prisma.promotion.findFirst({
       where: {
         enabled: true,
@@ -12888,33 +12898,19 @@ class PublicPromotionsController {
     });
     if (!promotion)
       throw new HttpException("優惠代碼無效或已過期", HttpStatus.NOT_FOUND);
-    if (promotion.perCustomerLimit !== null) {
-      if (!session)
-        throw new UnauthorizedException("此優惠碼需要登入後使用");
-      const customerUsage = await prisma.promotionUsage.count({
-        where: {
-          promotionId: promotion.id,
-          userId: session.sub,
-          status: { in: ["RESERVED", "USED"] },
-        },
-      });
-      if (customerUsage >= promotion.perCustomerLimit)
-        throw new HttpException("已達每位客戶使用上限", HttpStatus.CONFLICT);
-    }
-    if (promotion.usageLimit !== null) {
-      const reserved = await prisma.promotionUsage.count({
-        where: { promotionId: promotion.id, status: "RESERVED" },
-      });
-      if (promotion.usageCount + reserved >= promotion.usageLimit)
-        throw new HttpException("優惠代碼已達使用上限", HttpStatus.CONFLICT);
-    }
+    if (promotion.perCustomerLimit !== null && !session)
+      throw new UnauthorizedException("此優惠碼需要登入後使用");
+    const usage = await this.couponUsage([promotion.id], now, session?.sub);
+    const customerUsage = usage.customer.get(promotion.id) || 0;
+    if (promotion.perCustomerLimit !== null && customerUsage >= promotion.perCustomerLimit)
+      throw new HttpException("已達每位客戶使用上限", HttpStatus.CONFLICT);
+    if (promotion.usageLimit !== null && promotion.usageCount + (usage.reserved.get(promotion.id) || 0) >= promotion.usageLimit)
+      throw new HttpException("優惠代碼已達使用上限", HttpStatus.CONFLICT);
     return {
       data: this.publicPromotion(
         promotion,
         promotion.perCustomerLimit !== null && session
-          ? Math.max(0, promotion.perCustomerLimit - await prisma.promotionUsage.count({
-              where: { promotionId: promotion.id, userId: session.sub, status: { in: ["RESERVED", "USED"] } },
-            }))
+          ? Math.max(0, promotion.perCustomerLimit - customerUsage)
           : null,
       ),
       message: "優惠代碼有效，可於預約行程時使用",
