@@ -717,6 +717,47 @@ void main() {
     });
   }
 
+  testWidgets('bell shows the unread count and the sheet marks unread items',
+      (tester) async {
+    var read = false;
+    DriverApiClient.instance = DriverApiClient(
+      client: MockClient((request) async {
+        if (request.url.path == '/driver/auth/notifications') {
+          return _jsonResponse([
+            {
+              'id': 'notice-new',
+              'title': '新通知',
+              'content': '未讀內文',
+              'readAt': read ? '2026-10-13T08:00:00.000Z' : null,
+            },
+            {
+              'id': 'notice-old',
+              'title': '舊通知',
+              'content': '已讀內文',
+              'readAt': '2026-10-12T08:00:00.000Z',
+            },
+          ]);
+        }
+        if (request.url.path == '/driver/auth/notifications/notice-new/read') {
+          read = true;
+          return _jsonResponse({'id': 'notice-new'});
+        }
+        return _driverFixtureResponse(request);
+      }),
+    );
+    await tester.pumpWidget(testApp(const ProfilePage()));
+    await tester.pumpAndSettle();
+    expect(find.bySemanticsLabel('新通知 1'), findsOneWidget);
+
+    await tester.tap(find.bySemanticsLabel('通知'));
+    await tester.pumpAndSettle();
+    expect(find.text('新'), findsOneWidget);
+
+    await tester.tap(find.text('新通知'));
+    await tester.pumpAndSettle();
+    expect(find.bySemanticsLabel('新通知 1'), findsNothing);
+  });
+
   testWidgets('shows the new-order alert sound setting',
       (WidgetTester tester) async {
     await tester.pumpWidget(testApp(const NotificationSettingsPage()));

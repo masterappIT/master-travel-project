@@ -2,6 +2,8 @@ import 'core/widgets/driver_address_text.dart';
 import 'package:flutter/material.dart';
 import 'core/widgets/driver_overlays.dart';
 import 'core/widgets/driver_notifications_sheet.dart';
+import 'core/widgets/driver_notification_bell.dart';
+import 'core/state/driver_notification_inbox.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import 'app/route_names.dart';
@@ -47,6 +49,8 @@ class _HomePageState extends State<HomePage> {
   Map<String, dynamic>? _statistics;
   bool _statsLoading = true;
   String? _statsError;
+  // Static so the reconnect catch-up does not repeat a notice after the page is rebuilt.
+  static String? _lastNoticeId;
 
   @override
   void initState() {
@@ -67,10 +71,26 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _onNotificationsChanged() async {
     if (!mounted) return;
+    final catchUp = DriverOrderAlertCoordinator.notificationCatchUp;
+    DriverOrderAlertCoordinator.notificationCatchUp = false;
     try {
-      final items = await _api.notifications();
+      final items = await DriverNotificationInbox.load();
       if (!mounted || items.isEmpty) return;
       final notification = Map<String, dynamic>.from(items.first as Map);
+      final id = notification['id']?.toString();
+      final createdAt =
+          DateTime.tryParse(notification['createdAt']?.toString() ?? '');
+      final latest = DriverOrderAlertCoordinator.latestNotificationAt;
+      final isNew =
+          createdAt != null && latest != null && createdAt.isAfter(latest);
+      if (createdAt != null) {
+        DriverOrderAlertCoordinator.noteNotificationSeen(createdAt);
+      }
+      if (catchUp &&
+          (!isNew || id == _lastNoticeId || notification['readAt'] != null)) {
+        return;
+      }
+      _lastNoticeId = id;
       final title = notification['title']?.toString().trim();
       final content = notification['content']?.toString().trim();
       final lines = [
@@ -82,7 +102,7 @@ class _HomePageState extends State<HomePage> {
         lines.isEmpty ? '收到新通知' : lines.join('\n'),
       );
     } on DriverApiException catch (error) {
-      if (mounted) {
+      if (mounted && !catchUp) {
         showDriverNotice(context, error.message);
       }
     }
@@ -305,25 +325,7 @@ class _ProfileHeader extends StatelessWidget {
               ],
             ),
           ),
-          Semantics(
-            button: true,
-            label: '通知',
-            child: InkWell(
-              onTap: onNotificationTap,
-              borderRadius: BorderRadius.circular(20),
-              child: Container(
-                width: 40,
-                height: 40,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                    color: DriverColors.surface,
-                    border: Border.all(color: DriverColors.divider),
-                    borderRadius: BorderRadius.circular(20)),
-                child: SvgPicture.asset('assets/home-bell.svg',
-                    width: 24, height: 24),
-              ),
-            ),
-          ),
+          DriverNotificationBell(onTap: onNotificationTap),
         ],
       );
 }

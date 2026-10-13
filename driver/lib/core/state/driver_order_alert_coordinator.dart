@@ -8,6 +8,7 @@ import '../widgets/driver_overlays.dart';
 import '../platform/order_event_stream.dart';
 import '../state/driver_alert_audio_controller.dart';
 import '../state/driver_alert_sound_preference.dart';
+import '../state/driver_notification_inbox.dart';
 
 Set<String> driverAlertTripIds({
   required Iterable<dynamic> availableTrips,
@@ -55,6 +56,22 @@ class DriverOrderAlertCoordinator extends StatefulWidget {
   static final ValueNotifier<int> tripsChanged = ValueNotifier<int>(0);
   static final ValueNotifier<int> notificationsChanged = ValueNotifier<int>(0);
 
+  /// True when [notificationsChanged] fires for a reconnect instead of a live
+  /// event; listeners should only surface notifications newer than
+  /// [latestNotificationAt].
+  static bool notificationCatchUp = false;
+
+  /// Server `createdAt` of the newest notification seen so far. Comparing
+  /// server timestamps keeps the catch-up independent of the device clock.
+  static DateTime? latestNotificationAt;
+
+  static void noteNotificationSeen(DateTime createdAt) {
+    final latest = latestNotificationAt;
+    if (latest == null || createdAt.isAfter(latest)) {
+      latestNotificationAt = createdAt;
+    }
+  }
+
   @override
   State<DriverOrderAlertCoordinator> createState() =>
       _DriverOrderAlertCoordinatorState();
@@ -70,6 +87,7 @@ class _DriverOrderAlertCoordinatorState
   Timer? _notificationReconnectTimer;
   OrderEventConnection? _eventConnection;
   OrderEventConnection? _notificationConnection;
+  DateTime? _notificationSyncedAt;
   Set<String>? _knownIds;
   bool _refreshInFlight = false;
   bool _refreshPending = false;
@@ -150,6 +168,10 @@ class _DriverOrderAlertCoordinatorState
     _eventConnection = null;
     _notificationConnection?.close();
     _notificationConnection = null;
+    _notificationSyncedAt = null;
+    DriverOrderAlertCoordinator.notificationCatchUp = false;
+    DriverOrderAlertCoordinator.latestNotificationAt = null;
+    DriverNotificationInbox.reset();
   }
 
   Future<void> _connectEvents() async {
@@ -205,6 +227,26 @@ class _DriverOrderAlertCoordinatorState
         },
         _scheduleNotificationReconnect,
       );
+      final now = DateTime.now();
+      final syncedAt = _notificationSyncedAt;
+      if (syncedAt == null) {
+        _notificationSyncedAt = now;
+        // The ticket expires 60 seconds after it was issued, which gives the
+        // server's clock at connect time without another request.
+        final expiresAt =
+            DateTime.tryParse(response['expiresAt']?.toString() ?? '');
+        if (expiresAt != null) {
+          DriverOrderAlertCoordinator.noteNotificationSeen(
+            expiresAt.subtract(const Duration(seconds: 60)),
+          );
+        }
+      } else if (now.difference(syncedAt) >= const Duration(seconds: 30)) {
+        // Reconnected: events sent while the stream was down are not replayed,
+        // so ask listeners to re-read.
+        _notificationSyncedAt = now;
+        DriverOrderAlertCoordinator.notificationCatchUp = true;
+        DriverOrderAlertCoordinator.notificationsChanged.value++;
+      }
     } on Object catch (error, stackTrace) {
       developer.log('Unable to connect driver notification events',
           name: 'driver.order_alert', error: error, stackTrace: stackTrace);

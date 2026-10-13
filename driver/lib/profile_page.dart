@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'core/widgets/driver_notifications_sheet.dart';
+import 'core/widgets/driver_notification_bell.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import 'app/route_names.dart';
@@ -338,26 +339,7 @@ class _ProfileHeader extends StatelessWidget {
                     fontSize: 28,
                     fontWeight: FontWeight.w700,
                     color: DriverColors.text)),
-            Semantics(
-              button: true,
-              label: '通知',
-              child: InkWell(
-                onTap: onNotification,
-                borderRadius: BorderRadius.circular(20),
-                child: Container(
-                  width: 40,
-                  height: 40,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: DriverColors.surface,
-                    border: Border.all(color: DriverColors.divider),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: SvgPicture.asset('assets/home-bell.svg',
-                      width: 24, height: 24),
-                ),
-              ),
-            ),
+            DriverNotificationBell(onTap: onNotification),
           ],
         ),
         const SizedBox(height: 10),
