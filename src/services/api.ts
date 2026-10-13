@@ -432,7 +432,11 @@ export async function uploadClientAvatar(filePath: string): Promise<ClientProfil
       const profile = body as ClientProfile
       profile.avatarUrl = resolveClientAvatarUrl(profile.avatarUrl)
       resolve(profile)
-    }, fail: () => reject(new Error('網絡異常，頭像未能上傳')) })
+    }, fail: (error) => {
+      // A mini-program can only upload to hosts on its uploadFile domain list, which is separate from the request list.
+      const blocked = /domain list|合法域名/.test(String((error as { errMsg?: string })?.errMsg || ''))
+      reject(new Error(blocked ? '小程序尚未允許上傳到伺服器，請聯絡客服' : '網絡異常，頭像未能上傳'))
+    } })
   })
   // #endif
 }

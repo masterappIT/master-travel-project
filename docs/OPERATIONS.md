@@ -85,3 +85,12 @@ PROJECT_ID=... REGION=... SERVICE_NAME=... REVISION=... \\
 部署帳號、API runtime account、migration account 與 renderer account 應分離。部署帳號可更新服務與執行 job，但不應直接讀取 Secret value。
 
 這是權限原則，腳本未強制帳號彼此不同；workflow 未設定 `GCP_SHARE_RENDERER_SERVICE_ACCOUNT` 時會使用 API runtime 帳號。實際隔離狀態須查驗 IAM 設定。
+
+## iOS App 上傳 TestFlight 前的待辦
+
+乘客端 iOS App 目前沒有獨立的發布文件；以下是開始上傳 TestFlight 時必須先處理的事項，處理後請從本節移除。
+
+- **清理 `src/uni_modules/ios-keyboard-accessory`**（2026-10-13 記錄）。此原生外掛原本用來移除 iOS 鍵盤上方的「上一項／下一項／完成」工具列，但它清除的是 iPad 的快捷按鈕列，對 iPhone 上這條工具列無效。該工具列現已改由 `src/pages.json` 全域樣式的 `app-plus.softinputNavBar: "none"` 關閉。
+  - 清理前先在 iOS App 上確認鍵盤工具列已不再出現，並確認 App 是否需要支援 iPad；若需要支援 iPad，移除後 iPad 的快捷按鈕列會重新出現，須另行評估。
+  - 清理範圍：刪除 `src/uni_modules/ios-keyboard-accessory/` 整個目錄，以及 `src/pages/login/login.vue` 與 `src/pages/login/MiniProgramLogin.vue` 中對 `disableInputAssistantToolbar` 的引入與呼叫。
+  - 移除原生外掛後須重新打包 App 才會生效，並執行 `npm run verify:passenger`。
