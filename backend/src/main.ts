@@ -16510,6 +16510,8 @@ class ClientOrdersController {
     return { ok: true };
   }
 
+  // The route decorator was missing, so the account page's security tab always got a 404.
+  @Get("security")
   async getSecurity(@Req() req: RequestLike) {
     const session = await clientSessionFrom(req);
     return clientSecurityResponse(
