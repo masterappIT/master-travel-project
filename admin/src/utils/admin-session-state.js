@@ -7,6 +7,8 @@ export function createAdminSessionState() {
     locale: ref(localStorage.getItem('admin_locale') || 'en'),
     username: ref(''),
     password: ref(''),
+    signingIn: ref(false),
+    signInSlow: ref(false),
     currentAdministrator: ref(null)
   }
 }

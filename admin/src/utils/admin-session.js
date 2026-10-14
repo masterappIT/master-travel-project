@@ -1,5 +1,12 @@
-export function createAdminSessionActions({ api, token, username, password, currentAdministrator, error, adminLogo, dashboard, dashboardUpdatedAt, dashboardRefreshFailed, view, load, displayError }) {
+// A cold-started API takes several seconds to answer the first sign-in.
+const slowSignInDelayMs = 1500
+
+export function createAdminSessionActions({ api, token, username, password, signingIn, signInSlow, currentAdministrator, error, adminLogo, dashboard, dashboardUpdatedAt, dashboardRefreshFailed, view, load, displayError, t }) {
   async function apiLogin() {
+    if (signingIn.value) return
+    signingIn.value = true
+    signInSlow.value = false
+    const slowTimer = setTimeout(() => { signInSlow.value = true }, slowSignInDelayMs)
     try {
       error.value = ''
       token.value = ''
@@ -12,7 +19,12 @@ export function createAdminSessionActions({ api, token, username, password, curr
       password.value = ''
       load()
     } catch (e) {
-      error.value = displayError(e)
+      // The login endpoint answers 401 for wrong credentials and locked accounts alike; there is no session to expire yet.
+      error.value = e?.status === 401 ? t('invalidCredentials') : displayError(e)
+    } finally {
+      clearTimeout(slowTimer)
+      signingIn.value = false
+      signInSlow.value = false
     }
   }
 

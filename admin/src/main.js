@@ -73,7 +73,7 @@ import './style.css'
 import './styles/project-observability.css'
 
 const API = import.meta.env.VITE_API_URL || '/api'
-const { token, locale, username, password, currentAdministrator } = createAdminSessionState()
+const { token, locale, username, password, signingIn, signInSlow, currentAdministrator } = createAdminSessionState()
 const { t, translateRegion, translateStatus, formatDate, toggleLocale } = createLocalization(locale)
 const passengerTripStatusLabel = trip => getPassengerTripStatusLabel(trip, translateStatus)
 const displayError = createErrorDisplay({ locale, t })
@@ -189,7 +189,7 @@ const usersActions = createUsersActions({
   error,
   notify
 })
-const adminSessionActions = createAdminSessionActions({ api, token, username, password, currentAdministrator, error, adminLogo, dashboard, dashboardUpdatedAt, dashboardRefreshFailed, view, load, displayError })
+const adminSessionActions = createAdminSessionActions({ api, token, username, password, signingIn, signInSlow, currentAdministrator, error, adminLogo, dashboard, dashboardUpdatedAt, dashboardRefreshFailed, view, load, displayError, t })
 const { apiLogin, logout, uploadAdminLogo, removeAdminLogo } = adminSessionActions
 const saveFinanceCurrencySettings = async () => {
   try {
@@ -897,6 +897,8 @@ const App = { components: { SupportPage }, setup() {
       error,
       username,
       password,
+      signingIn,
+      signInSlow,
       apiLogin,
       logout,
       load,
@@ -907,7 +909,7 @@ const App = { components: { SupportPage }, setup() {
       confirmDialog,
       resolveConfirmation
     }
- }, template: `<ToastHost :items="toasts" @dismiss="dismissToast" /><ConfirmDialog v-bind="confirmDialog" @confirm="resolveConfirmation(true)" @cancel="resolveConfirmation(false)" /><div v-if="!token" class="login"><button type="button" class="login-language" @click="toggleLocale" :aria-label="t('languageLabel')">中 / EN</button><div class="login-orb login-orb-one"></div><div class="login-orb login-orb-two"></div><form @submit.prevent="apiLogin"><div class="brand"><img v-if="adminLogo" :src="adminLogo" width="180" height="56" alt="Admin logo"/><span v-else>{{t('brand')}}</span></div><h1>{{t('welcome')}}</h1><p>{{t('signInPrompt')}}</p><input v-model="username" :placeholder="t('adminUsername')" autocomplete="username" required/><input v-model="password" type="password" :placeholder="t('password')" autocomplete="current-password" required/><button type="submit">{{t('signIn')}}</button><small v-if="error">{{error}}</small></form><footer class="login-footer">© 2026 IM MASTER INC. LIMITED All Rights Reserved.</footer></div><div v-else class="shell"><aside :class="{ 'mobile-nav-open': mobileNavOpen }"><div class="brand"><img v-if="adminLogo" :src="adminLogo" width="180" height="56" alt="Admin logo"/><span v-else>{{t('brand')}}</span></div><button type="button" class="mobile-nav-toggle" :aria-expanded="mobileNavOpen ? 'true' : 'false'" aria-controls="admin-navigation" @click="mobileNavOpen = !mobileNavOpen"><span aria-hidden="true">☰</span><span>{{mobileNavOpen ? '關閉選單' : '開啟選單'}}</span></button><nav id="admin-navigation">
+ }, template: `<ToastHost :items="toasts" @dismiss="dismissToast" /><ConfirmDialog v-bind="confirmDialog" @confirm="resolveConfirmation(true)" @cancel="resolveConfirmation(false)" /><div v-if="!token" class="login"><button type="button" class="login-language" @click="toggleLocale" :aria-label="t('languageLabel')">中 / EN</button><div class="login-orb login-orb-one"></div><div class="login-orb login-orb-two"></div><form @submit.prevent="apiLogin"><div class="brand"><img v-if="adminLogo" :src="adminLogo" width="180" height="56" alt="Admin logo"/><span v-else>{{t('brand')}}</span></div><h1>{{t('welcome')}}</h1><p>{{t('signInPrompt')}}</p><input v-model="username" :placeholder="t('adminUsername')" autocomplete="username" required/><input v-model="password" type="password" :placeholder="t('password')" autocomplete="current-password" required/><button type="submit" :disabled="signingIn" :aria-busy="signingIn ? 'true' : 'false'">{{signingIn ? t(signInSlow ? 'signInSlow' : 'signingIn') : t('signIn')}}</button><small v-if="error">{{error}}</small></form><footer class="login-footer">© 2026 IM MASTER INC. LIMITED All Rights Reserved.</footer></div><div v-else class="shell"><aside :class="{ 'mobile-nav-open': mobileNavOpen }"><div class="brand"><img v-if="adminLogo" :src="adminLogo" width="180" height="56" alt="Admin logo"/><span v-else>{{t('brand')}}</span></div><button type="button" class="mobile-nav-toggle" :aria-expanded="mobileNavOpen ? 'true' : 'false'" aria-controls="admin-navigation" @click="mobileNavOpen = !mobileNavOpen"><span aria-hidden="true">☰</span><span>{{mobileNavOpen ? '關閉選單' : '開啟選單'}}</span></button><nav id="admin-navigation">
   <button type="button" :class="{active:view==='dashboard'}" @click="navigate('dashboard')">{{t('dashboard')}}</button>
   <button type="button" :class="{active:view==='project-observability'}" @click="navigate('project-observability')">數據流監控</button>
   <button type="button" :class="{active:view==='users'}" @click="navigate('users')">{{t('users')}}</button>
