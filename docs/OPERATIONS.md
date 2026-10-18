@@ -1,6 +1,6 @@
 # 維運操作入口
 
-本文件是發布、監控、回滾與資料庫復原的導航頁。Cloud Run 的具體命令與檢查細節以 [deploy/cloud-run/README.md](../deploy/cloud-run/README.md) 為準；完整系統部署架構以 [PRODUCTION-DEPLOYMENT.md](./PRODUCTION-DEPLOYMENT.md) 為準。
+本文件是發布、監控、回滾與資料庫復原的導航頁。2026-10-18（UTC）起正式環境在 HostKVM 伺服器上運行；完整系統部署架構、伺服器上的部署與回滾命令以 [PRODUCTION-DEPLOYMENT.md](./PRODUCTION-DEPLOYMENT.md) 為準。舊的 Cloud Run 流程已停用，見 [deploy/cloud-run/README.md](../deploy/cloud-run/README.md)。
 
 ## 發布與恢復操作門檻
 
@@ -22,69 +22,73 @@
 
 1. 確認 commit 已包含所有要發布的修改，工作目錄乾淨。
 2. 記錄完整 commit SHA，確認目前分支及目標為 `main`。
-3. 確認本次推送會觸發既有 `Deploy Production` workflow；不得把本機測試、手動 image 或手動 Cloud Run 更新當成正式部署完成。
+3. 確認本次推送會觸發 `Deploy HostKVM` workflow（`deploy-hostkvm.yml`）；不得把本機測試、手動 image 或在伺服器上手動執行的部署當成正式部署完成。部署會重新建立容器，網站會中斷幾秒到十幾秒。
 4. 推送後立即以 GitHub Actions run 的 SHA 作為唯一候選識別，不以本機 HEAD、快取的 `origin/main` 或局部測試結果替代。
 
 ### C. workflow 中：候選建置與部署
 
-正式候選必須由同一個 workflow SHA 完成 quality gates、production builds、immutable image digests、backup、migration、revision readiness 及 smoke tests。workflow 的 stale-SHA 檢查失敗、任何 quality gate 失敗、migration 失敗或 smoke test 失敗，都代表本次發布未完成；不可跳過失敗步驟宣稱可發布。
+正式候選必須由同一個 workflow SHA 完成 quality gates、production builds、immutable image digests、伺服器上的備份、migration、健康檢查及 smoke tests。workflow 的 stale-SHA 檢查失敗、任何 quality gate 失敗、migration 失敗、伺服器健康檢查失敗（會自動退回上一版）或 smoke test 失敗，都代表本次發布未完成；不可跳過失敗步驟宣稱可發布。
 
-### D. Cloud Run 流量指向：部署完成的必要證據
+### D. 伺服器部署結果：部署完成的必要證據
 
-每個服務都必須同時核對「revision、image、traffic」三者：
+伺服器上的部署腳本換上新映像並通過健康檢查，`deploy` job 才會成功。需要核對時，在伺服器上看：
 
-| 服務 | 必須核對 |
+| 項目 | 必須核對 |
 | --- | --- |
-| API | candidate revision Ready；`/health/live` 與 `/health/ready` 通過；`status.traffic` 為目標 revision 100%；revision image 為本次 SHA256 image |
-| Passenger / Admin / Driver | revision Ready；`status.traffic` 為目標 revision 100%；revision image 為本次 SHA256 image；服務 URL `/` 可達 |
-| Share Renderer | deployed revision Ready；revision image 為本次 SHA256 image；`status.traffic` 為目標 revision 100%；其服務 URL 與 `SHARE_RENDERER_ORIGIN` 一致；API 使用的 renderer 來源正確 |
+| 部署記錄 | `/srv/apps/mastertravel/deploy.log` 有「Deploy <sha 前 12 碼> succeeded」；若是「rolled back」代表健康檢查失敗、已退回上一版 |
+| 實際運行版本 | `/srv/apps/mastertravel/deploy.env` 第一行是本次 commit，5 個映像 digest 等於本次 workflow 產物 |
+| 容器 | `docker compose ps` 中 5 個容器都在運行；前端顯示 healthy |
+| 對外 | 4 個網域的 `/health` 或 `/` 可達；舊 run.app 網址經轉發也可達 |
 
-只有 Cloud Run `status.traffic` 明確顯示目標 revision 100%，且該 revision 的 image digest 等於本次 workflow 產物，才可說「該服務已承接本次版本流量」。revision 建立成功、`latestReadyRevisionName` 正確、deploy 命令成功或正式 URL 回傳 HTTP 200，都不能單獨證明流量已切換。
+workflow 成功、HTTP 200 或容器在運行，都不等於業務驗收；登入、下單、司機接單、客服、分享圖要另外實測。Cloud Run 上的轉發服務不由本 repo 部署，部署本 repo 不會改變它們。
 
 ### F. 現行 workflow 順序
 
-實際執行仍以 [production workflow](../.github/workflows/deploy-production.yml) 與呼叫腳本為準，不新增手動切流量或額外發布階段：
+實際執行以 [`deploy-hostkvm.yml`](../.github/workflows/deploy-hostkvm.yml) 與伺服器的部署腳本為準，不新增手動發布階段：
 
-1. `main` push 或 `workflow_dispatch`。
+1. `main` push、`workflow_dispatch` 或每月 2 日排程。
 2. Quality gates 通過。
-3. 建置前端、微信 artifact 與 immutable images。
-4. 建立 Cloud SQL pre-migration backup。
-5. 部署 Share Renderer，等待其 Revision Ready，核對 immutable image 並確認該 Revision 承接 100% traffic。
-6. 執行 migration job；失敗即停止後續 API／前端發布。
-7. 部署 API candidate、執行 health smoke tests，通過後切換 API 100% traffic 並核對 serving revision。
-8. 再次確認 workflow SHA 仍為目前 `main`，部署三個前端並逐一核對 revision、traffic、image。
-9. 分開回報部署證據與業務驗收；微信 artifact、體驗版上傳及正式發布不混為同一結果。
+3. `deploy` job：確認 workflow SHA 仍是目前 `main`；建置前端、微信 artifact 與 5 個 immutable images，推送至 Artifact Registry。
+4. 以 `deploy-mastertravel` 帳號通知伺服器，只傳 SHA 和 digest。
+5. 伺服器：拉取映像 → `pg_dump` 備份 → 用新 API 映像執行 migration（失敗即停止，不更新容器）→ 重新建立容器 → 健康檢查，失敗自動退回上一版（migration 不撤銷）。
+6. 經正式網址執行 smoke tests。
+7. `wechat-experience` job（排程時不執行）：建置小程序，交由伺服器以 `upload-mastertravel-mp` 帳號上傳體驗版 `0.2.<run number>`。
+8. 分開回報部署證據與業務驗收；微信 artifact、體驗版上傳及正式發布不混為同一結果。
 
 ## 監控與告警
 
-監控 Cloud Run 5xx、p95 latency、instance health、startup/liveness failure、API readiness、Cloud SQL 資源與連線、backup、PITR、migration job 及 GitHub Actions workflow。
+應監控 4 個網域的健康檢查、伺服器記憶體／磁碟／CPU、容器重啟、每日 GCS 備份及 GitHub Actions workflow。
 
-以上是維運要求，不代表已配置完成；須查驗實際雲端 dashboards、告警、檢查排程、備份與 PITR 設定。
+截至 2026-10-19 尚未配置外部監控與告警；以上是維運要求，不代表已配置完成。
 
 Log 不得包含 credentials、session tokens、Authorization headers 或未核准個資。
 
 ## 回滾
 
-應用程式 regression：
+應用程式 regression 時，在伺服器上退回上一版映像：
 
 ```bash
-PROJECT_ID=... REGION=... SERVICE_NAME=... REVISION=... \\
-./deploy/cloud-run/rollback.sh
+cd /srv/apps/mastertravel
+sudo cp deploy.env.prev deploy.env
+sudo docker compose --env-file deploy.env up -d
 ```
 
-回滾後重新執行 live/ready smoke test，保存失敗 revision、image digest、migration execution 與 logs。
+或用 `sudo mastertravel-deploy <sha> <5 個 digest>` 部署某個已驗證的版本。回滾後確認 `/health` 與主要頁面，保存失敗版本的 digest、`deploy.log` 與容器 log。
 
-已執行 migration 時，不要直接執行未審查的 down migration。優先採用 backward-compatible forward fix；資料完整性受影響時，再依事故流程評估 backup/PITR restore。
+已執行 migration 時，不要直接執行未審查的 down migration。優先採用 backward-compatible forward fix；資料完整性受影響時，先停止寫入，再用 `/srv/apps/mastertravel/predeploy/` 的部署前備份或每日 GCS 備份恢復，並記錄恢復點。
+
+不要執行 `deploy/cloud-run/rollback.sh`：它會把流量切回連 Cloud SQL 的舊 API，造成資料分裂。
 
 ## Restore drill
 
-至少每季將最新 backup 或指定 PITR timestamp 還原至隔離 Cloud SQL instance，連接非 production revision，執行 readiness 與唯讀 critical-path checks，記錄 RTO/RPO 後銷毀隔離資源。
+至少每季把最新的 GCS 備份還原到伺服器上一個隔離的資料庫（MasterApp-infra 的 `backup/restore-test.sh`），執行唯讀 critical-path 檢查，記錄 RTO/RPO 後刪除隔離資料庫。
 
 ## 權限
 
-部署帳號、API runtime account、migration account 與 renderer account 應分離。部署帳號可更新服務與執行 job，但不應直接讀取 Secret value。
-
-這是權限原則，腳本未強制帳號彼此不同；workflow 未設定 `GCP_SHARE_RENDERER_SERVICE_ACCOUNT` 時會使用 API runtime 帳號。實際隔離狀態須查驗 IAM 設定。
+- GitHub `production` environment 只放兩把 SSH 私鑰：部署用 `HOSTKVM_DEPLOY_SSH_KEY`、小程序上傳用 `HOSTKVM_MP_UPLOAD_SSH_KEY`。
+- 伺服器上對應的 `deploy-mastertravel`、`upload-mastertravel-mp` 帳號只能執行各自的腳本，不能開 shell、不在 docker 群組。
+- 正式密碼只在伺服器的 `/srv/apps/mastertravel/app.env`；小程序代碼上傳金鑰只在伺服器上。
+- GCP 部署帳號 `master-travel-github-deploy` 只需要推送映像；它仍保留舊流程的 Cloud Run、Cloud SQL 權限，待移除。
 
 ## iOS App 上傳 TestFlight 前的待辦
 

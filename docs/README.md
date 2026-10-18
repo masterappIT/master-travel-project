@@ -18,7 +18,7 @@
 |---|---|
 | [內置客服需求記錄](./INTERNAL-SUPPORT-REQUIREMENTS.md) | 記錄已確認要求、介面草稿、後續接入範圍與待決策事項 |
 | [Driver README](../driver/README.md) | Driver Flutter 專案說明 |
-| [Cloud Run Runbook](../deploy/cloud-run/README.md) | Cloud Run migration、健康檢查、回滾與 restore drill |
+| [Cloud Run（已停用）](../deploy/cloud-run/README.md) | 舊 Cloud Run 流程的停用說明、過渡期轉發服務與切換教訓 |
 | [Login Settings Architecture](../.github/instructions/login-settings-architecture.instructions.md) | 後台登入配置的分配層與配置層契約 |
 | [Driver Web UI Instructions](../.github/instructions/driver-web-ui.instructions.md) | Driver Web UI 開發規範 |
 | [iOS Screen Scaling Instructions](../.github/instructions/ios-screen-scaling.instructions.md) | uni-app 固定畫布與 iOS 螢幕縮放規範 |
@@ -28,7 +28,7 @@
 
 - `README.md`：快速開始與高層入口，不放完整操作細節。
 - `docs/`：跨模組、可供開發與維運共用的正式文件。
-- `deploy/cloud-run/README.md`：只保留 Cloud Run 的實際操作 runbook；完整系統架構與服務清單以 `PRODUCTION-DEPLOYMENT.md` 為準。
+- `deploy/cloud-run/README.md`：舊 Cloud Run 流程的停用說明；現行部署、回滾與服務清單以 `PRODUCTION-DEPLOYMENT.md` 為準。
 - `.github/instructions/`：修改特定路徑時必須遵守的工程規範。
 - 各產品目錄 README：只記錄該產品的專屬資訊。
 

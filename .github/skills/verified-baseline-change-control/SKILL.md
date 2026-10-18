@@ -29,7 +29,7 @@ description: 功能修改、優化、跨端整合、版本回復、發布與事�
 - 「先理解」「盤點」「提出方案」只做分析；載入 skill 不等於修改、提交、推送或部署授權。
 - 已確認範圍內自主完成，不逐步要求重複確認；只有範圍擴大、重大選擇或未授權高風險操作才詢問。
 - 同時遵守目標領域的既有 skill／instructions：後台與 API 使用 `admin-development`，乘客端使用 `passenger-modularity-maintenance`，手機開發模式使用 `phone-login-development-mode`，設計稿使用 `figma-ui-slicing`。本 skill 不覆蓋各端架構與業務契約。
-- 部署技術步驟參照 [維運入口](../../../docs/OPERATIONS.md)、[正式部署](../../../docs/PRODUCTION-DEPLOYMENT.md) 與 [Cloud Run 操作](../../../deploy/cloud-run/README.md)；實際觸發條件須讀取當前 workflows，不能只依賴文件快照。
+- 部署技術步驟參照 [維運入口](../../../docs/OPERATIONS.md) 與 [正式部署](../../../docs/PRODUCTION-DEPLOYMENT.md)；實際觸發條件須讀取當前 workflows，不能只依賴文件快照。2026-10-18（UTC）起正式環境在 HostKVM 伺服器，由 `deploy-hostkvm.yml` 部署；本 skill 提到的 Cloud Run Revision／流量只適用於過渡期的 run.app 轉發服務與歷史事故，舊的 [Cloud Run 流程](../../../deploy/cloud-run/README.md) 已停用，不得再執行。
 - 純文件整理不修改應用程式、資料庫、部署流程或分支，不要求無關建置。
 
 ## 2. 修改前：固定基線、範圍與狀態

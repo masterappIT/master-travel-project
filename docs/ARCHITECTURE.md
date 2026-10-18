@@ -54,15 +54,15 @@ flowchart LR
 
 ## 正式部署邊界
 
-正式環境使用獨立 Cloud Run services：
+正式環境（2026-10-18 起）在 HostKVM 伺服器上，以獨立的 Docker 容器運行：
 
-- Passenger frontend
-- Admin frontend
-- Driver frontend
-- NestJS API
-- Share Renderer
+- Passenger frontend（`mastertravelapp.masterappinc.com`）
+- Admin frontend（`mastertraveladmin.masterappinc.com`）
+- Driver frontend（`mastertraveldriver.masterappinc.com`）
+- NestJS API（`mastertravelapi.masterappinc.com`）
+- Share Renderer（只在內部網絡）
 
-API 使用 Cloud SQL PostgreSQL；分享圖片使用 private Cloud Storage bucket。完整發布流程請參考 [PRODUCTION-DEPLOYMENT.md](./PRODUCTION-DEPLOYMENT.md)。
+API 使用伺服器上的 PostgreSQL；分享圖片使用 private Cloud Storage bucket。完整發布流程請參考 [PRODUCTION-DEPLOYMENT.md](./PRODUCTION-DEPLOYMENT.md)。
 
 ## CSS 與 UI 邊界
 
@@ -79,4 +79,4 @@ npm run verify:admin
 
 Secret、第三方金鑰、session secret 只能放在環境變數或正式環境 Secret Manager。不得回傳給前端或提交至 Git。
 
-本機 PostgreSQL 是開發依賴；正式資料庫為 Cloud SQL，且 migration 由獨立 Cloud Run Job 執行。
+本機 PostgreSQL 是開發依賴；正式資料庫是伺服器上的 PostgreSQL 16，migration 由部署腳本在更新容器前執行。

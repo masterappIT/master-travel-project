@@ -4,7 +4,13 @@
 
 本文件說明 Master Travel Project 正式環境的前後端部署架構、服務責任、CI/CD 流程、資料庫 migration、健康檢查、回滾與必要的環境設定。
 
-正式部署平台為 Google Cloud Platform，主要使用 Cloud Run、Cloud SQL、Artifact Registry、Secret Manager、Cloud Storage，以及 GitHub Actions。
+**2026-10-18（UTC）起，正式環境由 Google Cloud Run 搬到 HostKVM 伺服器**（`45.134.82.239`，與其他 MasterApp 產品共用）：
+
+- 所有服務以 Docker 容器在伺服器上運行，由共用的 Caddy 提供 HTTPS，資料庫是伺服器上共用的 PostgreSQL 16。
+- 仍在使用的 GCP 資源：Artifact Registry（映像）、Cloud Storage（分享圖片快取），以及過渡期的 Cloud Run 轉發服務（見第 3 節）。
+- 部署由本 repo 的 [`deploy-hostkvm.yml`](../.github/workflows/deploy-hostkvm.yml) 負責。伺服器端的容器設定、部署腳本與專用帳號放在 `masterappIT/MasterApp-infra` 的 `apps/mastertravel/`；搬遷經過與切換記錄見該 repo 的 `docs/step-2-master-travel.md`。
+
+舊的 Cloud Run 流程（`deploy-production.yml`、`deploy/cloud-run/`）已停用，只作歷史參考，見 [deploy/cloud-run/README.md](../deploy/cloud-run/README.md)。
 
 > 本文件只記錄架構與操作方式，不記錄任何正式密碼、API 金鑰、Secret value 或個人資料。
 
@@ -13,49 +19,57 @@
 ```mermaid
 flowchart TB
     PassengerUser[乘客瀏覽器 / App / 微信小程序]
-    AdminUser[管理員瀏覽器]
+    AdminUser[管理員 / 客服瀏覽器]
     DriverUser[司機瀏覽器]
+    OldURL[舊 run.app 網址<br/>Cloud Run 轉發，過渡期]
 
-    Passenger[Passenger H5]
-    Admin[Admin Console]
-    Driver[Driver Web]
-    FrontendProxy[Cloud Run 前端服務<br/>Nginx]
-    API[Cloud Run API<br/>NestJS]
-    Renderer[Cloud Run Share Renderer]
-    SQL[Cloud SQL<br/>PostgreSQL]
+    subgraph Server[HostKVM 伺服器]
+        Caddy[Caddy<br/>HTTPS、按網域分流]
+        Passenger[passenger<br/>Nginx]
+        Admin[admin<br/>Nginx]
+        Driver[driver<br/>Nginx]
+        API[api<br/>NestJS]
+        Renderer[share-renderer<br/>Playwright，只在內部網絡]
+        DB[(PostgreSQL 16<br/>master_travel)]
+    end
+
     Bucket[Cloud Storage<br/>分享圖片快取]
     Registry[Artifact Registry]
     Actions[GitHub Actions]
 
-    PassengerUser --> Passenger
-    AdminUser --> Admin
-    DriverUser --> Driver
-    Passenger --> FrontendProxy
-    Admin --> FrontendProxy
-    Driver --> FrontendProxy
-    FrontendProxy -->|/api| API
-    API --> SQL
+    PassengerUser --> Caddy
+    AdminUser --> Caddy
+    DriverUser --> Caddy
+    OldURL --> Caddy
+    Caddy --> Passenger
+    Caddy --> Admin
+    Caddy --> Driver
+    Caddy --> API
+    Passenger -->|/api| API
+    Admin -->|/api| API
+    Driver -->|/api| API
+    API --> DB
     API --> Renderer
     Renderer --> Bucket
-    Actions --> Registry
-    Registry --> FrontendProxy
-    Registry --> API
-    Registry --> Renderer
-    Actions --> SQL
+    Actions -->|推送映像| Registry
+    Actions -->|SSH：deploy-mastertravel| Server
+    Registry -->|伺服器拉取| Server
 ```
 
-## 3. 服務清單
+## 3. 服務清單與網域
 
-| 服務 | 技術 | 正式部署 | 主要責任 |
-|---|---|---|---|
-| Passenger H5 | uni-app / Vite | Cloud Run + Nginx | 乘客端 Web 介面 |
-| Admin Console | Vue 3 / Vite | Cloud Run + Nginx | 後台管理、表單、權限操作介面 |
-| Driver Web | Flutter Web | Cloud Run + Nginx | 司機接單與訂單操作介面 |
-| API | NestJS / TypeScript | Cloud Run | 驗證、權限、商業邏輯、第三方整合 |
-| Database | PostgreSQL | Cloud SQL | 正式交易資料與設定資料 |
-| Share Renderer | Node.js / Playwright | Cloud Run | 訂單邀請頁與分享圖片產生 |
-| Image Cache | Cloud Storage | Private bucket | 分享圖片跨 instance 快取 |
-| Image Registry | Artifact Registry | GCP | 保存不可變 container image |
+| 服務 | 技術 | 容器 | 網域 | 主要責任 |
+|---|---|---|---|---|
+| Passenger H5 | uni-app / Vite | `master-travel-passenger`（Nginx，128MB） | `https://mastertravelapp.masterappinc.com` | 乘客端 Web 介面 |
+| Admin Console | Vue 3 / Vite | `master-travel-admin`（Nginx，128MB） | `https://mastertraveladmin.masterappinc.com`（客服工作台：`/support-agent.html`） | 後台管理與獨立客服工作台 |
+| Driver Web | Flutter Web | `master-travel-driver`（Nginx，128MB） | `https://mastertraveldriver.masterappinc.com` | 司機接單與訂單操作介面 |
+| API | NestJS / TypeScript | `master-travel-api`（1GB） | `https://mastertravelapi.masterappinc.com` | 驗證、權限、商業邏輯、第三方整合；小程序直接連這個網域 |
+| Share Renderer | Node.js / Playwright | `master-travel-share-renderer`（1GB） | 不對外，只供 API 經內部網絡呼叫 | 訂單邀請頁與分享圖片產生 |
+| Database | PostgreSQL 16 | 伺服器共用的 `postgres` 容器，資料庫 `master_travel` | 不對外 | 正式交易資料與設定資料 |
+| Image Cache | Cloud Storage | `master-travel-share-images`（private bucket） | — | 分享圖片快取 |
+| Image Registry | Artifact Registry | `asia-east2-docker.pkg.dev/mastertravel-507211/master-travel` | — | 保存不可變 container image |
+
+**舊 run.app 網址（過渡期）**：`master-travel-{api,passenger,admin,driver}-c25rpt3lia-df.a.run.app` 仍可使用。這 4 個 Cloud Run 服務現在只運行 nginx 轉發程式，把請求原樣轉到上表對應的新網域（保留 `X-Forwarded-For`，支援 WebSocket）；它們不連資料庫，也不再由本 repo 部署。已發出的舊連結與舊版小程序經轉發繼續可用，預計 2026-11 中下旬刪除，刪除前會先在本文件註明。
 
 前端產品區域保持獨立：`src/`、`admin/`、`driver/` 不直接引用彼此的實作；跨端資料格式應透過 API 或 `shared/` 契約傳遞。
 
@@ -69,14 +83,14 @@ flowchart TB
 npm run build:h5
 ```
 
-產物為 `dist/build/h5`，會被包裝成 `passenger` image，推送至 Artifact Registry，再部署至 Passenger Cloud Run service。
+產物為 `dist/build/h5`，會被包裝成 `passenger` image，推送至 Artifact Registry，由伺服器拉取後運行。
 
-正式建置時使用：
+正式建置時使用（GitHub 變數）：
 
-- `VITE_API_BASE_URL`: 正式 API URL
-- `VITE_API_URL`: `/api`
-- `VITE_PASSENGER_PREVIEW_URL`: 乘客端預覽 URL
-- `VITE_DRIVER_PREVIEW_URL`: 司機端預覽 URL
+- `VITE_API_BASE_URL`：`PRODUCTION_API_URL`，即 `https://mastertravelapi.masterappinc.com`
+- `VITE_API_URL`：`/api`
+- `VITE_PASSENGER_PREVIEW_URL`：`PRODUCTION_PASSENGER_URL`，即 `https://mastertravelapp.masterappinc.com`
+- `VITE_DRIVER_PREVIEW_URL`：`PRODUCTION_DRIVER_URL`，即 `https://mastertraveldriver.masterappinc.com`
 
 ### 4.2 Admin Console
 
@@ -86,7 +100,7 @@ npm run build:h5
 npm --prefix admin run build
 ```
 
-產物為 `admin/dist`，包含後台首頁與 `/support-agent.html` 獨立客服工作台，會被包裝成 `admin` image，部署至獨立 Cloud Run service。
+產物為 `admin/dist`，包含後台首頁與 `/support-agent.html` 獨立客服工作台，會被包裝成 `admin` image。
 
 後台只負責頁面、表單、互動、狀態呈現與 API 呼叫。權限、輸入驗證與商業結果必須由 API 再次驗證；後台不可直接連線資料庫。
 
@@ -96,12 +110,12 @@ npm --prefix admin run build
 
 ```bash
 cd driver
-flutter build web \\
-  --release \\
+flutter build web \
+  --release \
   --dart-define="DRIVER_API_BASE_URL=/api"
 ```
 
-產物為 `driver/build/web`，會被包裝成 `driver` image，部署至獨立 Cloud Run service。
+產物為 `driver/build/web`，會被包裝成 `driver` image。
 Driver 瀏覽器請求使用同站 `/api` 反向代理，避免跨站 CORS 預檢；Flutter 依實際頁面來源把 `/api` 解析為絕對 URL，以保留事件串流等 URL 的既有組合方式。前端容器只對 Driver 的 `main.dart.js`、`canvaskit/*.wasm`、Noto Sans TC 字型與 Noto Sans SC 補充字型提供預壓縮 Brotli，保留 gzip 與原檔回退；其他前端沿用既有壓縮方式。nginx 的 ETag／Last-Modified 由檔案修改時間與大小組成，映像建置時會把這些 Driver 字型、`canvaskit/` 檔案及 `main.dart.js`（含 `.gz`／`.br`）的修改時間設為由檔案內容 SHA-256 推導的固定值，內容未變的檔案跨版本保持相同驗證值並回應 304，避免每次發布後重新下載；快取標頭不變。
 
 ### 4.4 Nginx 前端容器
@@ -111,16 +125,16 @@ Driver 瀏覽器請求使用同站 `/api` 反向代理，避免跨站 CORS 預�
 - Base image：`nginx:1.27-alpine`
 - Container port：`8080`
 - 靜態根目錄：`/usr/share/nginx/html`
-- 健康檢查：`GET /healthz`
+- 健康檢查：`GET /healthz`（注意：Google 保留了 run.app 網址上的 `/healthz`，經舊網址查詢會回應 404，這是正常的）
 - 支援 SPA fallback 至 `/index.html`
 - 啟用 gzip
-- 使用 `API_ORIGIN` 反向代理 API
+- 使用 `API_ORIGIN` 反向代理 API；在伺服器上是內部的 `http://master-travel-api:8080`
 
 主要路由：
 
 | 路徑 | 行為 |
 |---|---|
-| `/api/*` | 轉發至 API Cloud Run service，移除 `/api` prefix |
+| `/api/*` | 轉發至 API 容器，移除 `/api` prefix |
 | `/order-invite` | 轉發至 API 分享頁 |
 | `/order-invite/share-image` | 轉發至 API 分享圖片 endpoint |
 | `/healthz` | 回傳前端容器健康狀態 |
@@ -138,8 +152,8 @@ API 位於 `backend/`，使用 NestJS + TypeScript。
 2. 複製 Prisma schema 與 backend source。
 3. 執行 `npm --prefix backend run build`。
 4. runtime stage 複製建置階段的 `node_modules`、編譯產物、Prisma generated client、schema 與 migrations；目前未執行 production-only 安裝或移除 devDependencies。
-5. 以非 root 的 `node` 使用者啟動。
-6. 監聽 Cloud Run 提供的 `PORT`，預設 host 為 `0.0.0.0`。
+5. 以非 root 的 `node` 使用者啟動，工作目錄 `/app/backend`。
+6. 監聽 `PORT`（伺服器上設為 `8080`），預設 host 為 `0.0.0.0`。
 
 啟動命令：
 
@@ -149,27 +163,23 @@ node dist/main.js
 
 ### 5.2 API runtime 設定
 
-一般環境變數由 Cloud Run 注入：
+所有設定放在伺服器的 `/srv/apps/mastertravel/app.env`（權限 600，只在伺服器上，不在 GitHub 或映像裏）：
 
-- `NODE_ENV=production`
+- `NODE_ENV=production`、`PORT=8080`
 - `ADMIN_USERNAME`
-- `APP_CORS_ORIGINS`
-- `DRIVER_ORDER_URL_BASE`
-- `SHARE_RENDERER_ORIGIN`
+- `APP_CORS_ORIGINS`：4 個新網域的前端，加上過渡期的 run.app 前端網址
+- `DRIVER_ORDER_URL_BASE`：`https://mastertraveldriver.masterappinc.com/order-invite`
+- `SHARE_RENDERER_ORIGIN`：內部的 `http://master-travel-share-renderer:8080`
+- `DATABASE_URL`：連伺服器上的 `master_travel` 資料庫（搬遷時建立的新帳號和新密碼）
+- `ADMIN_PASSWORD`、`ADMIN_SESSION_SECRET`、`SUPPORT_AGENT_SESSION_SECRET`、`AMAP_WEB_SERVICE_KEY`：搬遷時從 Secret Manager 原樣抄過來
 
-Secret Manager 注入：
+微信小程序的 AppID／AppSecret 由後台設定，加密後存在資料庫 `AppSetting`，不在 `app.env`。
 
-- `DATABASE_URL`
-- `ADMIN_PASSWORD`
-- `ADMIN_SESSION_SECRET`
-- `SUPPORT_AGENT_SESSION_SECRET`
-- `AMAP_WEB_SERVICE_KEY`
-
-Secret 不可寫入 source code、前端 bundle、Docker image 或 GitHub repository。
+Secret 不可寫入 source code、前端 bundle、Docker image 或 GitHub repository。修改 `app.env` 後要重新建立 API 容器才會生效（見第 12 節）。
 
 ### 5.3 CORS 與權限
 
-`APP_CORS_ORIGINS` 使用逗號分隔的 allowlist。API 會依 allowlist 判斷請求來源，不應以任意來源取代正式設定。
+`APP_CORS_ORIGINS` 使用逗號分隔的 allowlist。API 會依 allowlist 判斷請求來源，不應以任意來源取代正式設定。刪除 run.app 轉發後，要同時從 allowlist 移除 run.app 網址。
 
 API 負責：
 
@@ -181,38 +191,34 @@ API 負責：
 - 第三方登入與服務憑證驗證
 - 付款、退款、審核及其他商業規則
 
-## 6. Cloud SQL 與 Prisma migration
+### 5.4 用戶 IP
 
-正式資料庫使用 Cloud SQL PostgreSQL，API 透過 Cloud SQL connector / Unix socket 連線。`DATABASE_URL` 的完整內容存於 Secret Manager，例如使用 Cloud SQL socket：
+請求經 Caddy（舊網址還會多經 Cloud Run 轉發）才到 API。API 讀取用戶 IP 時先看 `X-Forwarded-For` 第一個值；Caddy 對 API 和前端都會原樣保留並附加這個標頭。登入限流使用的 `req.ip` 是 Caddy 容器的位址，搬遷前在 Cloud Run 上也是代理位址，行為沒有改變。
 
-```text
-postgresql://USER:PASSWORD@localhost/DATABASE?host=/cloudsql/PROJECT:REGION:INSTANCE&schema=public
-```
+## 6. 資料庫與 Prisma migration
 
-實際帳密與 instance name 不得寫入文件或 source code。
+正式資料庫是伺服器上共用 PostgreSQL 16 的 `master_travel` 資料庫，只在伺服器內部網絡開放。伺服器每天 03:30（香港時間）把所有資料庫備份到 GCS（由 MasterApp-infra 管理）；每次部署前另有一份本機備份（見第 7 節）。
 
 ### 6.1 Migration 原則
 
-API 啟動時不執行 schema migration，但會呼叫 `ensurePricingDefaults()` 與 `ensureMembershipPlanDefaults()` 初始化預設資料。正式 migration 使用獨立 Cloud Run Job，在容器工作目錄 `/app/backend` 執行：
+API 啟動時不執行 schema migration，但會呼叫 `ensurePricingDefaults()` 與 `ensureMembershipPlanDefaults()` 初始化預設資料。正式 migration 由伺服器的部署腳本執行：用**新版 API 映像**在容器工作目錄 `/app/backend` 執行
 
 ```bash
 npm run prisma:migrate:deploy
 ```
 
-若從專案根目錄手動執行相同 migration，命令為 `npm --prefix backend run prisma:migrate:deploy`；須先確認連線環境與發布授權，不可把手動命令當成正式 Job 流程的替代。
+若從專案根目錄手動執行相同 migration，命令為 `npm --prefix backend run prisma:migrate:deploy`；須先確認連線環境與發布授權，不可把手動命令當成正式部署流程的替代。
 
-正式 workflow 與部署腳本的順序：
+部署腳本的順序：
 
-1. Workflow 建立 Cloud SQL pre-migration backup。
-2. 部署腳本先更新 Share Renderer。
-3. 使用與 API 相同的 immutable image 部署 migration job。
-4. 執行 Prisma migration。
-5. migration 成功後才部署 API service。
-6. migration 失敗時中止後續發布；先前已部署的 Share Renderer 不會因此自動回滾。
+1. 拉取 5 個新映像。
+2. `pg_dump` 備份 `master_travel`。
+3. 用新 API 映像執行 migration；**失敗即停止**，容器不會更新，舊版繼續運行。
+4. migration 成功後才更新容器。
 
-Migration 必須遵循 expand/contract：先加入向後相容結構，再部署程式與搬移資料，最後於後續版本移除舊結構。正式環境不使用自動 down migration。
+Migration 必須遵循 expand/contract：先加入向後相容結構，再部署程式與搬移資料，最後於後續版本移除舊結構。正式環境不使用自動 down migration；部署失敗自動退回舊映像時，已套用的 migration **不會**撤銷，所以每個 migration 都必須能與上一版程式共存。
 
-## 7.1 提交、推送與 Cloud Run 流量判定
+## 7. 提交、推送與正式部署
 
 正式發布只接受同一個已提交 commit SHA 的完整 workflow 結果。單一測試、局部 build、未提交修改、手動 image 或單次 HTTP 200 均不可視為部署候選或部署完成。
 
@@ -220,156 +226,139 @@ Migration 必須遵循 expand/contract：先加入向後相容結構，再部署
 
 - 完整 diff 已檢查，工作目錄乾淨，所有要發布的修改已提交。
 - commit SHA、受影響端別及 quality gates 結果可追溯。
-- production build 已完成，所有正式 image 使用 immutable `service:<sha>@sha256:<digest>`。
-- backup、migration、revision readiness 與 smoke tests 均成功。
+- 推送到 `main` 就會自動部署（推送即發布）。
 
-發布完成必須逐服務核對 revision、image digest 與 `status.traffic`。只有目標 revision 的 traffic 明確為 100%，且其 image digest 等於本次 workflow 產物，才可判定該服務已承接本次版本。`latestReadyRevisionName`、deploy 命令成功或 URL HTTP 200 不能替代 traffic 證據。若任一服務的 traffic、revision 或 digest 未核實，整體只能回報為「部分完成／未驗證」，不可回報「正式部署完成」。
-
-
-正式 workflow 為 `.github/workflows/deploy-production.yml`。
+正式 workflow 為 [`.github/workflows/deploy-hostkvm.yml`](../.github/workflows/deploy-hostkvm.yml)。
 
 觸發方式：
 
 - push 至 `main`
 - GitHub Actions 手動執行 `workflow_dispatch`
-- 每月 2 日 03:00 UTC 排程重建（沿用完整正式發布流程）
+- 每月 2 日 03:00 UTC 排程重建（更新 GeoIP；只部署，不上傳小程序）
 
-API image 建置時下載當月 DB-IP Lite City MMDB，檢查 gzip、MMDB 類型與公開 IP 查詢；下載或驗證失敗會中止建置，不會部署缺少地區資料的 image。資料庫在 image 內由後端本地讀取，不再呼叫 `ipwho.is`；每次 workflow run 的 API tag 包含 commit SHA、run ID 與 attempt，部署仍引用 digest。DB-IP Lite City 資料每月更新，依 [DB-IP 來源及授權](https://db-ip.com) 標示；地區查不到仍回傳「未知地區」。排程會重新發布整站、執行既有備份與 migration，不是僅更新 API；實際正式生效需依下述 Revision／流量證據確認。
+API image 建置時下載當月 DB-IP Lite City MMDB，檢查 gzip、MMDB 類型與公開 IP 查詢；下載或驗證失敗會中止建置，不會部署缺少地區資料的 image。資料庫在 image 內由後端本地讀取，不再呼叫 `ipwho.is`；每次 workflow run 的 image tag 包含 commit SHA、run ID 與 attempt，部署一律引用 digest。DB-IP Lite City 資料每月更新，依 [DB-IP 來源及授權](https://db-ip.com) 標示；地區查不到仍回傳「未知地區」。
 
-流程如下：
+`deploy` job 的流程：
 
-1. 獨立 quality-gates job 執行驗證，通過後才啟動 deploy job。
-2. Deploy job checkout 本次 commit。
-3. 使用 Workload Identity Federation 登入 GCP。
-4. 安裝 Node.js 20 與 Flutter 3.47.4。
-5. 建置 Passenger H5、微信小程序、Admin 與 Driver Web。
-6. 建置並推送 `passenger`、`admin`、`driver`、`api`、`share-renderer` images。
-7. 解析每個 image 的 SHA-256 digest。
-8. Before any production mutation, the workflow re-checks that `origin/main` still equals the workflow commit; a queued stale run stops without backup, migration, API promotion, or frontend deployment.
-9. 建立 Cloud SQL pre-migration backup。
-10. 部署 Share Renderer。
-11. 執行 migration Cloud Run Job。
-12. 部署 API candidate revision。
-13. 執行 `/health/live` 與 `/health/ready` smoke tests。
-14. 成功後切換 API 100% traffic。
-15. 再次檢查正式 API URL。
-16. 部署三個前端 Cloud Run services。
-17. 前端部署前再次檢查 `origin/main`，避免過時 workflow 修改前端流量。
-18. 保留微信小程序 build artifact 30 天。
+1. 獨立 quality-gates job 通過後才開始。
+2. 確認 workflow commit 仍是目前的 `origin/main`，過時的 run 會停止。
+3. 以 Workload Identity Federation 登入 GCP（只用來推送映像）。
+4. 建置 Passenger H5、微信小程序、Admin 與 Driver Web；微信小程序 build 以 `production-mp-weixin-<commit>` artifact 保留 30 天。
+5. 建置並推送 `api`、`share-renderer`、`passenger`、`admin`、`driver` 映像，解析每個 SHA-256 digest。
+6. 以 `deploy-mastertravel` 帳號 SSH 到伺服器，只傳送 commit SHA 和 5 個 digest（次序：api、share-renderer、passenger、admin、driver）。workflow 固定了伺服器的 host key。
+7. 伺服器部署腳本 `/usr/local/sbin/mastertravel-deploy`（來源：MasterApp-infra `apps/mastertravel/deploy.sh`）：
+   1. 驗證參數格式，同一時間只允許一個部署
+   2. 拉取映像
+   3. `pg_dump` 備份，保留最近 5 份於 `/srv/apps/mastertravel/predeploy/`
+   4. 用新 API 映像執行 migration
+   5. 把舊的 `deploy.env` 存為 `deploy.env.prev`，寫入新 digest，重新建立容器
+   6. 健康檢查（最多 2 分鐘）：API `/health`、3 個前端 `/healthz`、share-renderer `/health/live`
+   7. 健康檢查失敗就換回 `deploy.env.prev` 的映像
+8. 經正式網址做 smoke tests：API `/health`、乘客和司機的 `/` 與 `/api/health`。
 
-正式部署一律使用：
+`wechat-experience` job 見第 10 節。
 
-```text
-service:<commit-sha>@sha256:<digest>
-```
+### 7.1 部署完成的判定
 
-不得以 `latest` 或可變動 tag 作為正式部署依據。
+- workflow 的 `deploy` job 成功，代表伺服器已換上本次映像並通過健康檢查。核對方法：伺服器上 `/srv/apps/mastertravel/deploy.env` 第一行寫著部署的 commit，`deploy.log` 有「Deploy <sha> succeeded」。
+- 部署會重新建立容器，**網站會中斷幾秒到十幾秒**（Cloud Run 時代是先準備好新版本再切換，沒有中斷）。避免在繁忙時段推送。
+- 部署成功不等於業務驗收；登入、下單、司機接單、客服、分享圖要另外實測。
+- workflow 執行中只能說「發布中」。
 
-## 8. API candidate 與流量切換
-
-若 API service 已存在，新 revision 先以 `--no-traffic` 和 `candidate` tag 部署，不能直接接收正式流量。
-
-Smoke test：
-
-```bash
-GET /health/live
-GET /health/ready
-```
-
-兩個 endpoint 都成功後才執行：
-
-```bash
-gcloud run services update-traffic SERVICE_NAME \\
-  --to-revisions REVISION=100
-```
-
-### Health endpoint 定義
+## 8. 健康檢查
 
 | Endpoint | 用途 |
 |---|---|
-| `/health/live` | process liveness，供 startup/liveness probe |
+| `/health/live` | process liveness |
 | `/health/ready` | 執行 `SELECT 1` 確認資料庫可連線，查詢失敗回傳 503；handler 未設定自身的查詢逾時上限 |
-| `/health` | readiness 相容別名 |
+| `/health` | readiness 相容別名；部署腳本與 smoke test 使用 |
 
-資料庫故障不應被 liveness probe 當成 process failure，避免造成無限重啟。
+資料庫故障不應被 liveness 當成 process failure，避免造成無限重啟。
 
 ## 9. Share Renderer
 
-Share Renderer 是獨立 Cloud Run service，負責產生訂單邀請分享圖片與 crawler 需要的分享內容。
+Share Renderer 是伺服器上獨立的容器，負責產生訂單邀請分享圖片與 crawler 需要的分享內容。
 
-部署特性：
+- 記憶體上限 1GB，`shm_size` 256MB（Playwright 需要）
+- 只在 API 與 renderer 之間的內部網絡，其他產品的容器連不到它，也沒有對外網域
+- 使用 `DRIVER_ORDER_URL_BASE`（新司機網域）與 `SHARE_IMAGE_BUCKET=master-travel-share-images`
+- 以 GCP 服務帳號 `master-travel-share-writer` 存取 bucket；這個帳號只有該 bucket 的權限，金鑰只在伺服器上
 
-- memory：`1Gi`
-- concurrency：`1`
-- min instances：`1`
-- max instances：`3`
-- service account 由 `GCP_SHARE_RENDERER_SERVICE_ACCOUNT` 指定；workflow 未設定該值時會 fallback 至 `GCP_RUNTIME_SERVICE_ACCOUNT`，並非強制獨立帳號
-- Cloud Storage private bucket
-- 使用 `DRIVER_ORDER_URL_BASE`
-- 使用 `SHARE_IMAGE_BUCKET`
-
-API 透過 `SHARE_RENDERER_ORIGIN` 呼叫 Renderer；Renderer 不應直接暴露資料庫權限。
+API 透過 `SHARE_RENDERER_ORIGIN` 呼叫 Renderer；Renderer 不連資料庫。
 
 ## 10. 微信小程序
 
-正式 workflow 會建置：
+`deploy-hostkvm.yml` 的 `wechat-experience` job（排程觸發時不執行）：
+
+1. 在 GitHub 的 runner 上 `npm run build:mp-weixin`，`VITE_API_BASE_URL` 是 `https://mastertravelapi.masterappinc.com`。
+2. 執行 `scripts/transpile-mp-weixin.mjs`，產物以 `main-mp-weixin-<commit>` artifact 保留 30 天。
+3. 把 `dist/build/mp-weixin` 打包，以 `upload-mastertravel-mp` 帳號經 SSH 交給伺服器。
+4. 伺服器腳本 `/usr/local/sbin/mastertravel-mp-upload`（來源：MasterApp-infra `apps/mastertravel/mp-upload.sh`）在隔離的容器內用 `miniprogram-ci@1.9.17` 上傳**體驗版**，版本號 `0.2.<run number>`。
+
+- **代碼上傳金鑰只存放在伺服器上**，不在 GitHub。2026-10 GitHub secret 外洩後已重置；舊的 `WECHAT_PRIVATE_KEY` secret 已失效。
+- 微信公眾平台的代碼上傳 IP 白名單是伺服器的 IP `45.134.82.239`。
+- 微信公眾平台的 request、socket、uploadFile 合法域名：`mastertravelapi.masterappinc.com`，以及過渡期保留的 API run.app 網址。
+- 上傳只會更新體驗版，不會自動提交審核或發布正式版。截至 2026-10-19 尚未發布正式版。
+- 不要再使用 self-hosted runner 上傳小程序。
+
+## 11. 權限與 Secret 分工
+
+| 帳號 | 用途與權限 |
+|---|---|
+| GitHub `production` environment | `HOSTKVM_DEPLOY_SSH_KEY`、`HOSTKVM_MP_UPLOAD_SSH_KEY` 兩把 SSH 私鑰；GCP 變數只用於推送映像 |
+| GCP `master-travel-github-deploy`（WIF） | 推送映像到 Artifact Registry。**待辦**：仍保留舊流程的 `run.admin`、`cloudsql.admin`、`iam.serviceAccountUser`，應移除 |
+| 伺服器 `deploy-mastertravel` | 只能執行部署腳本，只接受 SHA 和 digest；不能開 shell、不能轉發連線、不在 docker 群組 |
+| 伺服器 `upload-mastertravel-mp` | 只能執行小程序上傳腳本 |
+| GCP `masterapp-prod-vm` | 伺服器拉取映像（Artifact Registry 只讀） |
+| GCP `master-travel-share-writer` | Renderer 存取 `master-travel-share-images` |
+
+即使 GitHub 的部署金鑰外洩，對方也只能部署 Artifact Registry 裏已有的映像，碰不到資料庫和伺服器上的設定。正式密碼只在伺服器的 `app.env`；Secret Manager 裏的舊值在 GCP 清理前仍保留，但已不再被使用。
+
+## 12. 回滾與常用操作
+
+以下命令在伺服器上執行（SSH 帳號由維運人員持有）。
+
+**退回上一版映像**：
 
 ```bash
-npm run build:mp-weixin
+cd /srv/apps/mastertravel
+sudo cp deploy.env.prev deploy.env
+sudo docker compose --env-file deploy.env up -d
 ```
 
-產物：
+**部署某個已存在的版本**：
 
-```text
-dist/build/mp-weixin
+```bash
+sudo mastertravel-deploy <commit-sha> <api> <share-renderer> <passenger> <admin> <driver>
 ```
 
-目前 production workflow 會將產物上傳為 GitHub Actions artifact，保留 30 天；不會將小程序部署為 Cloud Run service。後續需透過微信小程序上傳流程發布。
+5 個參數是映像 digest。
 
-微信平台需要設定：
+**修改 `app.env` 後套用**：
 
-- request 合法域名指向正式 API host。
-- GitHub Actions runner 出口 IP 符合小程序上傳白名單策略。
-- 體驗版與正式版使用正確的 API 設定。
+```bash
+cd /srv/apps/mastertravel
+sudo docker compose --env-file deploy.env up -d api
+```
 
-## 11. IAM 與 Secret 分工
+**記錄**：
 
-正式環境應分離以下 service account：
+- 部署：`/srv/apps/mastertravel/deploy.log`
+- 小程序上傳：`/srv/apps/mastertravel/mp-upload.log`
+- 容器：`sudo docker logs master-travel-api`
 
-| Account | 權限原則 |
-|---|---|
-| GitHub deploy account | 推送 image、更新 Cloud Run、執行 migration job、建立 backup |
-| API runtime account | Cloud SQL Client、讀取必要 secrets |
-| Migration account | Cloud SQL 與 migration credentials |
-| Renderer account | Renderer 與 Cloud Storage 所需權限 |
+Migration 已執行時不可直接假設可以 down migration。若 schema 仍向後相容，優先採用 forward fix；若有資料完整性風險，用 `predeploy/` 的部署前備份或每日 GCS 備份恢復，並先停止寫入、記錄恢復點。
 
-GitHub deploy account 不應直接讀取 secret value。Runtime 與 migration job 應由 Cloud Run 透過 Secret Manager 注入 secrets。
-
-以上是權限分離原則，不代表腳本強制驗證帳號彼此不同。尤其 Renderer 帳號目前允許 fallback 至 API runtime 帳號；實際 IAM 權限與帳號分離狀態須於雲端查驗。
-
-## 12. 回滾
-
-若新 API revision 發生程式 regression：
-
-1. 找出最後一個已驗證的 revision。
-2. 執行 `deploy/cloud-run/rollback.sh`。
-3. 將流量切回該 revision。
-4. 重新執行 `/health/live` 與 `/health/ready`。
-5. 保留失敗 revision、image digest、migration job 記錄與 Cloud Logging。
-
-Migration 已執行時不可直接假設可以 down migration。若 schema 仍向後相容，優先採用 forward fix；若有資料完整性風險，才依事故流程評估 backup / PITR restore。
+退回 Cloud Run 的整體回退方法見 MasterApp-infra 的 `docs/step-2-master-travel.md`。只限搬遷初期使用，而且切換後新寫入的資料要另外搬回。
 
 ## 13. 監控與告警
 
-正式環境至少應監控以下項目。這是維運配置要求，不是已完成配置的證明；告警、多區域檢查、備份策略及 PITR 狀態須查驗實際雲端設定：
+正式環境至少應監控以下項目。這是維運要求，截至 2026-10-19 **尚未配置**外部監控：
 
-- Cloud Run 5xx ratio
-- p95 latency
-- instance 數量與 startup/liveness probe failure
-- `/health/ready` 多區域檢查結果
-- Cloud SQL CPU、memory、storage、connection saturation
-- backup 與 PITR 狀態
-- migration job failure
+- 4 個網域的 `/health`、`/healthz` 外部檢查
+- 伺服器記憶體、磁碟、CPU
+- 容器重啟次數
+- 每日備份是否成功上傳 GCS
 - GitHub Actions deployment failure
 
 Application logs 不得包含密碼、session token、Authorization header 或未核准的個人資料。
@@ -396,15 +385,22 @@ npm run verify:driver
 
 ## 15. 相關檔案
 
-- `.github/workflows/deploy-production.yml`
+本 repo：
+
+- `.github/workflows/deploy-hostkvm.yml`
 - `.github/workflows/quality-gates.yml`
 - `backend/Dockerfile`
 - `deploy/frontend/Dockerfile`
 - `deploy/frontend/default.conf`
 - `deploy/frontend/build-image.sh`
-- `deploy/frontend/deploy.sh`
-- `deploy/cloud-run/deploy.sh`
-- `deploy/cloud-run/rollback.sh`
-- `deploy/cloud-run/smoke-test.sh`
-- `deploy/cloud-run/README.md`
+- `deploy/share-renderer/Dockerfile`
+- `scripts/transpile-mp-weixin.mjs`
 - `docker-compose.yml`（僅本機 PostgreSQL）
+
+已停用，只作歷史參考：`.github/workflows/deploy-production.yml`、`.github/workflows/deploy-wechat-experience.yml`、`deploy/frontend/deploy.sh`、`deploy/cloud-run/`、`scripts/upload-mp-weixin.mjs`。
+
+MasterApp-infra（伺服器端）：
+
+- `apps/mastertravel/compose.yaml`、`setup.sh`、`deploy.sh`、`mp-upload.sh`、`accounts.sh`、`forwarder/`
+- `stack/sites/master-travel.caddy`
+- `docs/step-2-master-travel.md`

@@ -35,7 +35,7 @@
 
 - 建議用同一對話識別串起文字與圖片訊息；訊息內容、發送者、收件對象、狀態與時間戳保存在 PostgreSQL。現階段已落地圖片 metadata、格式驗證、10 MB 輸入上限、EXIF 方向校正、display／thumbnail WebP 壓縮、checksum、私有管理端讀取與刪除；本機開發二進位使用 `SUPPORT_MEDIA_STORAGE_DIR` 私有目錄，原始檔不保存。正式 Cloud Run 仍需接入私有 Cloud Storage adapter、短效 signed URL、保留期限清理及對話參與者授權；不要將媒體二進位直接塞進對話資料表。專案現有私有 Cloud Storage 用於分享圖片，客服媒體的儲存範圍與存取政策仍需另外配置。
 - 訂單／行程入口可在畫面傳入既有訂單 ID 與狀態作為聯繫情境；正式接線時，後端須按乘客或訪客身份重新核對訂單存取權與即時狀態，不能信任前端 query。訪客能否就既有訂單聯繫客服也須以授權規則明確界定。
-- 正式 API 使用 Cloud Run。圖片上傳仍需完善對話參與者權限、私有媒體存取、失敗重試及清理；不可把前端停用狀態當成後端授權。
+- 正式 API 在 HostKVM 伺服器上運行（2026-10-18 起，之前是 Cloud Run）。圖片上傳仍需完善對話參與者權限、私有媒體存取、失敗重試及清理；不可把前端停用狀態當成後端授權。
 
 ### 建議交付順序與驗收門檻
 
@@ -50,7 +50,7 @@
 
 ### 技術判斷參考
 
-- [Google Cloud Run WebSocket 說明](https://docs.cloud.google.com/run/docs/triggering/websockets)：連線受請求逾時限制，重連與跨實例同步須自行處理。
+- 正式 API 現在是伺服器上的單一容器，WebSocket 經 Caddy 轉發；舊 run.app 網址經 Cloud Run 轉發時仍受 1 小時請求逾時限制（[Cloud Run WebSocket 說明](https://docs.cloud.google.com/run/docs/triggering/websockets)）。重連仍須自行處理；部署時容器重建也會中斷連線。
 
 ## 待確認的產品決策
 
