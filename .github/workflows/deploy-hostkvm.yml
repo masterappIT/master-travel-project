@@ -1,0 +1,191 @@
+name: Deploy HostKVM
+
+# 2026-10-19 起正式環境在 HostKVM 伺服器（45.134.82.239），取代已停用的 deploy-production.yml（Cloud Run）
+# 和 deploy-wechat-experience.yml（self-hosted runner）。用戶照舊用 run.app 網址，Cloud Run 只負責轉發。
+# 伺服器端設定在 masterappIT/MasterApp-infra 的 apps/mastertravel/：
+# - deploy-mastertravel 帳號只能執行部署腳本，只接受提交 SHA 和 5 個映像 digest。
+#   伺服器會備份資料庫、執行 migration、更新容器、健康檢查，失敗就退回上一版。
+# - upload-mastertravel-mp 帳號只能上傳小程序體驗版；上傳金鑰只在伺服器上，微信上傳白名單是伺服器的 IP。
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 3 2 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+env:
+  DEPLOY_HOST: 45.134.82.239
+  DEPLOY_HOST_KEY: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIfLOO+u+1eL4NfB87NjjvQm6GWt7b4ZKianVO7bGRGD
+
+jobs:
+  quality-gates:
+    uses: ./.github/workflows/quality-gates.yml
+
+  deploy:
+    needs: quality-gates
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify commit is still current on main
+        run: |
+          set -euo pipefail
+          remote_sha="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          if [[ "$remote_sha" != "${GITHUB_SHA}" ]]; then
+            printf 'Refusing stale production deployment: workflow_sha=%s current_main=%s\n' \
+              "$GITHUB_SHA" "$remote_sha" >&2
+            exit 1
+          fi
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.4'
+          channel: stable
+          cache: true
+
+      - name: Configure Artifact Registry
+        run: gcloud auth configure-docker "${{ vars.GCP_REGION }}-docker.pkg.dev" --quiet
+
+      - name: Build production frontends
+        env:
+          VITE_API_BASE_URL: ${{ vars.PRODUCTION_API_URL }}
+          VITE_API_URL: /api
+          VITE_PASSENGER_PREVIEW_URL: ${{ vars.PRODUCTION_PASSENGER_URL }}
+          VITE_DRIVER_PREVIEW_URL: ${{ vars.PRODUCTION_DRIVER_URL }}
+        run: |
+          set -euo pipefail
+          npm ci
+          npm --prefix admin ci
+          (cd driver && flutter pub get)
+          npm run build:h5
+          npm run build:mp-weixin
+          npm --prefix admin run build
+          (cd driver && flutter build web \
+            --release \
+            --dart-define="DRIVER_API_BASE_URL=/api")
+
+      - name: Upload WeChat mini-program build
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-mp-weixin-${{ github.sha }}
+          path: dist/build/mp-weixin
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Build and push immutable images
+        env:
+          REGISTRY: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.GCP_ARTIFACT_REPOSITORY }}
+        run: |
+          set -euo pipefail
+          digest() { gcloud artifacts docker images describe "$1" --format='value(image_summary.digest)'; }
+          tag="${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+
+          docker buildx build --platform linux/amd64 \
+            --build-arg DBIP_RELEASE="$(date -u +%Y-%m)" \
+            --file backend/Dockerfile --tag "${REGISTRY}/api:${tag}" --push --provenance=false .
+          docker buildx build --platform linux/amd64 \
+            --file deploy/share-renderer/Dockerfile --tag "${REGISTRY}/share-renderer:${tag}" --push --provenance=false .
+          ./deploy/frontend/build-image.sh dist/build/h5 "${REGISTRY}/passenger:${tag}"
+          ./deploy/frontend/build-image.sh admin/dist "${REGISTRY}/admin:${tag}"
+          ./deploy/frontend/build-image.sh driver/build/web "${REGISTRY}/driver:${tag}"
+
+          # 次序要和伺服器的部署腳本一致：api share-renderer passenger admin driver
+          digests=""
+          for name in api share-renderer passenger admin driver; do
+            digests="${digests} $(digest "${REGISTRY}/${name}:${tag}")"
+          done
+          printf 'DIGESTS=%s\n' "${digests# }" >> "$GITHUB_ENV"
+
+      - name: Deploy to HostKVM
+        env:
+          SSH_KEY: ${{ secrets.HOSTKVM_DEPLOY_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s %s\n' "$DEPLOY_HOST" "$DEPLOY_HOST_KEY" > ~/.ssh/known_hosts
+          ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o BatchMode=yes \
+            "deploy-mastertravel@${DEPLOY_HOST}" "${GITHUB_SHA} ${DIGESTS}"
+
+      - name: Verify production endpoints
+        env:
+          API_URL: ${{ vars.PRODUCTION_API_URL }}
+          PASSENGER_URL: ${{ vars.PRODUCTION_PASSENGER_URL }}
+          DRIVER_URL: ${{ vars.PRODUCTION_DRIVER_URL }}
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 30 "${API_URL}/health" | grep -q '"status":"ok"'
+          for url in "$PASSENGER_URL/" "$PASSENGER_URL/api/health" "$DRIVER_URL/" "$DRIVER_URL/api/health"; do
+            curl --fail --silent --show-error --max-time 30 --output /dev/null "$url"
+          done
+
+  # 小程序體驗版：GitHub 的 runner 編譯，再交給伺服器上傳。每月的排程只重新部署（更新 GeoIP），不上傳。
+  wechat-experience:
+    needs: quality-gates
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    environment: production
+    concurrency:
+      group: wechat-experience
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Build WeChat mini-program
+        env:
+          VITE_API_BASE_URL: ${{ vars.PRODUCTION_API_URL }}
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run build:mp-weixin
+          node scripts/transpile-mp-weixin.mjs
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: main-mp-weixin-${{ github.sha }}
+          path: dist/build/mp-weixin
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload WeChat experience build through HostKVM
+        env:
+          SSH_KEY: ${{ secrets.HOSTKVM_MP_UPLOAD_SSH_KEY }}
+          WECHAT_MP_VERSION: 0.2.${{ github.run_number }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/upload_key
+          chmod 600 ~/.ssh/upload_key
+          printf '%s %s\n' "$DEPLOY_HOST" "$DEPLOY_HOST_KEY" > ~/.ssh/known_hosts
+          tar -czf - -C dist/build/mp-weixin . | ssh -i ~/.ssh/upload_key -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes -o BatchMode=yes \
+            "upload-mastertravel-mp@${DEPLOY_HOST}" "${WECHAT_MP_VERSION} ${GITHUB_SHA}"
