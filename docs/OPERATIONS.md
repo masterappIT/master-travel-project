@@ -29,7 +29,7 @@
 
 1. 確認 commit 已包含所有要發布的修改，工作目錄乾淨。
 2. 記錄完整 commit SHA，確認目前分支及目標為 `main`。
-3. 確認本次推送會觸發 `Deploy HostKVM` workflow（`deploy-hostkvm.yml`）；不得把本機測試、手動 image 或在伺服器上手動執行的部署當成正式部署完成。部署會重新建立容器，網站會中斷幾秒到十幾秒。
+3. 確認本次推送會觸發 `Deploy HostKVM` workflow（`deploy-hostkvm.yml`）；只改 `docs/` 或 `.md` 檔的推送不會部署（2026-10-19 起，因為伺服器部署會中斷網站）。不得把本機測試、手動 image 或在伺服器上手動執行的部署當成正式部署完成。部署會重新建立容器，網站會中斷幾秒到十幾秒。
 4. 推送後立即以 GitHub Actions run 的 SHA 作為唯一候選識別，不以本機 HEAD、快取的 `origin/main` 或局部測試結果替代。
 
 ### C. workflow 中：候選建置與部署
@@ -53,7 +53,7 @@ workflow 成功、HTTP 200 或容器在運行，都不等於業務驗收；登�
 
 實際執行以 [`deploy-hostkvm.yml`](../.github/workflows/deploy-hostkvm.yml) 與伺服器的部署腳本為準，不新增手動發布階段：
 
-1. `main` push、`workflow_dispatch` 或每月 2 日排程。
+1. `main` push（只改 `docs/` 或 `.md` 檔時不觸發）、`workflow_dispatch` 或每月 2 日排程。
 2. Quality gates 通過。
 3. `deploy` job：確認 workflow SHA 仍是目前 `main`；建置前端、微信 artifact 與 5 個 immutable images，推送至 GHCR；部署成功後 `ghcr-retention.yml` 每個映像只留最近 10 版。
 4. 以 `deploy-mastertravel` 帳號通知伺服器，只傳 SHA 和 digest；當次的 `GITHUB_TOKEN` 經標準輸入交給伺服器拉映像。

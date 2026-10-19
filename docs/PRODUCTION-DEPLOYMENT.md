@@ -224,13 +224,13 @@ Migration 必須遵循 expand/contract：先加入向後相容結構，再部署
 
 - 完整 diff 已檢查，工作目錄乾淨，所有要發布的修改已提交。
 - commit SHA、受影響端別及 quality gates 結果可追溯。
-- 推送到 `main` 就會自動部署（推送即發布）。
+- 推送到 `main` 就會自動部署（推送即發布）；只改 `docs/` 或 `.md` 檔的推送不部署。
 
 正式 workflow 為 [`.github/workflows/deploy-hostkvm.yml`](../.github/workflows/deploy-hostkvm.yml)。
 
 觸發方式：
 
-- push 至 `main`
+- push 至 `main`。只改 `docs/` 或 `.md` 檔時不觸發（2026-10-19 起）：伺服器部署會重建容器、網站中斷幾秒，Cloud Run 時代重新部署不會中斷，所以以前不需要這個限制。要只為文件重新部署時，手動執行 `workflow_dispatch`。
 - GitHub Actions 手動執行 `workflow_dispatch`
 - 每月 2 日 03:00 UTC 排程重建（更新 GeoIP；只部署，不上傳小程序）
 

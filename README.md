@@ -100,7 +100,7 @@ H5 靜態檔案與 `/api/` 同源反向代理可參考 `deploy/nginx.h5.conf`。
 
 ## 部署流程
 
-2026-10-19 起，正式環境在 HostKVM 伺服器上運行。`main` 是唯一正式部署分支，每次 push 都由 [`deploy-hostkvm.yml`](.github/workflows/deploy-hostkvm.yml) 自動部署：
+2026-10-19 起，正式環境在 HostKVM 伺服器上運行。`main` 是唯一正式部署分支，每次 push 都由 [`deploy-hostkvm.yml`](.github/workflows/deploy-hostkvm.yml) 自動部署（只改 `docs/` 或 `.md` 檔的推送不部署，quality gates 照常執行）：
 
 1. 執行完整 quality gates。
 2. 建置 API、share-renderer、乘客 H5、管理後台與司機 Web 的映像，推送至 GHCR（公開可讀；只用當次的 `GITHUB_TOKEN`，每個映像保留最近 10 版）；微信小程序 build 以 `production-mp-weixin-<commit>` artifact 保留 30 天。

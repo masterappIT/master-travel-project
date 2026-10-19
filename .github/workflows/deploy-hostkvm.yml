@@ -12,6 +12,11 @@ name: Deploy HostKVM
 on:
   push:
     branches: [main]
+    # 只改文件時不部署：伺服器部署會重建容器、網站中斷幾秒，還會多上傳一版小程序體驗版。
+    # 一次推送裏只要有一個檔案不在下列範圍，就照常部署。quality gates 仍由 quality-gates.yml 在每次 push 執行。
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
   schedule:
     - cron: '0 3 2 * *'
   workflow_dispatch:
