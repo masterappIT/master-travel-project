@@ -133,7 +133,7 @@ sudo docker compose --env-file deploy.env up -d
 
 以下事項是否已完成，倉庫內沒有紀錄；完成後在此註明日期。
 
-1. 舊 self-hosted runner（標籤 `wechat-ci`）所在的機器：在 2026-10-16 09:31 到 21:57 之間是否執行過 `cleanup-job.yml`；檢查該機器執行 runner 的帳號有沒有含 `ghc2` 或 `193.32.204.199` 的 crontab；若曾執行，該機器上的 SSH 私鑰、雲端與 AI 服務憑證、`.env` 內容一律更換，機器建議重裝。
+1. ~~舊 self-hosted runner（標籤 `wechat-ci`）所在的機器是否執行過 `cleanup-job.yml`~~：**已確認（2026-10-19）**。MasterApp-infra 的 `docs/incident-2026-10-wechat-runner.md` 查過 runner 日誌、systemd journal、cron 記錄和檔案改動：`cleanup-job` 從來沒有派到這台 runner，沒有傳出憑證、沒有安裝 `#ghc2` crontab（可信度高）。VM `wechat-ci-runner` 已刪除，證據快照 `wechat-ci-runner-evidence-20261019` 保留在 GCP 專案 `mastertravel-507211`，不要刪。
 2. masterappIT：更改密碼、確認兩步驗證，登出不認得的 Sessions，撤銷全部 Personal access token 後按需重建，移除不認得的 OAuth App、SSH／GPG key。
 3. masterappIT 名下其他倉庫（包括 MasterApp-infra）：有沒有同樣的檔案、不是自己做的提交、Deploy key、Webhook 或協作者；檢查帳號下有沒有不認得的 Gist。
 4. 確認被盜 token 的來源，避免同一途徑再次外洩。
