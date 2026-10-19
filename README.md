@@ -84,7 +84,7 @@ npm --prefix brand run dev
 
 H5 與管理後台使用固定連接埠；若連接埠已被其他程序占用，Vite 會直接報錯，不會自動切換到其他連接埠。開發環境的瀏覽器請求統一經由同源 `/api` 代理到 `http://127.0.0.1:3010`，原生、小程序等非 H5 目標則使用 `VITE_API_BASE_URL`。真機小程序必須將該變數設為開發電腦的區域網路 IP，並確保手機與電腦在同一 Wi-Fi。
 
-H5 靜態檔案與 `/api/` 同源反向代理可參考 `deploy/nginx.h5.conf`。正式 API 使用 Cloud Run + Cloud SQL；完整架構與部署說明請參考 [`docs/PRODUCTION-DEPLOYMENT.md`](docs/PRODUCTION-DEPLOYMENT.md)，Cloud Run 操作細節請參考 [`deploy/cloud-run/README.md`](deploy/cloud-run/README.md)。migration、發布、smoke test、回滾、監控與備份還原流程不在應用程式啟動時執行。
+H5 靜態檔案與 `/api/` 同源反向代理可參考 `deploy/nginx.h5.conf`。正式環境在 HostKVM 伺服器上（2026-10-18 起，之前是 Cloud Run + Cloud SQL）；完整架構與部署說明請參考 [`docs/PRODUCTION-DEPLOYMENT.md`](docs/PRODUCTION-DEPLOYMENT.md)。migration、發布、smoke test、回滾、監控與備份還原流程不在應用程式啟動時執行。
 
 ## 文件索引
 
@@ -94,7 +94,7 @@ H5 靜態檔案與 `/api/` 同源反向代理可參考 `deploy/nginx.h5.conf`。
 - [API 開發指南](docs/API.md)
 - [正式環境部署](docs/PRODUCTION-DEPLOYMENT.md)
 - [維運操作入口](docs/OPERATIONS.md)
-- [Cloud Run 操作 Runbook](deploy/cloud-run/README.md)
+- [Cloud Run（已停用）](deploy/cloud-run/README.md)
 - [Driver 專案說明](driver/README.md)
 - [開發規範](.github/instructions/)
 
@@ -103,7 +103,7 @@ H5 靜態檔案與 `/api/` 同源反向代理可參考 `deploy/nginx.h5.conf`。
 2026-10-19 起，正式環境在 HostKVM 伺服器上運行。`main` 是唯一正式部署分支，每次 push 都由 [`deploy-hostkvm.yml`](.github/workflows/deploy-hostkvm.yml) 自動部署：
 
 1. 執行完整 quality gates。
-2. 建置 API、share-renderer、乘客 H5、管理後台與司機 Web 的映像，推送至 GHCR 私人倉庫（只用當次的 `GITHUB_TOKEN`，每個映像保留最近 10 版）；微信小程序 build 以 `production-mp-weixin-<commit>` artifact 保留 30 天。
+2. 建置 API、share-renderer、乘客 H5、管理後台與司機 Web 的映像，推送至 GHCR（公開可讀；只用當次的 `GITHUB_TOKEN`，每個映像保留最近 10 版）；微信小程序 build 以 `production-mp-weixin-<commit>` artifact 保留 30 天。
 3. 以專用帳號通知伺服器部署。伺服器先備份資料庫，再執行 migration、更新容器並做健康檢查，失敗會自動退回上一版（migration 不會撤銷）。
 4. 透過正式網址執行 smoke tests。
 

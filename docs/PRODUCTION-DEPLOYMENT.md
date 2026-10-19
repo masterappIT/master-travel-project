@@ -7,10 +7,10 @@
 **2026-10-18（UTC）起，正式環境由 Google Cloud Run 搬到 HostKVM 伺服器**（`45.134.82.239`，與其他 MasterApp 產品共用）：
 
 - 所有服務以 Docker 容器在伺服器上運行，由共用的 Caddy 提供 HTTPS，資料庫是伺服器上共用的 PostgreSQL 16。
-- 映像放在 GHCR 私人倉庫（`ghcr.io/masterappit/master-travel-*`），分享圖片快取在伺服器的 Docker volume。Master Travel 的服務已不再使用 GCP；伺服器每日備份仍上傳到共用的 GCS bucket。舊的 run.app 網址已在 2026-10-19 刪除（見第 3 節）。
+- 映像放在 GHCR（`ghcr.io/masterappit/master-travel-*`，公開可讀；映像不含密碼，repo 本身也是公開的），分享圖片快取在伺服器的 Docker volume。Master Travel 的服務已不再使用 GCP，舊的 GCP 資源已在 2026-10-19 刪除；伺服器每日備份仍上傳到共用的 GCS bucket（由 MasterApp-infra 管理）。舊的 run.app 網址已在 2026-10-19 刪除（見第 3 節）。
 - 部署由本 repo 的 [`deploy-hostkvm.yml`](../.github/workflows/deploy-hostkvm.yml) 負責。伺服器端的容器設定、部署腳本與專用帳號放在 `masterappIT/MasterApp-infra` 的 `apps/mastertravel/`；搬遷經過與切換記錄見該 repo 的 `docs/step-2-master-travel.md`。
 
-舊的 Cloud Run 流程（`deploy-production.yml`、`deploy/cloud-run/`）已停用，只作歷史參考，見 [deploy/cloud-run/README.md](../deploy/cloud-run/README.md)。
+舊的 Cloud Run 流程（`deploy-production.yml`、`deploy/cloud-run/`）已停用，相關 GCP 資源和變數已刪除，無法再執行，只作歷史參考，見 [deploy/cloud-run/README.md](../deploy/cloud-run/README.md)。
 
 > 本文件只記錄架構與操作方式，不記錄任何正式密碼、API 金鑰、Secret value 或個人資料。
 
@@ -33,7 +33,7 @@ flowchart TB
         Cache[(share-images volume<br/>分享圖片快取)]
     end
 
-    Registry[GHCR 私人倉庫]
+    Registry[GHCR]
     Actions[GitHub Actions]
 
     PassengerUser --> Caddy
@@ -65,7 +65,7 @@ flowchart TB
 | Share Renderer | Node.js / Playwright | `master-travel-share-renderer`（1GB） | 不對外，只供 API 經內部網絡呼叫 | 訂單邀請頁與分享圖片產生 |
 | Database | PostgreSQL 16 | 伺服器共用的 `postgres` 容器，資料庫 `master_travel` | 不對外 | 正式交易資料與設定資料 |
 | Image Cache | Docker volume | `mastertravel_share-images`，掛在 share-renderer 的 `/var/cache/share-images` | — | 分享圖片快取；刪掉會按需要重新產生 |
-| Image Registry | GHCR（私人） | `ghcr.io/masterappit/master-travel-{api,share-renderer,passenger,admin,driver}` | — | 保存不可變 container image，每個只留最近 10 版 |
+| Image Registry | GHCR（公開可讀） | `ghcr.io/masterappit/master-travel-{api,share-renderer,passenger,admin,driver}` | — | 保存不可變 container image，每個只留最近 10 版 |
 
 **舊 run.app 網址已刪除**：`master-travel-{api,passenger,admin,driver}-c25rpt3lia-df.a.run.app` 原本由 Cloud Run 轉發到上表的網域，2026-10-19 已刪除這 4 個轉發服務，舊網址回應 404。之前發出的 run.app 派單連結和連舊網址的體驗版小程序不再可用。刪除前的服務設定備份與恢復方法見 MasterApp-infra 的 `docs/step-2-master-travel.md`。
 
@@ -169,7 +169,7 @@ node dist/main.js
 - `DRIVER_ORDER_URL_BASE`：`https://mastertraveldriver.masterappinc.com/order-invite`
 - `SHARE_RENDERER_ORIGIN`：內部的 `http://master-travel-share-renderer:8080`
 - `DATABASE_URL`：連伺服器上的 `master_travel` 資料庫（搬遷時建立的新帳號和新密碼）
-- `ADMIN_PASSWORD`、`ADMIN_SESSION_SECRET`、`SUPPORT_AGENT_SESSION_SECRET`、`AMAP_WEB_SERVICE_KEY`：搬遷時從 Secret Manager 原樣抄過來
+- `ADMIN_PASSWORD`、`ADMIN_SESSION_SECRET`、`SUPPORT_AGENT_SESSION_SECRET`、`AMAP_WEB_SERVICE_KEY`：搬遷時從 Secret Manager 原樣抄過來（Secret Manager 已在 2026-10-19 刪除，伺服器的 `app.env` 是唯一來源）
 
 微信小程序的 AppID／AppSecret 由後台設定，加密後存在資料庫 `AppSetting`，不在 `app.env`。
 
@@ -191,7 +191,7 @@ API 負責：
 
 ### 5.4 用戶 IP
 
-請求經 Caddy（舊網址還會多經 Cloud Run 轉發）才到 API。API 讀取用戶 IP 時先看 `X-Forwarded-For` 第一個值；Caddy 對 API 和前端都會原樣保留並附加這個標頭。登入限流使用的 `req.ip` 是 Caddy 容器的位址，搬遷前在 Cloud Run 上也是代理位址，行為沒有改變。
+請求經 Caddy 才到 API。API 讀取用戶 IP 時先看 `X-Forwarded-For` 第一個值；Caddy 不信任用戶送來的這個標頭，會改寫為對方的 IP（2026-10-19 刪除 run.app 轉發後），前端 Nginx 轉發 `/api` 時再附加自己的位址，所以第一個值就是用戶 IP，不能被偽造。登入限流使用的 `req.ip` 是 Caddy 容器的位址，搬遷前在 Cloud Run 上也是代理位址，行為沒有改變。
 
 ## 6. 資料庫與 Prisma migration
 
@@ -310,7 +310,7 @@ API 透過 `SHARE_RENDERER_ORIGIN` 呼叫 Renderer；Renderer 不連資料庫。
 | 伺服器 `deploy-mastertravel` | 只能執行部署腳本，只接受 SHA 和 digest；不能開 shell、不能轉發連線、不在 docker 群組 |
 | 伺服器 `upload-mastertravel-mp` | 只能執行小程序上傳腳本 |
 
-即使 GitHub 的部署金鑰外洩，對方也只能部署 GHCR 裏已有的映像，碰不到資料庫和伺服器上的設定。正式密碼只在伺服器的 `app.env`；Secret Manager 裏的舊值在 GCP 清理前仍保留，但已不再被使用。
+即使 GitHub 的部署金鑰外洩，對方也只能部署 GHCR 裏已有的映像，碰不到資料庫和伺服器上的設定。正式密碼只在伺服器的 `app.env`。
 
 ## 12. 回滾與常用操作
 
@@ -347,7 +347,7 @@ sudo docker compose --env-file deploy.env up -d api
 
 Migration 已執行時不可直接假設可以 down migration。若 schema 仍向後相容，優先採用 forward fix；若有資料完整性風險，用 `predeploy/` 的部署前備份或每日 GCS 備份恢復，並先停止寫入、記錄恢復點。
 
-退回 Cloud Run 的整體回退方法見 MasterApp-infra 的 `docs/step-2-master-travel.md`。只限搬遷初期使用，而且切換後新寫入的資料要另外搬回。
+不能再退回 Cloud Run：Cloud Run、Cloud SQL 已在 2026-10-19 刪除。搬遷前的最後一份資料庫匯出封存在 `gs://mastertravel-507211-migration/`，只能恢復到伺服器上；詳見 MasterApp-infra 的 `docs/step-2-master-travel.md`。
 
 ## 13. 監控與告警
 

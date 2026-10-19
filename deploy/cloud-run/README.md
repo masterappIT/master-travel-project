@@ -5,21 +5,20 @@
 
 ## 為甚麼不能再執行
 
-`deploy.sh` 會把 API 部署回 Cloud Run，連接舊的 Cloud SQL。正式資料現在在伺服器上的 PostgreSQL，Cloud SQL 停在 2026-10-18 22:54 UTC 的狀態。如果再執行，部分用戶會寫入舊資料庫，資料會分裂成兩份。
+2026-10-19 已刪除這套流程用到的全部 GCP 資源（見下表），GitHub `production` 環境的 GCP 變數和 Workload Identity 也已刪除，所以 `deploy-production.yml` 和本目錄的腳本都無法再執行。正式資料在伺服器上的 PostgreSQL。
 
-`rollback.sh` 會把流量切回某個舊的 API revision，同樣會連回 Cloud SQL。
-
-## Cloud Run 上現在剩下甚麼
+## GCP 上的資源（2026-10-19 已全部刪除）
 
 | 資源 | 現況 |
 |---|---|
-| `master-travel-api`、`-passenger`、`-admin`、`-driver` | 2026-10-19 已刪除。之前只運行轉發程式，把舊 run.app 網址轉到伺服器上的新網域；刪除前的設定備份在 `gs://mastertravel-507211-migration/cloudrun-forwarders-before-delete/` |
-| `master-travel-share-renderer` | 已不再被使用，等 GCP 清理時刪除 |
-| `master-travel-migrate`、`master-travel-migrate-repair`（Jobs） | 已不再被使用，等 GCP 清理時刪除 |
-| Cloud SQL `master-travel-db` | 停在切換時的狀態，作為後備；等 GCP 清理時先做最後備份再刪除 |
-| Secret Manager 的 5 個 secret | 已不再被使用；值已抄到伺服器的 `app.env` |
+| Cloud Run `master-travel-api`、`-passenger`、`-admin`、`-driver` | 已刪除。切換後只運行轉發程式，把舊 run.app 網址轉到伺服器上的新網域 |
+| Cloud Run `master-travel-share-renderer`、Jobs `master-travel-migrate`、`master-travel-migrate-repair` | 已刪除 |
+| Cloud SQL `master-travel-db` | 已刪除（含自動備份）。刪除前的最後匯出 `final-before-delete-20261019T013549Z.sql.gz` 和切換時的 `final-20261018T225447Z.sql.gz` 封存在 `gs://mastertravel-507211-migration/` |
+| Artifact Registry `master-travel`、bucket `master-travel-share-images` | 已刪除；映像改放 GHCR，分享圖改存伺服器磁碟 |
+| Secret Manager 5 個 secret | 已刪除；伺服器的 `app.env` 是唯一來源 |
+| 服務帳號與 Workload Identity pool | 已刪除 |
 
-切換前 4 個服務的設定備份在 `gs://mastertravel-507211-migration/cloudrun-before-cutover/`。
+只保留封存 bucket `gs://mastertravel-507211-migration/`：兩份資料庫匯出，以及各服務刪除前的設定（`cloudrun-before-cutover/`、`cloudrun-forwarders-before-delete/`、`cloudrun-before-final-delete/` 等）。清理記錄見 MasterApp-infra 的 `docs/step-2-master-travel.md`。
 
 ## 轉發程式（已刪除）
 

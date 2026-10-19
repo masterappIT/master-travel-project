@@ -15,7 +15,7 @@ API 必須在 server side 再次執行：
 
 ## 認證與權限
 
-API 包含管理員、乘客與司機等不同 session/token 流程。管理員 session secret、client secret、driver token secret 等敏感設定只能由環境變數或 Secret Manager 提供。
+API 包含管理員、乘客與司機等不同 session/token 流程。管理員 session secret、client secret、driver token secret 等敏感設定只能由環境變數提供（正式環境為伺服器的 `app.env`）。
 
 內置客服文字對話使用 `SupportConversation`、`SupportMessage`、`SupportAuditLog`。乘客與司機分別透過 `POST /support/conversations/mine`、`POST /driver/support/conversations/mine` 開啟自己的對話，並以 `GET/POST /.../:id/messages` 收發文字；後端從既有 session 確認身份，跨帳戶對話讀寫回傳 404。未登入乘客可由 `POST /support/guest/conversation` 取得隨機憑證，以 Bearer token 使用 `/support/guest/conversation/:id/messages`；憑證遺失無法找回舊對話。文字長度 1–4000 字，發送須提供 8–80 字元的 `clientMessageId`，同一發送者重送相同內容會去重，重用 ID 傳不同內容回傳 409。訊息列表目前只回傳最新 100 則。
 

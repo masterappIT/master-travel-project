@@ -18,7 +18,7 @@
 |---|---|
 | [內置客服需求記錄](./INTERNAL-SUPPORT-REQUIREMENTS.md) | 記錄已確認要求、介面草稿、後續接入範圍與待決策事項 |
 | [Driver README](../driver/README.md) | Driver Flutter 專案說明 |
-| [Cloud Run（已停用）](../deploy/cloud-run/README.md) | 舊 Cloud Run 流程的停用說明、過渡期轉發服務與切換教訓 |
+| [Cloud Run（已停用）](../deploy/cloud-run/README.md) | 舊 Cloud Run 流程的停用說明（GCP 資源已刪除）與切換教訓 |
 | [Login Settings Architecture](../.github/instructions/login-settings-architecture.instructions.md) | 後台登入配置的分配層與配置層契約 |
 | [Driver Web UI Instructions](../.github/instructions/driver-web-ui.instructions.md) | Driver Web UI 開發規範 |
 | [iOS Screen Scaling Instructions](../.github/instructions/ios-screen-scaling.instructions.md) | uni-app 固定畫布與 iOS 螢幕縮放規範 |

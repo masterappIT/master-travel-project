@@ -6,6 +6,13 @@
 
 發布、回滾、Git 回復及事故後整合遵循 [可信基線保護與變更、恢復控管 skill](../.github/skills/verified-baseline-change-control/SKILL.md)：保護已驗收版本與未提交工作，確認變更範圍及授權，沿用現有推送即發布流程。事故恢復時才補充相關版本狀態；流量回滾不等於 Git 或資料庫回復，問題版須隔離並從可信基線選擇性整合。workflow 成功與健康端點可達不能代替正式業務驗收，執行中流程不得回報為已完成。
 
+### 搬遷正式環境的範圍
+
+2026-10 由 Google Cloud Run 搬到 HostKVM，只是更換正式環境。原本的工作流程不變：推送即發布、quality gates、伺服器備份／migration／健康檢查／失敗回退、小程序體驗版上傳。各倉庫分工也不變：本 repo 管構建和 `deploy-hostkvm.yml`，伺服器檔案只放在 `masterappIT/MasterApp-infra` 的 `apps/mastertravel/`（和 MasterBox 一致）。
+
+- 只能針對目前正式環境做必需的調整，不藉搬遷重新設計流程、搬動檔案或改變分工。
+- 確實不合理而要改時，先取得同意；改完要在每個受影響的倉庫同時留下說明，寫明改了甚麼、以哪一份為準，避免之後又按舊方式操作。
+
 ## 提交—推送—部署發布規範
 
 以下是一次正式發布的完整判定鏈；任何一項未完成，都只能稱為「開發中」或「發布中」，不可稱為「已部署」或「已恢復」。
@@ -40,7 +47,7 @@
 | 容器 | `docker compose ps` 中 5 個容器都在運行；前端顯示 healthy |
 | 對外 | 4 個網域的 `/health` 或 `/` 可達 |
 
-workflow 成功、HTTP 200 或容器在運行，都不等於業務驗收；登入、下單、司機接單、客服、分享圖要另外實測。Cloud Run 上的轉發服務不由本 repo 部署，部署本 repo 不會改變它們。
+workflow 成功、HTTP 200 或容器在運行，都不等於業務驗收；登入、下單、司機接單、客服、分享圖要另外實測。舊的 Cloud Run 服務和 run.app 網址已在 2026-10-19 全部刪除。
 
 ### F. 現行 workflow 順序
 
@@ -77,7 +84,7 @@ sudo docker compose --env-file deploy.env up -d
 
 已執行 migration 時，不要直接執行未審查的 down migration。優先採用 backward-compatible forward fix；資料完整性受影響時，先停止寫入，再用 `/srv/apps/mastertravel/predeploy/` 的部署前備份或每日 GCS 備份恢復，並記錄恢復點。
 
-不要執行 `deploy/cloud-run/rollback.sh`：它會把流量切回連 Cloud SQL 的舊 API，造成資料分裂。
+不能退回 Cloud Run：Cloud Run、Cloud SQL 等 GCP 資源已在 2026-10-19 刪除，`deploy/cloud-run/` 的腳本只作歷史參考。搬遷前的最後一份資料庫匯出封存在 `gs://mastertravel-507211-migration/`，詳見 MasterApp-infra 的 `docs/step-2-master-travel.md`。
 
 ## Restore drill
 
@@ -88,7 +95,7 @@ sudo docker compose --env-file deploy.env up -d
 - GitHub `production` environment 只放兩把 SSH 私鑰：部署用 `HOSTKVM_DEPLOY_SSH_KEY`、小程序上傳用 `HOSTKVM_MP_UPLOAD_SSH_KEY`。
 - 伺服器上對應的 `deploy-mastertravel`、`upload-mastertravel-mp` 帳號只能執行各自的腳本，不能開 shell、不在 docker 群組。
 - 正式密碼只在伺服器的 `/srv/apps/mastertravel/app.env`；小程序代碼上傳金鑰只在伺服器上。
-- GCP 部署帳號 `master-travel-github-deploy` 只需要推送映像；它仍保留舊流程的 Cloud Run、Cloud SQL 權限，待移除。
+- 部署不使用任何 GCP 帳號：映像推到 GHCR 只用每次執行的 `GITHUB_TOKEN`。舊的 GCP 部署帳號、Workload Identity 與 `production` 環境的 GCP 變數已在 2026-10-19 刪除；`production` 只保留 `PRODUCTION_API_URL`、`PRODUCTION_PASSENGER_URL`、`PRODUCTION_DRIVER_URL` 三個變數。
 
 ## iOS App 上傳 TestFlight 前的待辦
 

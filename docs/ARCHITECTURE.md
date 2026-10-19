@@ -77,6 +77,6 @@ npm run verify:admin
 
 ## 設定與秘密
 
-Secret、第三方金鑰、session secret 只能放在環境變數或正式環境 Secret Manager。不得回傳給前端或提交至 Git。
+Secret、第三方金鑰、session secret 只能放在環境變數；正式環境放在伺服器的 `app.env`。不得回傳給前端或提交至 Git。
 
 本機 PostgreSQL 是開發依賴；正式資料庫是伺服器上的 PostgreSQL 16，migration 由部署腳本在更新容器前執行。
