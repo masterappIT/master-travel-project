@@ -8,7 +8,7 @@
 
 - 所有服務以 Docker 容器在伺服器上運行，由共用的 Caddy 提供 HTTPS，資料庫是伺服器上共用的 PostgreSQL 16。
 - 映像放在 GHCR 私人倉庫（`ghcr.io/masterappit/master-travel-*`），分享圖片快取在伺服器的 Docker volume。Master Travel 的服務已不再使用 GCP；伺服器每日備份仍上傳到共用的 GCS bucket。舊的 run.app 網址已在 2026-10-19 刪除（見第 3 節）。
-- 部署由本 repo 的 [`deploy-hostkvm.yml`](../.github/workflows/deploy-hostkvm.yml) 負責。伺服器端的容器設定、部署腳本與專用帳號放在 `masterappIT/MasterApp-infra` 的 `apps/mastertravel/`；搬遷經過與切換記錄見該 repo 的 `docs/step-2-master-travel.md`。
+- 部署由本 repo 的 [`deploy-hostkvm.yml`](../.github/workflows/deploy-hostkvm.yml) 負責。伺服器端的容器設定、部署腳本、專用帳號與 Caddy 網域設定放在本 repo 的 [`deploy/hostkvm/`](../deploy/hostkvm/README.md)（2026-10-19 起，之前在 `masterappIT/MasterApp-infra` 的 `apps/mastertravel/`）。伺服器的共用服務（Caddy、PostgreSQL、每日備份）仍在伺服器的 `/srv/infra/`。搬遷經過與切換記錄見 MasterApp-infra 的 `docs/step-2-master-travel.md`。
 
 舊的 Cloud Run 流程（`deploy-production.yml`、`deploy/cloud-run/`）已停用，只作歷史參考，見 [deploy/cloud-run/README.md](../deploy/cloud-run/README.md)。
 
@@ -244,7 +244,7 @@ API image 建置時下載當月 DB-IP Lite City MMDB，檢查 gzip、MMDB 類型
 4. 建置 Passenger H5、微信小程序、Admin 與 Driver Web；微信小程序 build 以 `production-mp-weixin-<commit>` artifact 保留 30 天。
 5. 建置並推送 `api`、`share-renderer`、`passenger`、`admin`、`driver` 映像（名稱加 `master-travel-` 前綴，帶 `org.opencontainers.image.source` 標籤連到本 repo），解析每個 SHA-256 digest。
 6. 以 `deploy-mastertravel` 帳號 SSH 到伺服器，只傳送 commit SHA 和 5 個 digest（次序：api、share-renderer、passenger、admin、driver）。workflow 固定了伺服器的 host key。當次的 `GITHUB_TOKEN` 經 SSH 標準輸入交給伺服器拉映像，不出現在命令列；伺服器不保存，workflow 結束後即失效。
-7. 伺服器部署腳本 `/usr/local/sbin/mastertravel-deploy`（來源：MasterApp-infra `apps/mastertravel/deploy.sh`）：
+7. 伺服器部署腳本 `/usr/local/sbin/mastertravel-deploy`（來源：[`deploy/hostkvm/deploy.sh`](../deploy/hostkvm/deploy.sh)）：
    1. 驗證參數格式，同一時間只允許一個部署
    2. 用臨時的 Docker 登入目錄從 GHCR 拉取映像，拉完即刪除登入資料
    3. `pg_dump` 備份，保留最近 5 份於 `/srv/apps/mastertravel/predeploy/`
@@ -293,7 +293,7 @@ API 透過 `SHARE_RENDERER_ORIGIN` 呼叫 Renderer；Renderer 不連資料庫。
 1. 在 GitHub 的 runner 上 `npm run build:mp-weixin`，`VITE_API_BASE_URL` 是 `https://mastertravelapi.masterappinc.com`。
 2. 執行 `scripts/transpile-mp-weixin.mjs`，產物以 `main-mp-weixin-<commit>` artifact 保留 30 天。
 3. 把 `dist/build/mp-weixin` 打包，以 `upload-mastertravel-mp` 帳號經 SSH 交給伺服器。
-4. 伺服器腳本 `/usr/local/sbin/mastertravel-mp-upload`（來源：MasterApp-infra `apps/mastertravel/mp-upload.sh`）在隔離的容器內用 `miniprogram-ci@1.9.17` 上傳**體驗版**，版本號 `0.2.<run number>`。
+4. 伺服器腳本 `/usr/local/sbin/mastertravel-mp-upload`（來源：[`deploy/hostkvm/mp-upload.sh`](../deploy/hostkvm/mp-upload.sh)）在隔離的容器內用 `miniprogram-ci@1.9.17` 上傳**體驗版**，版本號 `0.2.<run number>`。
 
 - **代碼上傳金鑰只存放在伺服器上**，不在 GitHub。2026-10 GitHub secret 外洩後已重置；舊的 `WECHAT_PRIVATE_KEY` secret 已失效。
 - 微信公眾平台的代碼上傳 IP 白名單是伺服器的 IP `45.134.82.239`。
@@ -392,13 +392,15 @@ npm run verify:driver
 - `deploy/frontend/default.conf`
 - `deploy/frontend/build-image.sh`
 - `deploy/share-renderer/Dockerfile`
+- `deploy/hostkvm/`：伺服器上的 `compose.yaml`、`setup.sh`、`deploy.sh`、`mp-upload.sh`、`accounts.sh`、`forced-command.sh`、`master-travel.caddy`
+- `.github/workflows/ghcr-retention.yml`
 - `scripts/transpile-mp-weixin.mjs`
 - `docker-compose.yml`（僅本機 PostgreSQL）
 
 已停用，只作歷史參考：`.github/workflows/deploy-production.yml`、`.github/workflows/deploy-wechat-experience.yml`、`deploy/frontend/deploy.sh`、`deploy/cloud-run/`、`scripts/upload-mp-weixin.mjs`。
 
-MasterApp-infra（伺服器端）：
+MasterApp-infra（只剩共用服務與歷史記錄）：
 
-- `apps/mastertravel/compose.yaml`、`setup.sh`、`deploy.sh`、`mp-upload.sh`、`accounts.sh`、`forwarder/`
-- `stack/sites/master-travel.caddy`
-- `docs/step-2-master-travel.md`
+- `stack/`：共用的 Caddy、PostgreSQL、Redis
+- `backup/`：每日備份
+- `docs/step-2-master-travel.md`：搬遷與切換記錄

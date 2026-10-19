@@ -1,0 +1,22 @@
+# Master Travel App（伺服器上的位置：/srv/infra/sites/master-travel.caddy，由 setup.sh 安裝）。用戶直接訪問這 4 個網域；舊的 run.app 網址與 Cloud Run 轉發已在 2026-10-19 刪除。
+# 前面不再有轉發，所以不再保留用戶送來的 X-Forwarded-For；Caddy 預設會改寫為對方的 IP，GeoIP 統計不能再被偽造。
+(master_travel_proxy) {
+	encode zstd gzip
+	reverse_proxy {args[0]}
+}
+
+mastertravelapi.masterappinc.com {
+	import master_travel_proxy master-travel-api:8080
+}
+
+mastertravelapp.masterappinc.com {
+	import master_travel_proxy master-travel-passenger:8080
+}
+
+mastertraveldriver.masterappinc.com {
+	import master_travel_proxy master-travel-driver:8080
+}
+
+mastertraveladmin.masterappinc.com {
+	import master_travel_proxy master-travel-admin:8080
+}

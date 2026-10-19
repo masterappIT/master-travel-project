@@ -111,7 +111,7 @@ H5 靜態檔案與 `/api/` 同源反向代理可參考 `deploy/nginx.h5.conf`。
 
 用戶使用 `mastertravel*.masterappinc.com` 網域。舊的 run.app 網址與 Cloud Run 轉發已在 2026-10-19 刪除。
 
-舊的 `deploy-production.yml`（Cloud Run）與 `deploy-wechat-experience.yml`（self-hosted runner）已停用，請勿重新啟用。伺服器端設定在 `masterappIT/MasterApp-infra` 的 `apps/mastertravel/`；`deploy/cloud-run/README.md` 描述的是舊流程。
+舊的 `deploy-production.yml`（Cloud Run）與 `deploy-wechat-experience.yml`（self-hosted runner）已停用，請勿重新啟用。伺服器端設定在本 repo 的 [`deploy/hostkvm/`](deploy/hostkvm/README.md)；`deploy/cloud-run/README.md` 描述的是舊流程。
 
 ## 環境變數
 

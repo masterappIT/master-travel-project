@@ -1,0 +1,64 @@
+# Master Travel。伺服器上的位置：/srv/apps/mastertravel/
+# 映像 digest 在 deploy.env，密碼在 app.env（都只在伺服器上，權限 600）。
+# 2026-10-19 起用戶改用 mastertravel* 自訂網域；舊的 run.app 網址與 Cloud Run 轉發已在 2026-10-19 刪除。
+name: mastertravel
+services:
+  api:
+    image: ${API_IMAGE:?API_IMAGE required}
+    container_name: master-travel-api
+    restart: unless-stopped
+    env_file: /srv/apps/mastertravel/app.env
+    networks: [edge, data, internal]
+    mem_limit: 1g
+
+  # 只供 API 調用，不開網域。分享圖快取在 share-images volume；只是快取，刪掉會按需要重新產生
+  share-renderer:
+    image: ${SHARE_RENDERER_IMAGE:?SHARE_RENDERER_IMAGE required}
+    container_name: master-travel-share-renderer
+    restart: unless-stopped
+    environment:
+      DRIVER_ORDER_URL_BASE: https://mastertraveldriver.masterappinc.com/order-invite
+      SHARE_IMAGE_DIR: /var/cache/share-images
+    volumes:
+      - share-images:/var/cache/share-images
+    networks: [internal]
+    shm_size: 256m
+    mem_limit: 1g
+
+  passenger:
+    image: ${PASSENGER_IMAGE:?PASSENGER_IMAGE required}
+    container_name: master-travel-passenger
+    restart: unless-stopped
+    environment:
+      API_ORIGIN: http://master-travel-api:8080
+    networks: [edge]
+    mem_limit: 128m
+
+  admin:
+    image: ${ADMIN_IMAGE:?ADMIN_IMAGE required}
+    container_name: master-travel-admin
+    restart: unless-stopped
+    environment:
+      API_ORIGIN: http://master-travel-api:8080
+    networks: [edge]
+    mem_limit: 128m
+
+  driver:
+    image: ${DRIVER_IMAGE:?DRIVER_IMAGE required}
+    container_name: master-travel-driver
+    restart: unless-stopped
+    environment:
+      API_ORIGIN: http://master-travel-api:8080
+    networks: [edge]
+    mem_limit: 128m
+
+volumes:
+  share-images: {}
+
+networks:
+  edge:
+    external: true
+  data:
+    external: true
+  # API 和 share-renderer 之間用，其他產品的容器連不到 share-renderer
+  internal: {}
