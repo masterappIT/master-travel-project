@@ -17,11 +17,20 @@ Master Travel 正式環境在 HostKVM 伺服器（`45.134.82.239`）上的設定
 
 ## 更新伺服器
 
-修改本目錄後，要把檔案放到伺服器上才會生效（`deploy-hostkvm.yml` 不會更新這些檔案）：
+修改本目錄後，要放到伺服器上才會生效（`deploy-hostkvm.yml` 不會更新這些檔案）。做法和 MasterApp-infra 一樣：先同步，再重新執行對應的安裝腳本。
 
-```bash
-rsync -az --delete --exclude .git ./deploy/hostkvm/ masterapp-prod:master-travel-hostkvm/
-ssh masterapp-prod 'sudo install -m 755 ~/master-travel-hostkvm/deploy.sh /usr/local/sbin/mastertravel-deploy && sudo install -m 644 ~/master-travel-hostkvm/compose.yaml /srv/apps/mastertravel/compose.yaml'
-```
+1. 同步到伺服器的 `~/master-travel-project/deploy/hostkvm/`：
+
+   ```bash
+   rsync -az --delete --exclude .git ./deploy/hostkvm/ masterapp-prod:master-travel-project/deploy/hostkvm/
+   ```
+
+2. 改了 `deploy.sh`、`mp-upload.sh`、`forced-command.sh` 或 `mp-uploader/`：重新執行 `accounts.sh`。公鑰沿用伺服器上現有的（`/home/<帳號>/.ssh/authorized_keys` 去掉前面的 `restrict,command="…"`）：
+
+   ```bash
+   sudo bash ~/master-travel-project/deploy/hostkvm/accounts.sh ~/master-travel-project deploy.pub upload.pub
+   ```
+
+3. 改了 `compose.yaml`：`sudo install -m 644 ~/master-travel-project/deploy/hostkvm/compose.yaml /srv/apps/mastertravel/compose.yaml`。只有首次安裝才執行整個 `setup.sh`，因為它會用目前的 `deploy.env` 重建容器。
 
 改了 Caddy 設定就 reload Caddy；改了 `compose.yaml` 要在下次部署或 `docker compose up -d` 時才生效。詳細流程見 [PRODUCTION-DEPLOYMENT.md](../../docs/PRODUCTION-DEPLOYMENT.md)。
