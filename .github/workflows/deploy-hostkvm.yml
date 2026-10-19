@@ -3,7 +3,7 @@ name: Deploy HostKVM
 # 2026-10-19 起正式環境在 HostKVM 伺服器（45.134.82.239），取代已停用的 deploy-production.yml（Cloud Run）
 # 和 deploy-wechat-experience.yml（self-hosted runner）。
 # 映像推到 GHCR 的私人倉庫（ghcr.io/masterappit/master-travel-*），推送和拉取都只用這次執行的 GITHUB_TOKEN。
-# 伺服器端設定在本 repo 的 deploy/hostkvm/（不會由這個 workflow 自動更新，見該目錄的 README）：
+# 伺服器端設定在 masterappIT/MasterApp-infra 的 apps/mastertravel/：
 # - deploy-mastertravel 帳號只能執行部署腳本，只接受提交 SHA 和 5 個映像 digest；
 #   GITHUB_TOKEN 經 SSH 的標準輸入交給伺服器拉映像，伺服器不保存，工作結束後失效。
 #   伺服器會備份資料庫、執行 migration、更新容器、健康檢查，失敗就退回上一版。
