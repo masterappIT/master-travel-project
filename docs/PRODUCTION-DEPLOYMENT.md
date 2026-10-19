@@ -7,7 +7,7 @@
 **2026-10-18（UTC）起，正式環境由 Google Cloud Run 搬到 HostKVM 伺服器**（`45.134.82.239`，與其他 MasterApp 產品共用）：
 
 - 所有服務以 Docker 容器在伺服器上運行，由共用的 Caddy 提供 HTTPS，資料庫是伺服器上共用的 PostgreSQL 16。
-- 仍在使用的 GCP 資源：Artifact Registry（映像）、Cloud Storage（分享圖片快取），以及過渡期的 Cloud Run 轉發服務（見第 3 節）。
+- 映像放在 GHCR 私人倉庫（`ghcr.io/masterappit/master-travel-*`），分享圖片快取在伺服器的 Docker volume。Master Travel 的服務已不再使用 GCP；伺服器每日備份仍上傳到共用的 GCS bucket。舊的 run.app 網址已在 2026-10-19 刪除（見第 3 節）。
 - 部署由本 repo 的 [`deploy-hostkvm.yml`](../.github/workflows/deploy-hostkvm.yml) 負責。伺服器端的容器設定、部署腳本與專用帳號放在 `masterappIT/MasterApp-infra` 的 `apps/mastertravel/`；搬遷經過與切換記錄見該 repo 的 `docs/step-2-master-travel.md`。
 
 舊的 Cloud Run 流程（`deploy-production.yml`、`deploy/cloud-run/`）已停用，只作歷史參考，見 [deploy/cloud-run/README.md](../deploy/cloud-run/README.md)。
@@ -21,7 +21,6 @@ flowchart TB
     PassengerUser[乘客瀏覽器 / App / 微信小程序]
     AdminUser[管理員 / 客服瀏覽器]
     DriverUser[司機瀏覽器]
-    OldURL[舊 run.app 網址<br/>Cloud Run 轉發，過渡期]
 
     subgraph Server[HostKVM 伺服器]
         Caddy[Caddy<br/>HTTPS、按網域分流]
@@ -31,16 +30,15 @@ flowchart TB
         API[api<br/>NestJS]
         Renderer[share-renderer<br/>Playwright，只在內部網絡]
         DB[(PostgreSQL 16<br/>master_travel)]
+        Cache[(share-images volume<br/>分享圖片快取)]
     end
 
-    Bucket[Cloud Storage<br/>分享圖片快取]
-    Registry[Artifact Registry]
+    Registry[GHCR 私人倉庫]
     Actions[GitHub Actions]
 
     PassengerUser --> Caddy
     AdminUser --> Caddy
     DriverUser --> Caddy
-    OldURL --> Caddy
     Caddy --> Passenger
     Caddy --> Admin
     Caddy --> Driver
@@ -50,7 +48,7 @@ flowchart TB
     Driver -->|/api| API
     API --> DB
     API --> Renderer
-    Renderer --> Bucket
+    Renderer --> Cache
     Actions -->|推送映像| Registry
     Actions -->|SSH：deploy-mastertravel| Server
     Registry -->|伺服器拉取| Server
@@ -66,10 +64,10 @@ flowchart TB
 | API | NestJS / TypeScript | `master-travel-api`（1GB） | `https://mastertravelapi.masterappinc.com` | 驗證、權限、商業邏輯、第三方整合；小程序直接連這個網域 |
 | Share Renderer | Node.js / Playwright | `master-travel-share-renderer`（1GB） | 不對外，只供 API 經內部網絡呼叫 | 訂單邀請頁與分享圖片產生 |
 | Database | PostgreSQL 16 | 伺服器共用的 `postgres` 容器，資料庫 `master_travel` | 不對外 | 正式交易資料與設定資料 |
-| Image Cache | Cloud Storage | `master-travel-share-images`（private bucket） | — | 分享圖片快取 |
-| Image Registry | Artifact Registry | `asia-east2-docker.pkg.dev/mastertravel-507211/master-travel` | — | 保存不可變 container image |
+| Image Cache | Docker volume | `mastertravel_share-images`，掛在 share-renderer 的 `/var/cache/share-images` | — | 分享圖片快取；刪掉會按需要重新產生 |
+| Image Registry | GHCR（私人） | `ghcr.io/masterappit/master-travel-{api,share-renderer,passenger,admin,driver}` | — | 保存不可變 container image，每個只留最近 10 版 |
 
-**舊 run.app 網址（過渡期）**：`master-travel-{api,passenger,admin,driver}-c25rpt3lia-df.a.run.app` 仍可使用。這 4 個 Cloud Run 服務現在只運行 nginx 轉發程式，把請求原樣轉到上表對應的新網域（保留 `X-Forwarded-For`，支援 WebSocket）；它們不連資料庫，也不再由本 repo 部署。已發出的舊連結與舊版小程序經轉發繼續可用，預計 2026-11 中下旬刪除，刪除前會先在本文件註明。
+**舊 run.app 網址已刪除**：`master-travel-{api,passenger,admin,driver}-c25rpt3lia-df.a.run.app` 原本由 Cloud Run 轉發到上表的網域，2026-10-19 已刪除這 4 個轉發服務，舊網址回應 404。之前發出的 run.app 派單連結和連舊網址的體驗版小程序不再可用。刪除前的服務設定備份與恢復方法見 MasterApp-infra 的 `docs/step-2-master-travel.md`。
 
 前端產品區域保持獨立：`src/`、`admin/`、`driver/` 不直接引用彼此的實作；跨端資料格式應透過 API 或 `shared/` 契約傳遞。
 
@@ -83,7 +81,7 @@ flowchart TB
 npm run build:h5
 ```
 
-產物為 `dist/build/h5`，會被包裝成 `passenger` image，推送至 Artifact Registry，由伺服器拉取後運行。
+產物為 `dist/build/h5`，會被包裝成 `passenger` image，推送至 GHCR，由伺服器拉取後運行。
 
 正式建置時使用（GitHub 變數）：
 
@@ -125,7 +123,7 @@ Driver 瀏覽器請求使用同站 `/api` 反向代理，避免跨站 CORS 預�
 - Base image：`nginx:1.27-alpine`
 - Container port：`8080`
 - 靜態根目錄：`/usr/share/nginx/html`
-- 健康檢查：`GET /healthz`（注意：Google 保留了 run.app 網址上的 `/healthz`，經舊網址查詢會回應 404，這是正常的）
+- 健康檢查：`GET /healthz`
 - 支援 SPA fallback 至 `/index.html`
 - 啟用 gzip
 - 使用 `API_ORIGIN` 反向代理 API；在伺服器上是內部的 `http://master-travel-api:8080`
@@ -167,7 +165,7 @@ node dist/main.js
 
 - `NODE_ENV=production`、`PORT=8080`
 - `ADMIN_USERNAME`
-- `APP_CORS_ORIGINS`：4 個新網域的前端，加上過渡期的 run.app 前端網址
+- `APP_CORS_ORIGINS`：3 個前端網域（乘客、後台、司機）
 - `DRIVER_ORDER_URL_BASE`：`https://mastertraveldriver.masterappinc.com/order-invite`
 - `SHARE_RENDERER_ORIGIN`：內部的 `http://master-travel-share-renderer:8080`
 - `DATABASE_URL`：連伺服器上的 `master_travel` 資料庫（搬遷時建立的新帳號和新密碼）
@@ -179,7 +177,7 @@ Secret 不可寫入 source code、前端 bundle、Docker image 或 GitHub reposi
 
 ### 5.3 CORS 與權限
 
-`APP_CORS_ORIGINS` 使用逗號分隔的 allowlist。API 會依 allowlist 判斷請求來源，不應以任意來源取代正式設定。刪除 run.app 轉發後，要同時從 allowlist 移除 run.app 網址。
+`APP_CORS_ORIGINS` 使用逗號分隔的 allowlist。API 會依 allowlist 判斷請求來源，不應以任意來源取代正式設定。2026-10-19 刪除 run.app 轉發時已從 allowlist 移除 run.app 網址。
 
 API 負責：
 
@@ -242,13 +240,13 @@ API image 建置時下載當月 DB-IP Lite City MMDB，檢查 gzip、MMDB 類型
 
 1. 獨立 quality-gates job 通過後才開始。
 2. 確認 workflow commit 仍是目前的 `origin/main`，過時的 run 會停止。
-3. 以 Workload Identity Federation 登入 GCP（只用來推送映像）。
+3. 以當次的 `GITHUB_TOKEN` 登入 GHCR（只有 `deploy` job 有 `packages: write`）。
 4. 建置 Passenger H5、微信小程序、Admin 與 Driver Web；微信小程序 build 以 `production-mp-weixin-<commit>` artifact 保留 30 天。
-5. 建置並推送 `api`、`share-renderer`、`passenger`、`admin`、`driver` 映像，解析每個 SHA-256 digest。
-6. 以 `deploy-mastertravel` 帳號 SSH 到伺服器，只傳送 commit SHA 和 5 個 digest（次序：api、share-renderer、passenger、admin、driver）。workflow 固定了伺服器的 host key。
+5. 建置並推送 `api`、`share-renderer`、`passenger`、`admin`、`driver` 映像（名稱加 `master-travel-` 前綴，帶 `org.opencontainers.image.source` 標籤連到本 repo），解析每個 SHA-256 digest。
+6. 以 `deploy-mastertravel` 帳號 SSH 到伺服器，只傳送 commit SHA 和 5 個 digest（次序：api、share-renderer、passenger、admin、driver）。workflow 固定了伺服器的 host key。當次的 `GITHUB_TOKEN` 經 SSH 標準輸入交給伺服器拉映像，不出現在命令列；伺服器不保存，workflow 結束後即失效。
 7. 伺服器部署腳本 `/usr/local/sbin/mastertravel-deploy`（來源：MasterApp-infra `apps/mastertravel/deploy.sh`）：
    1. 驗證參數格式，同一時間只允許一個部署
-   2. 拉取映像
+   2. 用臨時的 Docker 登入目錄從 GHCR 拉取映像，拉完即刪除登入資料
    3. `pg_dump` 備份，保留最近 5 份於 `/srv/apps/mastertravel/predeploy/`
    4. 用新 API 映像執行 migration
    5. 把舊的 `deploy.env` 存為 `deploy.env.prev`，寫入新 digest，重新建立容器
@@ -257,6 +255,8 @@ API image 建置時下載當月 DB-IP Lite City MMDB，檢查 gzip、MMDB 類型
 8. 經正式網址做 smoke tests：API `/health`、乘客和司機的 `/` 與 `/api/health`。
 
 `wechat-experience` job 見第 10 節。
+
+部署成功後，[`ghcr-retention.yml`](../.github/workflows/ghcr-retention.yml) 把 5 個映像各刪到只剩最近 10 版（也可手動執行）。它和部署用同一個 concurrency group，不會在部署拉映像時刪除。
 
 ### 7.1 部署完成的判定
 
@@ -281,8 +281,8 @@ Share Renderer 是伺服器上獨立的容器，負責產生訂單邀請分享�
 
 - 記憶體上限 1GB，`shm_size` 256MB（Playwright 需要）
 - 只在 API 與 renderer 之間的內部網絡，其他產品的容器連不到它，也沒有對外網域
-- 使用 `DRIVER_ORDER_URL_BASE`（新司機網域）與 `SHARE_IMAGE_BUCKET=master-travel-share-images`
-- 以 GCP 服務帳號 `master-travel-share-writer` 存取 bucket；這個帳號只有該 bucket 的權限，金鑰只在伺服器上
+- 使用 `DRIVER_ORDER_URL_BASE`（新司機網域）與 `SHARE_IMAGE_DIR=/var/cache/share-images`
+- 分享圖片寫在 Docker volume `mastertravel_share-images`，容器重啟和重新部署後仍可直接使用；這只是快取，刪掉會在下次請求時重新產生。先寫入暫存檔再改名，讀取時不會看到寫了一半的圖片。
 
 API 透過 `SHARE_RENDERER_ORIGIN` 呼叫 Renderer；Renderer 不連資料庫。
 
@@ -297,7 +297,7 @@ API 透過 `SHARE_RENDERER_ORIGIN` 呼叫 Renderer；Renderer 不連資料庫。
 
 - **代碼上傳金鑰只存放在伺服器上**，不在 GitHub。2026-10 GitHub secret 外洩後已重置；舊的 `WECHAT_PRIVATE_KEY` secret 已失效。
 - 微信公眾平台的代碼上傳 IP 白名單是伺服器的 IP `45.134.82.239`。
-- 微信公眾平台的 request、socket、uploadFile 合法域名：`mastertravelapi.masterappinc.com`，以及過渡期保留的 API run.app 網址。
+- 微信公眾平台的 request、socket、uploadFile 合法域名：`mastertravelapi.masterappinc.com`。run.app 網域已在 2026-10-19 刪除。
 - 上傳只會更新體驗版，不會自動提交審核或發布正式版。截至 2026-10-19 尚未發布正式版。
 - 不要再使用 self-hosted runner 上傳小程序。
 
@@ -305,14 +305,12 @@ API 透過 `SHARE_RENDERER_ORIGIN` 呼叫 Renderer；Renderer 不連資料庫。
 
 | 帳號 | 用途與權限 |
 |---|---|
-| GitHub `production` environment | `HOSTKVM_DEPLOY_SSH_KEY`、`HOSTKVM_MP_UPLOAD_SSH_KEY` 兩把 SSH 私鑰；GCP 變數只用於推送映像 |
-| GCP `master-travel-github-deploy`（WIF） | 推送映像到 Artifact Registry。**待辦**：仍保留舊流程的 `run.admin`、`cloudsql.admin`、`iam.serviceAccountUser`，應移除 |
+| GitHub `production` environment | `HOSTKVM_DEPLOY_SSH_KEY`、`HOSTKVM_MP_UPLOAD_SSH_KEY` 兩把 SSH 私鑰 |
+| `GITHUB_TOKEN`（每次執行自動產生） | 推送映像到 GHCR、交給伺服器拉取、清理舊版本；workflow 結束即失效，GitHub 和伺服器都不保存 GHCR token |
 | 伺服器 `deploy-mastertravel` | 只能執行部署腳本，只接受 SHA 和 digest；不能開 shell、不能轉發連線、不在 docker 群組 |
 | 伺服器 `upload-mastertravel-mp` | 只能執行小程序上傳腳本 |
-| GCP `masterapp-prod-vm` | 伺服器拉取映像（Artifact Registry 只讀） |
-| GCP `master-travel-share-writer` | Renderer 存取 `master-travel-share-images` |
 
-即使 GitHub 的部署金鑰外洩，對方也只能部署 Artifact Registry 裏已有的映像，碰不到資料庫和伺服器上的設定。正式密碼只在伺服器的 `app.env`；Secret Manager 裏的舊值在 GCP 清理前仍保留，但已不再被使用。
+即使 GitHub 的部署金鑰外洩，對方也只能部署 GHCR 裏已有的映像，碰不到資料庫和伺服器上的設定。正式密碼只在伺服器的 `app.env`；Secret Manager 裏的舊值在 GCP 清理前仍保留，但已不再被使用。
 
 ## 12. 回滾與常用操作
 
@@ -332,7 +330,7 @@ sudo docker compose --env-file deploy.env up -d
 sudo mastertravel-deploy <commit-sha> <api> <share-renderer> <passenger> <admin> <driver>
 ```
 
-5 個參數是映像 digest。
+5 個參數是映像 digest。手動執行時沒有 GHCR token，腳本不會拉取，只接受伺服器上已有的映像（例如最近部署過的版本）；更舊的版本請重新執行部署 workflow。
 
 **修改 `app.env` 後套用**：
 

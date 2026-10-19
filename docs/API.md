@@ -65,4 +65,4 @@ API 或 Prisma 變更完成後，確認不包含 secret、未驗證的跨區域 
 
 ## 正式環境參考
 
-正式 API 在 HostKVM 伺服器上運行，網址為 `https://mastertravelapi.masterappinc.com`（舊的 run.app 網址經轉發仍可用）。部署、設定、migration 與 rollback 流程請參考 [PRODUCTION-DEPLOYMENT.md](./PRODUCTION-DEPLOYMENT.md)。
+正式 API 在 HostKVM 伺服器上運行，網址為 `https://mastertravelapi.masterappinc.com`（舊的 run.app 網址已在 2026-10-19 刪除）。部署、設定、migration 與 rollback 流程請參考 [PRODUCTION-DEPLOYMENT.md](./PRODUCTION-DEPLOYMENT.md)。

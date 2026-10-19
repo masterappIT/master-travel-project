@@ -1,15 +1,15 @@
 import http from "node:http";
-import { createHash } from "node:crypto";
-import { Storage } from "@google-cloud/storage";
+import { createHash, randomUUID } from "node:crypto";
+import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import path from "node:path";
 import { chromium } from "playwright";
 
 const port = Number(process.env.PORT || 8080);
 const driverUrlBase = process.env.DRIVER_ORDER_URL_BASE;
-const shareImageBucketName = process.env.SHARE_IMAGE_BUCKET;
+// Rendered images are kept on a volume so restarts and other renderer processes reuse them.
+const shareImageDir = process.env.SHARE_IMAGE_DIR;
 if (!driverUrlBase) throw new Error("DRIVER_ORDER_URL_BASE is required");
-if (!shareImageBucketName) throw new Error("SHARE_IMAGE_BUCKET is required");
-const storage = new Storage();
-const shareImageBucket = storage.bucket(shareImageBucketName);
+if (!shareImageDir) throw new Error("SHARE_IMAGE_DIR is required");
 const browserPromise = chromium.launch({ headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage"] });
 const imageCache = new Map();
 const inFlight = new Map();
@@ -17,18 +17,72 @@ const cacheTtlMs = 10 * 60 * 1000;
 const maxCacheEntries = 100;
 // Bump when the rendered card changes so stored images are rendered again.
 const cacheVersion = "v2";
+// Invite links last at most 30 days, so older images are never requested again.
+const storedImageMaxAgeMs = 35 * 24 * 60 * 60 * 1000;
+const temporaryMaxAgeMs = 60 * 60 * 1000;
+const pruneIntervalMs = 6 * 60 * 60 * 1000;
 let active = false;
 
-function cacheKey(token) {
-  return `order-invites/${cacheVersion}/${createHash("sha256").update(token).digest("hex")}.png`;
+function cachePath(token) {
+  return path.join(shareImageDir, "order-invites", cacheVersion, `${createHash("sha256").update(token).digest("hex")}.png`);
 }
 
 async function readStoredImage(token) {
-  const [exists] = await shareImageBucket.file(cacheKey(token)).exists();
-  if (!exists) return null;
-  const [image] = await shareImageBucket.file(cacheKey(token)).download();
+  let image;
+  try {
+    image = await readFile(cachePath(token));
+  } catch (error) {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  }
   storeImage(token, image);
   return image;
+}
+
+// Write to a temporary file first so a reader never sees a partly written image.
+async function saveStoredImage(token, image) {
+  const file = cachePath(token);
+  const temporary = `${file}.${randomUUID()}.tmp`;
+  await mkdir(path.dirname(file), { recursive: true });
+  try {
+    await writeFile(temporary, image);
+    await rename(temporary, file);
+  } catch (error) {
+    await rm(temporary, { force: true });
+    throw error;
+  }
+}
+
+// Removes old images and temporary files left by an interrupted write, including older cache versions.
+async function pruneStoredImages() {
+  const root = path.join(shareImageDir, "order-invites");
+  let entries;
+  try {
+    entries = await readdir(root, { recursive: true, withFileTypes: true });
+  } catch (error) {
+    if (error.code === "ENOENT") return;
+    throw error;
+  }
+  const now = Date.now();
+  let removed = 0;
+  for (const entry of entries) {
+    if (!entry.isFile()) continue;
+    const file = path.join(entry.parentPath ?? entry.path, entry.name);
+    const maxAge = entry.name.endsWith(".tmp") ? temporaryMaxAgeMs : storedImageMaxAgeMs;
+    try {
+      if (now - (await stat(file)).mtimeMs > maxAge) {
+        await rm(file, { force: true });
+        removed += 1;
+      }
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+  }
+  if (removed) console.log(`Removed ${removed} expired share image files`);
+}
+
+function schedulePrune() {
+  pruneStoredImages().catch((error) => console.error("Failed to prune share images", error));
 }
 
 function cachedImage(token) {
@@ -70,11 +124,7 @@ async function renderImage(token) {
         await page.evaluate(() => document.fonts.ready);
         const image = await page.screenshot({ type: "png", animations: "disabled", timeout: 10000 });
         storeImage(token, image);
-        await shareImageBucket.file(cacheKey(token)).save(image, {
-          resumable: false,
-          contentType: "image/png",
-          metadata: { cacheControl: "public,max-age=86400,immutable" },
-        });
+        await saveStoredImage(token, image);
         return { image, cacheHit: false };
       } finally { await page.close(); }
     } finally {
@@ -119,3 +169,5 @@ const server = http.createServer(async (request, response) => {
   }
 });
 server.listen(port, "0.0.0.0");
+schedulePrune();
+setInterval(schedulePrune, pruneIntervalMs).unref();

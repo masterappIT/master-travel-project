@@ -103,13 +103,13 @@ H5 靜態檔案與 `/api/` 同源反向代理可參考 `deploy/nginx.h5.conf`。
 2026-10-19 起，正式環境在 HostKVM 伺服器上運行。`main` 是唯一正式部署分支，每次 push 都由 [`deploy-hostkvm.yml`](.github/workflows/deploy-hostkvm.yml) 自動部署：
 
 1. 執行完整 quality gates。
-2. 建置 API、share-renderer、乘客 H5、管理後台與司機 Web 的映像，推送至 Artifact Registry；微信小程序 build 以 `production-mp-weixin-<commit>` artifact 保留 30 天。
+2. 建置 API、share-renderer、乘客 H5、管理後台與司機 Web 的映像，推送至 GHCR 私人倉庫（只用當次的 `GITHUB_TOKEN`，每個映像保留最近 10 版）；微信小程序 build 以 `production-mp-weixin-<commit>` artifact 保留 30 天。
 3. 以專用帳號通知伺服器部署。伺服器先備份資料庫，再執行 migration、更新容器並做健康檢查，失敗會自動退回上一版（migration 不會撤銷）。
 4. 透過正式網址執行 smoke tests。
 
 同一 workflow 也會建置微信小程序體驗版（`main-mp-weixin-<commit>` artifact），交由伺服器上傳。上傳金鑰只存放在伺服器上，微信的代碼上傳 IP 白名單是伺服器的 IP。體驗版視同正式版本，連線正式 API；上傳不會自動提交審核或發布正式版。每月 2 日的排程只重新部署（更新 GeoIP），不上傳體驗版。
 
-用戶仍使用原有的 run.app 網址：Cloud Run 上的服務只負責把請求轉發到伺服器。微信公眾平台的 request 合法域名維持 run.app 的 API 網址。
+用戶使用 `mastertravel*.masterappinc.com` 網域。舊的 run.app 網址與 Cloud Run 轉發已在 2026-10-19 刪除。
 
 舊的 `deploy-production.yml`（Cloud Run）與 `deploy-wechat-experience.yml`（self-hosted runner）已停用，請勿重新啟用。伺服器端設定在 `masterappIT/MasterApp-infra` 的 `apps/mastertravel/`；`deploy/cloud-run/README.md` 描述的是舊流程。
 

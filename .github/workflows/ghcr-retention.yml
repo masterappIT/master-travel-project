@@ -1,0 +1,36 @@
+name: GHCR Retention
+
+# deploy-hostkvm.yml 每次部署推 5 個映像到 ghcr.io/masterappit/master-travel-*；這裏每個只留最近 10 版。
+# 伺服器正在用的和上一版的映像都已拉到本機，回滾不靠 GHCR；要部署更舊的版本就重新跑部署 workflow。
+# 映像帶 org.opencontainers.image.source 標籤連到本 repo，所以 GITHUB_TOKEN 有權刪除，不用另存 token。
+
+on:
+  workflow_run:
+    workflows: [Deploy HostKVM]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+# 和部署共用同一組，不會在部署拉映像時刪除
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+jobs:
+  prune:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [api, share-renderer, passenger, admin, driver]
+    steps:
+      - uses: actions/delete-package-versions@v5
+        with:
+          package-name: master-travel-${{ matrix.image }}
+          package-type: container
+          min-versions-to-keep: 10

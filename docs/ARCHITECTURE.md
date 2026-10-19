@@ -62,7 +62,7 @@ flowchart LR
 - NestJS API（`mastertravelapi.masterappinc.com`）
 - Share Renderer（只在內部網絡）
 
-API 使用伺服器上的 PostgreSQL；分享圖片使用 private Cloud Storage bucket。完整發布流程請參考 [PRODUCTION-DEPLOYMENT.md](./PRODUCTION-DEPLOYMENT.md)。
+API 使用伺服器上的 PostgreSQL；分享圖片快取在伺服器的 Docker volume。完整發布流程請參考 [PRODUCTION-DEPLOYMENT.md](./PRODUCTION-DEPLOYMENT.md)。
 
 ## CSS 與 UI 邊界
 

@@ -38,7 +38,7 @@
 | 部署記錄 | `/srv/apps/mastertravel/deploy.log` 有「Deploy <sha 前 12 碼> succeeded」；若是「rolled back」代表健康檢查失敗、已退回上一版 |
 | 實際運行版本 | `/srv/apps/mastertravel/deploy.env` 第一行是本次 commit，5 個映像 digest 等於本次 workflow 產物 |
 | 容器 | `docker compose ps` 中 5 個容器都在運行；前端顯示 healthy |
-| 對外 | 4 個網域的 `/health` 或 `/` 可達；舊 run.app 網址經轉發也可達 |
+| 對外 | 4 個網域的 `/health` 或 `/` 可達 |
 
 workflow 成功、HTTP 200 或容器在運行，都不等於業務驗收；登入、下單、司機接單、客服、分享圖要另外實測。Cloud Run 上的轉發服務不由本 repo 部署，部署本 repo 不會改變它們。
 
@@ -48,8 +48,8 @@ workflow 成功、HTTP 200 或容器在運行，都不等於業務驗收；登�
 
 1. `main` push、`workflow_dispatch` 或每月 2 日排程。
 2. Quality gates 通過。
-3. `deploy` job：確認 workflow SHA 仍是目前 `main`；建置前端、微信 artifact 與 5 個 immutable images，推送至 Artifact Registry。
-4. 以 `deploy-mastertravel` 帳號通知伺服器，只傳 SHA 和 digest。
+3. `deploy` job：確認 workflow SHA 仍是目前 `main`；建置前端、微信 artifact 與 5 個 immutable images，推送至 GHCR；部署成功後 `ghcr-retention.yml` 每個映像只留最近 10 版。
+4. 以 `deploy-mastertravel` 帳號通知伺服器，只傳 SHA 和 digest；當次的 `GITHUB_TOKEN` 經標準輸入交給伺服器拉映像。
 5. 伺服器：拉取映像 → `pg_dump` 備份 → 用新 API 映像執行 migration（失敗即停止，不更新容器）→ 重新建立容器 → 健康檢查，失敗自動退回上一版（migration 不撤銷）。
 6. 經正式網址執行 smoke tests。
 7. `wechat-experience` job（排程時不執行）：建置小程序，交由伺服器以 `upload-mastertravel-mp` 帳號上傳體驗版 `0.2.<run number>`。
@@ -98,3 +98,36 @@ sudo docker compose --env-file deploy.env up -d
   - 清理前先在 iOS App 上確認鍵盤工具列已不再出現，並確認 App 是否需要支援 iPad；若需要支援 iPad，移除後 iPad 的快捷按鈕列會重新出現，須另行評估。
   - 清理範圍：刪除 `src/uni_modules/ios-keyboard-accessory/` 整個目錄，以及 `src/pages/login/login.vue` 與 `src/pages/login/MiniProgramLogin.vue` 中對 `disableInputAssistantToolbar` 的引入與呼叫。
   - 移除原生外掛後須重新打包 App 才會生效，並執行 `npm run verify:passenger`。
+
+## 已處理：2026-10 token 盜用與 Secret 外洩
+
+**狀態：已處理（2026-10-16 刪除惡意工作流程，2026-10-19 正式環境改在 HostKVM）。**本節原本是 2026-10-13 記下的待辦，當時誤以為 masterappIT 帳號沒有被盜用；實際上是有人用**盜來的 token** 以 masterappIT 名義推送到 `main`。
+
+### 經過
+
+| 提交 | 時間（UTC+8） | 檔案 | 做了什麼 |
+| --- | --- | --- | --- |
+| `ff1429ef` | 2026-10-09 04:13 | `.github/workflows/security-audit.yml` | 每次 push 時，把 `production` Environment 的 `WECHAT_APPID`、`WECHAT_PRIVATE_KEY`，以及倉庫檔案和全部 Git 歷史中符合 AWS、GitHub、Google、Anthropic、OpenAI、Slack、SendGrid 等格式的金鑰，以未加密的 HTTP 傳到 `193.32.204.199`。 |
+| `494b10ce` | 2026-10-16 09:31 | `.github/workflows/code-review.yml` | 同樣在每次 push 時把上述 Secret、金鑰與 Wiki 中的金鑰傳到 `193.32.204.199:8080`；傳送失敗時改用 `GITHUB_TOKEN` 建立私人 Gist。 |
+| `d8b92371` | 2026-10-16 09:31 | `.github/workflows/cleanup-job.yml` | 在 **self-hosted runner** 上執行：收集該機器的 SSH 私鑰、`~/.aws`、`~/.config/gcloud`、`~/.git-credentials`、`~/.npmrc`、`~/.claude`、`.env` 檔與環境變數中的金鑰並傳出，再寫入每 5 分鐘從 `193.32.204.199:8080/c2/` 下載並執行指令的 crontab（行尾註記 `#ghc2`）。 |
+
+- `security-audit.yml` 截至 2026-10-13 17:38 已執行 46 次；之後的次數未記錄。
+- 本倉庫是公開的，這些檔案在刪除前任何人都看得到。
+
+### 處理結果（倉庫內可核實）
+
+- 2026-10-16 21:57 在 `df79a8bd` 刪除上述三個檔案；`origin/main` 已不含它們。
+- 2026-10-19 查詢時，GitHub Actions 已查不到這三個工作流程的執行紀錄，倉庫也沒有註冊任何 self-hosted runner。
+- 微信代碼上傳金鑰已重置，舊的 `WECHAT_PRIVATE_KEY` secret 已失效；新金鑰只放在伺服器上，見 [PRODUCTION-DEPLOYMENT.md 第 10 節](PRODUCTION-DEPLOYMENT.md#10-微信小程序)與上方[權限](#權限)。
+- 正式環境 2026-10-18（UTC）起由 Cloud Run 搬到 HostKVM（`d6fd78fa`、`c79b3c83`）。GitHub `production` Environment 現在只放兩把 SSH 私鑰；舊的 `deploy-production.yml` 與 `deploy-wechat-experience.yml`（self-hosted runner）已在 GitHub 停用，請勿重新啟用。
+- `.vscode/tasks.json` 目前只有本機驗證與啟動任務，沒有開啟資料夾就自動執行的設定。
+
+### 倉庫未記錄、仍待確認
+
+以下事項是否已完成，倉庫內沒有紀錄；完成後在此註明日期。
+
+1. 舊 self-hosted runner（標籤 `wechat-ci`）所在的機器：在 2026-10-16 09:31 到 21:57 之間是否執行過 `cleanup-job.yml`；檢查該機器執行 runner 的帳號有沒有含 `ghc2` 或 `193.32.204.199` 的 crontab；若曾執行，該機器上的 SSH 私鑰、雲端與 AI 服務憑證、`.env` 內容一律更換，機器建議重裝。
+2. masterappIT：更改密碼、確認兩步驗證，登出不認得的 Sessions，撤銷全部 Personal access token 後按需重建，移除不認得的 OAuth App、SSH／GPG key。
+3. masterappIT 名下其他倉庫（包括 MasterApp-infra）：有沒有同樣的檔案、不是自己做的提交、Deploy key、Webhook 或協作者；檢查帳號下有沒有不認得的 Gist。
+4. 確認被盜 token 的來源，避免同一途徑再次外洩。
+5. 若 Git 歷史或 Wiki 曾提交過任何金鑰，一律更換。

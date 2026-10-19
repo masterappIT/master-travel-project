@@ -3,6 +3,8 @@ set -euo pipefail
 
 source_dir=${1:?Static build directory is required}
 image=${2:?Image reference is required}
+shift 2
+# 其餘參數原樣交給 docker buildx build，例如 --label
 
 if [[ ! -f "$source_dir/index.html" ]]; then
   printf 'Static build is missing index.html: %s\n' "$source_dir" >&2
@@ -16,4 +18,5 @@ docker buildx build \
   --tag "$image" \
   --push \
   --provenance=false \
+  "$@" \
   .

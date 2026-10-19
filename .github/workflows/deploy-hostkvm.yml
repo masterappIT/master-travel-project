@@ -1,9 +1,11 @@
 name: Deploy HostKVM
 
 # 2026-10-19 起正式環境在 HostKVM 伺服器（45.134.82.239），取代已停用的 deploy-production.yml（Cloud Run）
-# 和 deploy-wechat-experience.yml（self-hosted runner）。用戶照舊用 run.app 網址，Cloud Run 只負責轉發。
+# 和 deploy-wechat-experience.yml（self-hosted runner）。
+# 映像推到 GHCR 的私人倉庫（ghcr.io/masterappit/master-travel-*），推送和拉取都只用這次執行的 GITHUB_TOKEN。
 # 伺服器端設定在 masterappIT/MasterApp-infra 的 apps/mastertravel/：
-# - deploy-mastertravel 帳號只能執行部署腳本，只接受提交 SHA 和 5 個映像 digest。
+# - deploy-mastertravel 帳號只能執行部署腳本，只接受提交 SHA 和 5 個映像 digest；
+#   GITHUB_TOKEN 經 SSH 的標準輸入交給伺服器拉映像，伺服器不保存，工作結束後失效。
 #   伺服器會備份資料庫、執行 migration、更新容器、健康檢查，失敗就退回上一版。
 # - upload-mastertravel-mp 帳號只能上傳小程序體驗版；上傳金鑰只在伺服器上，微信上傳白名單是伺服器的 IP。
 
@@ -16,7 +18,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 concurrency:
   group: production
@@ -34,6 +35,10 @@ jobs:
     needs: quality-gates
     runs-on: ubuntu-latest
     environment: production
+    # 只有這個 job 需要推送映像；品質檢查和小程序上傳不拿 packages 權限
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
 
@@ -47,13 +52,6 @@ jobs:
             exit 1
           fi
 
-      - uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
-
-      - uses: google-github-actions/setup-gcloud@v2
-
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -65,8 +63,10 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Configure Artifact Registry
-        run: gcloud auth configure-docker "${{ vars.GCP_REGION }}-docker.pkg.dev" --quiet
+      - name: Log in to GHCR
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "${{ github.actor }}" --password-stdin
 
       - name: Build production frontends
         env:
@@ -96,38 +96,45 @@ jobs:
 
       - name: Build and push immutable images
         env:
-          REGISTRY: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.GCP_ARTIFACT_REPOSITORY }}
+          # 和伺服器部署腳本的 REPO 一致；GHCR 的名稱只能用小寫
+          REGISTRY: ghcr.io/masterappit
+          # 讓新建立的 package 連到本 repo，GITHUB_TOKEN 才能推送、拉取和清理
+          SOURCE_LABEL: org.opencontainers.image.source=https://github.com/${{ github.repository }}
         run: |
           set -euo pipefail
-          digest() { gcloud artifacts docker images describe "$1" --format='value(image_summary.digest)'; }
+          digest() { docker buildx imagetools inspect "$1" --format '{{json .Manifest}}' | jq -r .digest; }
           tag="${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
 
           docker buildx build --platform linux/amd64 \
-            --build-arg DBIP_RELEASE="$(date -u +%Y-%m)" \
-            --file backend/Dockerfile --tag "${REGISTRY}/api:${tag}" --push --provenance=false .
-          docker buildx build --platform linux/amd64 \
-            --file deploy/share-renderer/Dockerfile --tag "${REGISTRY}/share-renderer:${tag}" --push --provenance=false .
-          ./deploy/frontend/build-image.sh dist/build/h5 "${REGISTRY}/passenger:${tag}"
-          ./deploy/frontend/build-image.sh admin/dist "${REGISTRY}/admin:${tag}"
-          ./deploy/frontend/build-image.sh driver/build/web "${REGISTRY}/driver:${tag}"
+            --build-arg DBIP_RELEASE="$(date -u +%Y-%m)" --label "$SOURCE_LABEL" \
+            --file backend/Dockerfile --tag "${REGISTRY}/master-travel-api:${tag}" --push --provenance=false .
+          docker buildx build --platform linux/amd64 --label "$SOURCE_LABEL" \
+            --file deploy/share-renderer/Dockerfile --tag "${REGISTRY}/master-travel-share-renderer:${tag}" --push --provenance=false .
+          ./deploy/frontend/build-image.sh dist/build/h5 "${REGISTRY}/master-travel-passenger:${tag}" --label "$SOURCE_LABEL"
+          ./deploy/frontend/build-image.sh admin/dist "${REGISTRY}/master-travel-admin:${tag}" --label "$SOURCE_LABEL"
+          ./deploy/frontend/build-image.sh driver/build/web "${REGISTRY}/master-travel-driver:${tag}" --label "$SOURCE_LABEL"
 
           # 次序要和伺服器的部署腳本一致：api share-renderer passenger admin driver
           digests=""
           for name in api share-renderer passenger admin driver; do
-            digests="${digests} $(digest "${REGISTRY}/${name}:${tag}")"
+            d="$(digest "${REGISTRY}/master-travel-${name}:${tag}")"
+            [[ "$d" =~ ^sha256:[0-9a-f]{64}$ ]] || { printf 'No digest for %s\n' "$name" >&2; exit 1; }
+            digests="${digests} ${d}"
           done
           printf 'DIGESTS=%s\n' "${digests# }" >> "$GITHUB_ENV"
 
       - name: Deploy to HostKVM
         env:
           SSH_KEY: ${{ secrets.HOSTKVM_DEPLOY_SSH_KEY }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           install -d -m 700 ~/.ssh
           printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           printf '%s %s\n' "$DEPLOY_HOST" "$DEPLOY_HOST_KEY" > ~/.ssh/known_hosts
-          ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o BatchMode=yes \
+          # token 經標準輸入傳過去，不出現在命令列和伺服器的記錄中
+          printf '%s\n' "$GHCR_TOKEN" | ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o BatchMode=yes \
             "deploy-mastertravel@${DEPLOY_HOST}" "${GITHUB_SHA} ${DIGESTS}"
 
       - name: Verify production endpoints

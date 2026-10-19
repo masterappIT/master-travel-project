@@ -50,7 +50,7 @@
 
 ### 技術判斷參考
 
-- 正式 API 現在是伺服器上的單一容器，WebSocket 經 Caddy 轉發；舊 run.app 網址經 Cloud Run 轉發時仍受 1 小時請求逾時限制（[Cloud Run WebSocket 說明](https://docs.cloud.google.com/run/docs/triggering/websockets)）。重連仍須自行處理；部署時容器重建也會中斷連線。
+- 正式 API 現在是伺服器上的單一容器，WebSocket 經 Caddy 轉發。重連仍須自行處理；部署時容器重建也會中斷連線。
 
 ## 待確認的產品決策
 
